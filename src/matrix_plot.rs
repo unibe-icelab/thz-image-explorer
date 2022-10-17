@@ -92,8 +92,8 @@ pub fn plot_matrix(ui: &mut egui::Ui,
     );
     ui.horizontal(|ui| {
         let plot = Plot::new("image")
-            .height(0.78 * height as f32 * size as f32)
-            .width(0.78 * width as f32 * size as f32)
+            .height(0.75 * height as f32 * size as f32)
+            .width(0.75 * width as f32 * size as f32)
             .show_axes([false, false])
             .show_x(false)
             .show_y(false)

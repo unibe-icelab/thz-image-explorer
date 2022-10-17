@@ -3,8 +3,10 @@ use std::sync::mpsc::{Sender};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use eframe::{egui, Storage};
+use eframe::egui::ColorImage;
 use eframe::egui::plot::PlotPoint;
 use egui_extras::RetainedImage;
+use ndarray::Array2;
 use preferences::Preferences;
 use crate::{APP_INFO, ScannedImage};
 use serde::{Deserialize, Serialize};
@@ -88,8 +90,7 @@ pub struct GuiSettingsContainer {
     pub normalize_fft: bool,
     pub signal_1_visible: bool,
     pub ref_1_visible: bool,
-    pub signal_2_visible: bool,
-    pub ref_2_visible: bool,
+    pub filtered_signal_1_visible: bool,
     pub water_lines_visible: bool,
     pub phases_visible: bool,
     pub frequency_resolution_temp: f64,
@@ -108,8 +109,7 @@ impl GuiSettingsContainer {
             normalize_fft: false,
             signal_1_visible: true,
             ref_1_visible: false,
-            signal_2_visible: false,
-            ref_2_visible: false,
+            filtered_signal_1_visible: false,
             water_lines_visible: false,
             phases_visible: false,
             frequency_resolution_temp: 0.001,
@@ -143,12 +143,13 @@ pub struct MyApp {
     data: DataContainer,
     print_lock: Arc<RwLock<Vec<Print>>>,
     gui_conf: GuiSettingsContainer,
-    img_lock: Arc<RwLock<ScannedImage>>,
+    img_lock: Arc<RwLock<Array2<f64>>>,
     data_lock: Arc<RwLock<DataContainer>>,
     df_lock: Arc<RwLock<f64>>,
     log_mode_lock: Arc<RwLock<bool>>,
     normalize_fft_lock: Arc<RwLock<bool>>,
     fft_bounds_lock: Arc<RwLock<[f64; 2]>>,
+    fft_filter_bounds_lock: Arc<RwLock<[f64; 2]>>,
     pixel_lock: Arc<RwLock<SelectedPixel>>,
     save_tx: Sender<String>,
     load_tx: Sender<String>,
@@ -160,9 +161,10 @@ impl MyApp {
                df_lock: Arc<RwLock<f64>>,
                pixel_lock: Arc<RwLock<SelectedPixel>>,
                log_mode_lock: Arc<RwLock<bool>>,
-               img_lock: Arc<RwLock<ScannedImage>>,
+               img_lock: Arc<RwLock<Array2<f64>>>,
                normalize_fft_lock: Arc<RwLock<bool>>,
                fft_bounds_lock: Arc<RwLock<[f64; 2]>>,
+               fft_filter_bounds_lock: Arc<RwLock<[f64; 2]>>,
                gui_conf: GuiSettingsContainer,
                save_tx: Sender<String>,
                load_tx: Sender<String>,
@@ -224,6 +226,7 @@ impl MyApp {
             log_mode_lock,
             normalize_fft_lock,
             fft_bounds_lock,
+            fft_filter_bounds_lock,
             pixel_lock,
             save_tx,
             load_tx,
@@ -279,6 +282,7 @@ impl eframe::App for MyApp {
                     &self.log_mode_lock,
                     &self.normalize_fft_lock,
                     &self.fft_bounds_lock,
+                    &self.fft_filter_bounds_lock,
                     &self.hacktica_dark,
                     &self.hacktica_light,
                     &self.wp,

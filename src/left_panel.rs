@@ -2,9 +2,10 @@ use std::sync::{Arc, RwLock};
 use std::sync::mpsc::{Sender};
 use eframe::egui;
 use eframe::egui::panel::Side;
-use eframe::egui::{Color32, Spinner};
+use eframe::egui::{Color32, ColorImage, Spinner};
 use eframe::egui::plot::PlotPoint;
 use egui_extras::RetainedImage;
+use ndarray::Array2;
 use crate::{DataContainer, GuiSettingsContainer, Print, ScannedImage};
 use crate::gauge::gauge;
 use crate::gui::SelectedPixel;
@@ -27,7 +28,7 @@ pub fn left_panel(ctx: &egui::Context,
                   coconut_dark: &RetainedImage,
                   pixel_selected: &mut SelectedPixel,
                   val: &mut PlotPoint,
-                  img_lock: &Arc<RwLock<ScannedImage>>,
+                  img_lock: &Arc<RwLock<Array2<f64>>>,
                   data_lock: &Arc<RwLock<DataContainer>>,
                   print_lock: &Arc<RwLock<Vec<Print>>>,
                   pixel_lock: &Arc<RwLock<SelectedPixel>>,
@@ -84,7 +85,7 @@ pub fn left_panel(ctx: &egui::Context,
 
             let mut img_data = make_dummy();
             if let Ok(read_guard) = img_lock.read() {
-                img_data = read_guard.img.clone();
+                img_data = read_guard.clone();
             }
             let img = plot_matrix(
                 ui,

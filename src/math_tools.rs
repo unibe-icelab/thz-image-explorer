@@ -4,6 +4,7 @@ use realfft::RealFftPlanner;
 
 use itertools_num::linspace;
 use rand::Rng;
+use realfft::num_complex::Complex64;
 use crate::data::{DataContainer};
 use crate::data::NUM_PULSE_LINES;
 
@@ -146,6 +147,20 @@ pub fn apply_fft_window(signal: &mut [f64], time: &[f64], lower_bound: &f64, upp
     }
 }
 
+pub fn apply_filter(data: &mut DataContainer, bounds: &[f64; 2]) {
+    for ((f, amplitude), filtered_amplitude) in data.frequencies_fft.iter()
+        .zip(data.signal_1_fft.iter())
+        .zip(data.filtered_signal_1_fft.iter_mut())
+    {
+        if (*f >= bounds[0]) && (*f <= bounds[1]) {
+            *filtered_amplitude = *amplitude;
+        } else {
+            *filtered_amplitude = 0.0;
+        }
+    }
+}
+
+
 pub fn make_fft(t_in: &[f64], p_in: &[f64], normalize: bool, df: &f64,
                 lower_bound: &f64, upper_bound: &f64) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
     // make a planner
@@ -188,6 +203,34 @@ pub fn make_fft(t_in: &[f64], p_in: &[f64], normalize: bool, df: &f64,
     (freq, amp, phase)
 }
 
+
+pub fn make_ifft(frequencies: &[f64], amplitudes: &[f64], phases: &[f64]) -> Vec<f64> {
+    // make a planner
+    let mut real_planner = RealFftPlanner::<f64>::new();
+
+    let mut spectrum: Vec<Complex64> = vec![];
+    // spectrum = spectrum.iter_mut().zip(amplitudes.iter().zip(phases.iter()))
+    //     .map(|(s,(a,p))| {
+    //         *s = Complex64::new(*a,*p)
+    //     }).collect();
+    for (a, p) in amplitudes.iter().zip(phases.iter()) {
+        spectrum.push(Complex64::new(*a, *p));
+    }
+    // create a iFFT
+    let c2r = real_planner.plan_fft_inverse(frequencies.len() * 2 - 1);
+    // make input and output vectors
+    let mut output = c2r.make_output_vec();
+
+    // Forward transform the input data
+    c2r.process(&mut spectrum, &mut output).unwrap();
+    let mut pulse: Vec<f64> = vec![];
+    for (i, p) in output.iter().enumerate() {
+        if i % 2 == 0 {
+            pulse.push(*p)
+        }
+    };
+    pulse
+}
 
 #[cfg(test)]
 mod tests {
