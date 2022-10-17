@@ -1,6 +1,53 @@
 use std::error::Error;
 use csv::{ReaderBuilder, WriterBuilder};
-use crate::data::DataContainer;
+use crate::data::{DataContainer, HouseKeeping};
+
+
+
+pub fn open_hk(hk: &mut HouseKeeping, file_path: String) -> Result<(usize, usize), Box<dyn Error>> {
+    let mut rdr = ReaderBuilder::new()
+        .delimiter(b',')
+        .has_headers(true)
+        .from_path(file_path)?;
+    // data
+    let mut x = 0;
+    let mut y = 0;
+    if let Some(result) = rdr.records().next() {
+        let record = result?;
+        x = record[1].parse::<usize>().unwrap();
+        y = record[2].parse::<usize>().unwrap();
+        hk.ambient_temperature = record[3].parse::<f64>().unwrap();
+        hk.sample_temperature = record[4].parse::<f64>().unwrap();
+        hk.ambient_pressure = record[5].parse::<f64>().unwrap();
+        hk.ambient_humidity = record[6].parse::<f64>().unwrap();
+    }
+    Ok((x, y))
+}
+
+pub fn open_conf(hk: &mut HouseKeeping, file_path: String) -> Result<(usize, usize), Box<dyn Error>> {
+    let mut rdr = ReaderBuilder::new()
+        .delimiter(b',')
+        .has_headers(true)
+        .from_path(file_path)?;
+    let mut width = 0;
+    let mut height = 0;
+    if let Some(result) = rdr.records().next() {
+        let record = result?;
+        width = record[1].parse::<usize>().unwrap();
+        height = record[2].parse::<usize>().unwrap();
+        hk.dx = record[3].parse::<f64>().unwrap();
+        hk.x_range[0] = record[4].parse::<f64>().unwrap();
+        hk.x_range[1] = record[5].parse::<f64>().unwrap();
+        hk.dy = record[6].parse::<f64>().unwrap();
+        hk.y_range[0] = record[7].parse::<f64>().unwrap();
+        hk.y_range[1] = record[8].parse::<f64>().unwrap();
+        hk.ambient_temperature = record[9].parse::<f64>().unwrap();
+        hk.sample_temperature = record[10].parse::<f64>().unwrap();
+        hk.ambient_pressure = record[11].parse::<f64>().unwrap();
+        hk.ambient_humidity = record[12].parse::<f64>().unwrap();
+    }
+    Ok((width, height))
+}
 
 
 pub fn open_from_csv(data: &mut DataContainer, file_path: &String, file_path_fft: &String) -> Result<(), Box<dyn Error>> {

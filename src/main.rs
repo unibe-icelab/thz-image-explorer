@@ -20,6 +20,7 @@ mod gauge;
 mod left_panel;
 mod matrix_plot;
 mod data;
+mod right_panel;
 
 use std::thread;
 use eframe::egui::{vec2, Visuals};
@@ -68,11 +69,14 @@ fn main() {
     let print_lock = Arc::new(RwLock::new(vec![Print::EMPTY]));
 
     let (save_tx, save_rx): (Sender<String>, Receiver<String>) = mpsc::channel();
+    let (load_tx, load_rx): (Sender<String>, Receiver<String>) = mpsc::channel();
 
     let main_data_lock = data_lock.clone();
     let main_print_lock = print_lock.clone();
     let main_log_mode_lock = log_mode_lock.clone();
     let main_df_lock = df_lock.clone();
+    let main_img_lock = img_lock.clone();
+    let main_pixel_lock = pixel_lock.clone();
     let main_normalize_fft_lock = normalize_fft_lock.clone();
     let main_fft_bounds_lock = fft_bounds_lock.clone();
     let main_pixel_lock = pixel_lock.clone();
@@ -84,8 +88,11 @@ fn main() {
                     main_log_mode_lock,
                     main_normalize_fft_lock,
                     main_fft_bounds_lock,
+                    main_img_lock,
+                    main_pixel_lock,
                     main_print_lock,
-                    save_rx);
+                    save_rx,
+                    load_rx);
     });
 
 
@@ -122,7 +129,8 @@ fn main() {
                 gui_normalize_fft_lock,
                 gui_fft_bounds_lock,
                 gui_settings,
-                save_tx
+                save_tx,
+                load_tx
             ))
         }),
     );
