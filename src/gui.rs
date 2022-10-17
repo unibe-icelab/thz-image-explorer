@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::center_panel::center_panel;
 use crate::data::DataContainer;
 use crate::left_panel::{left_panel};
+use crate::right_panel::right_panel;
 
 const MAX_FPS: f64 = 24.0;
 
@@ -126,6 +127,7 @@ pub struct MyApp {
     dark_mode: bool,
     console: Vec<Print>,
     fft_bounds: [f64; 2],
+    filter_bounds: [f64; 2],
     pixel_selected: SelectedPixel,
     val: PlotPoint,
     hacktica_light: RetainedImage,
@@ -149,6 +151,7 @@ pub struct MyApp {
     fft_bounds_lock: Arc<RwLock<[f64; 2]>>,
     pixel_lock: Arc<RwLock<SelectedPixel>>,
     save_tx: Sender<String>,
+    load_tx: Sender<String>,
 }
 
 impl MyApp {
@@ -162,6 +165,7 @@ impl MyApp {
                fft_bounds_lock: Arc<RwLock<[f64; 2]>>,
                gui_conf: GuiSettingsContainer,
                save_tx: Sender<String>,
+               load_tx: Sender<String>,
     ) -> Self {
         let mut water_vapour_lines: Vec<f64> = Vec::new();
         let buffered = include_str!("../resources/water_lines.csv");
@@ -222,7 +226,9 @@ impl MyApp {
             fft_bounds_lock,
             pixel_lock,
             save_tx,
+            load_tx,
             fft_bounds: [1.0, 7.0],
+            filter_bounds: [0.0, 7.0],
             pixel_selected: SelectedPixel::new(),
             val: PlotPoint { x: 0.0, y: 0.0 },
         }
@@ -231,8 +237,8 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let left_panel_width = 250.0;
-        let right_panel_width = 350.0;
+        let left_panel_width = 300.0;
+        let right_panel_width = 500.0;
 
         center_panel(&ctx,
                      &right_panel_width,
@@ -253,37 +259,30 @@ impl eframe::App for MyApp {
                    &mut self.pixel_selected,
                    &mut self.val,
                    &self.img_lock,
+                   &self.data_lock,
                    &self.print_lock,
                    &self.pixel_lock,
                    &self.save_tx,
+            &self.load_tx
         );
 
-        // right_panel(&ctx,
-        //             &right_panel_width,
-        //             &mut self.tera_flash_conf,
-        //             &mut self.gui_conf,
-        //             &mut self.status,
-        //             &mut self.console,
-        //             &mut self.picked_path,
-        //             &mut self.series_counter,
-        //             &mut self.fft_bounds,
-        //             &self.ip_lock,
-        //             &self.config_tx,
-        //             &self.save_tx,
-        //             &self.avg_lock,
-        //             &self.heartbeat_lock,
-        //             &self.progress_lock,
-        //             &self.status_lock,
-        //             &self.print_lock,
-        //             &self.log_mode_lock,
-        //             &self.normalize_fft_lock,
-        //             &self.fft_bounds_lock,
-        //             &self.data_reconnect_lock,
-        //             &self.config_reconnect_lock,
-        //             &self.hacktica_dark,
-        //             &self.hacktica_light,
-        //             &self.wp,
-        // );
+        right_panel(&ctx,
+                    &right_panel_width,
+                    &mut self.gui_conf,
+                    &mut self.console,
+                    &mut self.picked_path,
+                    &mut self.fft_bounds,
+                    &mut self.filter_bounds,
+                    &self.save_tx,
+                    &self.data_lock,
+                    &self.print_lock,
+                    &self.log_mode_lock,
+                    &self.normalize_fft_lock,
+                    &self.fft_bounds_lock,
+                    &self.hacktica_dark,
+                    &self.hacktica_light,
+                    &self.wp,
+        );
 
         self.gui_conf.x = ctx.used_size().x;
         self.gui_conf.y = ctx.used_size().y;

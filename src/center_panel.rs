@@ -38,14 +38,6 @@ pub fn center_panel(ctx: &egui::Context,
                     ui.add(Checkbox::new(&mut gui_conf.ref_1_visible, ""));
                     ui.colored_label(egui::Color32::RED, "--- ");
                     ui.label("Ref 1");
-                    ui.add_space(50.0);
-                    ui.add(Checkbox::new(&mut gui_conf.signal_2_visible, ""));
-                    ui.colored_label(plot_color, "— ");
-                    ui.label("Signal 2");
-                    ui.add_space(50.0);
-                    ui.add(Checkbox::new(&mut gui_conf.ref_2_visible, ""));
-                    ui.colored_label(plot_color, "--- ");
-                    ui.label("Ref 2");
                 });
 
                 if let Ok(read_guard) = data_lock.read() {
@@ -233,8 +225,8 @@ pub fn center_panel(ctx: &egui::Context,
                         .suffix(" THz".to_string())
                     ).lost_focus() {
                         // TODO: get range from dataset!
-                        if gui_conf.frequency_resolution_temp > 1.0 / 50.0 {
-                            gui_conf.frequency_resolution_temp = 1.0 / 50.0;
+                        if gui_conf.frequency_resolution_temp > 1.0 / data.hk.range {
+                            gui_conf.frequency_resolution_temp = 1.0 / data.hk.range;
                         } else if gui_conf.frequency_resolution_temp < 0.0001 {
                             gui_conf.frequency_resolution_temp = 0.0001;
                         }

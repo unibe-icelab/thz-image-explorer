@@ -1,11 +1,14 @@
+use std::f64::NEG_INFINITY;
 use std::sync::{Arc, RwLock};
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
 use eframe::egui::{Color32, ColorImage};
 use image::RgbaImage;
 use ndarray::Array2;
-use crate::{make_fft, Print, print_to_console, save_to_csv, update_in_console};
+use crate::{make_fft, Print, print_to_console, save_to_csv, SelectedPixel, update_in_console};
 use crate::data::{DataContainer};
+use crate::io::{open_from_csv, open_conf, open_hk};
+use crate::matrix_plot::color_from_intensity;
 
 
 #[derive(Clone)]
@@ -87,11 +90,15 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                    log_mode_lock: Arc<RwLock<bool>>,
                    normalize_fft_lock: Arc<RwLock<bool>>,
                    fft_bounds_lock: Arc<RwLock<[f64; 2]>>,
+                   img_lock: Arc<RwLock<ScannedImage>>,
+                   pixel_lock: Arc<RwLock<SelectedPixel>>,
                    print_lock: Arc<RwLock<Vec<Print>>>,
-                   save_rx: Receiver<String>) {
+                   save_rx: Receiver<String>,
+                   load_rx: Receiver<String>) {
     // reads data from mutex, samples and saves if needed
     let mut acquire = false;
     let mut file_path = "test.csv".to_string();
+    let mut opened_file_path = "test.csv".to_string();
     let mut data = DataContainer::default();
     let mut df = 0.001;
     let mut lower_bound = 1.0;
@@ -100,7 +107,6 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
     let mut log_mode = true;
 
     loop {
-
         if let Ok(read_guard) = df_lock.read() {
             df = *read_guard;
         }
@@ -118,6 +124,8 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
             upper_bound = (*read_guard)[1];
         }
 
+        // TODO: add filter bounds
+
         match save_rx.recv_timeout(Duration::from_millis(10)) {
             Ok(fp) => {
                 file_path = fp;
@@ -126,9 +134,93 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
             Err(..) => ()
         }
 
-        // TODO: load file >> data
+        match load_rx.recv() {
+            Ok(fp) => {
+                opened_file_path = fp;
+            }
+            Err(..) => ()
+        }
 
-        // TODO: show data of selected pixel
+        let width: usize;
+        let height: usize;
+        match open_conf(&mut data.hk, format!("{opened_file_path}/conf.csv")) {
+            Ok((w, h)) => {
+                width = w;
+                height = h;
+            }
+            Err(err) => {
+                println!("failed to open conf @ {opened_file_path}... {err}");
+                width = 0;
+                height = 0;
+            }
+        }
+
+        let mut scan = ScannedImage::new(
+            height,
+            width,
+            data.hk.x_range[0],
+            data.hk.y_range[0],
+            data.hk.dx,
+            data.hk.dy,
+        );
+        for x in 0..width {
+            for y in 0..height {
+                let pulse_path = format!("{}/pixel_ID={:05}-{:05}.csv", opened_file_path, x, y);
+                let fft_path = format!("{}/pixel_ID={:05}-{:05}_spectrum.csv", opened_file_path, x, y);
+                match open_from_csv(&mut data, &pulse_path, &fft_path) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        println!("failed to open files: {pulse_path} {fft_path}");
+                    }
+                }
+                // calculate the intensity by summing the squares
+                let sig_squared: Vec<f64> = data.signal_1.iter().map(|x| x.powi(2)).collect();
+                scan.img[[y, x]] = sig_squared.iter().sum();
+                let max = scan.img.iter().fold(NEG_INFINITY, |ai, &bi| ai.max(bi));
+                scan.color_img[(y, x)] = color_from_intensity(scan.img[[y, x]], max, data.cut_off);
+                if let Ok(mut write_guard) = img_lock.write() {
+                    *write_guard = scan.clone();
+                }
+            }
+        }
+
+        let mut pixel = SelectedPixel::new();
+
+        loop {
+            if let Ok(read_guard) = pixel_lock.read() {
+                if pixel.x != read_guard.x || pixel.y != read_guard.y {
+                    pixel = read_guard.clone();
+
+                    // open data file of selected pixel
+                    let pulse_path = format!("{}/pixel_ID={:05}-{:05}.csv", opened_file_path, pixel.y, pixel.x);
+                    let fft_path = format!("{}/pixel_ID={:05}-{:05}_spectrum.csv", opened_file_path, pixel.y, pixel.x);
+                    match open_from_csv(&mut data, &pulse_path, &fft_path) {
+                        Ok(_) => {}
+                        Err(_) => {
+                            println!("failed to open files: {pulse_path} {fft_path}");
+                        }
+                    }
+                    if let Ok(mut write_guard) = data_lock.write() {
+                        *write_guard = data.clone();
+                    }
+                    // open hk file of selected pixel
+                    let hk_path = format!("{}/pixel_ID={:05}-{:05}_hk.csv", opened_file_path, pixel.x, pixel.y);
+                    match open_hk(&mut data.hk, hk_path) {
+                        Ok((x, y)) => {}
+                        Err(err) => {
+                            println!("failed to open hk: {err}");
+                        }
+                    }
+                    if let Ok(mut write_guard) = data_lock.write() {
+                        *write_guard = data.clone();
+                    }
+                }
+            }
+
+            // TODO: check for new file
+
+            std::thread::sleep(Duration::from_millis(10));
+        }
 
         let (frequencies_fft, signal_1_fft, phase_1_fft) = make_fft(&data.time, &data.signal_1, normalize_fft, &df, &lower_bound, &upper_bound);
         let (_, ref_1_fft, ref_phase_1_fft) = make_fft(&data.time, &data.ref_1, normalize_fft, &df, &lower_bound, &upper_bound);
