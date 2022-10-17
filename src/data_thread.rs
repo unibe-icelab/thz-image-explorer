@@ -8,6 +8,7 @@ use ndarray::Array2;
 use crate::{make_fft, Print, print_to_console, save_to_csv, SelectedPixel, update_in_console};
 use crate::data::{DataContainer};
 use crate::io::{open_from_csv, open_conf, open_hk};
+use crate::math_tools::{apply_filter, make_ifft};
 use crate::matrix_plot::color_from_intensity;
 
 
@@ -22,7 +23,7 @@ pub struct ScannedImage {
     pub width: usize,
     pub img: Array2<f64>,
     pub color_img: ColorImage,
-    pub img_filenames: Vec<Vec<String>>,
+    pub data: Vec<Vec<DataContainer>>,
     // do we need the ids?
 }
 
@@ -40,7 +41,7 @@ impl Default for ScannedImage {
                 0.0
             }),
             color_img: ColorImage::new([1, 1], Color32::TRANSPARENT),
-            img_filenames: vec![vec![]],
+            data: vec![vec![]],
         };
     }
 }
@@ -59,7 +60,7 @@ impl ScannedImage {
                 0.0
             }),
             color_img: ColorImage::new([width, height], Color32::TRANSPARENT),
-            img_filenames: vec![vec!["".to_string(); width]; height],
+            data: vec![vec![DataContainer::default(); width]; height],
         };
     }
 }
@@ -90,7 +91,8 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                    log_mode_lock: Arc<RwLock<bool>>,
                    normalize_fft_lock: Arc<RwLock<bool>>,
                    fft_bounds_lock: Arc<RwLock<[f64; 2]>>,
-                   img_lock: Arc<RwLock<ScannedImage>>,
+                   fft_filter_bounds_lock: Arc<RwLock<[f64; 2]>>,
+                   img_lock: Arc<RwLock<Array2<f64>>>,
                    pixel_lock: Arc<RwLock<SelectedPixel>>,
                    print_lock: Arc<RwLock<Vec<Print>>>,
                    save_rx: Receiver<String>,
@@ -101,6 +103,7 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
     let mut opened_file_path = "test.csv".to_string();
     let mut data = DataContainer::default();
     let mut df = 0.001;
+    let mut filter_bounds = [0.0, 10.0];
     let mut lower_bound = 1.0;
     let mut upper_bound = 7.0;
     let mut normalize_fft = false;
@@ -173,13 +176,15 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                         println!("failed to open files: {pulse_path} {fft_path}");
                     }
                 }
+                scan.data[x][y] = data.clone();
                 // calculate the intensity by summing the squares
                 let sig_squared: Vec<f64> = data.signal_1.iter().map(|x| x.powi(2)).collect();
                 scan.img[[y, x]] = sig_squared.iter().sum();
                 let max = scan.img.iter().fold(NEG_INFINITY, |ai, &bi| ai.max(bi));
                 scan.color_img[(y, x)] = color_from_intensity(scan.img[[y, x]], max, data.cut_off);
+
                 if let Ok(mut write_guard) = img_lock.write() {
-                    *write_guard = scan.clone();
+                    *write_guard = scan.img.clone();
                 }
             }
         }
@@ -200,9 +205,40 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                             println!("failed to open files: {pulse_path} {fft_path}");
                         }
                     }
-                    if let Ok(mut write_guard) = data_lock.write() {
-                        *write_guard = data.clone();
+
+                    let (frequencies_fft, signal_1_fft, phase_1_fft) = make_fft(&data.time, &data.signal_1, normalize_fft, &df, &lower_bound, &upper_bound);
+                    let (_, ref_1_fft, ref_phase_1_fft) = make_fft(&data.time, &data.ref_1, normalize_fft, &df, &lower_bound, &upper_bound);
+
+                    data.frequencies_fft = frequencies_fft;
+                    data.signal_1_fft = signal_1_fft;
+                    data.phase_1_fft = phase_1_fft;
+                    data.ref_1_fft = ref_1_fft;
+                    data.ref_phase_1_fft = ref_phase_1_fft;
+
+                    if let Ok(read_guard) = fft_filter_bounds_lock.read() {
+                        if filter_bounds != *read_guard {
+                            filter_bounds = read_guard.clone();
+
+                            apply_filter(&mut data, &filter_bounds);
+                            data.filtered_signal_1 = make_ifft(&data.frequencies_fft, &data.filtered_signal_1_fft, &data.filtered_phase_1_fft);
+
+                            for x in 0..width {
+                                for y in 0..height {
+                                    scan.data[x][y] = data.clone();
+                                    // calculate the intensity by summing the squares
+                                    let sig_squared: Vec<f64> = data.filtered_signal_1.iter().map(|x| x.powi(2)).collect();
+                                    scan.img[[y, x]] = sig_squared.iter().sum();
+                                    let max = scan.img.iter().fold(NEG_INFINITY, |ai, &bi| ai.max(bi));
+                                    scan.color_img[(y, x)] = color_from_intensity(scan.img[[y, x]], max, data.cut_off);
+                                    if let Ok(mut write_guard) = img_lock.write() {
+                                        *write_guard = scan.img.clone();
+                                    }
+                                }
+                            }
+
+                        }
                     }
+
                     // open hk file of selected pixel
                     let hk_path = format!("{}/pixel_ID={:05}-{:05}_hk.csv", opened_file_path, pixel.x, pixel.y);
                     match open_hk(&mut data.hk, hk_path) {

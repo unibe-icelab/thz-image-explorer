@@ -23,11 +23,12 @@ mod data;
 mod right_panel;
 
 use std::thread;
-use eframe::egui::{vec2, Visuals};
+use eframe::egui::{ColorImage, vec2, Visuals};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, mpsc, RwLock};
 use eframe::HardwareAcceleration;
 use itertools_num::linspace;
+use ndarray::Array2;
 use preferences::{AppInfo, Preferences};
 use crate::data::DataContainer;
 use crate::data_thread::{main_thread, ScannedImage};
@@ -58,11 +59,14 @@ fn main() {
 
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::new()));
     let data_lock = Arc::new(RwLock::new(DataContainer::default()));
-    let img_lock = Arc::new(RwLock::new(ScannedImage::default()));
+    let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| {
+        0.0
+    })));
     let df_lock = Arc::new(RwLock::new(gui_settings.frequency_resolution));
     let log_mode_lock = Arc::new(RwLock::new(gui_settings.log_plot));
     let normalize_fft_lock = Arc::new(RwLock::new(gui_settings.normalize_fft));
     let fft_bounds_lock = Arc::new(RwLock::new([1.0, 7.0]));
+    let fft_filter_bounds_lock = Arc::new(RwLock::new([0.0, 10.0]));
     let status_lock = Arc::new(RwLock::new("".to_string()));
     let connected_lock = Arc::new(RwLock::new(0));
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::new()));
@@ -79,6 +83,7 @@ fn main() {
     let main_pixel_lock = pixel_lock.clone();
     let main_normalize_fft_lock = normalize_fft_lock.clone();
     let main_fft_bounds_lock = fft_bounds_lock.clone();
+    let main_fft_filter_bounds_lock = fft_filter_bounds_lock.clone();
     let main_pixel_lock = pixel_lock.clone();
 
     println!("starting main server..");
@@ -88,6 +93,7 @@ fn main() {
                     main_log_mode_lock,
                     main_normalize_fft_lock,
                     main_fft_bounds_lock,
+                    main_fft_filter_bounds_lock,
                     main_img_lock,
                     main_pixel_lock,
                     main_print_lock,
@@ -107,6 +113,7 @@ fn main() {
     let gui_df_lock = df_lock.clone();
     let gui_log_mode_lock = log_mode_lock.clone();
     let gui_normalize_fft_lock = normalize_fft_lock.clone();
+    let gui_fft_filter_bounds_lock = fft_filter_bounds_lock.clone();
     let gui_fft_bounds_lock = fft_bounds_lock.clone();
     let gui_status_lock = status_lock.clone();
     let gui_connected_lock = connected_lock.clone();
@@ -128,6 +135,7 @@ fn main() {
                 gui_img_lock,
                 gui_normalize_fft_lock,
                 gui_fft_bounds_lock,
+                gui_fft_filter_bounds_lock,
                 gui_settings,
                 save_tx,
                 load_tx

@@ -1,3 +1,5 @@
+use std::f64::consts::E;
+use std::f64::NEG_INFINITY;
 use std::sync::{Arc, RwLock};
 use std::sync::mpsc::{Sender};
 use eframe::egui;
@@ -27,6 +29,7 @@ pub fn right_panel(ctx: &egui::Context,
                    log_mode_lock: &Arc<RwLock<bool>>,
                    normalize_fft_lock: &Arc<RwLock<bool>>,
                    fft_bounds_lock: &Arc<RwLock<[f64; 2]>>,
+                   fft_filter_bounds_lock: &Arc<RwLock<[f64; 2]>>,
                    hacktica_dark: &RetainedImage,
                    hacktica_light: &RetainedImage,
                    wp: &RetainedImage,
@@ -128,20 +131,28 @@ pub fn right_panel(ctx: &egui::Context,
 
                 // TODO: implement different windows
 
-                let mut spectrum_vals: Vec<[f64; 2]> = Vec::new();
-                let f = data.frequencies_fft;
-                let a= data.signal_1_fft;
-
-                for i in 0..f.len() {
-                    spectrum_vals.push([f[i], a[i]]);
-                }
+                let spectrum_vals: Vec<[f64; 2]> = data.frequencies_fft.iter()
+                    .zip(data.signal_1_fft.iter())
+                    .map(|(x, y)| {
+                        let mut fft;
+                        if gui_conf.log_plot {
+                            fft = (*y + 1.0).log(E);
+                        } else {
+                            fft = *y;
+                        }
+                        if fft < 0.0 {
+                            fft = 0.0;
+                        }
+                        [*x as f64, fft]
+                    }).collect();
+                let max = spectrum_vals.iter().fold(NEG_INFINITY, |ai, &bi| ai.max(bi[1]));
 
                 let mut filter_vals: Vec<[f64; 2]> = Vec::new();
                 let filter_f: Vec<f64> = linspace::<f64>(0.0, 10.0, NUM_PULSE_LINES).collect();
                 for i in 0..filter_f.len() {
-                    let a : f64;
+                    let a: f64;
                     if filter_f[i] >= filter_bounds[0] && filter_f[i] <= filter_bounds[1] {
-                        a = 1.0;
+                        a = max;
                     } else {
                         a = 0.0;
                     }
@@ -178,6 +189,10 @@ pub fn right_panel(ctx: &egui::Context,
                 ui.vertical_centered(|ui| {
                     ui.add(filter(&(*right_panel_width as f64 * 0.9), &100.0, &10.0, filter_bounds));
                 });
+
+                if let Ok(mut write_guard) = fft_filter_bounds_lock.write() {
+                    *write_guard = filter_bounds.clone();
+                }
 
                 global_dark_light_mode_buttons(ui);
 

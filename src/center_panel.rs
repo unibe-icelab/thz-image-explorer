@@ -35,6 +35,10 @@ pub fn center_panel(ctx: &egui::Context,
                     ui.colored_label(egui::Color32::RED, "— ");
                     ui.label("Signal 1");
                     ui.add_space(50.0);
+                    ui.add(Checkbox::new(&mut gui_conf.filtered_signal_1_visible, ""));
+                    ui.colored_label(egui::Color32::BLUE, "— ");
+                    ui.label("Filtered Signal 1");
+                    ui.add_space(50.0);
                     ui.add(Checkbox::new(&mut gui_conf.ref_1_visible, ""));
                     ui.colored_label(egui::Color32::RED, "--- ");
                     ui.label("Ref 1");
@@ -47,24 +51,30 @@ pub fn center_panel(ctx: &egui::Context,
                 }
 
                 let mut signal_1: Vec<[f64; 2]> = Vec::new();
+                let mut filtered_signal_1: Vec<[f64; 2]> = Vec::new();
                 let mut ref_1: Vec<[f64; 2]> = Vec::new();
 
                 let mut axis_display_offset_signal_1 = f64::NEG_INFINITY;
+                let mut axis_display_offset_filtered_signal_1 = f64::NEG_INFINITY;
                 let mut axis_display_offset_ref_1 = f64::NEG_INFINITY;
 
                 if gui_conf.signal_1_visible {
                     axis_display_offset_signal_1 = data.signal_1.iter().fold(f64::INFINITY, |ai, &bi| ai.min(bi)).abs();
                 }
+                if gui_conf.filtered_signal_1_visible {
+                    axis_display_offset_filtered_signal_1 = data.filtered_signal_1.iter().fold(f64::INFINITY, |ai, &bi| ai.min(bi)).abs();
+                }
                 if gui_conf.ref_1_visible {
                     axis_display_offset_ref_1 = data.ref_1.iter().fold(f64::INFINITY, |ai, &bi| ai.min(bi)).abs();
                 }
 
-                let axis_display_offset = vec![axis_display_offset_ref_1, axis_display_offset_signal_1]
+                let axis_display_offset = vec![axis_display_offset_ref_1, axis_display_offset_signal_1, axis_display_offset_filtered_signal_1]
                     .iter()
                     .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi)) * 1.05;
 
                 for i in 0..data.time.len() {
                     signal_1.push([data.time[i] as f64, (data.signal_1[i] + axis_display_offset) as f64]);
+                    filtered_signal_1.push([data.time[i] as f64, (data.filtered_signal_1[i] + axis_display_offset) as f64]);
                     ref_1.push([data.time[i] as f64, (data.ref_1[i] + axis_display_offset) as f64]);
                 }
 
@@ -98,6 +108,12 @@ pub fn center_panel(ctx: &egui::Context,
                             .style(LineStyle::Solid)
                             .name("signal 1"));
                     }
+                    if gui_conf.filtered_signal_1_visible {
+                        signal_plot_ui.line(Line::new(PlotPoints::from(filtered_signal_1))
+                            .color(egui::Color32::BLUE)
+                            .style(LineStyle::Solid)
+                            .name("filtered signal 1"));
+                    }
                     if gui_conf.ref_1_visible {
                         signal_plot_ui.line(Line::new(PlotPoints::from(ref_1))
                             .color(egui::Color32::RED)
@@ -125,6 +141,20 @@ pub fn center_panel(ctx: &egui::Context,
 
                 let signal_1_fft: Vec<[f64; 2]> = data.frequencies_fft.iter()
                     .zip(data.signal_1_fft.iter())
+                    .map(|(x, y)| {
+                        let mut fft;
+                        if gui_conf.log_plot {
+                            fft = (*y + 1.0).log(E);
+                        } else {
+                            fft = *y;
+                        }
+                        if fft < 0.0 {
+                            fft = 0.0;
+                        }
+                        [*x as f64, fft]
+                    }).collect();
+                let filtered_signal_1_fft: Vec<[f64; 2]> = data.frequencies_fft.iter()
+                    .zip(data.filtered_signal_1_fft.iter())
                     .map(|(x, y)| {
                         let mut fft;
                         if gui_conf.log_plot {
@@ -194,6 +224,12 @@ pub fn center_panel(ctx: &egui::Context,
                                 .style(LineStyle::Solid)
                                 .name("phase 1"));
                         }
+                    }
+                    if gui_conf.filtered_signal_1_visible {
+                        fft_plot_ui.line(Line::new(PlotPoints::from(filtered_signal_1_fft))
+                            .color(egui::Color32::BLUE)
+                            .style(LineStyle::Solid)
+                            .name("filtered signal 1"));
                     }
                     if gui_conf.ref_1_visible {
                         if !gui_conf.phases_visible {
