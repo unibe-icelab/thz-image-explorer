@@ -1,0 +1,49 @@
+[package]
+name = "coconut-explorer"
+authors = ["Linus Leo Stöckli"]
+version = "0.2.1"
+edition = "2021"
+description = "Explorer Software for Data of the COCoNuT Experiment."
+license = "GPL-3.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+#
+# add this to the plist file to prevent dedicated gpu usage:
+# <key>NSSupportsAutomaticGraphicsSwitching</key>
+# <true/>
+
+[dependencies]
+eframe = {version = "0.19.0", features = ["persistence"]}
+egui_extras = { version = "0.19.0", features = ["image"] }
+image = { version = "0.24", default-features = false, features = ["png"] }
+rand = "0.8.4"
+itertools-num = "0.1"
+realfft = "3.0.0"
+rfd = "0.8"
+hex = "0.4"
+safe-transmute = "0.11.2"
+preferences = { git = "https://github.com/andybarron/preferences-rs" }
+serde = { version = "1.0", features = ["derive"] }
+regex = "1"
+csv = "1.1.6"
+ndarray = "0.15.6"
+
+[package.metadata.bundle]
+name = "COExplore"
+identifier = "com.unibe.coconut"
+icon = ["./icons/icon-128.png", "./icons/icon-128@2x.png"]
+version = "0.2.1"
+copyright = "Copyright (c) Linus Leo Stöckli 2022. All rights reserved."
+category = "Developer Tool"
+short_description = "Explorer Software for Data of the COCoNuT Experiment."
+license = "GPL-3.0"
+osx_minimum_system_version = "10.8"
+
+[package.metadata.wix]
+dbg-build = false
+dbg-name = false
+name = "COExplore"
+no-build = false
+output = "target/wix/COExploreInstaller.msi"
+version = "0.2.1"
+license = "GPL-3.0"

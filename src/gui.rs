@@ -1,0 +1,303 @@
+use core::f64;
+use std::sync::mpsc::{Sender};
+use std::sync::{Arc, RwLock};
+use std::time::Duration;
+use eframe::{egui, Storage};
+use eframe::egui::plot::PlotPoint;
+use egui_extras::RetainedImage;
+use preferences::Preferences;
+use crate::{APP_INFO, ScannedImage};
+use serde::{Deserialize, Serialize};
+use crate::center_panel::center_panel;
+use crate::data::DataContainer;
+use crate::left_panel::{left_panel};
+
+const MAX_FPS: f64 = 24.0;
+
+
+#[derive(Clone)]
+pub enum Print {
+    EMPTY,
+    MESSAGE(String),
+    ERROR(String),
+    DEBUG(String),
+    TASK(String),
+    OK(String),
+}
+
+pub fn print_to_console(print_lock: &Arc<RwLock<Vec<Print>>>, message: Print) -> usize {
+    let mut index: usize = 0;
+    if let Ok(mut write_guard) = print_lock.write() {
+        write_guard.push(message);
+        index = write_guard.len() - 1;
+    }
+    index
+}
+
+pub fn update_in_console(print_lock: &Arc<RwLock<Vec<Print>>>, message: Print, index: usize) {
+    if let Ok(mut write_guard) = print_lock.write() {
+        write_guard[index] = message;
+    }
+}
+
+pub enum GuiState {
+    IDLE,
+    Status,
+    TBegin(f64),
+    TRange(f64),
+    Avg(u32),
+    Transmission(String),
+    Channel(String),
+    UpdateConf,
+    Laser(bool),
+    Emitter1(bool),
+    Emitter2(bool),
+    Run(bool),
+    SetReference1,
+    SetReference2,
+    ClearReference1,
+    ClearReference2,
+}
+
+#[derive(Debug, Clone)]
+pub struct SelectedPixel {
+    pub selected: bool,
+    pub rect: Vec<[f64; 2]>,
+    pub x: f64,
+    pub y: f64,
+    pub id: String,
+}
+
+impl SelectedPixel {
+    pub fn new() -> SelectedPixel {
+        return SelectedPixel {
+            selected: false,
+            rect: vec![],
+            x: 0.0,
+            y: 0.0,
+            id: "0000-0000".to_string(),
+        };
+    }
+}
+
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct GuiSettingsContainer {
+    pub log_plot: bool,
+    pub normalize_fft: bool,
+    pub signal_1_visible: bool,
+    pub ref_1_visible: bool,
+    pub signal_2_visible: bool,
+    pub ref_2_visible: bool,
+    pub water_lines_visible: bool,
+    pub phases_visible: bool,
+    pub frequency_resolution_temp: f64,
+    pub frequency_resolution: f64,
+    pub advanced_settings_window: bool,
+    pub debug: bool,
+    pub dark_mode: bool,
+    pub x: f32,
+    pub y: f32,
+}
+
+impl GuiSettingsContainer {
+    pub fn new() -> GuiSettingsContainer {
+        return GuiSettingsContainer {
+            log_plot: true,
+            normalize_fft: false,
+            signal_1_visible: true,
+            ref_1_visible: false,
+            signal_2_visible: false,
+            ref_2_visible: false,
+            water_lines_visible: false,
+            phases_visible: false,
+            frequency_resolution_temp: 0.001,
+            frequency_resolution: 0.001,
+            advanced_settings_window: false,
+            debug: true,
+            dark_mode: true,
+            x: 1600.0,
+            y: 900.0,
+        };
+    }
+}
+
+pub struct MyApp {
+    dark_mode: bool,
+    console: Vec<Print>,
+    fft_bounds: [f64; 2],
+    pixel_selected: SelectedPixel,
+    val: PlotPoint,
+    hacktica_light: RetainedImage,
+    hacktica_dark: RetainedImage,
+    connection_error_image_dark: RetainedImage,
+    connection_error_image_light: RetainedImage,
+    coconut_logo_dark: RetainedImage,
+    coconut_logo_light: RetainedImage,
+    water_vapour_lines: Vec<f64>,
+    wp: RetainedImage,
+    dropped_files: Vec<egui::DroppedFile>,
+    picked_path: String,
+    data: DataContainer,
+    print_lock: Arc<RwLock<Vec<Print>>>,
+    gui_conf: GuiSettingsContainer,
+    img_lock: Arc<RwLock<ScannedImage>>,
+    data_lock: Arc<RwLock<DataContainer>>,
+    df_lock: Arc<RwLock<f64>>,
+    log_mode_lock: Arc<RwLock<bool>>,
+    normalize_fft_lock: Arc<RwLock<bool>>,
+    fft_bounds_lock: Arc<RwLock<[f64; 2]>>,
+    pixel_lock: Arc<RwLock<SelectedPixel>>,
+    save_tx: Sender<String>,
+}
+
+impl MyApp {
+    pub fn new(print_lock: Arc<RwLock<Vec<Print>>>,
+               data_lock: Arc<RwLock<DataContainer>>,
+               df_lock: Arc<RwLock<f64>>,
+               pixel_lock: Arc<RwLock<SelectedPixel>>,
+               log_mode_lock: Arc<RwLock<bool>>,
+               img_lock: Arc<RwLock<ScannedImage>>,
+               normalize_fft_lock: Arc<RwLock<bool>>,
+               fft_bounds_lock: Arc<RwLock<[f64; 2]>>,
+               gui_conf: GuiSettingsContainer,
+               save_tx: Sender<String>,
+    ) -> Self {
+        let mut water_vapour_lines: Vec<f64> = Vec::new();
+        let buffered = include_str!("../resources/water_lines.csv");
+        for line in buffered.lines() {
+            water_vapour_lines.push(line.trim().parse().unwrap());
+        }
+
+        Self {
+            dark_mode: true,
+            hacktica_dark: RetainedImage::from_image_bytes(
+                "Hacktica",
+                include_bytes!("../images/hacktica_inv.png"),
+            )
+                .unwrap(),
+            hacktica_light: RetainedImage::from_image_bytes(
+                "Hacktica",
+                include_bytes!("../images/hacktica.png"),
+            )
+                .unwrap(),
+            connection_error_image_dark: RetainedImage::from_image_bytes(
+                "Hacktica",
+                include_bytes!("../images/connection_error_inv.png"),
+            )
+                .unwrap(),
+            connection_error_image_light: RetainedImage::from_image_bytes(
+                "Hacktica",
+                include_bytes!("../images/connection_error.png"),
+            )
+                .unwrap(),
+            coconut_logo_dark: RetainedImage::from_image_bytes(
+                "Hacktica",
+                include_bytes!("../images/coconut_inv.png"),
+            )
+                .unwrap(),
+            coconut_logo_light: RetainedImage::from_image_bytes(
+                "Hacktica",
+                include_bytes!("../images/coconut.png"),
+            )
+                .unwrap(),
+            water_vapour_lines,
+            wp: RetainedImage::from_image_bytes(
+                "WP",
+                include_bytes!("../images/WP-Logo.png"),
+            )
+                .unwrap(),
+
+            dropped_files: vec![],
+            picked_path: "".to_string(),
+            data: DataContainer::default(),
+            console: vec![Print::MESSAGE("".to_string())],
+            print_lock,
+            gui_conf,
+            img_lock,
+            data_lock,
+            df_lock,
+            log_mode_lock,
+            normalize_fft_lock,
+            fft_bounds_lock,
+            pixel_lock,
+            save_tx,
+            fft_bounds: [1.0, 7.0],
+            pixel_selected: SelectedPixel::new(),
+            val: PlotPoint { x: 0.0, y: 0.0 },
+        }
+    }
+}
+
+impl eframe::App for MyApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let left_panel_width = 250.0;
+        let right_panel_width = 350.0;
+
+        center_panel(&ctx,
+                     &right_panel_width,
+                     &left_panel_width,
+                     &mut self.gui_conf,
+                     &mut self.data,
+                     &self.df_lock,
+                     &self.data_lock,
+                     &self.water_vapour_lines,
+        );
+
+        left_panel(&ctx,
+                   &left_panel_width,
+                   &mut self.picked_path,
+                   &mut self.gui_conf,
+                   &self.coconut_logo_light,
+                   &self.coconut_logo_dark,
+                   &mut self.pixel_selected,
+                   &mut self.val,
+                   &self.img_lock,
+                   &self.print_lock,
+                   &self.pixel_lock,
+                   &self.save_tx,
+        );
+
+        // right_panel(&ctx,
+        //             &right_panel_width,
+        //             &mut self.tera_flash_conf,
+        //             &mut self.gui_conf,
+        //             &mut self.status,
+        //             &mut self.console,
+        //             &mut self.picked_path,
+        //             &mut self.series_counter,
+        //             &mut self.fft_bounds,
+        //             &self.ip_lock,
+        //             &self.config_tx,
+        //             &self.save_tx,
+        //             &self.avg_lock,
+        //             &self.heartbeat_lock,
+        //             &self.progress_lock,
+        //             &self.status_lock,
+        //             &self.print_lock,
+        //             &self.log_mode_lock,
+        //             &self.normalize_fft_lock,
+        //             &self.fft_bounds_lock,
+        //             &self.data_reconnect_lock,
+        //             &self.config_reconnect_lock,
+        //             &self.hacktica_dark,
+        //             &self.hacktica_light,
+        //             &self.wp,
+        // );
+
+        self.gui_conf.x = ctx.used_size().x;
+        self.gui_conf.y = ctx.used_size().y;
+
+        std::thread::sleep(Duration::from_millis((1000.0 / MAX_FPS) as u64));
+    }
+
+    fn save(&mut self, _storage: &mut dyn Storage) {
+        let prefs_key = "config/gui";
+        match self.gui_conf.save(&APP_INFO, prefs_key) {
+            Ok(_) => {}
+            Err(err) => {
+                println!("error saving gui_conf: {err:?}");
+            }
+        }
+    }
+}

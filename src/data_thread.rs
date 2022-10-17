@@ -1,0 +1,177 @@
+use std::sync::{Arc, RwLock};
+use std::sync::mpsc::Receiver;
+use std::time::Duration;
+use eframe::egui::{Color32, ColorImage};
+use image::RgbaImage;
+use ndarray::Array2;
+use crate::{make_fft, Print, print_to_console, save_to_csv, update_in_console};
+use crate::data::{DataContainer};
+
+
+#[derive(Clone)]
+pub struct ScannedImage {
+    pub path: String,
+    pub x_min: f64,
+    pub dx: f64,
+    pub y_min: f64,
+    pub dy: f64,
+    pub height: usize,
+    pub width: usize,
+    pub img: Array2<f64>,
+    pub color_img: ColorImage,
+    pub img_filenames: Vec<Vec<String>>,
+    // do we need the ids?
+}
+
+impl Default for ScannedImage {
+    fn default() -> Self {
+        return ScannedImage {
+            path: "".to_string(),
+            x_min: 0.0,
+            dx: 0.0,
+            y_min: 0.0,
+            dy: 0.0,
+            height: 0,
+            width: 0,
+            img: Array2::from_shape_fn((1, 1), |(_, _)| {
+                0.0
+            }),
+            color_img: ColorImage::new([1, 1], Color32::TRANSPARENT),
+            img_filenames: vec![vec![]],
+        };
+    }
+}
+
+impl ScannedImage {
+    pub fn new(height: usize, width: usize, x_min: f64, y_min: f64, dx: f64, dy: f64) -> ScannedImage {
+        return ScannedImage {
+            path: "test".to_string(),
+            x_min,
+            dx,
+            y_min,
+            dy,
+            height,
+            width,
+            img: Array2::from_shape_fn((width, height), |(_, _)| {
+                0.0
+            }),
+            color_img: ColorImage::new([width, height], Color32::TRANSPARENT),
+            img_filenames: vec![vec!["".to_string(); width]; height],
+        };
+    }
+}
+
+fn save_image(img: &ColorImage, file_path: &String) {
+    let height = img.height();
+    let width = img.width();
+    let mut raw: Vec<u8> = vec![];
+    for p in img.pixels.clone().iter() {
+        raw.push(p.r());
+        raw.push(p.g());
+        raw.push(p.b());
+        raw.push(p.a());
+    }
+    let img_to_save = RgbaImage::from_raw(width as u32, height as u32, raw)
+        .expect("container should have the right size for the image dimensions");
+    match img_to_save.save(format!("{}/image.png", file_path)) {
+        Ok(_) => {}
+        Err(err) => {
+            println!("error in saving image: {err:?}");
+        }
+    }
+    //TODO: implement large image saving
+}
+
+pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
+                   df_lock: Arc<RwLock<f64>>,
+                   log_mode_lock: Arc<RwLock<bool>>,
+                   normalize_fft_lock: Arc<RwLock<bool>>,
+                   fft_bounds_lock: Arc<RwLock<[f64; 2]>>,
+                   print_lock: Arc<RwLock<Vec<Print>>>,
+                   save_rx: Receiver<String>) {
+    // reads data from mutex, samples and saves if needed
+    let mut acquire = false;
+    let mut file_path = "test.csv".to_string();
+    let mut data = DataContainer::default();
+    let mut df = 0.001;
+    let mut lower_bound = 1.0;
+    let mut upper_bound = 7.0;
+    let mut normalize_fft = false;
+    let mut log_mode = true;
+
+    loop {
+
+        if let Ok(read_guard) = df_lock.read() {
+            df = *read_guard;
+        }
+
+        if let Ok(read_guard) = log_mode_lock.read() {
+            log_mode = *read_guard;
+        }
+
+        if let Ok(read_guard) = normalize_fft_lock.read() {
+            normalize_fft = *read_guard;
+        }
+
+        if let Ok(read_guard) = fft_bounds_lock.read() {
+            lower_bound = (*read_guard)[0];
+            upper_bound = (*read_guard)[1];
+        }
+
+        match save_rx.recv_timeout(Duration::from_millis(10)) {
+            Ok(fp) => {
+                file_path = fp;
+                acquire = true;
+            }
+            Err(..) => ()
+        }
+
+        // TODO: load file >> data
+
+        // TODO: show data of selected pixel
+
+        let (frequencies_fft, signal_1_fft, phase_1_fft) = make_fft(&data.time, &data.signal_1, normalize_fft, &df, &lower_bound, &upper_bound);
+        let (_, ref_1_fft, ref_phase_1_fft) = make_fft(&data.time, &data.ref_1, normalize_fft, &df, &lower_bound, &upper_bound);
+
+        data.frequencies_fft = frequencies_fft;
+        data.signal_1_fft = signal_1_fft;
+        data.phase_1_fft = phase_1_fft;
+        data.ref_1_fft = ref_1_fft;
+        data.ref_phase_1_fft = ref_phase_1_fft;
+
+
+        if acquire == true {
+            // save file
+            let extension = "_spectrum.csv".to_string();
+            let mut file_path_fft: String;
+            if file_path.ends_with(".csv") {
+                file_path_fft = file_path[..file_path.len() - 4].to_string();
+                file_path_fft.push_str(&extension);
+            } else {
+                file_path_fft = file_path.to_string();
+                file_path_fft.push_str(&extension);
+            }
+            let print_index_1 = print_to_console(&print_lock, Print::TASK(format!("saving pulse file to {:?} ...", file_path).to_string()));
+            let print_index_2 = print_to_console(&print_lock, Print::TASK(format!("saving fft ile to {:?} ...", file_path_fft).to_string()));
+            let save_result = save_to_csv(&data, &file_path, &file_path_fft);
+            match save_result {
+                Ok(_) => {
+                    update_in_console(&print_lock, Print::OK(format!("saved pulse file to {:?} ", file_path).to_string()), print_index_1);
+                    update_in_console(&print_lock, Print::OK(format!("saved fft file to {:?} ", file_path_fft).to_string()), print_index_2);
+                }
+                Err(e) => {
+                    update_in_console(&print_lock, Print::ERROR(format!("failed to save file to {:?} and {:?}", file_path, file_path_fft).to_string()), print_index_1);
+                    update_in_console(&print_lock, Print::ERROR(e.to_string()), print_index_2);
+                }
+            }
+            acquire = false;
+        }
+
+        if let Ok(mut write_guard) = data_lock.write() {
+            // if normal mode, otherwise write scanned data here
+            *write_guard = data.clone();
+        }
+
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
