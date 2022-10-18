@@ -187,12 +187,12 @@ pub fn right_panel(ctx: &egui::Context,
                 });
 
                 ui.vertical_centered(|ui| {
-                    ui.add(filter(&(*right_panel_width as f64 * 0.9), &100.0, &10.0, filter_bounds));
+                    if ui.add(filter(&(*right_panel_width as f64 * 0.9), &100.0, &10.0, filter_bounds)).changed(){
+                        if let Ok(mut write_guard) = fft_filter_bounds_lock.write() {
+                            *write_guard = filter_bounds.clone();
+                        }
+                    };
                 });
-
-                if let Ok(mut write_guard) = fft_filter_bounds_lock.write() {
-                    *write_guard = filter_bounds.clone();
-                }
 
                 global_dark_light_mode_buttons(ui);
 

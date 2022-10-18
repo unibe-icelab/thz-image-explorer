@@ -177,6 +177,17 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                         data = scan.data[x - 1][y - 1].clone();
                     }
                 }
+                data.signal_1 = data.signal_1.iter().zip(data.ref_1.iter()).map(|(s, r)| *s - *r).collect();
+
+                let (frequencies_fft, signal_1_fft, phase_1_fft) = make_fft(&data.time, &data.signal_1, normalize_fft, &df, &lower_bound, &upper_bound);
+                let (_, ref_1_fft, ref_phase_1_fft) = make_fft(&data.time, &data.ref_1, normalize_fft, &df, &lower_bound, &upper_bound);
+
+                data.frequencies_fft = frequencies_fft;
+                data.signal_1_fft = signal_1_fft;
+                data.phase_1_fft = phase_1_fft;
+                data.ref_1_fft = ref_1_fft;
+                data.ref_phase_1_fft = ref_phase_1_fft;
+
                 data.filtered_phase_1_fft = data.phase_1_fft.clone();
                 data.filtered_signal_1_fft = data.signal_1_fft.clone();
                 scan.data[x][y] = data.clone();
@@ -242,6 +253,9 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                                 *write_guard = scan.img.clone();
                             }
                         }
+                    }
+                    if let Ok(mut write_guard) = data_lock.write() {
+                        *write_guard = scan.data[pixel.x as usize][pixel.y as usize].clone();
                     }
                 }
             }
