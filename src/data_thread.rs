@@ -10,7 +10,7 @@ use crate::data::{DataContainer};
 use crate::io::{open_from_csv, open_conf, open_hk};
 use crate::math_tools::{apply_filter, make_ifft};
 use crate::matrix_plot::color_from_intensity;
-
+use rayon::prelude::*;
 
 #[derive(Clone)]
 pub struct ScannedImage {
@@ -192,8 +192,8 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                 data.filtered_signal_1_fft = data.signal_1_fft.clone();
                 scan.data[x][y] = data.clone();
                 // calculate the intensity by summing the squares
-                let sig_squared: Vec<f64> = data.signal_1.iter().map(|x| x.powi(2)).collect();
-                scan.img[[y, x]] = sig_squared.iter().sum();
+                let sig_squared: Vec<f64> = data.signal_1.par_iter().map(|x| x.powi(2)).collect();
+                scan.img[[y, x]] = sig_squared.par_iter().sum();
                 let max = scan.img.iter().fold(NEG_INFINITY, |ai, &bi| ai.max(bi));
                 scan.color_img[(y, x)] = color_from_intensity(scan.img[[y, x]], max, data.cut_off);
 
@@ -239,13 +239,15 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
             if let Ok(read_guard) = fft_filter_bounds_lock.read() {
                 if filter_bounds != *read_guard {
                     filter_bounds = read_guard.clone();
+                    //TODO: iterate over image pixels instead of x and y
+                    // >> implement iter for scan object
                     for x in 0..width {
                         for y in 0..height {
                             apply_filter(&mut scan.data[x][y], &filter_bounds);
                             scan.data[x][y].filtered_signal_1 = make_ifft(&scan.data[x][y].frequencies_fft, &scan.data[x][y].filtered_signal_1_fft, &scan.data[x][y].filtered_phase_1_fft);
                             // calculate the intensity by summing the squares
-                            let sig_squared: Vec<f64> = scan.data[x][y].filtered_signal_1.iter().map(|x| x.powi(2)).collect();
-                            scan.img[[y, x]] = sig_squared.iter().sum();
+                            let sig_squared: Vec<f64> = scan.data[x][y].filtered_signal_1.par_iter().map(|x| x.powi(2)).collect();
+                            scan.img[[y, x]] = sig_squared.par_iter().sum();
                             let max = scan.img.iter().fold(NEG_INFINITY, |ai, &bi| ai.max(bi));
                             scan.color_img[(y, x)] = color_from_intensity(scan.img[[y, x]], max, scan.data[x][y].cut_off);
 
