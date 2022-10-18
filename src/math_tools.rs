@@ -7,6 +7,7 @@ use rand::Rng;
 use realfft::num_complex::Complex64;
 use crate::data::{DataContainer};
 use crate::data::NUM_PULSE_LINES;
+use rayon::prelude::*;
 
 pub struct MovingAverage {
     populated_width: usize,
@@ -87,7 +88,7 @@ impl MovingAverage {
             // mav.ref_1[j] = mav.ref_1[j] / self.populated_width as f64;
         }
         // only average the signals, not the references!
-        mav.time = data.time.iter().map(|x| (x * 1000.0).round() / 1000.0).collect();
+        mav.time = data.time.par_iter().map(|x| (x * 1000.0).round() / 1000.0).collect();
         mav.ref_1 = data.ref_1;
 
         mav.frequencies_fft = data.frequencies_fft;
@@ -187,20 +188,20 @@ pub fn make_fft(t_in: &[f64], p_in: &[f64], normalize: bool, df: &f64,
     // create a FFT
     let r2c = real_planner.plan_fft_forward(t.len());
     // make input and output vectors
-    let mut in_data: Vec<f64> = p.iter().map(|x| *x as f64).collect();
+    let mut in_data: Vec<f64> = p.par_iter().map(|x| *x as f64).collect();
     let mut spectrum = r2c.make_output_vec();
     // Forward transform the input data
     r2c.process(&mut in_data, &mut spectrum).unwrap();
 
     // println!("spectrum: {:?}", spectrum);
 
-    let mut amp: Vec<f64> = spectrum.iter().map(|s| s.norm()).collect();
+    let mut amp: Vec<f64> = spectrum.par_iter().map(|s| s.norm()).collect();
     let rng = t[t.len() - 1] - t[0];
     let freq: Vec<f64> = (0..spectrum.len()).map(|i| i as f64 / rng).collect();
-    let phase: Vec<f64> = spectrum.iter().map(|s| s.arg()).collect();
+    let phase: Vec<f64> = spectrum.par_iter().map(|s| s.arg()).collect();
     if normalize {
         let max_amp = amp.iter().fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi));
-        amp = amp.iter().map(|a| *a / max_amp).collect();
+        amp = amp.par_iter().map(|a| *a / max_amp).collect();
     }
     (freq, amp, phase)
 }
@@ -232,7 +233,7 @@ pub fn make_ifft(frequencies: &[f64], amplitudes: &[f64], phases: &[f64]) -> Vec
         }
     };
     let length = output.len();
-    output = output.iter().map(|p| *p / length as f64).collect();
+    output = output.par_iter().map(|p| *p / length as f64).collect();
     // let mut pulse: Vec<f64> = vec![];
     // for (i, p) in output.iter().enumerate() {
     //     if i % 2 == 0 {
