@@ -231,7 +231,7 @@ impl MyApp {
             save_tx,
             load_tx,
             fft_bounds: [1.0, 7.0],
-            filter_bounds: [0.0, 7.0],
+            filter_bounds: [0.0, 10.0],
             pixel_selected: SelectedPixel::new(),
             val: PlotPoint { x: 0.0, y: 0.0 },
         }
@@ -274,8 +274,8 @@ impl eframe::App for MyApp {
                     &mut self.gui_conf,
                     &mut self.console,
                     &mut self.picked_path,
-                    &mut self.fft_bounds,
                     &mut self.filter_bounds,
+                    &mut self.fft_bounds,
                     &self.save_tx,
                     &self.data_lock,
                     &self.print_lock,

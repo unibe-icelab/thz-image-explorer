@@ -192,6 +192,8 @@ pub fn make_fft(t_in: &[f64], p_in: &[f64], normalize: bool, df: &f64,
     // Forward transform the input data
     r2c.process(&mut in_data, &mut spectrum).unwrap();
 
+    // println!("spectrum: {:?}", spectrum);
+
     let mut amp: Vec<f64> = spectrum.iter().map(|s| s.norm()).collect();
     let rng = t[t.len() - 1] - t[0];
     let freq: Vec<f64> = (0..spectrum.len()).map(|i| i as f64 / rng).collect();
@@ -214,41 +216,116 @@ pub fn make_ifft(frequencies: &[f64], amplitudes: &[f64], phases: &[f64]) -> Vec
     //         *s = Complex64::new(*a,*p)
     //     }).collect();
     for (a, p) in amplitudes.iter().zip(phases.iter()) {
-        spectrum.push(Complex64::new(*a, *p));
+        spectrum.push(Complex64::from_polar(*a, *p));
     }
+
     // create a iFFT
-    let c2r = real_planner.plan_fft_inverse(frequencies.len() * 2 - 1);
+    let c2r = real_planner.plan_fft_inverse((frequencies.len() - 1 ) * 2);
     // make input and output vectors
     let mut output = c2r.make_output_vec();
 
     // Forward transform the input data
-    c2r.process(&mut spectrum, &mut output).unwrap();
-    let mut pulse: Vec<f64> = vec![];
-    for (i, p) in output.iter().enumerate() {
-        if i % 2 == 0 {
-            pulse.push(*p)
+    match c2r.process(&mut spectrum, &mut output) {
+        Ok(_) => {}
+        Err(err) => {
+            //println!("error in iFFT: {err:?}");
         }
     };
-    pulse
+    let length = output.len();
+    output = output.iter().map(|p| *p / length as f64).collect();
+    // let mut pulse: Vec<f64> = vec![];
+    // for (i, p) in output.iter().enumerate() {
+    //     if i % 2 == 0 {
+    //         pulse.push(*p)
+    //     }
+    // };
+    output
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::teraflash::NUM_PULSE_LINES;
+    use crate::io::open_from_csv;
+    use approx::assert_relative_eq;
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
     #[test]
-    fn test_mav() {
-        let mut mav = MovingAverage::default(2);
+    fn test_fft_ifft() {
+        let x = 0;
+        let y = 0;
+        let opened_file_path = "/Users/linus/Documents/test_scan9";
+        let pulse_path = format!("{}/pixel_ID={:05}-{:05}.csv", opened_file_path, x, y);
+        let fft_path = format!("{}/pixel_ID={:05}-{:05}_spectrum.csv", opened_file_path, x, y);
         let mut data = DataContainer::default();
-        data = mav.run(data);
-        println!("1: {:?}", data.signal_1);
-        data.signal_1 = vec![1.0; NUM_PULSE_LINES];
-        data = mav.run(data);
-        println!("2: {:?}", data.signal_1);
-        data.signal_1 = vec![1.0; NUM_PULSE_LINES];
-        data = mav.run(data);
-        println!("3: {:?}", data.signal_1);
+        match open_from_csv(&mut data, &pulse_path, &fft_path) {
+            Ok(_) => {}
+            Err(_) => {
+                println!("failed to open files: {pulse_path} {fft_path}");
+            }
+        }
+
+        println!("signal: {:?}", data.signal_1[100]);
+
+        let mut spectrum: Vec<Complex64> = vec![];
+        for (a, p) in data.signal_1_fft.iter().zip(data.phase_1_fft.iter()) {
+            spectrum.push(Complex64::from_polar(*a, *p));
+        }
+
+        println!("spectrum: {:?}", spectrum[100]);
+
+
+        let (frequencies_fft, signal_1_fft, phase_1_fft) = make_fft(&data.time, &data.signal_1, false, &0.001, &1.0, &7.0);
+
+        data.frequencies_fft = frequencies_fft;
+        data.signal_1_fft = signal_1_fft;
+        data.phase_1_fft = phase_1_fft;
+
+        let mut spectrum: Vec<Complex64> = vec![];
+        for (a, p) in data.signal_1_fft.iter().zip(data.phase_1_fft.iter()) {
+            spectrum.push(Complex64::from_polar(*a, *p));
+        }
+
+        println!("spectrum: {:?}", spectrum[100]);
+
+        data.filtered_signal_1 = make_ifft(&data.frequencies_fft, &data.signal_1_fft, &data.phase_1_fft);
+
+        println!("signal: {:?}", data.filtered_signal_1[100]);
+    }
+
+    #[test]
+    fn one_dim_fft() {
+        // data([f64;6])
+        let answer = vec![0, 1, 2, 3, 2, 1, 0]
+            .into_iter()
+            .map(|x| x as f64)
+            .collect::<Vec<_>>();
+        let mut fft_planner = realfft::RealFftPlanner::new();
+
+        // fft
+        let mut complex = {
+            let fft = fft_planner.plan_fft_forward(answer.len());
+            let mut f = answer.clone();
+            let mut complex = fft.make_output_vec();
+            fft.process(&mut f, &mut complex).unwrap();
+            complex
+        };
+
+        // inv-fft
+        let real = {
+            let inv_fft = fft_planner.plan_fft_inverse(answer.len());
+            let mut f = inv_fft.make_output_vec();
+            inv_fft.process(&mut complex, &mut f).unwrap();
+            let len = f.len();
+            let f = f.into_iter().map(|x| x / len as f64).collect::<Vec<_>>();
+            f
+        };
+
+        // test
+        assert_eq!(answer.len(), real.len());
+        const APPROX_EPSILON: f64 = 1e-15;
+        for (ans, f) in answer.into_iter().zip(real) {
+            println!("{ans} {f}");
+            assert_relative_eq!(ans, f, epsilon = APPROX_EPSILON)
+        }
     }
 }
