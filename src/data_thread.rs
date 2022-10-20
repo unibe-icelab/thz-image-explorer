@@ -23,7 +23,7 @@ pub struct ScannedImage {
     pub width: usize,
     pub img: Array2<f64>,
     pub color_img: ColorImage,
-    pub data: Vec<Vec<DataContainer>>,
+    pub data: Vec<DataContainer>,
     // do we need the ids?
 }
 
@@ -41,7 +41,7 @@ impl Default for ScannedImage {
                 0.0
             }),
             color_img: ColorImage::new([1, 1], Color32::TRANSPARENT),
-            data: vec![vec![]],
+            data: vec![],
         };
     }
 }
@@ -60,8 +60,84 @@ impl ScannedImage {
                 0.0
             }),
             color_img: ColorImage::new([width, height], Color32::TRANSPARENT),
-            data: vec![vec![DataContainer::default(); width]; height],
+            data: vec![DataContainer::default(); width * height],
         };
+    }
+    pub fn get_data(&mut self, x: usize, y: usize) -> DataContainer {
+        self.data[x * self.width + y].clone()
+    }
+
+    pub fn set_data(&mut self, x: usize, y: usize, data: DataContainer) {
+        self.data[x * self.width + y] = data;
+    }
+}
+
+impl ScannedImage {
+    fn iter(&self) -> ScannedImageIter<impl Iterator<Item = &DataContainer>, impl Iterator<Item = &f64>> {
+        ScannedImageIter {
+            data: self.data.iter(),
+            img: self.img.iter()
+        }
+    }
+    fn iter_mut(&mut self) -> ScannedImageIterMut<impl Iterator<Item = &mut DataContainer>, impl Iterator<Item = &mut f64>> {
+        ScannedImageIterMut {
+            data: self.data.iter_mut(),
+            img: self.img.iter_mut()
+        }
+    }
+}
+
+struct ScannedImageIter <D,I> {
+    data: D,
+    img: I
+}
+
+impl<'r,D, I> Iterator for ScannedImageIter<D,I>
+    where
+        D: Iterator<Item = &'r DataContainer>,
+        I: Iterator<Item = &'r f64>
+{
+    type Item = (&'r DataContainer, &'r f64);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.data.next()  {
+            Some(d) => {
+                match self.img.next() {
+                    Some(i) => {
+                        Some((d,i))
+                    },
+                    None => {None}
+                }
+            },
+            None => {None}
+        }
+    }
+}
+
+struct ScannedImageIterMut <D,I> {
+    data: D,
+    img: I
+}
+
+impl<'r,D, I> Iterator for ScannedImageIterMut<D,I>
+    where
+        D: Iterator<Item = &'r mut DataContainer>,
+        I: Iterator<Item = &'r mut f64>
+{
+    type Item = (&'r mut DataContainer, &'r mut f64);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.data.next()  {
+            Some(d) => {
+                match self.img.next() {
+                    Some(i) => {
+                        Some((d,i))
+                    },
+                    None => {None}
+                }
+            },
+            None => {None}
+        }
     }
 }
 
@@ -174,7 +250,7 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                     Ok(_) => {}
                     Err(_) => {
                         println!("failed to open files: {pulse_path} {fft_path}");
-                        data = scan.data[x - 1][y - 1].clone();
+                        data = scan.get_data(x - 1, y - 1);
                     }
                 }
                 data.signal_1 = data.signal_1.iter().zip(data.ref_1.iter()).map(|(s, r)| *s - *r).collect();
@@ -190,12 +266,13 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
 
                 data.filtered_phase_1_fft = data.phase_1_fft.clone();
                 data.filtered_signal_1_fft = data.signal_1_fft.clone();
-                scan.data[x][y] = data.clone();
                 // calculate the intensity by summing the squares
                 let sig_squared: Vec<f64> = data.signal_1.par_iter().map(|x| x.powi(2)).collect();
                 scan.img[[y, x]] = sig_squared.par_iter().sum();
                 let max = scan.img.iter().fold(NEG_INFINITY, |ai, &bi| ai.max(bi));
-                scan.color_img[(y, x)] = color_from_intensity(scan.img[[y, x]], max, data.cut_off);
+                let cut_off = data.cut_off.clone();
+                scan.color_img[(y, x)] = color_from_intensity(scan.img[[y, x]], max, cut_off);
+                scan.set_data(x, y, data.clone());
 
                 if let Ok(mut write_guard) = img_lock.write() {
                     *write_guard = scan.img.clone();
@@ -210,7 +287,7 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                 if pixel.x != read_guard.x || pixel.y != read_guard.y {
                     pixel = read_guard.clone();
 
-                    data = scan.data[pixel.x as usize][pixel.y as usize].clone();
+                    data = scan.get_data(pixel.x as usize, pixel.y as usize);
 
                     let (frequencies_fft, signal_1_fft, phase_1_fft) = make_fft(&data.time, &data.signal_1, normalize_fft, &df, &lower_bound, &upper_bound);
                     let (_, ref_1_fft, ref_phase_1_fft) = make_fft(&data.time, &data.ref_1, normalize_fft, &df, &lower_bound, &upper_bound);
@@ -243,23 +320,20 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
             if filter_bounds != old_bounds {
                 //TODO: iterate over image pixels instead of x and y
                 // >> implement iter for scan object
-                for x in 0..width {
-                    for y in 0..height {
-                        apply_filter(&mut scan.data[x][y], &filter_bounds);
-                        scan.data[x][y].filtered_signal_1 = make_ifft(&scan.data[x][y].frequencies_fft, &scan.data[x][y].filtered_signal_1_fft, &scan.data[x][y].filtered_phase_1_fft);
-                        // calculate the intensity by summing the squares
-                        let sig_squared: Vec<f64> = scan.data[x][y].filtered_signal_1.par_iter().map(|x| x.powi(2)).collect();
-                        scan.img[[y, x]] = sig_squared.par_iter().sum();
-                        let max = scan.img.iter().fold(NEG_INFINITY, |ai, &bi| ai.max(bi));
-                        scan.color_img[(y, x)] = color_from_intensity(scan.img[[y, x]], max, scan.data[x][y].cut_off);
+                // for (pixel_data, img_data) in scan.data.iter_mut().zip(scan.img.iter_mut()) {
+                scan.iter_mut().for_each(|(pixel_data, img_data)| {
+                    apply_filter( pixel_data, &filter_bounds);
+                    pixel_data.filtered_signal_1 = make_ifft(&pixel_data.frequencies_fft, &pixel_data.filtered_signal_1_fft, &pixel_data.filtered_phase_1_fft);
+                    // calculate the intensity by summing the squares
+                    let sig_squared: Vec<f64> = pixel_data.filtered_signal_1.par_iter().map(|x| x.powi(2)).collect();
+                    *img_data = sig_squared.par_iter().sum();
 
-                        if let Ok(mut write_guard) = img_lock.write() {
-                            *write_guard = scan.img.clone();
-                        }
-                    }
+                });
+                if let Ok(mut write_guard) = img_lock.write() {
+                    *write_guard = scan.img.clone();
                 }
                 if let Ok(mut write_guard) = data_lock.write() {
-                    *write_guard = scan.data[pixel.x as usize][pixel.y as usize].clone();
+                    *write_guard = scan.get_data(pixel.x as usize, pixel.y as usize);
                 }
             }
 
