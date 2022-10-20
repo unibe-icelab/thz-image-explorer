@@ -77,7 +77,7 @@ pub fn center_panel(ctx: &egui::Context,
                     ref_1.push([data.time[i] as f64, (data.ref_1[i] + axis_display_offset) as f64]);
                 }
 
-                for i in 0..data.time.len() {
+                for i in 0..data.time.len().min(data.filtered_signal_1.len()) {
                     filtered_signal_1.push([data.time[i] as f64, (data.filtered_signal_1[i] + axis_display_offset) as f64]);
                 }
 

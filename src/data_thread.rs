@@ -21,8 +21,7 @@ pub struct ScannedImage {
     pub dy: f64,
     pub height: usize,
     pub width: usize,
-    pub img: Array2<f64>,
-    pub color_img: ColorImage,
+    pub img: Vec<f64>,
     pub data: Vec<DataContainer>,
     // do we need the ids?
 }
@@ -37,10 +36,7 @@ impl Default for ScannedImage {
             dy: 0.0,
             height: 0,
             width: 0,
-            img: Array2::from_shape_fn((1, 1), |(_, _)| {
-                0.0
-            }),
-            color_img: ColorImage::new([1, 1], Color32::TRANSPARENT),
+            img: vec![],
             data: vec![],
         };
     }
@@ -56,10 +52,7 @@ impl ScannedImage {
             dy,
             height,
             width,
-            img: Array2::from_shape_fn((width, height), |(_, _)| {
-                0.0
-            }),
-            color_img: ColorImage::new([width, height], Color32::TRANSPARENT),
+            img: vec![0.0; width * height],
             data: vec![DataContainer::default(); width * height],
         };
     }
@@ -73,70 +66,70 @@ impl ScannedImage {
 }
 
 impl ScannedImage {
-    fn iter(&self) -> ScannedImageIter<impl Iterator<Item = &DataContainer>, impl Iterator<Item = &f64>> {
+    fn iter(&self) -> ScannedImageIter<impl Iterator<Item=&DataContainer>, impl Iterator<Item=&f64>> {
         ScannedImageIter {
             data: self.data.iter(),
-            img: self.img.iter()
+            img: self.img.iter(),
         }
     }
-    fn iter_mut(&mut self) -> ScannedImageIterMut<impl Iterator<Item = &mut DataContainer>, impl Iterator<Item = &mut f64>> {
+    fn iter_mut(&mut self) -> ScannedImageIterMut<impl Iterator<Item=&mut DataContainer>, impl Iterator<Item=&mut f64>> {
         ScannedImageIterMut {
             data: self.data.iter_mut(),
-            img: self.img.iter_mut()
+            img: self.img.iter_mut(),
         }
     }
 }
 
-struct ScannedImageIter <D,I> {
+struct ScannedImageIter<D, I> {
     data: D,
-    img: I
+    img: I,
 }
 
-impl<'r,D, I> Iterator for ScannedImageIter<D,I>
+impl<'r, D, I> Iterator for ScannedImageIter<D, I>
     where
-        D: Iterator<Item = &'r DataContainer>,
-        I: Iterator<Item = &'r f64>
+        D: Iterator<Item=&'r DataContainer>,
+        I: Iterator<Item=&'r f64>
 {
     type Item = (&'r DataContainer, &'r f64);
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.data.next()  {
+        match self.data.next() {
             Some(d) => {
                 match self.img.next() {
                     Some(i) => {
-                        Some((d,i))
-                    },
-                    None => {None}
+                        Some((d, i))
+                    }
+                    None => { None }
                 }
-            },
-            None => {None}
+            }
+            None => { None }
         }
     }
 }
 
-struct ScannedImageIterMut <D,I> {
+struct ScannedImageIterMut<D, I> {
     data: D,
-    img: I
+    img: I,
 }
 
-impl<'r,D, I> Iterator for ScannedImageIterMut<D,I>
+impl<'r, D, I> Iterator for ScannedImageIterMut<D, I>
     where
-        D: Iterator<Item = &'r mut DataContainer>,
-        I: Iterator<Item = &'r mut f64>
+        D: Iterator<Item=&'r mut DataContainer>,
+        I: Iterator<Item=&'r mut f64>
 {
     type Item = (&'r mut DataContainer, &'r mut f64);
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.data.next()  {
+        match self.data.next() {
             Some(d) => {
                 match self.img.next() {
                     Some(i) => {
-                        Some((d,i))
-                    },
-                    None => {None}
+                        Some((d, i))
+                    }
+                    None => { None }
                 }
-            },
-            None => {None}
+            }
+            None => { None }
         }
     }
 }
@@ -268,14 +261,16 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                 data.filtered_signal_1_fft = data.signal_1_fft.clone();
                 // calculate the intensity by summing the squares
                 let sig_squared: Vec<f64> = data.signal_1.par_iter().map(|x| x.powi(2)).collect();
-                scan.img[[y, x]] = sig_squared.par_iter().sum();
+                scan.img[x*scan.width + y] = sig_squared.par_iter().sum();
                 let max = scan.img.iter().fold(NEG_INFINITY, |ai, &bi| ai.max(bi));
                 let cut_off = data.cut_off.clone();
-                scan.color_img[(y, x)] = color_from_intensity(scan.img[[y, x]], max, cut_off);
                 scan.set_data(x, y, data.clone());
 
                 if let Ok(mut write_guard) = img_lock.write() {
-                    *write_guard = scan.img.clone();
+                    let img = Array2::from_shape_fn((scan.width, scan.height), |(x, y)| {
+                        scan.img[x*scan.width + y]
+                    });
+                    *write_guard = img;
                 }
             }
         }
@@ -283,33 +278,43 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
         let mut pixel = SelectedPixel::new();
 
         loop {
+            let old_lb = lower_bound;
+            let old_ub = upper_bound;
+            if let Ok(read_guard) = fft_bounds_lock.read() {
+                lower_bound = read_guard[0].clone();
+                upper_bound = read_guard[1].clone();
+            }
+            let old_df = df;
+            if let Ok(read_guard) = df_lock.read() {
+                df = read_guard.clone();
+            }
+            let old_pixel = pixel.clone();
             if let Ok(read_guard) = pixel_lock.read() {
-                if pixel.x != read_guard.x || pixel.y != read_guard.y {
-                    pixel = read_guard.clone();
+                pixel = read_guard.clone();
+            }
+            if pixel.x != old_pixel.x || pixel.y != old_pixel.y || old_df != df || old_lb != lower_bound || old_ub != upper_bound {
+                data = scan.get_data(pixel.x as usize, pixel.y as usize);
 
-                    data = scan.get_data(pixel.x as usize, pixel.y as usize);
+                let (frequencies_fft, signal_1_fft, phase_1_fft) = make_fft(&data.time, &data.signal_1, normalize_fft, &df, &lower_bound, &upper_bound);
+                let (_, ref_1_fft, ref_phase_1_fft) = make_fft(&data.time, &data.ref_1, normalize_fft, &df, &lower_bound, &upper_bound);
 
-                    let (frequencies_fft, signal_1_fft, phase_1_fft) = make_fft(&data.time, &data.signal_1, normalize_fft, &df, &lower_bound, &upper_bound);
-                    let (_, ref_1_fft, ref_phase_1_fft) = make_fft(&data.time, &data.ref_1, normalize_fft, &df, &lower_bound, &upper_bound);
+                data.frequencies_fft = frequencies_fft;
+                data.signal_1_fft = signal_1_fft;
+                data.phase_1_fft = phase_1_fft;
+                data.ref_1_fft = ref_1_fft;
+                data.ref_phase_1_fft = ref_phase_1_fft;
 
-                    data.frequencies_fft = frequencies_fft;
-                    data.signal_1_fft = signal_1_fft;
-                    data.phase_1_fft = phase_1_fft;
-                    data.ref_1_fft = ref_1_fft;
-                    data.ref_phase_1_fft = ref_phase_1_fft;
-
-                    // open hk file of selected pixel
-                    let hk_path = format!("{}/pixel_ID={:05}-{:05}_hk.csv", opened_file_path, pixel.y, pixel.x);
-                    match open_hk(&mut data.hk, hk_path) {
-                        Ok((x, y)) => {}
-                        Err(err) => {
-                            println!("failed to open hk: {err}");
-                        }
+                // open hk file of selected pixel
+                let hk_path = format!("{}/pixel_ID={:05}-{:05}_hk.csv", opened_file_path, pixel.y, pixel.x);
+                match open_hk(&mut data.hk, hk_path) {
+                    Ok((x, y)) => {}
+                    Err(err) => {
+                        println!("failed to open hk: {err}");
                     }
+                }
 
-                    if let Ok(mut write_guard) = data_lock.write() {
-                        *write_guard = data.clone();
-                    }
+                if let Ok(mut write_guard) = data_lock.write() {
+                    *write_guard = data.clone();
                 }
             }
 
@@ -321,17 +326,19 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                 //TODO: iterate over image pixels instead of x and y
                 // >> implement iter for scan object
                 // for (pixel_data, img_data) in scan.data.iter_mut().zip(scan.img.iter_mut()) {
-                scan.iter_mut().for_each(|(pixel_data, img_data)| {
-                    apply_filter( pixel_data, &filter_bounds);
+                scan.data.par_iter_mut().zip(scan.img.par_iter_mut()).for_each(|(pixel_data, img_data)| {
+                    //scan.iter_mut().for_each(|(pixel_data, img_data)| {
+                    apply_filter(pixel_data, &filter_bounds);
                     pixel_data.filtered_signal_1 = make_ifft(&pixel_data.frequencies_fft, &pixel_data.filtered_signal_1_fft, &pixel_data.filtered_phase_1_fft);
                     // calculate the intensity by summing the squares
                     let sig_squared: Vec<f64> = pixel_data.filtered_signal_1.par_iter().map(|x| x.powi(2)).collect();
                     *img_data = sig_squared.par_iter().sum();
-
                 });
                 if let Ok(mut write_guard) = img_lock.write() {
-                    *write_guard = scan.img.clone();
-                }
+                    let img = Array2::from_shape_fn((scan.width, scan.height), |(x, y)| {
+                        scan.img[x*scan.width + y]
+                    });
+                    *write_guard = img;                }
                 if let Ok(mut write_guard) = data_lock.write() {
                     *write_guard = scan.get_data(pixel.x as usize, pixel.y as usize);
                 }
