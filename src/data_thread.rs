@@ -236,29 +236,30 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                 }
             }
 
+            let old_bounds = filter_bounds;
             if let Ok(read_guard) = fft_filter_bounds_lock.read() {
-                if filter_bounds != *read_guard {
-                    filter_bounds = read_guard.clone();
-                    //TODO: iterate over image pixels instead of x and y
-                    // >> implement iter for scan object
-                    for x in 0..width {
-                        for y in 0..height {
-                            apply_filter(&mut scan.data[x][y], &filter_bounds);
-                            scan.data[x][y].filtered_signal_1 = make_ifft(&scan.data[x][y].frequencies_fft, &scan.data[x][y].filtered_signal_1_fft, &scan.data[x][y].filtered_phase_1_fft);
-                            // calculate the intensity by summing the squares
-                            let sig_squared: Vec<f64> = scan.data[x][y].filtered_signal_1.par_iter().map(|x| x.powi(2)).collect();
-                            scan.img[[y, x]] = sig_squared.par_iter().sum();
-                            let max = scan.img.iter().fold(NEG_INFINITY, |ai, &bi| ai.max(bi));
-                            scan.color_img[(y, x)] = color_from_intensity(scan.img[[y, x]], max, scan.data[x][y].cut_off);
+                filter_bounds = read_guard.clone();
+            }
+            if filter_bounds != old_bounds {
+                //TODO: iterate over image pixels instead of x and y
+                // >> implement iter for scan object
+                for x in 0..width {
+                    for y in 0..height {
+                        apply_filter(&mut scan.data[x][y], &filter_bounds);
+                        scan.data[x][y].filtered_signal_1 = make_ifft(&scan.data[x][y].frequencies_fft, &scan.data[x][y].filtered_signal_1_fft, &scan.data[x][y].filtered_phase_1_fft);
+                        // calculate the intensity by summing the squares
+                        let sig_squared: Vec<f64> = scan.data[x][y].filtered_signal_1.par_iter().map(|x| x.powi(2)).collect();
+                        scan.img[[y, x]] = sig_squared.par_iter().sum();
+                        let max = scan.img.iter().fold(NEG_INFINITY, |ai, &bi| ai.max(bi));
+                        scan.color_img[(y, x)] = color_from_intensity(scan.img[[y, x]], max, scan.data[x][y].cut_off);
 
-                            if let Ok(mut write_guard) = img_lock.write() {
-                                *write_guard = scan.img.clone();
-                            }
+                        if let Ok(mut write_guard) = img_lock.write() {
+                            *write_guard = scan.img.clone();
                         }
                     }
-                    if let Ok(mut write_guard) = data_lock.write() {
-                        *write_guard = scan.data[pixel.x as usize][pixel.y as usize].clone();
-                    }
+                }
+                if let Ok(mut write_guard) = data_lock.write() {
+                    *write_guard = scan.data[pixel.x as usize][pixel.y as usize].clone();
                 }
             }
 
