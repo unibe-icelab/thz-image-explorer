@@ -9,7 +9,7 @@ use ndarray::Array2;
 use crate::{DataContainer, GuiSettingsContainer, Print, ScannedImage};
 use crate::gauge::gauge;
 use crate::gui::SelectedPixel;
-use crate::matrix_plot::{make_dummy, plot_matrix};
+use crate::matrix_plot::{make_dummy, plot_matrix, plot_waterfall};
 use serde::{Deserialize, Serialize};
 use crate::toggle::toggle;
 
@@ -29,6 +29,7 @@ pub fn left_panel(ctx: &egui::Context,
                   pixel_selected: &mut SelectedPixel,
                   val: &mut PlotPoint,
                   img_lock: &Arc<RwLock<Array2<f64>>>,
+                  waterfall_lock: &Arc<RwLock<Array2<f64>>>,
                   data_lock: &Arc<RwLock<DataContainer>>,
                   print_lock: &Arc<RwLock<Vec<Print>>>,
                   pixel_lock: &Arc<RwLock<SelectedPixel>>,
@@ -84,8 +85,12 @@ pub fn left_panel(ctx: &egui::Context,
 
 
             let mut img_data = make_dummy();
+            let mut waterfall_data = make_dummy();
             if let Ok(read_guard) = img_lock.read() {
                 img_data = read_guard.clone();
+            }
+            if let Ok(read_guard) = waterfall_lock.read() {
+                waterfall_data = read_guard.clone();
             }
             let img = plot_matrix(
                 ui,
@@ -101,6 +106,15 @@ pub fn left_panel(ctx: &egui::Context,
                     *write_guard = pixel_selected.clone();
                 }
             }
+            let img = plot_waterfall(
+                ui,
+                &waterfall_data,
+                &(*left_panel_width as f64),
+                &(*left_panel_width as f64),
+                &mut data.cut_off,
+                val,
+                pixel_selected,
+            );
 
             let height = ui.available_size().y - logo_height - 20.0;
             ui.add_space(height);

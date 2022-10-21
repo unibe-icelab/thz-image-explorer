@@ -94,9 +94,9 @@ pub fn plot_matrix(ui: &mut egui::Ui,
         let plot = Plot::new("image")
             .height(0.75 * height as f32 * size as f32)
             .width(0.75 * width as f32 * size as f32)
-            .show_axes([false, false])
-            .show_x(false)
-            .show_y(false)
+            //.show_axes([false, false])
+            //.show_x(false)
+            //.show_y(false)
             //.set_margin_fraction(Vec2 { x: 0.0, y: 0.0 })
             .allow_drag(false);
         let plot_response = plot.show(ui, |plot_ui| {
@@ -119,13 +119,13 @@ pub fn plot_matrix(ui: &mut egui::Ui,
         colorbar(ui, &(0.1 * width as f64 * size as f64), &(0.78 * height as f64 * size as f64));
         ui.vertical(|ui| {
             for i in 0..11 {
-                ui.label(RichText::new(format!("{:.1}%",  (i as f64) / (11.0 - 1.0) * (100.0)))
+                ui.label(RichText::new(format!("{:.1}%", (i as f64) / (11.0 - 1.0) * (100.0)))
                     .font(FontId::proportional(1.35 * 10.0)));
             }
         });
         if plot_response.response.clicked() {
             // display spectrum!
-            if pixel_selected.x == val.x.floor() && pixel_selected.y == val.y.floor() &&
+            if pixel_selected.x == val.x.floor() && pixel_selected.y == height as f64 - 1.0 - val.y.floor() &&
                 pixel_selected.selected {
                 pixel_selected.selected = false;
             } else {
@@ -147,5 +147,68 @@ pub fn plot_matrix(ui: &mut egui::Ui,
     let x = val.x.floor() as usize;
     let y = val.y.floor() as usize;
     ui.label(format!("ID = {}: i = {:.2}%", id_matrix[x][y], intensity_matrix[x][y]));
+    img
+}
+
+pub fn plot_waterfall(ui: &mut egui::Ui,
+                      data: &Array2<f64>,
+                      plot_width: &f64,
+                      plot_height: &f64,
+                      cut_off: &mut f64,
+                      val: &mut PlotPoint,
+                      pixel_selected: &mut SelectedPixel) -> ColorImage {
+    let max = data.iter().fold(NEG_INFINITY, |ai, &bi| ai.max(bi));
+    ui.horizontal(|ui| {
+        ui.label("Noise gate:");
+        ui.add(egui::Slider::new(cut_off, 0.0..=100.0));
+    });
+    let width = data.len_of(Axis(0));
+    let height = data.len_of(Axis(1));
+    let size = *plot_width as f64; //[plot_width / width as f64, plot_height / height as f64].iter().fold(INFINITY, |ai, &bi| ai.min(bi));
+    let mut img = ColorImage::new([width, height], Color32::TRANSPARENT);
+    for y in 0..height {
+        for x in 0..width {
+            match data.get((x, y)) {
+                Some(i) => {
+                    img[(x, y)] = color_from_intensity(*i / max * 100.0, 100.0, *cut_off);
+                }
+                None => {}
+            }
+        }
+    }
+    let texture = ui.ctx().load_texture("waterfall", img.clone(), TextureFilter::Nearest);
+    let im = PlotImage::new(
+        &texture,
+        PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
+        vec2(img.width() as f32, img.height() as f32),
+    );
+    ui.horizontal(|ui| {
+        let plot = Plot::new("waterfall")
+            .height(0.75 * *plot_height as f32)
+            .width(0.75 * *plot_width as f32)
+            //.show_axes([false, false])
+            //.show_x(false)
+            //.show_y(false)
+            .set_margin_fraction(Vec2 { x: 0.0, y: 0.0 })
+            .allow_drag(false);
+        let plot_response = plot.show(ui, |plot_ui| {
+            plot_ui.image(im);
+            let selected_row = PlotPoints::from(
+                vec![
+                    [0.0, height as f64 - pixel_selected.y.floor()],
+                    [0.0, height as f64  - pixel_selected.y.floor() + 1.0],
+                    [width as f64 - 1.0, height as f64  - pixel_selected.y.floor() + 1.0],
+                    [width as f64 - 1.0, height as f64  - pixel_selected.y.floor()],
+                    [0.0, height as f64  - pixel_selected.y.floor()],
+                ]
+            );
+            if pixel_selected.selected {
+                plot_ui.line(Line::new(selected_row)
+                    .highlight(true)
+                    .color(Color32::GRAY));
+            }
+        });
+    });
+
     img
 }
