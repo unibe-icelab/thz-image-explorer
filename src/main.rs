@@ -62,6 +62,9 @@ fn main() {
     let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| {
         0.0
     })));
+    let waterfall_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| {
+        0.0
+    })));
     let df_lock = Arc::new(RwLock::new(gui_settings.frequency_resolution));
     let log_mode_lock = Arc::new(RwLock::new(gui_settings.log_plot));
     let normalize_fft_lock = Arc::new(RwLock::new(gui_settings.normalize_fft));
@@ -80,6 +83,7 @@ fn main() {
     let main_log_mode_lock = log_mode_lock.clone();
     let main_df_lock = df_lock.clone();
     let main_img_lock = img_lock.clone();
+    let main_waterfall_lock = waterfall_lock.clone();
     let main_pixel_lock = pixel_lock.clone();
     let main_normalize_fft_lock = normalize_fft_lock.clone();
     let main_fft_bounds_lock = fft_bounds_lock.clone();
@@ -95,6 +99,7 @@ fn main() {
                     main_fft_bounds_lock,
                     main_fft_filter_bounds_lock,
                     main_img_lock,
+                    main_waterfall_lock,
                     main_pixel_lock,
                     main_print_lock,
                     save_rx,
@@ -119,6 +124,7 @@ fn main() {
     let gui_connected_lock = connected_lock.clone();
     let gui_print_lock = print_lock.clone();
     let gui_img_lock = img_lock.clone();
+    let gui_waterfall_lock = waterfall_lock.clone();
     let gui_pixel_lock = pixel_lock.clone();
 
     eframe::run_native(
@@ -133,6 +139,7 @@ fn main() {
                 gui_pixel_lock,
                 gui_log_mode_lock,
                 gui_img_lock,
+                gui_waterfall_lock,
                 gui_normalize_fft_lock,
                 gui_fft_bounds_lock,
                 gui_fft_filter_bounds_lock,
