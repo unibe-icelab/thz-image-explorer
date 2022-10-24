@@ -14,8 +14,8 @@ pub fn open_hk(hk: &mut HouseKeeping, file_path: String) -> Result<(usize, usize
     let mut y = 0;
     if let Some(result) = rdr.records().next() {
         let record = result?;
-        x = record[1].parse::<usize>().unwrap();
-        y = record[2].parse::<usize>().unwrap();
+        x = record[1].parse::<f64>().unwrap() as usize;
+        y = record[2].parse::<f64>().unwrap() as usize;
         hk.ambient_temperature = record[3].parse::<f64>().unwrap();
         hk.sample_temperature = record[4].parse::<f64>().unwrap();
         hk.ambient_pressure = record[5].parse::<f64>().unwrap();
