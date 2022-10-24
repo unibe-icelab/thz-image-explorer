@@ -62,6 +62,9 @@ pub fn right_panel(ctx: &egui::Context,
 
                         ui.label("Normalize FFT: ");
                         ui.add(toggle(&mut gui_conf.normalize_fft));
+                        if let Ok(mut write_guard) = normalize_fft_lock.write() {
+                            *write_guard = gui_conf.normalize_fft.clone();
+                        }
                     });
 
                 ui.label("FFT window bounds: ");
@@ -187,7 +190,7 @@ pub fn right_panel(ctx: &egui::Context,
                 });
 
                 ui.vertical_centered(|ui| {
-                    if ui.add(filter(&(*right_panel_width as f64 * 0.9), &100.0, &10.0, filter_bounds)).changed(){
+                    if ui.add(filter(&(*right_panel_width as f64 * 0.9), &100.0, &10.0, filter_bounds)).changed() {
                         if let Ok(mut write_guard) = fft_filter_bounds_lock.write() {
                             *write_guard = filter_bounds.clone();
                         }
