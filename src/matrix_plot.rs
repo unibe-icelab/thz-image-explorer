@@ -196,8 +196,8 @@ pub fn plot_waterfall(ui: &mut egui::Ui,
             let selected_row = PlotPoints::from(
                 vec![
                     [0.0, height as f64 - pixel_selected.y.floor()],
-                    [0.0, height as f64  - pixel_selected.y.floor() + 1.0],
-                    [width as f64 - 1.0, height as f64  - pixel_selected.y.floor() + 1.0],
+                    [0.0, height as f64  - pixel_selected.y.floor() - 1.0],
+                    [width as f64 - 1.0, height as f64  - pixel_selected.y.floor() - 1.0],
                     [width as f64 - 1.0, height as f64  - pixel_selected.y.floor()],
                     [0.0, height as f64  - pixel_selected.y.floor()],
                 ]
