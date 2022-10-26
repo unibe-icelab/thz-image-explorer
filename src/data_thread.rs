@@ -63,6 +63,14 @@ impl ScannedImage {
     pub fn set_data(&mut self, x: usize, y: usize, data: DataContainer) {
         self.data[x * self.width + y] = data;
     }
+
+    pub fn get_img(&mut self, x: usize, y: usize) -> f64 {
+        self.img[x * self.width + y].clone()
+    }
+
+    pub fn set_img(&mut self, x: usize, y: usize, val: f64) {
+        self.img[x * self.width + y] = val;
+    }
 }
 
 impl ScannedImage {
@@ -244,7 +252,19 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                     Ok(_) => {}
                     Err(_) => {
                         println!("failed to open files: {pulse_path} {fft_path}");
-                        data = scan.get_data(x - 1, y - 1);
+                        let x1;
+                        let y1;
+                        if x == 0 {
+                            x1 = 0;
+                        } else {
+                            x1 = x - 1;
+                        }
+                        if y == 0 {
+                            y1 = 0;
+                        } else {
+                            y1 = y - 1;
+                        }
+                        data = scan.get_data(x1, y1);
                     }
                 }
                 data.signal_1 = data.signal_1.iter().zip(data.ref_1.iter()).map(|(s, r)| *s - *r).collect();
@@ -262,12 +282,12 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                 data.filtered_signal_1_fft = data.signal_1_fft.clone();
                 // calculate the intensity by summing the squares
                 let sig_squared: Vec<f64> = data.signal_1.par_iter().map(|x| x.powi(2)).collect();
-                scan.img[x * scan.width + y] = sig_squared.par_iter().sum();
+                scan.set_img(x, y, sig_squared.par_iter().sum());
                 scan.set_data(x, y, data.clone());
 
                 if let Ok(mut write_guard) = img_lock.write() {
                     let img = Array2::from_shape_fn((scan.width, scan.height), |(x, y)| {
-                        scan.img[y * scan.height + x]
+                        scan.get_img(x, y)
                     });
                     *write_guard = img;
                 }
@@ -277,7 +297,7 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
         if let Ok(mut write_guard) = waterfall_lock.write() {
             let len = scan.data[0].signal_1_fft.len();
             let img = Array2::from_shape_fn((len, scan.height), |(x, y)| {
-                scan.data[0 as usize * scan.width + y].filtered_signal_1_fft.clone()[x]
+                scan.get_data(scan.width - 1, y).filtered_signal_1_fft.clone()[x]
             });
             *write_guard = img;
         }
@@ -311,7 +331,7 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                 data.ref_phase_1_fft = ref_phase_1_fft;
 
                 // open hk file of selected pixel
-                let hk_path = format!("{}/pixel_ID={:05}-{:05}_hk.csv", opened_file_path, pixel.y, pixel.x);
+                let hk_path = format!("{}/pixel_ID={:05}-{:05}_hk.csv", opened_file_path, pixel.x, pixel.y);
                 match open_hk(&mut data.hk, hk_path) {
                     Ok((x, y)) => {}
                     Err(err) => {
@@ -321,14 +341,14 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
 
                 if let Ok(mut write_guard) = img_lock.write() {
                     let img = Array2::from_shape_fn((scan.width, scan.height), |(x, y)| {
-                        scan.img[y * scan.height + x]
+                        scan.get_img(x, y)
                     });
                     *write_guard = img;
                 }
                 if let Ok(mut write_guard) = waterfall_lock.write() {
                     let len = scan.data[0].signal_1_fft.len();
                     let img = Array2::from_shape_fn((len, scan.height), |(x, y)| {
-                        scan.data[pixel.x as usize + scan.height * y].filtered_signal_1_fft.clone()[x]
+                        scan.get_data(pixel.x as usize, y).filtered_signal_1_fft.clone()[x]
                     });
                     *write_guard = img;
                 }
@@ -356,14 +376,14 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
                 });
                 if let Ok(mut write_guard) = img_lock.write() {
                     let img = Array2::from_shape_fn((scan.width, scan.height), |(x, y)| {
-                        scan.img[y * scan.height + x]
+                        scan.get_img(x, y)
                     });
                     *write_guard = img;
                 }
                 if let Ok(mut write_guard) = waterfall_lock.write() {
                     let len = scan.data[0].signal_1_fft.len();
                     let img = Array2::from_shape_fn((len, scan.height), |(x, y)| {
-                        scan.data[pixel.x as usize + scan.height * y].filtered_signal_1_fft.clone()[x]
+                        scan.get_data(pixel.x as usize, y).filtered_signal_1_fft.clone()[x]
                     });
                     *write_guard = img;
                 }
