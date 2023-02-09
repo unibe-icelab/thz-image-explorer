@@ -39,7 +39,7 @@ pub fn right_panel(ctx: &egui::Context,
         data = read_guard.clone();
     }
 
-    egui::SidePanel::new(Side::Right, 3)
+    egui::SidePanel::new(Side::Right, "Right Panel Settings")
         .min_width(*right_panel_width)
         .max_width(*right_panel_width)
         .resizable(false)
@@ -286,9 +286,9 @@ pub fn right_panel(ctx: &egui::Context,
                                    }
                                });
                 if task_open {
-                    ui.output().cursor_icon = egui::CursorIcon::Wait;
+                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
                 } else {
-                    ui.output().cursor_icon = egui::CursorIcon::Default;
+                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
                 }
                 ui.add_space(5.0);
                 ui.separator();
