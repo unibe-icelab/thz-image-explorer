@@ -42,7 +42,7 @@ pub fn left_panel(ctx: &egui::Context,
         data = read_guard.clone();
     }
 
-    egui::SidePanel::new(Side::Left, 4)
+    egui::SidePanel::new(Side::Left, "Left Panel Settings")
         .min_width(*left_panel_width)
         .max_width(*left_panel_width)
         .resizable(false)

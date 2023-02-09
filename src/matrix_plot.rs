@@ -2,7 +2,7 @@ use std::f64::{INFINITY, NEG_INFINITY};
 use eframe::egui;
 use eframe::egui::{Color32, ColorImage, FontId, RichText, vec2, Vec2};
 use eframe::egui::plot::{Line, Plot, PlotImage, PlotPoint, PlotPoints};
-use eframe::egui_glow::painter::TextureFilter;
+use egui::TextureOptions;
 use ndarray::{Array2, Axis};
 use crate::gui::SelectedPixel;
 
@@ -19,9 +19,9 @@ pub fn make_dummy() -> Array2<f64> {
 pub fn color_from_intensity(i: f64, max_intensity: f64, cut_off: f64) -> Color32 {
     let h = i / max_intensity * 0.667; // only go from red to blue
     if h > cut_off / max_intensity * 0.667 {
-        egui::color::Hsva { h: h as f32, s: 1.0, v: 1.0, a: 1.0 }.into()
+        egui::ecolor::Hsva { h: h as f32, s: 1.0, v: 1.0, a: 1.0 }.into()
     } else {
-        egui::color::Hsva { h: h as f32, s: 1.0, v: 0.0, a: 0.0 }.into()
+        egui::ecolor::Hsva { h: h as f32, s: 1.0, v: 0.0, a: 0.0 }.into()
     }
 }
 
@@ -40,10 +40,10 @@ fn colorbar(ui: &mut egui::Ui, width: &f64, height: &f64) {
 
     let mut img = egui::ColorImage::new([1, 100], Color32::TRANSPARENT);
     for y in 0..100 {
-        img[(0, y)] = egui::color::Hsva { h: y as f32 / 100.0 * 0.667, s: 1.0, v: 1.0, a: 1.0 }.into()
+        img[(0, y)] = egui::ecolor::Hsva { h: y as f32 / 100.0 * 0.667, s: 1.0, v: 1.0, a: 1.0 }.into()
     }
 
-    let texture = ui.ctx().load_texture("image", img.clone(), TextureFilter::Nearest);
+    let texture = ui.ctx().load_texture("image", img.clone(), TextureOptions::NEAREST);
     let im = PlotImage::new(
         &texture,
         PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
@@ -84,7 +84,7 @@ pub fn plot_matrix(ui: &mut egui::Ui,
             }
         }
     }
-    let texture = ui.ctx().load_texture("image", img.clone(), TextureFilter::Nearest);
+    let texture = ui.ctx().load_texture("image", img.clone(), TextureOptions::NEAREST);
     let im = PlotImage::new(
         &texture,
         PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
@@ -176,7 +176,7 @@ pub fn plot_waterfall(ui: &mut egui::Ui,
             }
         }
     }
-    let texture = ui.ctx().load_texture("waterfall", img.clone(), TextureFilter::Nearest);
+    let texture = ui.ctx().load_texture("waterfall", img.clone(), TextureOptions::NEAREST);
     let im = PlotImage::new(
         &texture,
         PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
