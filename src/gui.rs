@@ -4,14 +4,13 @@ use std::sync::mpsc::Sender;
 use std::time::Duration;
 
 use eframe::{egui, Storage};
-use eframe::egui::ColorImage;
 use eframe::egui::plot::PlotPoint;
 use egui_extras::RetainedImage;
 use ndarray::Array2;
 use preferences::Preferences;
 use serde::{Deserialize, Serialize};
 
-use crate::{APP_INFO, ScannedImage};
+use crate::{APP_INFO};
 use crate::center_panel::center_panel;
 use crate::data::DataContainer;
 use crate::left_panel::left_panel;
@@ -21,6 +20,7 @@ const MAX_FPS: f64 = 24.0;
 
 
 #[derive(Clone)]
+#[allow(unused)]
 pub enum Print {
     EMPTY,
     MESSAGE(String),
@@ -43,25 +43,6 @@ pub fn update_in_console(print_lock: &Arc<RwLock<Vec<Print>>>, message: Print, i
     if let Ok(mut write_guard) = print_lock.write() {
         write_guard[index] = message;
     }
-}
-
-pub enum GuiState {
-    IDLE,
-    Status,
-    TBegin(f64),
-    TRange(f64),
-    Avg(u32),
-    Transmission(String),
-    Channel(String),
-    UpdateConf,
-    Laser(bool),
-    Emitter1(bool),
-    Emitter2(bool),
-    Run(bool),
-    SetReference1,
-    SetReference2,
-    ClearReference1,
-    ClearReference2,
 }
 
 #[derive(Debug, Clone)]

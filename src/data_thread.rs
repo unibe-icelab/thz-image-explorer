@@ -1,9 +1,8 @@
-use std::f64::NEG_INFINITY;
 use std::sync::{Arc, RwLock};
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
-use eframe::egui::{Color32, ColorImage};
+use eframe::egui::{ ColorImage};
 use image::RgbaImage;
 use ndarray::Array2;
 use rayon::prelude::*;
@@ -398,49 +397,5 @@ pub fn main_thread(data_lock: Arc<RwLock<DataContainer>>,
 
             std::thread::sleep(Duration::from_millis(10));
         }
-
-        let (frequencies_fft, signal_1_fft, phase_1_fft) = make_fft(&data.time, &data.signal_1, normalize_fft, &df, &lower_bound, &upper_bound);
-        let (_, ref_1_fft, ref_phase_1_fft) = make_fft(&data.time, &data.ref_1, normalize_fft, &df, &lower_bound, &upper_bound);
-
-        data.frequencies_fft = frequencies_fft;
-        data.signal_1_fft = signal_1_fft;
-        data.phase_1_fft = phase_1_fft;
-        data.ref_1_fft = ref_1_fft;
-        data.ref_phase_1_fft = ref_phase_1_fft;
-
-
-        if acquire == true {
-            // save file
-            let extension = "_spectrum.csv".to_string();
-            let mut file_path_fft: String;
-            if file_path.ends_with(".csv") {
-                file_path_fft = file_path[..file_path.len() - 4].to_string();
-                file_path_fft.push_str(&extension);
-            } else {
-                file_path_fft = file_path.to_string();
-                file_path_fft.push_str(&extension);
-            }
-            let print_index_1 = print_to_console(&print_lock, Print::TASK(format!("saving pulse file to {:?} ...", file_path).to_string()));
-            let print_index_2 = print_to_console(&print_lock, Print::TASK(format!("saving fft ile to {:?} ...", file_path_fft).to_string()));
-            let save_result = save_to_csv(&data, &file_path, &file_path_fft);
-            match save_result {
-                Ok(_) => {
-                    update_in_console(&print_lock, Print::OK(format!("saved pulse file to {:?} ", file_path).to_string()), print_index_1);
-                    update_in_console(&print_lock, Print::OK(format!("saved fft file to {:?} ", file_path_fft).to_string()), print_index_2);
-                }
-                Err(e) => {
-                    update_in_console(&print_lock, Print::ERROR(format!("failed to save file to {:?} and {:?}", file_path, file_path_fft).to_string()), print_index_1);
-                    update_in_console(&print_lock, Print::ERROR(e.to_string()), print_index_2);
-                }
-            }
-            acquire = false;
-        }
-
-        if let Ok(mut write_guard) = data_lock.write() {
-            // if normal mode, otherwise write scanned data here
-            *write_guard = data.clone();
-        }
-
-        std::thread::sleep(Duration::from_millis(10));
     }
 }

@@ -1,5 +1,3 @@
-use std::fmt;
-
 use itertools_num::linspace;
 use serde::{Deserialize, Serialize};
 
