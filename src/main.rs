@@ -41,7 +41,6 @@ const APP_INFO: AppInfo = AppInfo { name: "COExplore", author: "Linus Leo Stöck
 
 
 fn main() {
-
     let mut gui_settings = GuiSettingsContainer::new();
     let prefs_key = "config/gui";
     let load_result = GuiSettingsContainer::load(&APP_INFO, prefs_key);
@@ -145,10 +144,8 @@ fn main() {
                 gui_fft_filter_bounds_lock,
                 gui_settings,
                 save_tx,
-                load_tx
+                load_tx,
             ))
         }),
     );
-
-    main_thread_handler.join().unwrap();
 }
