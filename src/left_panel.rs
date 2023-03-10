@@ -1,16 +1,18 @@
 use std::sync::{Arc, RwLock};
-use std::sync::mpsc::{Sender};
+use std::sync::mpsc::Sender;
+
 use eframe::egui;
-use eframe::egui::panel::Side;
 use eframe::egui::{Color32, ColorImage, Spinner};
+use eframe::egui::panel::Side;
 use eframe::egui::plot::PlotPoint;
 use egui_extras::RetainedImage;
 use ndarray::Array2;
+use serde::{Deserialize, Serialize};
+
 use crate::{DataContainer, GuiSettingsContainer, Print, ScannedImage};
 use crate::gauge::gauge;
 use crate::gui::SelectedPixel;
 use crate::matrix_plot::{make_dummy, plot_matrix, plot_waterfall};
-use serde::{Deserialize, Serialize};
 use crate::toggle::toggle;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -38,7 +40,7 @@ pub fn left_panel(ctx: &egui::Context,
 ) {
     let gauge_size = left_panel_width / 2.5;
     let mut data = DataContainer::default();
-    if let Ok( read_guard) = data_lock.read() {
+    if let Ok(read_guard) = data_lock.read() {
         data = read_guard.clone();
     }
 
@@ -123,6 +125,5 @@ pub fn left_panel(ctx: &egui::Context,
             } else {
                 ui.add(egui::Image::new(coconut_light.texture_id(ctx), coconut_light.size_vec2() / coconut_light.width() as f32 * *left_panel_width));
             }
-
         });
 }

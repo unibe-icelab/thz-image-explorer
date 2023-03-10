@@ -1,18 +1,20 @@
 use core::f64;
-use std::sync::mpsc::{Sender};
 use std::sync::{Arc, RwLock};
+use std::sync::mpsc::Sender;
 use std::time::Duration;
+
 use eframe::{egui, Storage};
 use eframe::egui::ColorImage;
 use eframe::egui::plot::PlotPoint;
 use egui_extras::RetainedImage;
 use ndarray::Array2;
 use preferences::Preferences;
-use crate::{APP_INFO, ScannedImage};
 use serde::{Deserialize, Serialize};
+
+use crate::{APP_INFO, ScannedImage};
 use crate::center_panel::center_panel;
 use crate::data::DataContainer;
-use crate::left_panel::{left_panel};
+use crate::left_panel::left_panel;
 use crate::right_panel::right_panel;
 
 const MAX_FPS: f64 = 24.0;
@@ -270,7 +272,7 @@ impl eframe::App for MyApp {
                    &self.print_lock,
                    &self.pixel_lock,
                    &self.save_tx,
-            &self.load_tx
+                   &self.load_tx,
         );
 
         right_panel(&ctx,

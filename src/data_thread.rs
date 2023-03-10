@@ -2,15 +2,17 @@ use std::f64::NEG_INFINITY;
 use std::sync::{Arc, RwLock};
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
+
 use eframe::egui::{Color32, ColorImage};
 use image::RgbaImage;
 use ndarray::Array2;
+use rayon::prelude::*;
+
 use crate::{make_fft, Print, print_to_console, save_to_csv, SelectedPixel, update_in_console};
-use crate::data::{DataContainer};
-use crate::io::{open_from_csv, open_conf, open_hk};
+use crate::data::DataContainer;
+use crate::io::{open_conf, open_from_csv, open_hk};
 use crate::math_tools::{apply_filter, make_ifft};
 use crate::matrix_plot::color_from_intensity;
-use rayon::prelude::*;
 
 #[derive(Clone)]
 pub struct ScannedImage {

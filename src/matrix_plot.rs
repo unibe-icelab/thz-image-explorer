@@ -1,11 +1,12 @@
 use std::f64::{INFINITY, NEG_INFINITY};
+
 use eframe::egui;
 use eframe::egui::{Color32, ColorImage, FontId, RichText, vec2, Vec2};
 use eframe::egui::plot::{Line, Plot, PlotImage, PlotPoint, PlotPoints};
 use egui::TextureOptions;
 use ndarray::{Array2, Axis};
-use crate::gui::SelectedPixel;
 
+use crate::gui::SelectedPixel;
 
 pub fn make_dummy() -> Array2<f64> {
     let width = 20;
@@ -196,10 +197,10 @@ pub fn plot_waterfall(ui: &mut egui::Ui,
             let selected_row = PlotPoints::from(
                 vec![
                     [0.0, height as f64 - pixel_selected.y.floor()],
-                    [0.0, height as f64  - pixel_selected.y.floor() - 1.0],
-                    [width as f64 - 1.0, height as f64  - pixel_selected.y.floor() - 1.0],
-                    [width as f64 - 1.0, height as f64  - pixel_selected.y.floor()],
-                    [0.0, height as f64  - pixel_selected.y.floor()],
+                    [0.0, height as f64 - pixel_selected.y.floor() - 1.0],
+                    [width as f64 - 1.0, height as f64 - pixel_selected.y.floor() - 1.0],
+                    [width as f64 - 1.0, height as f64 - pixel_selected.y.floor()],
+                    [0.0, height as f64 - pixel_selected.y.floor()],
                 ]
             );
             if pixel_selected.selected {
