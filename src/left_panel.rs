@@ -2,18 +2,17 @@ use std::sync::{Arc, RwLock};
 use std::sync::mpsc::Sender;
 
 use eframe::egui;
-use eframe::egui::{Color32, ColorImage, Spinner};
+use eframe::egui::{ ColorImage, Spinner};
 use eframe::egui::panel::Side;
 use eframe::egui::plot::PlotPoint;
 use egui_extras::RetainedImage;
 use ndarray::Array2;
 use serde::{Deserialize, Serialize};
 
-use crate::{DataContainer, GuiSettingsContainer, Print, ScannedImage};
+use crate::{DataContainer, GuiSettingsContainer, Print};
 use crate::gauge::gauge;
 use crate::gui::SelectedPixel;
 use crate::matrix_plot::{make_dummy, plot_matrix, plot_waterfall};
-use crate::toggle::toggle;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub enum MODE {

@@ -9,17 +9,15 @@ use std::sync::{Arc, mpsc, RwLock};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 
-use eframe::egui::{ColorImage, vec2, Visuals};
-use eframe::HardwareAcceleration;
-use itertools_num::linspace;
+use eframe::egui::{vec2, Visuals};
 use ndarray::Array2;
 use preferences::{AppInfo, Preferences};
 
 use crate::data::DataContainer;
 use crate::data_thread::{main_thread, ScannedImage};
-use crate::gui::{GuiSettingsContainer, GuiState, MyApp, Print, print_to_console, SelectedPixel, update_in_console};
+use crate::gui::{GuiSettingsContainer, MyApp, Print, print_to_console, SelectedPixel, update_in_console};
 use crate::io::save_to_csv;
-use crate::math_tools::{make_fft, MovingAverage};
+use crate::math_tools::{make_fft,};
 
 mod gui;
 mod center_panel;
@@ -91,7 +89,7 @@ fn main() {
     let main_pixel_lock = pixel_lock.clone();
 
     println!("starting main server..");
-    let main_thread_handler = thread::spawn(|| {
+    let _main_thread_handler = thread::spawn(|| {
         main_thread(main_data_lock,
                     main_df_lock,
                     main_log_mode_lock,
@@ -148,5 +146,5 @@ fn main() {
                 load_tx,
             ))
         }),
-    );
+    ).expect("Failed to launch GUI");
 }

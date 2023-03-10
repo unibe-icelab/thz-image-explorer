@@ -1,4 +1,3 @@
-use std::f64::consts::E;
 use std::ops::RangeInclusive;
 use std::sync::{Arc, RwLock};
 

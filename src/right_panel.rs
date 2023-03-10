@@ -4,14 +4,13 @@ use std::sync::{Arc, RwLock};
 use std::sync::mpsc::Sender;
 
 use eframe::egui;
-use eframe::egui::{FontFamily, FontId, global_dark_light_mode_buttons, RichText, Spinner, Stroke, Vec2, Visuals};
+use eframe::egui::{FontFamily, FontId, global_dark_light_mode_buttons, RichText, Stroke, Vec2, Visuals};
 use eframe::egui::panel::Side;
 use eframe::egui::plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use egui_extras::RetainedImage;
 use itertools_num::linspace;
-use preferences::Preferences;
 
-use crate::{APP_INFO, DataContainer, GuiSettingsContainer, GuiState, Print, print_to_console};
+use crate::{DataContainer, GuiSettingsContainer, Print};
 use crate::data::NUM_PULSE_LINES;
 use crate::math_tools::apply_fft_window;
 use crate::plot_slider::{filter, windowing};
