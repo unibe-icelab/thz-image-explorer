@@ -1,9 +1,25 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-// hide console window on Windows in release
-extern crate serde;
-extern crate preferences;
 extern crate core;
 extern crate csv;
+extern crate preferences;
+// hide console window on Windows in release
+extern crate serde;
+
+use std::sync::{Arc, mpsc, RwLock};
+use std::sync::mpsc::{Receiver, Sender};
+use std::thread;
+
+use eframe::egui::{ColorImage, vec2, Visuals};
+use eframe::HardwareAcceleration;
+use itertools_num::linspace;
+use ndarray::Array2;
+use preferences::{AppInfo, Preferences};
+
+use crate::data::DataContainer;
+use crate::data_thread::{main_thread, ScannedImage};
+use crate::gui::{GuiSettingsContainer, GuiState, MyApp, Print, print_to_console, SelectedPixel, update_in_console};
+use crate::io::save_to_csv;
+use crate::math_tools::{make_fft, MovingAverage};
 
 mod gui;
 mod center_panel;
@@ -21,21 +37,6 @@ mod left_panel;
 mod matrix_plot;
 mod data;
 mod right_panel;
-
-use std::thread;
-use eframe::egui::{ColorImage, vec2, Visuals};
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, mpsc, RwLock};
-use eframe::HardwareAcceleration;
-use itertools_num::linspace;
-use ndarray::Array2;
-use preferences::{AppInfo, Preferences};
-use crate::data::DataContainer;
-use crate::data_thread::{main_thread, ScannedImage};
-
-use crate::gui::{GuiSettingsContainer, GuiState, MyApp, Print, print_to_console, SelectedPixel, update_in_console};
-use crate::io::save_to_csv;
-use crate::math_tools::{make_fft, MovingAverage};
 
 const APP_INFO: AppInfo = AppInfo { name: "COExplore", author: "Linus Leo Stöckli" };
 

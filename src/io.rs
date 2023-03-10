@@ -1,8 +1,8 @@
 use std::error::Error;
+
 use csv::{ReaderBuilder, WriterBuilder};
+
 use crate::data::{DataContainer, HouseKeeping};
-
-
 
 pub fn open_hk(hk: &mut HouseKeeping, file_path: String) -> Result<(usize, usize), Box<dyn Error>> {
     let mut rdr = ReaderBuilder::new()

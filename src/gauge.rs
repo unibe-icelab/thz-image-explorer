@@ -2,9 +2,10 @@
 //! This is meant to be read as a tutorial, hence the plethora of comments.
 
 use std::f64::consts::PI;
+
 use eframe::egui;
 use eframe::egui::{Align2, Color32, FontId, Pos2, pos2, Stroke, Visuals};
-use eframe::egui::Shape::{Path};
+use eframe::egui::Shape::Path;
 use eframe::epaint::{FontFamily, PathShape};
 
 pub fn map(x: &f64, min: f64, max: f64, min_i: f64, max_i: f64) -> f64 {

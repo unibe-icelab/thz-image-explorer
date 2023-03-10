@@ -1,13 +1,14 @@
 use std::cmp::{max, min};
-use std::f64::consts::{PI};
-use realfft::RealFftPlanner;
+use std::f64::consts::PI;
 
 use itertools_num::linspace;
 use rand::Rng;
-use realfft::num_complex::Complex64;
-use crate::data::{DataContainer};
-use crate::data::NUM_PULSE_LINES;
 use rayon::prelude::*;
+use realfft::num_complex::Complex64;
+use realfft::RealFftPlanner;
+
+use crate::data::DataContainer;
+use crate::data::NUM_PULSE_LINES;
 
 pub struct MovingAverage {
     populated_width: usize,
@@ -285,8 +286,10 @@ fn numpy_unwrap(mut phase_unwrapped: Vec<f64>, discont: Option<f64>) -> Vec<f64>
 
 #[cfg(test)]
 mod tests {
-    use crate::io::open_from_csv;
     use approx::assert_relative_eq;
+
+    use crate::io::open_from_csv;
+
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 

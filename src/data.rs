@@ -1,6 +1,7 @@
 use std::fmt;
+
 use itertools_num::linspace;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 pub const NUM_PULSE_LINES: usize = 1001;
 pub const NUM_FFT_LINES: usize = 10001;
@@ -31,7 +32,7 @@ impl HouseKeeping {
             ambient_temperature: 22.0,
             ambient_pressure: 950.0,
             ambient_humidity: 50.0,
-            sample_temperature: 0.0
+            sample_temperature: 0.0,
         }
     }
 }

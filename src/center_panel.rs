@@ -1,14 +1,14 @@
 use std::f64::consts::E;
-use std::sync::{Arc, RwLock};
 use std::ops::RangeInclusive;
+use std::sync::{Arc, RwLock};
+
 use eframe::egui;
-use eframe::egui::{Checkbox, Stroke, DragValue};
+use eframe::egui::{Checkbox, DragValue, Stroke};
 use eframe::egui::plot::{GridInput, GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
+
 use crate::{GuiSettingsContainer, vec2};
 use crate::data::DataContainer;
 use crate::toggle::toggle;
-
-
 
 type GridSpacerFn = dyn Fn(GridInput) -> Vec<GridMark>;
 type GridSpacer = Box<GridSpacerFn>;
