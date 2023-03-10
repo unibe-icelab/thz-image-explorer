@@ -3,10 +3,74 @@ use std::sync::{Arc, RwLock};
 use std::ops::RangeInclusive;
 use eframe::egui;
 use eframe::egui::{Checkbox, Stroke, DragValue};
-use eframe::egui::plot::{Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
+use eframe::egui::plot::{GridInput, GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 use crate::{GuiSettingsContainer, vec2};
 use crate::data::DataContainer;
 use crate::toggle::toggle;
+
+
+
+type GridSpacerFn = dyn Fn(GridInput) -> Vec<GridMark>;
+type GridSpacer = Box<GridSpacerFn>;
+
+fn next_power(value: f64, base: f64) -> f64 {
+    assert_ne!(value, 0.0); // can be negative (typical for Y axis)
+    base.powi(value.abs().log(base).ceil() as i32)
+}
+
+/// Fill in all values between [min, max]
+fn generate_marks_log_plot(step_sizes: [f64; 3], bounds: (f64, f64)) -> Vec<GridMark> {
+    let mut steps = vec![];
+    make_marks_log_plot(&mut steps, step_sizes, bounds);
+    steps
+}
+
+/// Fill in all values between [min, max] which are a multiple of `step_size`
+fn make_marks_log_plot(out: &mut Vec<GridMark>, step_size: [f64; 3], (min, max): (f64, f64)) {
+    assert!(max > min);
+    // TODO: pos/neg check
+    let first = (min).floor() as i64;
+    let last = (max).floor() as i64;
+
+    let mut marks_iter = vec![];
+    for i in first..=last {
+        let step = (10_f64.powi(i as i32 + 1) - 10_f64.powi(i as i32)) / 9.0;
+        marks_iter.push(GridMark {
+            value: i as f64,
+            step_size: step_size[1],
+        });
+        for j in 1..9 {
+            let value = 10_f64.powi(i as i32) + j as f64 * step;
+            marks_iter.push(GridMark {
+                value: value.log(10.0),
+                step_size: step_size[0],
+            });
+        }
+    }
+
+    out.extend(marks_iter);
+}
+
+pub fn logarithmic_grid_spacer(log_base: i64) -> GridSpacer {
+    let log_base = log_base as f64;
+    let step_sizes = move |input: GridInput| -> Vec<GridMark> {
+        // The distance between two of the thinnest grid lines is "rounded" up
+        // to the next-bigger power of base
+
+        let smallest_visible_unit = next_power(input.base_step_size, log_base);
+
+        let step_sizes = [
+            smallest_visible_unit,
+            smallest_visible_unit * log_base,
+            smallest_visible_unit * log_base * log_base,
+        ];
+
+        generate_marks_log_plot(step_sizes, input.bounds)
+    };
+
+    Box::new(step_sizes)
+}
+
 
 pub fn center_panel(ctx: &egui::Context,
                     right_panel_width: &f32,
@@ -127,27 +191,48 @@ pub fn center_panel(ctx: &egui::Context,
 
                 ui.add_space(spacing);
 
-                let f_fmt = |x, _range: &RangeInclusive<f64>| {
-                    format!("{:4.2} THz", x)
+                let a_fmt = if gui_conf.log_plot {
+                    move |y: f64, _range: &RangeInclusive<f64>| format!("{:4.2}", 10.0_f64.powf(y))
+                } else {
+                    move |y: f64, _range: &RangeInclusive<f64>| format!("{:4.2} a.u.", y)
                 };
-                let a_fmt = |y: f64, _range: &RangeInclusive<f64>| {
-                    format!("{:4.2} a.u.", y.exp())
+
+                let label_fmt = if gui_conf.log_plot {
+                    move |s: &str, val: &PlotPoint| {
+                        format!(
+                            "{}\n{:4.2} THz\n{:4.2} a.u.",
+                            s,
+                            val.x,
+                            10.0_f64.powf(val.y)
+                        )
+                    }
+                } else {
+                    move |s: &str, val: &PlotPoint| {
+                        format!("{}\n{:4.2} THz\n{:4.2} a.u.", s, val.x, val.y)
+                    }
                 };
-                let fft_plot = Plot::new("fft")
+                let f_fmt = |x, _range: &RangeInclusive<f64>| format!("{:4.2} THz", x);
+
+                let mut fft_plot = Plot::new("fft")
                     .height(height)
                     .width(width)
+                    .label_formatter(label_fmt)
                     .y_axis_formatter(a_fmt)
                     .x_axis_formatter(f_fmt)
                     .include_y(0.0)
                     .include_x(0.0)
                     .include_x(10.0);
 
+                if gui_conf.log_plot {
+                    fft_plot = fft_plot.y_grid_spacer(logarithmic_grid_spacer(10));
+                }
+
                 let signal_1_fft: Vec<[f64; 2]> = data.frequencies_fft.iter()
                     .zip(data.signal_1_fft.iter())
                     .map(|(x, y)| {
                         let mut fft;
                         if gui_conf.log_plot {
-                            fft = (*y + 1.0).log(E);
+                            fft = (*y + 1e-10).log(10.0);
                         } else {
                             fft = *y;
                         }
@@ -161,7 +246,7 @@ pub fn center_panel(ctx: &egui::Context,
                     .map(|(x, y)| {
                         let mut fft;
                         if gui_conf.log_plot {
-                            fft = (*y + 1.0).log(E);
+                            fft = (*y + 1e-10).log(10.0);
                         } else {
                             fft = *y;
                         }
@@ -175,7 +260,7 @@ pub fn center_panel(ctx: &egui::Context,
                     .map(|(x, y)| {
                         let mut fft;
                         if gui_conf.log_plot {
-                            fft = (*y + 1.0).log(E);
+                            fft = (*y + 1e-10).log(10.0);
                         } else {
                             fft = *y;
                         }
@@ -190,7 +275,7 @@ pub fn center_panel(ctx: &egui::Context,
                     .map(|(x, y)| {
                         let mut fft;
                         if gui_conf.log_plot {
-                            fft = (*y + 1.0).log(E);
+                            fft = (*y + 1e-10).log(10.0);
                         } else {
                             fft = *y;
                         }
@@ -204,7 +289,7 @@ pub fn center_panel(ctx: &egui::Context,
                     .map(|(x, y)| {
                         let mut fft;
                         if gui_conf.log_plot {
-                            fft = (*y + 1.0).log(E);
+                            fft = (*y + 1e-10).log(10.0);
                         } else {
                             fft = *y;
                         }
