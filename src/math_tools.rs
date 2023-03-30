@@ -181,29 +181,20 @@ fn numpy_unwrap(mut phase_unwrapped: Vec<f64>, discont: Option<f64>) -> Vec<f64>
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
+    use std::path::PathBuf;
 
-    use crate::io::open_from_csv;
+    use crate::io::{open_from_csv, open_from_npy};
 
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
     #[test]
     fn test_fft_ifft() {
-        let x = 0;
-        let y = 0;
-        let opened_file_path = "/Users/linus/Documents/test_scan9";
-        let pulse_path = format!("{}/pixel_ID={:05}-{:05}.csv", opened_file_path, x, y);
-        let fft_path = format!(
-            "{}/pixel_ID={:05}-{:05}_spectrum.csv",
-            opened_file_path, x, y
-        );
+        let path = PathBuf::from("pixel_ID=00000-00000.npy");
+        let fft_path = PathBuf::from("pixel_ID=00000-00000_spectrum.npy");
         let mut data = DataContainer::default();
-        match open_from_csv(&mut data, &pulse_path, &fft_path) {
-            Ok(_) => {}
-            Err(_) => {
-                println!("failed to open files: {pulse_path} {fft_path}");
-            }
-        }
+
+        open_from_npy(&mut data, &path, &fft_path).expect("TODO: panic message");
 
         println!("signal: {:?}", data.signal_1[100]);
 

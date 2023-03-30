@@ -29,6 +29,7 @@ csv = "1.1.6"
 ndarray = "0.15.6"
 approx = "0.5.1"
 rayon = "1.5.3"
+ndarray-npy = "0.8.1"
 
 [package.metadata.bundle]
 name = "COExplore"
