@@ -5,8 +5,9 @@ extern crate preferences;
 // hide console window on Windows in release
 extern crate serde;
 
-use std::sync::{Arc, mpsc, RwLock};
+use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{mpsc, Arc, RwLock};
 use std::thread;
 
 use eframe::egui::{vec2, Visuals};
@@ -15,29 +16,33 @@ use preferences::{AppInfo, Preferences};
 
 use crate::data::DataContainer;
 use crate::data_thread::{main_thread, ScannedImage};
-use crate::gui::{GuiSettingsContainer, MyApp, Print, print_to_console, SelectedPixel, update_in_console};
+use crate::gui::{
+    print_to_console, update_in_console, GuiSettingsContainer, MyApp, Print, SelectedPixel,
+};
 use crate::io::save_to_csv;
-use crate::math_tools::{make_fft,};
+use crate::math_tools::make_fft;
 
-mod gui;
 mod center_panel;
-#[path = "teraflash-ctrl/src/toggle.rs"]
-mod toggle;
-mod io;
-mod math_tools;
+mod data;
+mod data_thread;
 #[path = "teraflash-ctrl/src/errors.rs"]
 mod errors;
+mod gauge;
+mod gui;
+mod io;
+mod left_panel;
+mod math_tools;
+mod matrix_plot;
 #[path = "teraflash-ctrl/src/plot_slider.rs"]
 mod plot_slider;
-mod data_thread;
-mod gauge;
-mod left_panel;
-mod matrix_plot;
-mod data;
 mod right_panel;
+#[path = "teraflash-ctrl/src/toggle.rs"]
+mod toggle;
 
-const APP_INFO: AppInfo = AppInfo { name: "COExplore", author: "Linus Leo Stöckli" };
-
+const APP_INFO: AppInfo = AppInfo {
+    name: "COExplore",
+    author: "Linus Leo Stöckli",
+};
 
 fn main() {
     let mut gui_settings = GuiSettingsContainer::new();
@@ -57,12 +62,8 @@ fn main() {
 
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::new()));
     let data_lock = Arc::new(RwLock::new(DataContainer::default()));
-    let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| {
-        0.0
-    })));
-    let waterfall_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| {
-        0.0
-    })));
+    let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
+    let waterfall_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
     let df_lock = Arc::new(RwLock::new(gui_settings.frequency_resolution));
     let log_mode_lock = Arc::new(RwLock::new(gui_settings.log_plot));
     let normalize_fft_lock = Arc::new(RwLock::new(gui_settings.normalize_fft));
@@ -73,8 +74,8 @@ fn main() {
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::new()));
     let print_lock = Arc::new(RwLock::new(vec![Print::EMPTY]));
 
-    let (save_tx, save_rx): (Sender<String>, Receiver<String>) = mpsc::channel();
-    let (load_tx, load_rx): (Sender<String>, Receiver<String>) = mpsc::channel();
+    let (save_tx, save_rx): (Sender<PathBuf>, Receiver<PathBuf>) = mpsc::channel();
+    let (load_tx, load_rx): (Sender<PathBuf>, Receiver<PathBuf>) = mpsc::channel();
 
     let main_data_lock = data_lock.clone();
     let main_print_lock = print_lock.clone();
@@ -90,20 +91,21 @@ fn main() {
 
     println!("starting main server..");
     let _main_thread_handler = thread::spawn(|| {
-        main_thread(main_data_lock,
-                    main_df_lock,
-                    main_log_mode_lock,
-                    main_normalize_fft_lock,
-                    main_fft_bounds_lock,
-                    main_fft_filter_bounds_lock,
-                    main_img_lock,
-                    main_waterfall_lock,
-                    main_pixel_lock,
-                    main_print_lock,
-                    save_rx,
-                    load_rx);
+        main_thread(
+            main_data_lock,
+            main_df_lock,
+            main_log_mode_lock,
+            main_normalize_fft_lock,
+            main_fft_bounds_lock,
+            main_fft_filter_bounds_lock,
+            main_img_lock,
+            main_waterfall_lock,
+            main_pixel_lock,
+            main_print_lock,
+            save_rx,
+            load_rx,
+        );
     });
-
 
     let options = eframe::NativeOptions {
         drag_and_drop_support: true,
@@ -146,5 +148,6 @@ fn main() {
                 load_tx,
             ))
         }),
-    ).expect("Failed to launch GUI");
+    )
+    .expect("Failed to launch GUI");
 }

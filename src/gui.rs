@@ -1,23 +1,23 @@
 use core::f64;
-use std::sync::{Arc, RwLock};
+use std::path::PathBuf;
 use std::sync::mpsc::Sender;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use eframe::{egui, Storage};
 use eframe::egui::plot::PlotPoint;
+use eframe::{egui, Storage};
 use egui_extras::RetainedImage;
 use ndarray::Array2;
 use preferences::Preferences;
 use serde::{Deserialize, Serialize};
 
-use crate::{APP_INFO};
 use crate::center_panel::center_panel;
 use crate::data::DataContainer;
 use crate::left_panel::left_panel;
 use crate::right_panel::right_panel;
+use crate::APP_INFO;
 
 const MAX_FPS: f64 = 24.0;
-
 
 #[derive(Clone)]
 #[allow(unused)]
@@ -65,7 +65,6 @@ impl SelectedPixel {
         };
     }
 }
-
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct GuiSettingsContainer {
@@ -135,24 +134,25 @@ pub struct MyApp {
     fft_bounds_lock: Arc<RwLock<[f64; 2]>>,
     fft_filter_bounds_lock: Arc<RwLock<[f64; 2]>>,
     pixel_lock: Arc<RwLock<SelectedPixel>>,
-    save_tx: Sender<String>,
-    load_tx: Sender<String>,
+    save_tx: Sender<PathBuf>,
+    load_tx: Sender<PathBuf>,
 }
 
 impl MyApp {
-    pub fn new(print_lock: Arc<RwLock<Vec<Print>>>,
-               data_lock: Arc<RwLock<DataContainer>>,
-               df_lock: Arc<RwLock<f64>>,
-               pixel_lock: Arc<RwLock<SelectedPixel>>,
-               log_mode_lock: Arc<RwLock<bool>>,
-               img_lock: Arc<RwLock<Array2<f64>>>,
-               waterfall_lock: Arc<RwLock<Array2<f64>>>,
-               normalize_fft_lock: Arc<RwLock<bool>>,
-               fft_bounds_lock: Arc<RwLock<[f64; 2]>>,
-               fft_filter_bounds_lock: Arc<RwLock<[f64; 2]>>,
-               gui_conf: GuiSettingsContainer,
-               save_tx: Sender<String>,
-               load_tx: Sender<String>,
+    pub fn new(
+        print_lock: Arc<RwLock<Vec<Print>>>,
+        data_lock: Arc<RwLock<DataContainer>>,
+        df_lock: Arc<RwLock<f64>>,
+        pixel_lock: Arc<RwLock<SelectedPixel>>,
+        log_mode_lock: Arc<RwLock<bool>>,
+        img_lock: Arc<RwLock<Array2<f64>>>,
+        waterfall_lock: Arc<RwLock<Array2<f64>>>,
+        normalize_fft_lock: Arc<RwLock<bool>>,
+        fft_bounds_lock: Arc<RwLock<[f64; 2]>>,
+        fft_filter_bounds_lock: Arc<RwLock<[f64; 2]>>,
+        gui_conf: GuiSettingsContainer,
+        save_tx: Sender<PathBuf>,
+        load_tx: Sender<PathBuf>,
     ) -> Self {
         let mut water_vapour_lines: Vec<f64> = Vec::new();
         let buffered = include_str!("../resources/water_lines.csv");
@@ -166,37 +166,34 @@ impl MyApp {
                 "Hacktica",
                 include_bytes!("../images/hacktica_inv.png"),
             )
-                .unwrap(),
+            .unwrap(),
             hacktica_light: RetainedImage::from_image_bytes(
                 "Hacktica",
                 include_bytes!("../images/hacktica.png"),
             )
-                .unwrap(),
+            .unwrap(),
             connection_error_image_dark: RetainedImage::from_image_bytes(
                 "Hacktica",
                 include_bytes!("../images/connection_error_inv.png"),
             )
-                .unwrap(),
+            .unwrap(),
             connection_error_image_light: RetainedImage::from_image_bytes(
                 "Hacktica",
                 include_bytes!("../images/connection_error.png"),
             )
-                .unwrap(),
+            .unwrap(),
             coconut_logo_dark: RetainedImage::from_image_bytes(
                 "Hacktica",
                 include_bytes!("../images/coconut_inv.png"),
             )
-                .unwrap(),
+            .unwrap(),
             coconut_logo_light: RetainedImage::from_image_bytes(
                 "Hacktica",
                 include_bytes!("../images/coconut.png"),
             )
-                .unwrap(),
+            .unwrap(),
             water_vapour_lines,
-            wp: RetainedImage::from_image_bytes(
-                "WP",
-                include_bytes!("../images/WP-Logo.png"),
-            )
+            wp: RetainedImage::from_image_bytes("WP", include_bytes!("../images/WP-Logo.png"))
                 .unwrap(),
 
             dropped_files: vec![],
@@ -229,50 +226,53 @@ impl eframe::App for MyApp {
         let left_panel_width = 300.0;
         let right_panel_width = 500.0;
 
-        center_panel(&ctx,
-                     &right_panel_width,
-                     &left_panel_width,
-                     &mut self.gui_conf,
-                     &mut self.data,
-                     &self.df_lock,
-                     &self.data_lock,
-                     &self.water_vapour_lines,
+        center_panel(
+            &ctx,
+            &right_panel_width,
+            &left_panel_width,
+            &mut self.gui_conf,
+            &mut self.data,
+            &self.df_lock,
+            &self.data_lock,
+            &self.water_vapour_lines,
         );
 
-        left_panel(&ctx,
-                   &left_panel_width,
-                   &mut self.picked_path,
-                   &mut self.gui_conf,
-                   &self.coconut_logo_light,
-                   &self.coconut_logo_dark,
-                   &mut self.pixel_selected,
-                   &mut self.val,
-                   &self.img_lock,
-                   &self.waterfall_lock,
-                   &self.data_lock,
-                   &self.print_lock,
-                   &self.pixel_lock,
-                   &self.save_tx,
-                   &self.load_tx,
+        left_panel(
+            &ctx,
+            &left_panel_width,
+            &mut self.picked_path,
+            &mut self.gui_conf,
+            &self.coconut_logo_light,
+            &self.coconut_logo_dark,
+            &mut self.pixel_selected,
+            &mut self.val,
+            &self.img_lock,
+            &self.waterfall_lock,
+            &self.data_lock,
+            &self.print_lock,
+            &self.pixel_lock,
+            &self.save_tx,
+            &self.load_tx,
         );
 
-        right_panel(&ctx,
-                    &right_panel_width,
-                    &mut self.gui_conf,
-                    &mut self.console,
-                    &mut self.picked_path,
-                    &mut self.filter_bounds,
-                    &mut self.fft_bounds,
-                    &self.save_tx,
-                    &self.data_lock,
-                    &self.print_lock,
-                    &self.log_mode_lock,
-                    &self.normalize_fft_lock,
-                    &self.fft_bounds_lock,
-                    &self.fft_filter_bounds_lock,
-                    &self.hacktica_dark,
-                    &self.hacktica_light,
-                    &self.wp,
+        right_panel(
+            &ctx,
+            &right_panel_width,
+            &mut self.gui_conf,
+            &mut self.console,
+            &mut self.picked_path,
+            &mut self.filter_bounds,
+            &mut self.fft_bounds,
+            &self.save_tx,
+            &self.data_lock,
+            &self.print_lock,
+            &self.log_mode_lock,
+            &self.normalize_fft_lock,
+            &self.fft_bounds_lock,
+            &self.fft_filter_bounds_lock,
+            &self.hacktica_dark,
+            &self.hacktica_light,
+            &self.wp,
         );
 
         self.gui_conf.x = ctx.used_size().x;

@@ -18,8 +18,8 @@ pub struct HouseKeeping {
     pub sample_temperature: f64,
 }
 
-impl HouseKeeping {
-    fn new() -> Self {
+impl Default for HouseKeeping {
+    fn default() -> Self {
         Self {
             dx: 1.0,
             x_range: [0.0, 10.0],
@@ -35,8 +35,7 @@ impl HouseKeeping {
     }
 }
 
-
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct DataContainer {
     pub hk: HouseKeeping,
     pub cut_off: f64,
@@ -52,25 +51,4 @@ pub struct DataContainer {
     pub filtered_phase_1_fft: Vec<f64>,
     pub ref_1_fft: Vec<f64>,
     pub ref_phase_1_fft: Vec<f64>,
-}
-
-impl Default for DataContainer {
-    fn default() -> DataContainer {
-        return DataContainer {
-            hk: HouseKeeping::new(),
-            cut_off: 0.0,
-            valid: false,
-            time: linspace::<f64>(0.0, 1000.0, NUM_PULSE_LINES).collect(),
-            signal_1: vec![0.0; NUM_PULSE_LINES],
-            filtered_signal_1: vec![0.0; NUM_PULSE_LINES],
-            ref_1: vec![0.0; NUM_PULSE_LINES],
-            frequencies_fft: vec![0.0; NUM_FFT_LINES],
-            signal_1_fft: vec![0.0; NUM_FFT_LINES],
-            phase_1_fft: vec![0.0; NUM_FFT_LINES],
-            filtered_signal_1_fft: vec![0.0; NUM_FFT_LINES],
-            filtered_phase_1_fft: vec![0.0; NUM_FFT_LINES],
-            ref_1_fft: vec![0.0; NUM_FFT_LINES],
-            ref_phase_1_fft: vec![0.0; NUM_FFT_LINES],
-        };
-    }
 }
