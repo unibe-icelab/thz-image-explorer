@@ -12,7 +12,8 @@ use preferences::Preferences;
 use serde::{Deserialize, Serialize};
 
 use crate::center_panel::center_panel;
-use crate::data::DataContainer;
+use crate::config::Config;
+use crate::data::DataPoint;
 use crate::left_panel::left_panel;
 use crate::right_panel::right_panel;
 use crate::APP_INFO;
@@ -54,15 +55,15 @@ pub struct SelectedPixel {
     pub id: String,
 }
 
-impl SelectedPixel {
-    pub fn new() -> SelectedPixel {
-        return SelectedPixel {
+impl Default for SelectedPixel {
+    fn default() -> Self {
+        SelectedPixel {
             selected: false,
             rect: vec![],
             x: 0.0,
             y: 0.0,
             id: "0000-0000".to_string(),
-        };
+        }
     }
 }
 
@@ -75,8 +76,8 @@ pub struct GuiSettingsContainer {
     pub filtered_signal_1_visible: bool,
     pub water_lines_visible: bool,
     pub phases_visible: bool,
-    pub frequency_resolution_temp: f64,
-    pub frequency_resolution: f64,
+    pub frequency_resolution_temp: f32,
+    pub frequency_resolution: f32,
     pub advanced_settings_window: bool,
     pub debug: bool,
     pub dark_mode: bool,
@@ -108,8 +109,8 @@ impl GuiSettingsContainer {
 pub struct MyApp {
     dark_mode: bool,
     console: Vec<Print>,
-    fft_bounds: [f64; 2],
-    filter_bounds: [f64; 2],
+    fft_bounds: [f32; 2],
+    filter_bounds: [f32; 2],
     pixel_selected: SelectedPixel,
     val: PlotPoint,
     hacktica_light: RetainedImage,
@@ -122,36 +123,36 @@ pub struct MyApp {
     wp: RetainedImage,
     dropped_files: Vec<egui::DroppedFile>,
     picked_path: String,
-    data: DataContainer,
+    data: DataPoint,
     print_lock: Arc<RwLock<Vec<Print>>>,
     gui_conf: GuiSettingsContainer,
-    img_lock: Arc<RwLock<Array2<f64>>>,
-    waterfall_lock: Arc<RwLock<Array2<f64>>>,
-    data_lock: Arc<RwLock<DataContainer>>,
-    df_lock: Arc<RwLock<f64>>,
+    img_lock: Arc<RwLock<Array2<f32>>>,
+    waterfall_lock: Arc<RwLock<Array2<f32>>>,
+    data_lock: Arc<RwLock<DataPoint>>,
+    df_lock: Arc<RwLock<f32>>,
     log_mode_lock: Arc<RwLock<bool>>,
     normalize_fft_lock: Arc<RwLock<bool>>,
-    fft_bounds_lock: Arc<RwLock<[f64; 2]>>,
-    fft_filter_bounds_lock: Arc<RwLock<[f64; 2]>>,
+    fft_bounds_lock: Arc<RwLock<[f32; 2]>>,
+    fft_filter_bounds_lock: Arc<RwLock<[f32; 2]>>,
     pixel_lock: Arc<RwLock<SelectedPixel>>,
-    save_tx: Sender<PathBuf>,
+    config_tx: Sender<Config>,
     load_tx: Sender<PathBuf>,
 }
 
 impl MyApp {
     pub fn new(
         print_lock: Arc<RwLock<Vec<Print>>>,
-        data_lock: Arc<RwLock<DataContainer>>,
-        df_lock: Arc<RwLock<f64>>,
+        data_lock: Arc<RwLock<DataPoint>>,
+        df_lock: Arc<RwLock<f32>>,
         pixel_lock: Arc<RwLock<SelectedPixel>>,
         log_mode_lock: Arc<RwLock<bool>>,
-        img_lock: Arc<RwLock<Array2<f64>>>,
-        waterfall_lock: Arc<RwLock<Array2<f64>>>,
+        img_lock: Arc<RwLock<Array2<f32>>>,
+        waterfall_lock: Arc<RwLock<Array2<f32>>>,
         normalize_fft_lock: Arc<RwLock<bool>>,
-        fft_bounds_lock: Arc<RwLock<[f64; 2]>>,
-        fft_filter_bounds_lock: Arc<RwLock<[f64; 2]>>,
+        fft_bounds_lock: Arc<RwLock<[f32; 2]>>,
+        fft_filter_bounds_lock: Arc<RwLock<[f32; 2]>>,
         gui_conf: GuiSettingsContainer,
-        save_tx: Sender<PathBuf>,
+        config_tx: Sender<Config>,
         load_tx: Sender<PathBuf>,
     ) -> Self {
         let mut water_vapour_lines: Vec<f64> = Vec::new();
@@ -198,7 +199,7 @@ impl MyApp {
 
             dropped_files: vec![],
             picked_path: "".to_string(),
-            data: DataContainer::default(),
+            data: DataPoint::default(),
             console: vec![Print::MESSAGE("".to_string())],
             print_lock,
             gui_conf,
@@ -211,11 +212,11 @@ impl MyApp {
             fft_bounds_lock,
             fft_filter_bounds_lock,
             pixel_lock,
-            save_tx,
+            config_tx,
             load_tx,
             fft_bounds: [1.0, 7.0],
             filter_bounds: [0.0, 10.0],
-            pixel_selected: SelectedPixel::new(),
+            pixel_selected: SelectedPixel::default(),
             val: PlotPoint { x: 0.0, y: 0.0 },
         }
     }
@@ -251,7 +252,7 @@ impl eframe::App for MyApp {
             &self.data_lock,
             &self.print_lock,
             &self.pixel_lock,
-            &self.save_tx,
+            &self.config_tx,
             &self.load_tx,
         );
 
@@ -263,7 +264,7 @@ impl eframe::App for MyApp {
             &mut self.picked_path,
             &mut self.filter_bounds,
             &mut self.fft_bounds,
-            &self.save_tx,
+            &self.config_tx,
             &self.data_lock,
             &self.print_lock,
             &self.log_mode_lock,

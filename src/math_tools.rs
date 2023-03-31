@@ -1,5 +1,5 @@
 use std::cmp::{max, min};
-use std::f64::consts::PI;
+use std::f32::consts::PI;
 
 use itertools_num::linspace;
 use rand::Rng;
@@ -7,9 +7,9 @@ use rayon::prelude::*;
 use realfft::num_complex::Complex64;
 use realfft::RealFftPlanner;
 
-use crate::data::DataContainer;
+use crate::data::DataPoint;
 
-fn blackman_window(n: f64, m: f64) -> f64 {
+fn blackman_window(n: f32, m: f32) -> f32 {
     // blackman window as implemented by numpy (python)
     let res = 0.42 - 0.5 * (2.0 * PI * n / m).cos() + 0.08 * (4.0 * PI * n / m).cos();
     return if res.is_nan() {
@@ -23,7 +23,7 @@ fn blackman_window(n: f64, m: f64) -> f64 {
     };
 }
 
-pub fn apply_fft_window(signal: &mut [f64], time: &[f64], lower_bound: &f64, upper_bound: &f64) {
+pub fn apply_fft_window(signal: &mut [f32], time: &[f32], lower_bound: &f32, upper_bound: &f32) {
     for (s, t) in signal.iter_mut().zip(time.iter()) {
         if *t <= lower_bound + time[0] {
             // first half of blackman
@@ -40,7 +40,7 @@ pub fn apply_fft_window(signal: &mut [f64], time: &[f64], lower_bound: &f64, upp
     }
 }
 
-pub fn apply_filter(data: &mut DataContainer, bounds: &[f64; 2]) {
+pub fn apply_filter(data: &mut DataPoint, bounds: &[f32; 2]) {
     for ((f, amplitude), filtered_amplitude) in data
         .frequencies_fft
         .iter()
@@ -56,13 +56,13 @@ pub fn apply_filter(data: &mut DataContainer, bounds: &[f64; 2]) {
 }
 
 pub fn make_fft(
-    t_in: &[f64],
-    p_in: &[f64],
+    t_in: &[f32],
+    p_in: &[f32],
     normalize: bool,
-    df: &f64,
-    lower_bound: &f64,
-    upper_bound: &f64,
-) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
+    df: &f32,
+    lower_bound: &f32,
+    upper_bound: &f32,
+) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
     // make a planner
     let mut real_planner = RealFftPlanner::<f64>::new();
 
@@ -70,41 +70,44 @@ pub fn make_fft(
     let dt = t_in[1] - t_in[0];
     let zero_padding = (1.0 / (*df * dt)) as usize;
     let padding_length;
+
     let mut t = t_in.to_vec();
-    let mut p = p_in.to_vec();
+    let p_zero = p_in[0];
+    let mut p = p_in.iter().map(|p| p - p_zero).collect::<Vec<f32>>();
 
     // apply fft window (modified blackman window as specified by Toptica)
     apply_fft_window(&mut p, &t, lower_bound, upper_bound);
 
     if zero_padding > t.len() {
         padding_length = zero_padding - t.len();
-        let t_padded_bound = t[0] + dt * (zero_padding as f64);
-        t = linspace::<f64>(t[0], t_padded_bound, zero_padding).collect();
+        let t_padded_bound = t[0] + dt * (zero_padding as f32);
+        t = linspace::<f32>(t[0], t_padded_bound, zero_padding).collect();
         p.append(&mut vec![0.0; padding_length]);
     }
 
     // create a FFT
     let r2c = real_planner.plan_fft_forward(t.len());
     // make input and output vectors
-    let mut in_data: Vec<f64> = p.par_iter().map(|x| *x as f64).collect();
+    let mut in_data: Vec<f64> = p.iter().map(|d| *d as f64).collect();
     let mut spectrum = r2c.make_output_vec();
     // Forward transform the input data
     r2c.process(&mut in_data, &mut spectrum).unwrap();
 
-    // println!("spectrum: {:?}", spectrum);
-
-    let mut amp: Vec<f64> = spectrum.par_iter().map(|s| s.norm()).collect();
+    let mut amp: Vec<f32> = spectrum.iter().map(|s| s.norm() as f32).collect();
     let rng = t[t.len() - 1] - t[0];
-    let freq: Vec<f64> = (0..spectrum.len()).map(|i| i as f64 / rng).collect();
-    let phase: Vec<f64> = spectrum.par_iter().map(|s| s.arg()).collect();
+    let freq: Vec<f32> = (0..spectrum.len()).map(|i| i as f32 / rng).collect();
+    let phase: Vec<f32> = spectrum.iter().map(|s| s.arg() as f32).collect();
     if normalize {
-        let max_amp = amp.iter().fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi));
-        amp = amp.par_iter().map(|a| *a / max_amp).collect();
+        let mut max_amp = amp.iter().fold(f32::NEG_INFINITY, |ai, &bi| ai.max(bi));
+        if max_amp == 0.0 {
+            max_amp = 1.0;
+        }
+        amp = amp.iter().map(|a| *a / max_amp).collect();
     }
     (freq, amp, numpy_unwrap(phase, Some(2.0 * PI)))
 }
 
-pub fn make_ifft(frequencies: &[f64], amplitudes: &[f64], phases: &[f64]) -> Vec<f64> {
+pub fn make_ifft(frequencies: &[f32], amplitudes: &[f32], phases: &[f32]) -> Vec<f32> {
     // make a planner
     let mut real_planner = RealFftPlanner::<f64>::new();
 
@@ -114,7 +117,7 @@ pub fn make_ifft(frequencies: &[f64], amplitudes: &[f64], phases: &[f64]) -> Vec
     //         *s = Complex64::new(*a,*p)
     //     }).collect();
     for (a, p) in amplitudes.iter().zip(phases.iter()) {
-        spectrum.push(Complex64::from_polar(*a, *p));
+        spectrum.push(Complex64::from_polar(*a as f64, *p as f64));
     }
 
     // create a iFFT
@@ -130,7 +133,7 @@ pub fn make_ifft(frequencies: &[f64], amplitudes: &[f64], phases: &[f64]) -> Vec
         }
     };
     let length = output.len();
-    output = output.par_iter().map(|p| *p / length as f64).collect();
+    let output = output.iter().map(|p| *p as f32 / length as f32).collect();
     // let mut pulse: Vec<f64> = vec![];
     // for (i, p) in output.iter().enumerate() {
     //     if i % 2 == 0 {
@@ -140,7 +143,7 @@ pub fn make_ifft(frequencies: &[f64], amplitudes: &[f64], phases: &[f64]) -> Vec
     output
 }
 
-fn numpy_unwrap(mut phase_unwrapped: Vec<f64>, discont: Option<f64>) -> Vec<f64> {
+fn numpy_unwrap(mut phase_unwrapped: Vec<f32>, discont: Option<f32>) -> Vec<f32> {
     // this was generated by ChatGPT
 
     let n = phase_unwrapped.len();
@@ -192,7 +195,7 @@ mod tests {
     fn test_fft_ifft() {
         let path = PathBuf::from("pixel_ID=00000-00000.npy");
         let fft_path = PathBuf::from("pixel_ID=00000-00000_spectrum.npy");
-        let mut data = DataContainer::default();
+        let mut data = DataPoint::default();
 
         open_from_npy(&mut data, &path, &fft_path).expect("TODO: panic message");
 

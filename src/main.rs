@@ -10,12 +10,13 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, RwLock};
 use std::thread;
 
+use crate::config::Config;
 use eframe::egui::{vec2, Visuals};
 use ndarray::Array2;
 use preferences::{AppInfo, Preferences};
 
-use crate::data::DataContainer;
-use crate::data_thread::{main_thread, ScannedImage};
+use crate::data::DataPoint;
+use crate::data_thread::main_thread;
 use crate::gui::{
     print_to_console, update_in_console, GuiSettingsContainer, MyApp, Print, SelectedPixel,
 };
@@ -23,6 +24,7 @@ use crate::io::save_to_csv;
 use crate::math_tools::make_fft;
 
 mod center_panel;
+mod config;
 mod data;
 mod data_thread;
 #[path = "teraflash-ctrl/src/errors.rs"]
@@ -60,8 +62,8 @@ fn main() {
         }
     }
 
-    let pixel_lock = Arc::new(RwLock::new(SelectedPixel::new()));
-    let data_lock = Arc::new(RwLock::new(DataContainer::default()));
+    let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
+    let data_lock = Arc::new(RwLock::new(DataPoint::default()));
     let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
     let waterfall_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
     let df_lock = Arc::new(RwLock::new(gui_settings.frequency_resolution));
@@ -71,10 +73,10 @@ fn main() {
     let fft_filter_bounds_lock = Arc::new(RwLock::new([0.0, 10.0]));
     let status_lock = Arc::new(RwLock::new("".to_string()));
     let connected_lock = Arc::new(RwLock::new(0));
-    let pixel_lock = Arc::new(RwLock::new(SelectedPixel::new()));
+    let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
     let print_lock = Arc::new(RwLock::new(vec![Print::EMPTY]));
 
-    let (save_tx, save_rx): (Sender<PathBuf>, Receiver<PathBuf>) = mpsc::channel();
+    let (config_tx, config_rx): (Sender<Config>, Receiver<Config>) = mpsc::channel();
     let (load_tx, load_rx): (Sender<PathBuf>, Receiver<PathBuf>) = mpsc::channel();
 
     let main_data_lock = data_lock.clone();
@@ -93,16 +95,10 @@ fn main() {
     let _main_thread_handler = thread::spawn(|| {
         main_thread(
             main_data_lock,
-            main_df_lock,
-            main_log_mode_lock,
-            main_normalize_fft_lock,
-            main_fft_bounds_lock,
-            main_fft_filter_bounds_lock,
             main_img_lock,
             main_waterfall_lock,
-            main_pixel_lock,
             main_print_lock,
-            save_rx,
+            config_rx,
             load_rx,
         );
     });
@@ -144,7 +140,7 @@ fn main() {
                 gui_fft_bounds_lock,
                 gui_fft_filter_bounds_lock,
                 gui_settings,
-                save_tx,
+                config_tx,
                 load_tx,
             ))
         }),

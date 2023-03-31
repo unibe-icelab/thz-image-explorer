@@ -1,4 +1,4 @@
-use std::f64::consts::E;
+use std::f32::consts::E;
 use std::f64::NEG_INFINITY;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
@@ -13,11 +13,11 @@ use eframe::egui::{
 use egui_extras::RetainedImage;
 use itertools_num::linspace;
 
-use crate::data::NUM_PULSE_LINES;
+use crate::config::Config;
 use crate::math_tools::apply_fft_window;
 use crate::plot_slider::{filter, windowing};
 use crate::toggle::toggle;
-use crate::{DataContainer, GuiSettingsContainer, Print};
+use crate::{DataPoint, GuiSettingsContainer, Print};
 
 pub fn right_panel(
     ctx: &egui::Context,
@@ -25,20 +25,20 @@ pub fn right_panel(
     gui_conf: &mut GuiSettingsContainer,
     console: &mut Vec<Print>,
     picked_path: &mut String,
-    filter_bounds: &mut [f64; 2],
-    fft_bounds: &mut [f64; 2],
-    save_tx: &Sender<PathBuf>,
-    data_lock: &Arc<RwLock<DataContainer>>,
+    filter_bounds: &mut [f32; 2],
+    fft_bounds: &mut [f32; 2],
+    config_tx: &Sender<Config>,
+    data_lock: &Arc<RwLock<DataPoint>>,
     print_lock: &Arc<RwLock<Vec<Print>>>,
     log_mode_lock: &Arc<RwLock<bool>>,
     normalize_fft_lock: &Arc<RwLock<bool>>,
-    fft_bounds_lock: &Arc<RwLock<[f64; 2]>>,
-    fft_filter_bounds_lock: &Arc<RwLock<[f64; 2]>>,
+    fft_bounds_lock: &Arc<RwLock<[f32; 2]>>,
+    fft_filter_bounds_lock: &Arc<RwLock<[f32; 2]>>,
     hacktica_dark: &RetainedImage,
     hacktica_light: &RetainedImage,
     wp: &RetainedImage,
 ) {
-    let mut data = DataContainer::default();
+    let mut data = DataPoint::default();
     if let Ok(read_guard) = data_lock.read() {
         data = read_guard.clone();
     }
@@ -77,17 +77,17 @@ pub fn right_panel(
                 // TODO: implement different windows
 
                 let mut window_vals: Vec<[f64; 2]> = Vec::new();
-                let mut p = vec![1.0; NUM_PULSE_LINES];
-                let t: Vec<f64> = linspace::<f64>(
+                let mut p = vec![1.0; data.time.len()];
+                let t: Vec<f32> = linspace::<f32>(
                     data.hk.t_begin,
                     data.hk.t_begin + data.hk.range,
-                    NUM_PULSE_LINES,
+                    data.time.len(),
                 )
                 .collect();
                 apply_fft_window(&mut p, &t, &fft_bounds[0], &fft_bounds[1]);
 
                 for i in 0..t.len() {
-                    window_vals.push([t[i], p[i]]);
+                    window_vals.push([t[i] as f64, p[i] as f64]);
                 }
                 let window_plot = Plot::new("Window")
                     .include_x(data.hk.t_begin)
@@ -121,7 +121,7 @@ pub fn right_panel(
 
                 ui.vertical_centered(|ui| {
                     ui.add(windowing(
-                        &(*right_panel_width as f64 * 0.9),
+                        &(*right_panel_width * 0.9),
                         &100.0,
                         &data.hk.range,
                         fft_bounds,
@@ -168,18 +168,20 @@ pub fn right_panel(
                         if fft < 0.0 {
                             fft = 0.0;
                         }
-                        [*x as f64, fft]
+                        [*x as f64, fft as f64]
                     })
                     .collect();
                 let max = spectrum_vals
                     .iter()
-                    .fold(NEG_INFINITY, |ai, &bi| ai.max(bi[1]));
+                    .fold(NEG_INFINITY, |ai, &bi| (ai as f64).max(bi[1]));
 
                 let mut filter_vals: Vec<[f64; 2]> = Vec::new();
-                let filter_f: Vec<f64> = linspace::<f64>(0.0, 10.0, NUM_PULSE_LINES).collect();
+                let filter_f: Vec<f64> = linspace::<f64>(0.0, 10.0, data.time.len()).collect();
                 for i in 0..filter_f.len() {
                     let a: f64;
-                    if filter_f[i] >= filter_bounds[0] && filter_f[i] <= filter_bounds[1] {
+                    if filter_f[i] >= filter_bounds[0] as f64
+                        && filter_f[i] <= filter_bounds[1] as f64
+                    {
                         a = max;
                     } else {
                         a = 0.0;
@@ -225,7 +227,7 @@ pub fn right_panel(
                 ui.vertical_centered(|ui| {
                     if ui
                         .add(filter(
-                            &(*right_panel_width as f64 * 0.9),
+                            &(*right_panel_width * 0.9),
                             &100.0,
                             &10.0,
                             filter_bounds,
