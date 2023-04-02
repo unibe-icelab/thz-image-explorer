@@ -7,7 +7,7 @@ use csv::{ReaderBuilder, WriterBuilder};
 use ndarray::Array2;
 use ndarray_npy::NpzReader;
 use ndarray_npy::ReadNpyExt;
-
+use realfft::RealFftPlanner;
 use serde_json::{Number, Value};
 
 use crate::data::{DataPoint, HouseKeeping, Meta, ScannedImage};
@@ -193,7 +193,11 @@ pub fn open_from_npy(
     Ok(())
 }
 
-pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(), Box<dyn Error>> {
+pub fn open_from_npz(
+    scan: &mut ScannedImage,
+    real_planner: &mut RealFftPlanner<f32>,
+    file_path: &PathBuf,
+) -> Result<(), Box<dyn Error>> {
     let file = File::open(file_path)?;
     let mut npz = NpzReader::new(file)?;
     for x in 0..scan.width {
@@ -206,10 +210,24 @@ pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(),
             data.signal_1 = arr.row(1).iter().copied().collect();
             data.ref_1 = arr.row(2).iter().copied().collect();
 
-            (data.frequencies_fft, data.signal_1_fft, data.phase_1_fft) =
-                make_fft(&data.time, &data.signal_1, false, &0.01, &0.0, &0.0);
-            (_, data.ref_1_fft, data.ref_phase_1_fft) =
-                make_fft(&data.time, &data.ref_1, false, &0.01, &0.0, &0.0);
+            (data.frequencies_fft, data.signal_1_fft, data.phase_1_fft) = make_fft(
+                real_planner,
+                &data.time,
+                &data.signal_1,
+                false,
+                &0.01,
+                &0.0,
+                &0.0,
+            );
+            (_, data.ref_1_fft, data.ref_phase_1_fft) = make_fft(
+                real_planner,
+                &data.time,
+                &data.ref_1,
+                false,
+                &0.01,
+                &0.0,
+                &0.0,
+            );
             data.filtered_phase_1_fft = data.phase_1_fft.clone();
             data.filtered_signal_1_fft = data.signal_1_fft.clone();
             // calculate the intensity by summing the squares
