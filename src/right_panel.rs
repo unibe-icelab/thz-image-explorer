@@ -120,32 +120,38 @@ pub fn right_panel(
                 });
 
                 ui.vertical_centered(|ui| {
-                    ui.add(windowing(
-                        &(*right_panel_width * 0.9),
-                        &100.0,
-                        &data.hk.range,
-                        fft_bounds,
-                    ));
+                    if ui
+                        .add(windowing(
+                            &(*right_panel_width * 0.9),
+                            &100.0,
+                            &data.hk.range,
+                            fft_bounds,
+                        ))
+                        .changed()
+                    {
+                        if fft_bounds[0] < 0.0 {
+                            fft_bounds[0] = 0.0;
+                        }
+
+                        if fft_bounds[1] < 0.0 {
+                            fft_bounds[1] = 0.0;
+                        }
+
+                        if fft_bounds[0] > data.hk.range {
+                            fft_bounds[0] = data.hk.range;
+                        }
+
+                        if fft_bounds[1] > data.hk.range {
+                            fft_bounds[1] = data.hk.range;
+                        }
+                        config_tx
+                            .send(Config::SetFFTWindowLow(fft_bounds[0]))
+                            .unwrap();
+                        config_tx
+                            .send(Config::SetFFTWindowHigh(fft_bounds[1]))
+                            .unwrap();
+                    };
                 });
-                if fft_bounds[0] < 0.0 {
-                    fft_bounds[0] = 0.0;
-                }
-
-                if fft_bounds[1] < 0.0 {
-                    fft_bounds[1] = 0.0;
-                }
-
-                if fft_bounds[0] > data.hk.range {
-                    fft_bounds[0] = data.hk.range;
-                }
-
-                if fft_bounds[1] > data.hk.range {
-                    fft_bounds[1] = data.hk.range;
-                }
-
-                if let Ok(mut write_guard) = fft_bounds_lock.write() {
-                    *write_guard = fft_bounds.clone();
-                }
 
                 ui.add_space(10.0);
 
@@ -234,9 +240,12 @@ pub fn right_panel(
                         ))
                         .changed()
                     {
-                        if let Ok(mut write_guard) = fft_filter_bounds_lock.write() {
-                            *write_guard = filter_bounds.clone();
-                        }
+                        config_tx
+                            .send(Config::SetFFTFilterLow(filter_bounds[0]))
+                            .unwrap();
+                        config_tx
+                            .send(Config::SetFFTFilterHigh(filter_bounds[1]))
+                            .unwrap();
                     };
                 });
 

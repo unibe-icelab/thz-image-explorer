@@ -131,6 +131,12 @@ pub fn left_panel(
                 pixel_selected,
             );
             if pixel_selected.selected {
+                config_tx
+                    .send(Config::SetSelectedPixel([
+                        pixel_selected.x as usize,
+                        pixel_selected.y as usize,
+                    ]))
+                    .unwrap();
                 if let Ok(mut write_guard) = pixel_lock.write() {
                     *write_guard = pixel_selected.clone();
                 }

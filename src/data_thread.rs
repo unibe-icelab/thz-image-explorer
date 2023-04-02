@@ -4,13 +4,14 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use eframe::egui::ColorImage;
 use image::RgbaImage;
 use ndarray::Array2;
 use ndarray_npy::NpzReader;
 use rayon::prelude::*;
+use realfft::RealFftPlanner;
 
 use crate::config::{Config, ConfigContainer};
 use crate::data::{DataPoint, ScannedImage};
@@ -69,16 +70,21 @@ fn update(
     waterfall_lock: &Arc<RwLock<Array2<f32>>>,
 ) {
     // calculate fft filter and calculate ifft
+    println!("updating data");
+    let start = Instant::now();
     scan.data
-        .iter_mut()
-        .zip(scan.img.iter_mut())
+        .par_iter_mut()
+        .zip(scan.img.par_iter_mut())
         .for_each(|(pixel_data, img_data)| {
+            let mut real_planner = RealFftPlanner::<f32>::new();
+
             // calculate fft
             (
                 pixel_data.frequencies_fft,
                 pixel_data.signal_1_fft,
                 pixel_data.phase_1_fft,
             ) = make_fft(
+                &mut real_planner,
                 &pixel_data.time,
                 &pixel_data.signal_1,
                 config.normalize_fft,
@@ -87,6 +93,7 @@ fn update(
                 &config.fft_window[1],
             );
             (_, pixel_data.ref_1_fft, pixel_data.ref_phase_1_fft) = make_fft(
+                &mut real_planner,
                 &pixel_data.time,
                 &pixel_data.ref_1,
                 config.normalize_fft,
@@ -96,6 +103,7 @@ fn update(
             );
             apply_filter(pixel_data, &config.fft_filter);
             pixel_data.filtered_signal_1 = make_ifft(
+                &mut real_planner,
                 &pixel_data.frequencies_fft,
                 &pixel_data.filtered_signal_1_fft,
                 &pixel_data.filtered_phase_1_fft,
@@ -106,15 +114,17 @@ fn update(
                 .iter()
                 .map(|x| x.powi(2))
                 .collect();
-            *img_data = sig_squared.iter().sum();
+            *img_data = sig_squared.par_iter().sum();
         });
     // update images
     update_intensity_image(scan, img_lock);
     update_waterfall_image(scan, config.selected_pixel[0], waterfall_lock);
+    println!("updated data. This took {:?}", start.elapsed());
 }
 
 fn load_from_npy(
     opened_directory_path: &PathBuf,
+    real_planner: &mut RealFftPlanner<f32>,
     data: &mut DataPoint,
     scan: &mut ScannedImage,
     config: &mut ConfigContainer,
@@ -183,6 +193,7 @@ fn load_from_npy(
                 .collect();
 
             (data.frequencies_fft, data.signal_1_fft, data.phase_1_fft) = make_fft(
+                real_planner,
                 &data.time,
                 &data.signal_1,
                 config.normalize_fft,
@@ -191,6 +202,7 @@ fn load_from_npy(
                 &config.fft_window[1],
             );
             (_, data.ref_1_fft, data.ref_phase_1_fft) = make_fft(
+                real_planner,
                 &data.time,
                 &data.ref_1,
                 config.normalize_fft,
@@ -216,6 +228,7 @@ fn load_from_npy(
 
 fn load_from_npz(
     opened_directory_path: &PathBuf,
+    real_planner: &mut RealFftPlanner<f32>,
     data: &mut DataPoint,
     scan: &mut ScannedImage,
     config: &mut ConfigContainer,
@@ -252,7 +265,7 @@ fn load_from_npz(
     let mut pulse_path = opened_directory_path.clone();
     pulse_path.push("data.npz");
     dbg!(&pulse_path);
-    match open_from_npz(scan, &pulse_path) {
+    match open_from_npz(scan, real_planner, &pulse_path) {
         Ok(_) => {
             update_intensity_image(scan, img_lock);
             update_waterfall_image(scan, config.selected_pixel[0], waterfall_lock);
@@ -282,6 +295,8 @@ pub fn main_thread(
     let mut scan = ScannedImage::default();
     let mut config = ConfigContainer::default();
     let mut pixel = SelectedPixel::default();
+    // make a planner
+    let mut real_planner = RealFftPlanner::<f32>::new();
 
     loop {
         if let Ok(opened_folder_path) = load_rx.recv_timeout(Duration::from_millis(10)) {
@@ -304,6 +319,7 @@ pub fn main_thread(
                 println!("[OK] found npy binaries.");
                 load_from_npy(
                     &opened_folder_path,
+                    &mut real_planner,
                     &mut data,
                     &mut scan,
                     &mut config,
@@ -314,6 +330,7 @@ pub fn main_thread(
                 println!("[OK] found a npz binary.");
                 load_from_npz(
                     &opened_folder_path,
+                    &mut real_planner,
                     &mut data,
                     &mut scan,
                     &mut config,
@@ -328,39 +345,49 @@ pub fn main_thread(
             match config_command {
                 Config::SetFFTWindowLow(low) => {
                     config.fft_window[0] = low;
+                    update(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetFFTWindowHigh(high) => {
                     config.fft_window[1] = high;
+                    update(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetFFTFilterLow(low) => {
                     config.fft_filter[0] = low;
+                    update(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetFFTFilterHigh(high) => {
                     config.fft_filter[1] = high;
+                    update(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetTimeWindowLow(low) => {
                     config.time_window[0] = low;
+                    update(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetTimeWindowHigh(high) => {
                     config.time_window[1] = high;
+                    update(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetFFTLogPlot(log_plot) => {
                     config.fft_log_plot = log_plot;
+                    update(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetFFTNormalization(normalization) => {
                     config.normalize_fft = normalization;
+                    update(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetFFTResolution(df) => {
                     config.fft_df = df;
+                    update(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetSelectedPixel(pixel_location) => {
                     config.selected_pixel = pixel_location;
+                    println!("new pixel: {:?}", config.selected_pixel);
                     if let Ok(mut write_guard) = data_lock.write() {
                         *write_guard = scan.get_data(pixel_location[0], pixel_location[1]);
                     }
+                    // send HK?
                 }
             }
-            update(&config, &mut scan, &img_lock, &waterfall_lock);
         }
         std::thread::sleep(Duration::from_millis(100));
     }

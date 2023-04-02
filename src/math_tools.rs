@@ -4,7 +4,7 @@ use std::f32::consts::PI;
 use itertools_num::linspace;
 use rand::Rng;
 use rayon::prelude::*;
-use realfft::num_complex::Complex64;
+use realfft::num_complex::{Complex32, Complex64};
 use realfft::RealFftPlanner;
 
 use crate::data::DataPoint;
@@ -56,6 +56,7 @@ pub fn apply_filter(data: &mut DataPoint, bounds: &[f32; 2]) {
 }
 
 pub fn make_fft(
+    real_planner: &mut RealFftPlanner<f32>,
     t_in: &[f32],
     p_in: &[f32],
     normalize: bool,
@@ -63,9 +64,6 @@ pub fn make_fft(
     lower_bound: &f32,
     upper_bound: &f32,
 ) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
-    // make a planner
-    let mut real_planner = RealFftPlanner::<f64>::new();
-
     // implement zero padding!
     let dt = t_in[1] - t_in[0];
     let zero_padding = (1.0 / (*df * dt)) as usize;
@@ -88,15 +86,15 @@ pub fn make_fft(
     // create a FFT
     let r2c = real_planner.plan_fft_forward(t.len());
     // make input and output vectors
-    let mut in_data: Vec<f64> = p.iter().map(|d| *d as f64).collect();
+    let mut in_data: Vec<f32> = p.to_vec();
     let mut spectrum = r2c.make_output_vec();
     // Forward transform the input data
     r2c.process(&mut in_data, &mut spectrum).unwrap();
 
-    let mut amp: Vec<f32> = spectrum.iter().map(|s| s.norm() as f32).collect();
+    let mut amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
     let rng = t[t.len() - 1] - t[0];
     let freq: Vec<f32> = (0..spectrum.len()).map(|i| i as f32 / rng).collect();
-    let phase: Vec<f32> = spectrum.iter().map(|s| s.arg() as f32).collect();
+    let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
     if normalize {
         let mut max_amp = amp.iter().fold(f32::NEG_INFINITY, |ai, &bi| ai.max(bi));
         if max_amp == 0.0 {
@@ -107,17 +105,19 @@ pub fn make_fft(
     (freq, amp, numpy_unwrap(phase, Some(2.0 * PI)))
 }
 
-pub fn make_ifft(frequencies: &[f32], amplitudes: &[f32], phases: &[f32]) -> Vec<f32> {
-    // make a planner
-    let mut real_planner = RealFftPlanner::<f64>::new();
-
-    let mut spectrum: Vec<Complex64> = vec![];
+pub fn make_ifft(
+    real_planner: &mut RealFftPlanner<f32>,
+    frequencies: &[f32],
+    amplitudes: &[f32],
+    phases: &[f32],
+) -> Vec<f32> {
+    let mut spectrum: Vec<Complex32> = vec![];
     // spectrum = spectrum.iter_mut().zip(amplitudes.iter().zip(phases.iter()))
     //     .map(|(s,(a,p))| {
     //         *s = Complex64::new(*a,*p)
     //     }).collect();
     for (a, p) in amplitudes.iter().zip(phases.iter()) {
-        spectrum.push(Complex64::from_polar(*a as f64, *p as f64));
+        spectrum.push(Complex32::from_polar(*a, *p));
     }
 
     // create a iFFT
@@ -133,7 +133,7 @@ pub fn make_ifft(frequencies: &[f32], amplitudes: &[f32], phases: &[f32]) -> Vec
         }
     };
     let length = output.len();
-    let output = output.iter().map(|p| *p as f32 / length as f32).collect();
+    let output = output.iter().map(|p| *p / length as f32).collect();
     // let mut pulse: Vec<f64> = vec![];
     // for (i, p) in output.iter().enumerate() {
     //     if i % 2 == 0 {
@@ -183,8 +183,9 @@ fn numpy_unwrap(mut phase_unwrapped: Vec<f32>, discont: Option<f32>) -> Vec<f32>
 
 #[cfg(test)]
 mod tests {
-    use approx::assert_relative_eq;
     use std::path::PathBuf;
+
+    use approx::assert_relative_eq;
 
     use crate::io::{open_from_csv, open_from_npy};
 
@@ -201,9 +202,9 @@ mod tests {
 
         println!("signal: {:?}", data.signal_1[100]);
 
-        let mut spectrum: Vec<Complex64> = vec![];
+        let mut spectrum: Vec<Complex32> = vec![];
         for (a, p) in data.signal_1_fft.iter().zip(data.phase_1_fft.iter()) {
-            spectrum.push(Complex64::from_polar(*a, *p));
+            spectrum.push(Complex32::from_polar(*a, *p));
         }
 
         println!("spectrum: {:?}", spectrum[100]);
