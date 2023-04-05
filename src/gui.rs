@@ -70,6 +70,7 @@ impl Default for SelectedPixel {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct GuiSettingsContainer {
     pub log_plot: bool,
+    pub down_scaling: usize,
     pub normalize_fft: bool,
     pub signal_1_visible: bool,
     pub ref_1_visible: bool,
@@ -89,6 +90,7 @@ impl GuiSettingsContainer {
     pub fn new() -> GuiSettingsContainer {
         return GuiSettingsContainer {
             log_plot: true,
+            down_scaling: 1,
             normalize_fft: false,
             signal_1_visible: true,
             ref_1_visible: false,

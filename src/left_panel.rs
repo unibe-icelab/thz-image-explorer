@@ -103,7 +103,7 @@ pub fn left_panel(
             if ui.button("Load Scan").clicked() {
                 match rfd::FileDialog::new().pick_folder() {
                     Some(path) => {
-                        load_tx.send(path.clone()).expect("TODO: panic message");
+                        config_tx.send(Config::OpenFile(path.clone()));
                     }
                     None => {}
                 }
@@ -121,16 +121,16 @@ pub fn left_panel(
             if let Ok(read_guard) = waterfall_lock.read() {
                 waterfall_data = read_guard.clone();
             }
-            let img = plot_matrix(
+            let pixel_clicked = plot_matrix(
                 ui,
                 &img_data,
                 &(*left_panel_width as f64),
                 &(height as f64),
-                &mut data.cut_off,
+                &mut 0.0,
                 val,
                 pixel_selected,
             );
-            if pixel_selected.selected {
+            if pixel_clicked {
                 config_tx
                     .send(Config::SetSelectedPixel([
                         pixel_selected.x as usize,
@@ -146,7 +146,7 @@ pub fn left_panel(
                 &waterfall_data,
                 &(*left_panel_width as f64),
                 &(*left_panel_width as f64),
-                &mut data.cut_off,
+                &mut 0.0,
                 val,
                 pixel_selected,
             );

@@ -159,10 +159,10 @@ pub fn center_panel(
                         data.time[i] as f64,
                         data.signal_1[i] as f64 + axis_display_offset,
                     ]);
-                    ref_1.push([
-                        data.time[i] as f64,
-                        data.ref_1[i] as f64 + axis_display_offset,
-                    ]);
+                    // ref_1.push([
+                    //     data.time[i] as f64,
+                    //     data.ref_1[i] as f64 + axis_display_offset,
+                    // ]);
                 }
 
                 for i in 0..data.time.len().min(data.filtered_signal_1.len()) {
@@ -263,7 +263,7 @@ pub fn center_panel(
                 }
 
                 let signal_1_fft: Vec<[f64; 2]> = data
-                    .frequencies_fft
+                    .frequencies
                     .iter()
                     .zip(data.signal_1_fft.iter())
                     .map(|(x, y)| {
@@ -280,7 +280,7 @@ pub fn center_panel(
                     })
                     .collect();
                 let filtered_signal_1_fft: Vec<[f64; 2]> = data
-                    .frequencies_fft
+                    .frequencies
                     .iter()
                     .zip(data.filtered_signal_1_fft.iter())
                     .map(|(x, y)| {
@@ -297,7 +297,7 @@ pub fn center_panel(
                     })
                     .collect();
                 let ref_1_fft: Vec<[f64; 2]> = data
-                    .frequencies_fft
+                    .frequencies
                     .iter()
                     .zip(data.ref_1_fft.iter())
                     .map(|(x, y)| {
@@ -315,7 +315,7 @@ pub fn center_panel(
                     .collect();
 
                 let phase_1_fft: Vec<[f64; 2]> = data
-                    .frequencies_fft
+                    .frequencies
                     .iter()
                     .zip(data.phase_1_fft.iter())
                     .map(|(x, y)| {
@@ -332,7 +332,7 @@ pub fn center_panel(
                     })
                     .collect();
                 let ref_phase_1_fft: Vec<[f64; 2]> = data
-                    .frequencies_fft
+                    .frequencies
                     .iter()
                     .zip(data.ref_phase_1_fft.iter())
                     .map(|(x, y)| {
