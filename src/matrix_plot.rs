@@ -81,7 +81,9 @@ pub fn plot_matrix(
     cut_off: &mut f64,
     val: &mut PlotPoint,
     pixel_selected: &mut SelectedPixel,
-) -> ColorImage {
+) -> bool {
+    let mut pixel_clicked = false;
+
     let max = data.iter().fold(NEG_INFINITY, |ai, &bi| ai.max(bi as f64));
     ui.horizontal(|ui| {
         ui.label("Noise gate:");
@@ -160,7 +162,9 @@ pub fn plot_matrix(
                 );
             }
         });
+
         if plot_response.response.clicked() {
+            pixel_clicked = true;
             // display spectrum!
             if pixel_selected.x == val.x.floor()
                 && pixel_selected.y == height as f64 - 1.0 - val.y.floor()
@@ -190,7 +194,7 @@ pub fn plot_matrix(
         "ID = {}: i = {:.2}%",
         id_matrix[x][y], intensity_matrix[x][y]
     ));
-    img
+    pixel_clicked
 }
 
 pub fn plot_waterfall(

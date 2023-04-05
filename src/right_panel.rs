@@ -69,6 +69,15 @@ pub fn right_panel(
                         if let Ok(mut write_guard) = normalize_fft_lock.write() {
                             *write_guard = gui_conf.normalize_fft.clone();
                         }
+
+                        ui.end_row();
+                        ui.label("Down scaling:");
+                        if ui
+                            .add(egui::Slider::new(&mut gui_conf.down_scaling, 1..=10))
+                            .changed()
+                        {
+                            config_tx.send(Config::SetDownScaling(gui_conf.down_scaling));
+                        }
                     });
 
                 ui.separator();
@@ -84,7 +93,7 @@ pub fn right_panel(
                     data.time.len(),
                 )
                 .collect();
-                apply_fft_window(&mut p, &t, &fft_bounds[0], &fft_bounds[1]);
+                //apply_fft_window(&mut p, &t, &fft_bounds[0], &fft_bounds[1]);
 
                 for i in 0..t.len() {
                     window_vals.push([t[i] as f64, p[i] as f64]);
@@ -161,7 +170,7 @@ pub fn right_panel(
                 // TODO: implement different windows
 
                 let spectrum_vals: Vec<[f64; 2]> = data
-                    .frequencies_fft
+                    .frequencies
                     .iter()
                     .zip(data.signal_1_fft.iter())
                     .map(|(x, y)| {

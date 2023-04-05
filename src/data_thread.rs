@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::f32::consts::PI;
 use std::fs;
 use std::fs::File;
 use std::path::PathBuf;
@@ -8,16 +9,19 @@ use std::time::{Duration, Instant};
 
 use eframe::egui::ColorImage;
 use image::RgbaImage;
-use ndarray::Array2;
+use ndarray::parallel::prelude::*;
+use ndarray::{Array1, Array2, ArrayBase, ArrayViewMut, Axis};
 use ndarray_npy::NpzReader;
-use rayon::prelude::*;
+use realfft::num_complex::Complex32;
 use realfft::RealFftPlanner;
+
+use itertools::izip;
 
 use crate::config::{Config, ConfigContainer};
 use crate::data::{DataPoint, ScannedImage};
 use crate::io::{open_conf, open_from_npy, open_from_npz, open_hk, open_json};
-use crate::math_tools::{apply_filter, make_ifft};
-use crate::{make_fft, print_to_console, save_to_csv, update_in_console, Print, SelectedPixel};
+use crate::math_tools::{apply_fft_window, apply_filter, make_ifft, numpy_unwrap};
+use crate::{make_fft, print_to_console, update_in_console, Print, SelectedPixel};
 
 fn save_image(img: &ColorImage, file_path: &PathBuf) {
     let height = img.height();
@@ -44,8 +48,7 @@ fn save_image(img: &ColorImage, file_path: &PathBuf) {
 
 fn update_intensity_image(scan: &mut ScannedImage, img_lock: &Arc<RwLock<Array2<f32>>>) {
     if let Ok(mut write_guard) = img_lock.write() {
-        let img = Array2::from_shape_fn((scan.width, scan.height), |(x, y)| scan.get_img(x, y));
-        *write_guard = img;
+        *write_guard = scan.filtered_img.clone();
     }
 }
 
@@ -55,15 +58,17 @@ fn update_waterfall_image(
     waterfall_lock: &Arc<RwLock<Array2<f32>>>,
 ) {
     if let Ok(mut write_guard) = waterfall_lock.write() {
-        let len = scan.data[0].signal_1_fft.len();
-        let img = Array2::from_shape_fn((len, scan.height), |(x, y)| {
-            scan.get_data(pixel_x, y).filtered_signal_1_fft.clone()[x]
+        let length = scan.time.len();
+        let img = Array2::from_shape_fn((length, scan.height), |(x, y)| {
+            scan.filtered_data
+                .index_axis(Axis(0), pixel_x)
+                .index_axis(Axis(0), y)[x]
         });
         *write_guard = img;
     }
 }
 
-fn update(
+fn filter(
     config: &ConfigContainer,
     scan: &mut ScannedImage,
     img_lock: &Arc<RwLock<Array2<f32>>>,
@@ -72,50 +77,89 @@ fn update(
     // calculate fft filter and calculate ifft
     println!("updating data");
     let start = Instant::now();
-    scan.data
-        .par_iter_mut()
-        .zip(scan.img.par_iter_mut())
-        .for_each(|(pixel_data, img_data)| {
-            let mut real_planner = RealFftPlanner::<f32>::new();
-
-            // calculate fft
+    if let Some(r2c) = &scan.r2c {
+        if let Some(c2r) = &scan.c2r {
             (
-                pixel_data.frequencies_fft,
-                pixel_data.signal_1_fft,
-                pixel_data.phase_1_fft,
-            ) = make_fft(
-                &mut real_planner,
-                &pixel_data.time,
-                &pixel_data.signal_1,
-                config.normalize_fft,
-                &config.fft_df,
-                &config.fft_window[0],
-                &config.fft_window[1],
-            );
-            (_, pixel_data.ref_1_fft, pixel_data.ref_phase_1_fft) = make_fft(
-                &mut real_planner,
-                &pixel_data.time,
-                &pixel_data.ref_1,
-                config.normalize_fft,
-                &config.fft_df,
-                &config.fft_window[0],
-                &config.fft_window[1],
-            );
-            apply_filter(pixel_data, &config.fft_filter);
-            pixel_data.filtered_signal_1 = make_ifft(
-                &mut real_planner,
-                &pixel_data.frequencies_fft,
-                &pixel_data.filtered_signal_1_fft,
-                &pixel_data.filtered_phase_1_fft,
-            );
-            // calculate the intensity by summing the squares
-            let sig_squared: Vec<f32> = pixel_data
-                .filtered_signal_1
-                .iter()
-                .map(|x| x.powi(2))
-                .collect();
-            *img_data = sig_squared.par_iter().sum();
-        });
+                scan.scaled_data.axis_iter_mut(Axis(0)),
+                scan.filtered_data.axis_iter_mut(Axis(0)),
+                scan.filtered_img.axis_iter_mut(Axis(0)),
+            )
+                .into_par_iter()
+                .for_each(
+                    |(
+                        mut scaled_data_columns,
+                        mut filtered_data_columns,
+                        mut filtered_img_columns,
+                    )| {
+                        (
+                            scaled_data_columns.axis_iter_mut(Axis(0)),
+                            filtered_data_columns.axis_iter_mut(Axis(0)),
+                            filtered_img_columns.axis_iter_mut(Axis(0)),
+                        )
+                            .into_par_iter()
+                            .for_each(
+                                |(mut scaled_data, mut filtered_data, mut filtered_img)| {
+                                    filtered_data.assign(&scaled_data);
+                                    apply_fft_window(
+                                        &mut filtered_data,
+                                        &scan.time,
+                                        &config.fft_window[0],
+                                        &config.fft_window[1],
+                                    );
+
+                                    // calculate fft
+                                    let mut in_data: Vec<f32> = filtered_data.to_vec();
+                                    let mut spectrum = r2c.make_output_vec();
+                                    // Forward transform the input data
+                                    r2c.process(&mut in_data, &mut spectrum).unwrap();
+
+                                    // apply bandpass filter
+                                    for (f, spectrum) in
+                                        scan.frequencies.iter().zip(spectrum.iter_mut())
+                                    {
+                                        if (*f < config.fft_filter[0])
+                                            || (*f > config.fft_filter[1])
+                                        {
+                                            *spectrum = Complex32::new(0.0, 0.0);
+                                        }
+                                    }
+
+                                    let mut output = c2r.make_output_vec();
+
+                                    // Forward transform the input data
+                                    match c2r.process(&mut spectrum, &mut output) {
+                                        Ok(_) => {}
+                                        Err(err) => {
+                                            println!("error in iFFT: {err:?}");
+                                        }
+                                    };
+                                    let length = output.len();
+                                    let output = output
+                                        .iter()
+                                        .map(|p| *p / length as f32)
+                                        .collect::<Vec<f32>>();
+                                    *filtered_img.into_scalar() =
+                                        output.iter().map(|xi| xi * xi).sum::<f32>();
+                                    filtered_data.assign(&Array1::from_vec(output));
+                                },
+                            );
+                    },
+                );
+        };
+    };
+
+    // for x in 0..scan.width {
+    //     for y in 0..scan.height {
+    //         // calculate the intensity by summing the squares
+    //         let sig_squared_sum = scan
+    //             .raw_data
+    //             .index_axis(Axis(0), x)
+    //             .index_axis(Axis(0), y)
+    //             .mapv(|xi| xi * xi)
+    //             .sum();
+    //         scan.raw_img[[x, y]] = sig_squared_sum;
+    //     }
+    // }
     // update images
     update_intensity_image(scan, img_lock);
     update_waterfall_image(scan, config.selected_pixel[0], waterfall_lock);
@@ -180,45 +224,17 @@ fn load_from_npy(
                 } else {
                     y1 = y - 1;
                 }
-                *data = scan.get_data(x1, y1);
+                //*data = scan.get_raw_data(x1, y1);
             }
 
             // subtract reference from signal
             // TODO: we need to remove the bias/offset!
-            data.signal_1 = data
-                .signal_1
-                .iter()
-                .zip(data.ref_1.iter())
-                .map(|(s, r)| *s - *r)
-                .collect();
 
-            (data.frequencies_fft, data.signal_1_fft, data.phase_1_fft) = make_fft(
-                real_planner,
-                &data.time,
-                &data.signal_1,
-                config.normalize_fft,
-                &config.fft_df,
-                &config.fft_window[0],
-                &config.fft_window[1],
-            );
-            (_, data.ref_1_fft, data.ref_phase_1_fft) = make_fft(
-                real_planner,
-                &data.time,
-                &data.ref_1,
-                config.normalize_fft,
-                &config.fft_df,
-                &config.fft_window[0],
-                &config.fft_window[1],
-            );
-
-            data.filtered_phase_1_fft = data.phase_1_fft.clone();
-            data.filtered_signal_1_fft = data.signal_1_fft.clone();
-
-            scan.set_data(x, y, data.clone());
+            //scan.set_raw_data(x, y, data.clone());
 
             // calculate the intensity by summing the squares
             let sig_squared: Vec<f32> = data.signal_1.iter().map(|x| x.powi(2)).collect();
-            scan.set_img(x, y, sig_squared.iter().sum());
+            //scan.set_raw_img(x, y, sig_squared.iter().sum());
 
             update_intensity_image(scan, img_lock);
             update_waterfall_image(scan, config.selected_pixel[0], waterfall_lock);
@@ -228,7 +244,6 @@ fn load_from_npy(
 
 fn load_from_npz(
     opened_directory_path: &PathBuf,
-    real_planner: &mut RealFftPlanner<f32>,
     data: &mut DataPoint,
     scan: &mut ScannedImage,
     config: &mut ConfigContainer,
@@ -265,7 +280,7 @@ fn load_from_npz(
     let mut pulse_path = opened_directory_path.clone();
     pulse_path.push("data.npz");
     dbg!(&pulse_path);
-    match open_from_npz(scan, real_planner, &pulse_path) {
+    match open_from_npz(scan, &pulse_path) {
         Ok(_) => {
             update_intensity_image(scan, img_lock);
             update_waterfall_image(scan, config.selected_pixel[0], waterfall_lock);
@@ -274,6 +289,8 @@ fn load_from_npz(
             println!("an error occurred while trying to read data.npz {err:?}");
         }
     }
+    println!("opened npz");
+    filter(&config, scan, img_lock, waterfall_lock);
 }
 
 #[derive(Clone, PartialEq)]
@@ -295,100 +312,137 @@ pub fn main_thread(
     let mut scan = ScannedImage::default();
     let mut config = ConfigContainer::default();
     let mut pixel = SelectedPixel::default();
-    // make a planner
-    let mut real_planner = RealFftPlanner::<f32>::new();
 
     loop {
-        if let Ok(opened_folder_path) = load_rx.recv_timeout(Duration::from_millis(10)) {
-            let files = fs::read_dir(&opened_folder_path)
-                .unwrap()
-                .filter_map(Result::ok)
-                .filter_map(|entry| {
-                    if let Some(extension) = entry.path().extension() {
-                        match extension.to_str().unwrap() {
-                            "npy" => Some(FileType::Npy),
-                            "npz" => Some(FileType::Npz),
-                            _ => None,
+        if let Ok(config_command) = config_rx.recv() {
+            match config_command {
+                Config::OpenFile(opened_folder_path) => {
+                    let files = fs::read_dir(&opened_folder_path)
+                        .unwrap()
+                        .filter_map(Result::ok)
+                        .filter_map(|entry| {
+                            if let Some(extension) = entry.path().extension() {
+                                match extension.to_str().unwrap() {
+                                    "npy" => Some(FileType::Npy),
+                                    "npz" => Some(FileType::Npz),
+                                    _ => None,
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<FileType>>();
+                    if files.contains(&FileType::Npy) {
+                        println!("[OK] found npy binaries.");
+                        // load_from_npy(
+                        //     &opened_folder_path,
+                        //     &mut real_planner,
+                        //     &mut data,
+                        //     &mut scan,
+                        //     &mut config,
+                        //     &img_lock,
+                        //     &waterfall_lock,
+                        // );
+                    } else if files.contains(&FileType::Npz) {
+                        println!("[OK] found a npz binary.");
+                        load_from_npz(
+                            &opened_folder_path,
+                            &mut data,
+                            &mut scan,
+                            &mut config,
+                            &img_lock,
+                            &waterfall_lock,
+                        );
+
+                        if let Some(r2c) = &scan.r2c {
+                            if let Ok(mut data) = data_lock.write() {
+                                data.time = scan.time.to_vec();
+                                data.frequencies = scan.frequencies.to_vec();
+                                data.signal_1 = scan
+                                    .raw_data
+                                    .index_axis(Axis(0), 0)
+                                    .index_axis(Axis(0), 0)
+                                    .to_vec();
+                                let mut in_data: Vec<f32> = data.signal_1.to_vec();
+                                let mut spectrum = r2c.make_output_vec();
+                                // Forward transform the input data
+                                r2c.process(&mut in_data, &mut spectrum).unwrap();
+                                let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
+                                let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
+                                data.signal_1_fft = amp;
+                                data.phase_1_fft = numpy_unwrap(phase, Some(2.0 * PI));
+                                let d = data.clone();
+                            }
                         }
                     } else {
-                        None
+                        println!("no binaries found.. CSV has to be implemented!")
                     }
-                })
-                .collect::<Vec<FileType>>();
-            if files.contains(&FileType::Npy) {
-                println!("[OK] found npy binaries.");
-                load_from_npy(
-                    &opened_folder_path,
-                    &mut real_planner,
-                    &mut data,
-                    &mut scan,
-                    &mut config,
-                    &img_lock,
-                    &waterfall_lock,
-                );
-            } else if files.contains(&FileType::Npz) {
-                println!("[OK] found a npz binary.");
-                load_from_npz(
-                    &opened_folder_path,
-                    &mut real_planner,
-                    &mut data,
-                    &mut scan,
-                    &mut config,
-                    &img_lock,
-                    &waterfall_lock,
-                )
-            } else {
-                println!("no binaries found.. CSV has to be implemented!")
-            }
-        }
-        if let Ok(config_command) = config_rx.recv_timeout(Duration::from_millis(10)) {
-            match config_command {
+                }
                 Config::SetFFTWindowLow(low) => {
                     config.fft_window[0] = low;
-                    update(&config, &mut scan, &img_lock, &waterfall_lock);
+                    filter(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetFFTWindowHigh(high) => {
                     config.fft_window[1] = high;
-                    update(&config, &mut scan, &img_lock, &waterfall_lock);
+                    filter(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetFFTFilterLow(low) => {
                     config.fft_filter[0] = low;
-                    update(&config, &mut scan, &img_lock, &waterfall_lock);
+                    filter(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetFFTFilterHigh(high) => {
                     config.fft_filter[1] = high;
-                    update(&config, &mut scan, &img_lock, &waterfall_lock);
+                    filter(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetTimeWindowLow(low) => {
                     config.time_window[0] = low;
-                    update(&config, &mut scan, &img_lock, &waterfall_lock);
+                    filter(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetTimeWindowHigh(high) => {
                     config.time_window[1] = high;
-                    update(&config, &mut scan, &img_lock, &waterfall_lock);
+                    filter(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetFFTLogPlot(log_plot) => {
                     config.fft_log_plot = log_plot;
-                    update(&config, &mut scan, &img_lock, &waterfall_lock);
+                    filter(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetFFTNormalization(normalization) => {
                     config.normalize_fft = normalization;
-                    update(&config, &mut scan, &img_lock, &waterfall_lock);
+                    filter(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetFFTResolution(df) => {
                     config.fft_df = df;
-                    update(&config, &mut scan, &img_lock, &waterfall_lock);
+                    filter(&config, &mut scan, &img_lock, &waterfall_lock);
+                }
+                Config::SetDownScaling(scaling) => {
+                    config.down_scaling = scaling;
+                    scan.rescale(config.down_scaling);
                 }
                 Config::SetSelectedPixel(pixel_location) => {
                     config.selected_pixel = pixel_location;
                     println!("new pixel: {:?}", config.selected_pixel);
-                    if let Ok(mut write_guard) = data_lock.write() {
-                        *write_guard = scan.get_data(pixel_location[0], pixel_location[1]);
+                    if let Some(r2c) = &scan.r2c {
+                        if let Ok(mut data) = data_lock.write() {
+                            data.time = scan.time.to_vec();
+                            data.frequencies = scan.frequencies.to_vec();
+                            data.signal_1 = scan
+                                .filtered_data
+                                .index_axis(Axis(0), config.selected_pixel[0])
+                                .index_axis(Axis(0), config.selected_pixel[1])
+                                .to_vec();
+                            let mut in_data: Vec<f32> = data.signal_1.to_vec();
+                            let mut spectrum = r2c.make_output_vec();
+                            // Forward transform the input data
+                            r2c.process(&mut in_data, &mut spectrum).unwrap();
+                            let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
+                            let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
+                            data.signal_1_fft = amp;
+                            data.phase_1_fft = numpy_unwrap(phase, Some(2.0 * PI));
+                            let d = data.clone();
+                        }
                     }
-                    // send HK?
-                }
+                } // send HK?
             }
         }
-        std::thread::sleep(Duration::from_millis(100));
     }
 }
