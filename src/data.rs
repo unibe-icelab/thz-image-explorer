@@ -1,7 +1,8 @@
+use std::ops::AddAssign;
 use std::sync::Arc;
 use std::time::Instant;
 
-use ndarray::{Array, Array1, Array2, Array3};
+use ndarray::{Array, Array1, Array2, Array3, Axis};
 use realfft::num_complex::{Complex, Complex32};
 use realfft::{ComplexToReal, RealToComplex};
 use serde::{Deserialize, Serialize};
@@ -168,7 +169,43 @@ impl ScannedImage {
     //     self.raw_img[x * self.width + y] = val;
     // }
 
-    pub fn rescale(&mut self, scaling: usize) {}
+    pub fn rescale(&mut self, scaling: usize) {
+        self.scaled_img = Array2::zeros((self.width / scaling, self.height / scaling));
+        self.scaled_data =
+            Array3::zeros((self.width / scaling, self.height / scaling, self.time.len()));
+
+        for x in 0..self.width / scaling {
+            for y in 0..self.height / scaling {
+                // calculate the intensity by summing the squares
+                let mut averaged_pulse: Array1<f32> = Array1::zeros(self.time.len());
+                for x_step in 0..scaling {
+                    for y_step in 0..scaling {
+                        averaged_pulse.add_assign(
+                            &self
+                                .raw_data
+                                .index_axis(Axis(0), x * scaling + x_step)
+                                .index_axis(Axis(0), y * scaling + y_step),
+                        );
+                    }
+                }
+                averaged_pulse
+                    .view_mut()
+                    .mapv_inplace(|p| p / (scaling * scaling) as f32);
+
+                self.scaled_data
+                    .index_axis_mut(Axis(0), x)
+                    .index_axis_mut(Axis(0), y)
+                    .assign(&averaged_pulse);
+                let sig_squared_sum = self
+                    .scaled_data
+                    .index_axis(Axis(0), x)
+                    .index_axis(Axis(0), y)
+                    .mapv(|xi| xi * xi)
+                    .sum();
+                self.scaled_img[[x, y]] = sig_squared_sum;
+            }
+        }
+    }
 }
 //
 // impl ScannedImage {

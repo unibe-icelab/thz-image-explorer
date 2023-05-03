@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
+use std::ops::SubAssign;
 use std::path::PathBuf;
 
 use csv::{ReaderBuilder, WriterBuilder};
@@ -12,7 +13,6 @@ use realfft::RealFftPlanner;
 use serde_json::{Number, Value};
 
 use crate::data::{DataPoint, HouseKeeping, Meta, ScannedImage};
-use crate::math_tools::make_fft;
 
 pub fn open_hk(
     hk: &mut HouseKeeping,
@@ -206,6 +206,13 @@ pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(),
     scan.raw_img = Array2::zeros((scan.width, scan.height));
     for x in 0..scan.width {
         for y in 0..scan.height {
+            // subtract bias
+            let offset = scan.raw_data[[x, y, 0]];
+            scan.raw_data
+                .index_axis_mut(Axis(0), x)
+                .index_axis_mut(Axis(0), y)
+                .mapv_inplace(|p| p - offset);
+
             // calculate the intensity by summing the squares
             let sig_squared_sum = scan
                 .raw_data
@@ -216,11 +223,12 @@ pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(),
             scan.raw_img[[x, y]] = sig_squared_sum;
         }
     }
-    scan.filtered_data = scan.raw_data.clone();
-    scan.filtered_img = scan.raw_img.clone();
 
     scan.scaled_data = scan.raw_data.clone();
     scan.scaled_img = scan.raw_img.clone();
+
+    scan.filtered_data = scan.scaled_data.clone();
+    scan.filtered_img = scan.scaled_img.clone();
 
     let mut real_planner = RealFftPlanner::<f32>::new();
     let r2c = real_planner.plan_fft_forward(n);

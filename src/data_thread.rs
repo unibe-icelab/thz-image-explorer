@@ -9,13 +9,12 @@ use std::time::{Duration, Instant};
 
 use eframe::egui::ColorImage;
 use image::RgbaImage;
+use itertools::izip;
 use ndarray::parallel::prelude::*;
 use ndarray::{Array1, Array2, ArrayBase, ArrayViewMut, Axis};
 use ndarray_npy::NpzReader;
 use realfft::num_complex::Complex32;
 use realfft::RealFftPlanner;
-
-use itertools::izip;
 
 use crate::config::{Config, ConfigContainer};
 use crate::data::{DataPoint, ScannedImage};
@@ -57,15 +56,83 @@ fn update_waterfall_image(
     pixel_x: usize,
     waterfall_lock: &Arc<RwLock<Array2<f32>>>,
 ) {
-    if let Ok(mut write_guard) = waterfall_lock.write() {
-        let length = scan.time.len();
-        let img = Array2::from_shape_fn((length, scan.height), |(x, y)| {
-            scan.filtered_data
+    if let Some(r2c) = &scan.r2c {
+        if let Ok(mut write_guard) = waterfall_lock.write() {
+            let mut spectrum = r2c.make_output_vec();
+            let mut in_data = scan
+                .filtered_data
                 .index_axis(Axis(0), pixel_x)
-                .index_axis(Axis(0), y)[x]
-        });
-        *write_guard = img;
+                .index_axis(Axis(0), 0)
+                .to_vec();
+            r2c.process(&mut in_data, &mut spectrum).unwrap();
+
+            let m = scan.filtered_data.shape()[0];
+            let n = spectrum.len();
+            let mut img = Array2::zeros((n, m));
+            let data = scan.filtered_data.index_axis(Axis(0), pixel_x);
+            (data.axis_iter(Axis(0)), img.axis_iter_mut(Axis(1)))
+                .into_par_iter()
+                .for_each(|(line, mut img)| {
+                    let mut spectrum = r2c.make_output_vec();
+                    let mut in_data = line.to_vec();
+                    r2c.process(&mut in_data, &mut spectrum).unwrap();
+                    let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
+                    img.assign(&Array1::from_vec(amp));
+                });
+            *write_guard = img;
+        }
     }
+}
+
+fn filter_time_window(
+    config: &ConfigContainer,
+    scan: &mut ScannedImage,
+    img_lock: &Arc<RwLock<Array2<f32>>>,
+    waterfall_lock: &Arc<RwLock<Array2<f32>>>,
+) {
+    // calculate fft filter and calculate ifft
+    println!("updating data");
+    let start = Instant::now();
+    let lower = scan
+        .time
+        .iter()
+        .position(|t| *t == config.time_window[0].round())
+        .unwrap_or(0);
+    let upper = scan
+        .time
+        .iter()
+        .position(|t| *t == config.time_window[1].round())
+        .unwrap_or(0);
+
+    (
+        scan.scaled_data.axis_iter_mut(Axis(0)),
+        scan.filtered_data.axis_iter_mut(Axis(0)),
+        scan.filtered_img.axis_iter_mut(Axis(0)),
+    )
+        .into_par_iter()
+        .for_each(
+            |(mut scaled_data_columns, mut filtered_data_columns, mut filtered_img_columns)| {
+                (
+                    scaled_data_columns.axis_iter_mut(Axis(0)),
+                    filtered_data_columns.axis_iter_mut(Axis(0)),
+                    filtered_img_columns.axis_iter_mut(Axis(0)),
+                )
+                    .into_par_iter()
+                    .for_each(
+                        |(mut scaled_data, mut filtered_data, mut filtered_img)| {
+                            *filtered_img.into_scalar() = filtered_data
+                                .iter()
+                                .skip(lower)
+                                .take(upper - lower)
+                                .map(|xi| xi * xi)
+                                .sum::<f32>();
+                        },
+                    );
+            },
+        );
+    update_intensity_image(scan, img_lock);
+    update_waterfall_image(scan, config.selected_pixel[0], waterfall_lock);
+    println!("updated data. This took {:?}", start.elapsed());
 }
 
 fn filter(
@@ -77,6 +144,16 @@ fn filter(
     // calculate fft filter and calculate ifft
     println!("updating data");
     let start = Instant::now();
+    let lower = scan
+        .time
+        .iter()
+        .position(|t| *t == config.time_window[0].round())
+        .unwrap_or(0);
+    let upper = scan
+        .time
+        .iter()
+        .position(|t| *t == config.time_window[1].round())
+        .unwrap_or(0);
     if let Some(r2c) = &scan.r2c {
         if let Some(c2r) = &scan.c2r {
             (
@@ -108,10 +185,10 @@ fn filter(
                                     );
 
                                     // calculate fft
-                                    let mut in_data: Vec<f32> = filtered_data.to_vec();
                                     let mut spectrum = r2c.make_output_vec();
                                     // Forward transform the input data
-                                    r2c.process(&mut in_data, &mut spectrum).unwrap();
+                                    r2c.process(&mut filtered_data.to_vec(), &mut spectrum)
+                                        .unwrap();
 
                                     // apply bandpass filter
                                     for (f, spectrum) in
@@ -138,8 +215,12 @@ fn filter(
                                         .iter()
                                         .map(|p| *p / length as f32)
                                         .collect::<Vec<f32>>();
-                                    *filtered_img.into_scalar() =
-                                        output.iter().map(|xi| xi * xi).sum::<f32>();
+                                    *filtered_img.into_scalar() = output
+                                        .iter()
+                                        .skip(lower)
+                                        .take(upper - lower)
+                                        .map(|xi| xi * xi)
+                                        .sum::<f32>();
                                     filtered_data.assign(&Array1::from_vec(output));
                                 },
                             );
@@ -290,7 +371,6 @@ fn load_from_npz(
         }
     }
     println!("opened npz");
-    filter(&config, scan, img_lock, waterfall_lock);
 }
 
 #[derive(Clone, PartialEq)]
@@ -334,6 +414,7 @@ pub fn main_thread(
                         .collect::<Vec<FileType>>();
                     if files.contains(&FileType::Npy) {
                         println!("[OK] found npy binaries.");
+                        println!("[ERR] npy no implemented...");
                         // load_from_npy(
                         //     &opened_folder_path,
                         //     &mut real_planner,
@@ -370,13 +451,13 @@ pub fn main_thread(
                                 let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
                                 let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
                                 data.signal_1_fft = amp;
-                                data.phase_1_fft = numpy_unwrap(phase, Some(2.0 * PI));
-                                let d = data.clone();
+                                data.phase_1_fft = numpy_unwrap(&phase, Some(2.0 * PI));
                             }
                         }
                     } else {
-                        println!("no binaries found.. CSV has to be implemented!")
+                        println!("[ERR] no binaries found!")
                     }
+                    // read HK
                 }
                 Config::SetFFTWindowLow(low) => {
                     config.fft_window[0] = low;
@@ -396,11 +477,11 @@ pub fn main_thread(
                 }
                 Config::SetTimeWindowLow(low) => {
                     config.time_window[0] = low;
-                    filter(&config, &mut scan, &img_lock, &waterfall_lock);
+                    filter_time_window(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetTimeWindowHigh(high) => {
                     config.time_window[1] = high;
-                    filter(&config, &mut scan, &img_lock, &waterfall_lock);
+                    filter_time_window(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetFFTLogPlot(log_plot) => {
                     config.fft_log_plot = log_plot;
@@ -415,33 +496,39 @@ pub fn main_thread(
                     filter(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetDownScaling(scaling) => {
+                    // TODO: rescale selected pixel
                     config.down_scaling = scaling;
                     scan.rescale(config.down_scaling);
+                    scan.filtered_data = scan.scaled_data.clone();
+                    scan.filtered_img = scan.scaled_img.clone();
+                    filter(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetSelectedPixel(pixel_location) => {
                     config.selected_pixel = pixel_location;
+                    update_waterfall_image(&mut scan, config.selected_pixel[0], &waterfall_lock);
                     println!("new pixel: {:?}", config.selected_pixel);
-                    if let Some(r2c) = &scan.r2c {
-                        if let Ok(mut data) = data_lock.write() {
-                            data.time = scan.time.to_vec();
-                            data.frequencies = scan.frequencies.to_vec();
-                            data.signal_1 = scan
-                                .filtered_data
-                                .index_axis(Axis(0), config.selected_pixel[0])
-                                .index_axis(Axis(0), config.selected_pixel[1])
-                                .to_vec();
-                            let mut in_data: Vec<f32> = data.signal_1.to_vec();
-                            let mut spectrum = r2c.make_output_vec();
-                            // Forward transform the input data
-                            r2c.process(&mut in_data, &mut spectrum).unwrap();
-                            let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
-                            let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
-                            data.signal_1_fft = amp;
-                            data.phase_1_fft = numpy_unwrap(phase, Some(2.0 * PI));
-                            let d = data.clone();
-                        }
-                    }
-                } // send HK?
+                    // send HK?
+                }
+            }
+            if let Some(r2c) = &scan.r2c {
+                if let Ok(mut data) = data_lock.write() {
+                    data.time = scan.time.to_vec();
+                    data.frequencies = scan.frequencies.to_vec();
+                    data.signal_1 = scan
+                        .filtered_data
+                        .index_axis(Axis(0), config.selected_pixel[0])
+                        .index_axis(Axis(0), config.selected_pixel[1])
+                        .to_vec();
+                    let mut in_data: Vec<f32> = data.signal_1.to_vec();
+                    let mut spectrum = r2c.make_output_vec();
+                    // Forward transform the input data
+                    r2c.process(&mut in_data, &mut spectrum).unwrap();
+                    let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
+                    let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
+                    data.signal_1_fft = amp;
+                    data.phase_1_fft = numpy_unwrap(&phase, Some(2.0 * PI));
+                    let d = data.clone();
+                }
             }
         }
     }

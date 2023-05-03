@@ -258,7 +258,7 @@ pub fn center_panel(
                     .include_x(0.0)
                     .include_x(10.0);
 
-                if gui_conf.log_plot {
+                if gui_conf.log_plot && !gui_conf.phases_visible {
                     fft_plot = fft_plot.y_grid_spacer(logarithmic_grid_spacer(10));
                 }
 
@@ -318,35 +318,13 @@ pub fn center_panel(
                     .frequencies
                     .iter()
                     .zip(data.phase_1_fft.iter())
-                    .map(|(x, y)| {
-                        let mut fft;
-                        if gui_conf.log_plot {
-                            fft = (*y + 1e-10).log(10.0);
-                        } else {
-                            fft = *y;
-                        }
-                        if fft < 0.0 {
-                            fft = 0.0;
-                        }
-                        [*x as f64, fft as f64]
-                    })
+                    .map(|(x, y)| [*x as f64, *y as f64])
                     .collect();
                 let ref_phase_1_fft: Vec<[f64; 2]> = data
                     .frequencies
                     .iter()
                     .zip(data.ref_phase_1_fft.iter())
-                    .map(|(x, y)| {
-                        let mut fft;
-                        if gui_conf.log_plot {
-                            fft = (*y + 1e-10).log(10.0);
-                        } else {
-                            fft = *y;
-                        }
-                        if fft < 0.0 {
-                            fft = 0.0;
-                        }
-                        [*x as f64, fft as f64]
-                    })
+                    .map(|(x, y)| [*x as f64, *y as f64])
                     .collect();
 
                 fft_plot.show(ui, |fft_plot_ui| {

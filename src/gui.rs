@@ -113,6 +113,7 @@ pub struct MyApp {
     console: Vec<Print>,
     fft_bounds: [f32; 2],
     filter_bounds: [f32; 2],
+    time_window: [f32; 2],
     pixel_selected: SelectedPixel,
     val: PlotPoint,
     hacktica_light: RetainedImage,
@@ -218,6 +219,7 @@ impl MyApp {
             load_tx,
             fft_bounds: [1.0, 7.0],
             filter_bounds: [0.0, 10.0],
+            time_window: [1000.0, 1050.0],
             pixel_selected: SelectedPixel::default(),
             val: PlotPoint { x: 0.0, y: 0.0 },
         }
@@ -266,6 +268,7 @@ impl eframe::App for MyApp {
             &mut self.picked_path,
             &mut self.filter_bounds,
             &mut self.fft_bounds,
+            &mut self.time_window,
             &self.config_tx,
             &self.data_lock,
             &self.print_lock,
