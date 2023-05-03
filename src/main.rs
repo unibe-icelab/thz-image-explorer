@@ -91,7 +91,7 @@ fn main() {
     let main_pixel_lock = pixel_lock.clone();
 
     println!("starting main server..");
-    let main_thread_handler = thread::spawn(|| {
+    let _main_thread_handler = thread::spawn(|| {
         main_thread(
             main_data_lock,
             main_img_lock,
@@ -145,6 +145,4 @@ fn main() {
         }),
     )
     .expect("Failed to launch GUI");
-
-    main_thread_handler.join().expect("TODO: panic message");
 }

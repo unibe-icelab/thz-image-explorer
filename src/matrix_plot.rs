@@ -121,10 +121,10 @@ pub fn plot_matrix(
         let plot = Plot::new("image")
             .height(0.75 * height as f32 * size as f32)
             .width(0.75 * width as f32 * size as f32)
-            //.show_axes([false, false])
-            //.show_x(false)
-            //.show_y(false)
-            //.set_margin_fraction(Vec2 { x: 0.0, y: 0.0 })
+            .show_axes([false, false])
+            .show_x(false)
+            .show_y(false)
+            .set_margin_fraction(Vec2 { x: 0.0, y: 0.0 })
             .allow_drag(false);
         let plot_response = plot.show(ui, |plot_ui| {
             plot_ui.image(im);
@@ -190,10 +190,10 @@ pub fn plot_matrix(
 
     let x = val.x.floor() as usize;
     let y = val.y.floor() as usize;
-    ui.label(format!(
-        "ID = {}: i = {:.2}%",
-        id_matrix[x][y], intensity_matrix[x][y]
-    ));
+    // ui.label(format!(
+    //     "ID = {}: i = {:.2}%",
+    //     id_matrix[x][y], intensity_matrix[x][y]
+    // ));
     pixel_clicked
 }
 
@@ -237,9 +237,9 @@ pub fn plot_waterfall(
         let plot = Plot::new("waterfall")
             .height(0.75 * *plot_height as f32)
             .width(0.75 * *plot_width as f32)
-            //.show_axes([false, false])
-            //.show_x(false)
-            //.show_y(false)
+            .show_axes([false, false])
+            .show_x(false)
+            .show_y(false)
             .set_margin_fraction(Vec2 { x: 0.0, y: 0.0 })
             .allow_drag(false);
         let plot_response = plot.show(ui, |plot_ui| {

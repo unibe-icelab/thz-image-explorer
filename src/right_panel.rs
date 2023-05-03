@@ -12,10 +12,11 @@ use eframe::egui::{
 };
 use egui_extras::RetainedImage;
 use itertools_num::linspace;
+use ndarray::Array1;
 
 use crate::config::Config;
 use crate::math_tools::apply_fft_window;
-use crate::plot_slider::{filter, windowing};
+use crate::plot_slider::{fft_filter, time_filter, windowing};
 use crate::toggle::toggle;
 use crate::{DataPoint, GuiSettingsContainer, Print};
 
@@ -27,6 +28,7 @@ pub fn right_panel(
     picked_path: &mut String,
     filter_bounds: &mut [f32; 2],
     fft_bounds: &mut [f32; 2],
+    time_window: &mut [f32; 2],
     config_tx: &Sender<Config>,
     data_lock: &Arc<RwLock<DataPoint>>,
     print_lock: &Arc<RwLock<Vec<Print>>>,
@@ -86,19 +88,20 @@ pub fn right_panel(
                 // TODO: implement different windows
 
                 let mut window_vals: Vec<[f64; 2]> = Vec::new();
-                let mut p = vec![1.0; data.time.len()];
-                let t: Vec<f32> = linspace::<f32>(
+                let mut p = Array1::from_vec(vec![1.0; data.time.len()]);
+                let t: Array1<f32> = linspace::<f32>(
                     data.hk.t_begin,
                     data.hk.t_begin + data.hk.range,
                     data.time.len(),
                 )
                 .collect();
-                //apply_fft_window(&mut p, &t, &fft_bounds[0], &fft_bounds[1]);
+
+                apply_fft_window(&mut p.view_mut(), &t, &fft_bounds[0], &fft_bounds[1]);
 
                 for i in 0..t.len() {
                     window_vals.push([t[i] as f64, p[i] as f64]);
                 }
-                let window_plot = Plot::new("Window")
+                let fft_window_plot = Plot::new("FFT Window")
                     .include_x(data.hk.t_begin)
                     .include_x(data.hk.t_begin + data.hk.range)
                     .include_y(0.0)
@@ -108,7 +111,7 @@ pub fn right_panel(
                     .height(100.0)
                     .width(right_panel_width * 0.9);
                 ui.vertical_centered(|ui| {
-                    window_plot.show(ui, |window_plot_ui| {
+                    fft_window_plot.show(ui, |window_plot_ui| {
                         window_plot_ui.line(
                             Line::new(PlotPoints::from(window_vals))
                                 .color(egui::Color32::RED)
@@ -204,7 +207,7 @@ pub fn right_panel(
                     filter_vals.push([filter_f[i], a]);
                 }
 
-                let window_plot = Plot::new("Filter")
+                let window_plot = Plot::new("FFT Filter")
                     .include_x(0.0)
                     .include_x(10.0)
                     .include_y(0.0)
@@ -241,7 +244,7 @@ pub fn right_panel(
 
                 ui.vertical_centered(|ui| {
                     if ui
-                        .add(filter(
+                        .add(fft_filter(
                             &(*right_panel_width * 0.9),
                             &100.0,
                             &10.0,
@@ -263,7 +266,60 @@ pub fn right_panel(
                 ui.separator();
                 ui.heading("III. Time Filter: ");
 
-                // TDOO: add time filter
+                let mut window_vals: Vec<[f64; 2]> = Vec::new();
+                for i in 0..data.time.len() {
+                    window_vals.push([data.time[i] as f64, data.signal_1[i] as f64]);
+                }
+                let time_window_plot = Plot::new("Time Window")
+                    .allow_drag(false)
+                    .set_margin_fraction(Vec2 { x: 0.0, y: 0.05 })
+                    .height(100.0)
+                    .width(right_panel_width * 0.9);
+                ui.vertical_centered(|ui| {
+                    time_window_plot.show(ui, |window_plot_ui| {
+                        window_plot_ui.line(
+                            Line::new(PlotPoints::from(window_vals))
+                                .color(egui::Color32::RED)
+                                .style(LineStyle::Solid)
+                                .name("Pulse"),
+                        );
+                        window_plot_ui.vline(
+                            // TODO: adjust this
+                            VLine::new(time_window[0])
+                                .stroke(Stroke::new(1.0, egui::Color32::GRAY))
+                                .name("Lower Bound"),
+                        );
+                        window_plot_ui.vline(
+                            VLine::new(time_window[1])
+                                .stroke(Stroke::new(1.0, egui::Color32::GRAY))
+                                .name("Upper Bound"),
+                        );
+                    });
+                });
+
+                ui.vertical_centered(|ui| {
+                    if ui
+                        .add(time_filter(
+                            &(*right_panel_width * 0.9),
+                            &100.0,
+                            &data.time.first().unwrap_or(&1000.0),
+                            &data.time.last().unwrap_or(&1050.0),
+                            time_window,
+                        ))
+                        .changed()
+                    {
+                        if time_window[0] == time_window[1] {
+                            time_window[0] = *data.time.first().unwrap_or(&1000.0);
+                            time_window[1] = *data.time.last().unwrap_or(&1050.0);
+                        }
+                        config_tx
+                            .send(Config::SetTimeWindowLow(time_window[0]))
+                            .unwrap();
+                        config_tx
+                            .send(Config::SetTimeWindowHigh(time_window[1]))
+                            .unwrap();
+                    };
+                });
 
                 ui.add_space(40.0);
                 ui.separator();

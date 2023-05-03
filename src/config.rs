@@ -31,8 +31,8 @@ impl Default for ConfigContainer {
     fn default() -> Self {
         ConfigContainer {
             fft_window: [1.0, 7.0],
-            fft_filter: [0.0, 0.0],
-            time_window: [0.0, 0.0],
+            fft_filter: [0.0, 10.0],
+            time_window: [1000.0, 1050.0],
             down_scaling: 1,
             fft_log_plot: false,
             normalize_fft: false,
