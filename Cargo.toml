@@ -35,7 +35,7 @@ itertools = "0.10.5"
 [package.metadata.bundle]
 name = "COExplore"
 identifier = "com.unibe.coconut"
-icon = ["./icons/icon-128.png", "./icons/icon-128@2x.png"]
+icon = ["./icons/install.png"]
 version = "0.2.1"
 copyright = "Copyright (c) Linus Leo Stöckli 2022. All rights reserved."
 category = "Developer Tool"
