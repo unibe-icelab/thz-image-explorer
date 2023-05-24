@@ -11,15 +11,10 @@ Tested on:
 - Debian 12 (Testing) x86
 - Windows 10 x86
 
-The application is an improved version of and replaces the original Toptica LabView-based control software.
+On Linux first install the following::
 
-On Debian 12 (Testing) the following error occurred:
-```
-Error: glib-2.0 was not found in the pkg-config search path.
-```
-solved through
-```
-sudo apt-get install libgtk-3-dev
+```sh
+sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
 ```
 
 One might have to delete the ```Cargo.lock``` file before compiling.  
