@@ -12,6 +12,7 @@ use std::thread;
 
 use crate::config::Config;
 use eframe::egui::{vec2, Visuals};
+use eframe::IconData;
 use ndarray::Array2;
 use preferences::{AppInfo, Preferences};
 
@@ -103,6 +104,8 @@ fn main() {
     });
 
     let options = eframe::NativeOptions {
+        follow_system_theme: true,
+        icon_data: Some(IconData::try_from_png_bytes(include_bytes!("../icons/icon.png")).unwrap()),
         drag_and_drop_support: true,
         initial_window_size: Option::from(vec2(gui_settings.x, gui_settings.y)),
         // hardware_acceleration : HardwareAcceleration::Off,

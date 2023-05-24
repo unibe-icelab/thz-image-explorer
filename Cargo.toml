@@ -13,8 +13,8 @@ license = "GPL-3.0"
 # <true/>
 
 [dependencies]
-eframe = { version = "0.21.0", features = ["persistence"] }
-egui_extras = { version = "0.21.0", features = ["image"] }
+eframe = { version = "0.22.0", features = ["persistence"] }
+egui_extras = { version = "0.22.0", features = ["image"] }
 image = { version = "0.24", default-features = false, features = ["png"] }
 rand = "0.8.4"
 itertools-num = "0.1"
