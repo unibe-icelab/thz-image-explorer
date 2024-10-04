@@ -93,7 +93,7 @@ fn filter_time_window(
     // calculate fft filter and calculate ifft
     println!("updating data");
     let start = Instant::now();
-    let lower = scan
+    let mut lower = scan
         .time
         .iter()
         .position(|t| *t == config.time_window[0].round())
@@ -103,6 +103,7 @@ fn filter_time_window(
         .iter()
         .position(|t| *t == config.time_window[1].round())
         .unwrap_or(0);
+    println!("lower: {}, upper: {}", lower, upper);
 
     (
         scan.scaled_data.axis_iter_mut(Axis(0)),
@@ -475,12 +476,8 @@ pub fn main_thread(
                     config.fft_filter[1] = high;
                     filter(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
-                Config::SetTimeWindowLow(low) => {
-                    config.time_window[0] = low;
-                    filter_time_window(&config, &mut scan, &img_lock, &waterfall_lock);
-                }
-                Config::SetTimeWindowHigh(high) => {
-                    config.time_window[1] = high;
+                Config::SetTimeWindow(time_window) => {
+                    config.time_window = time_window;
                     filter_time_window(&config, &mut scan, &img_lock, &waterfall_lock);
                 }
                 Config::SetFFTLogPlot(log_plot) => {
