@@ -313,10 +313,7 @@ pub fn right_panel(
                             time_window[1] = *data.time.last().unwrap_or(&1050.0);
                         }
                         config_tx
-                            .send(Config::SetTimeWindowLow(time_window[0]))
-                            .unwrap();
-                        config_tx
-                            .send(Config::SetTimeWindowHigh(time_window[1]))
+                            .send(Config::SetTimeWindow(time_window.clone()))
                             .unwrap();
                     };
                 });
@@ -333,10 +330,7 @@ pub fn right_panel(
                         time_window[1] = *data.time.last().unwrap_or(&1050.0);
                     }
                     config_tx
-                        .send(Config::SetTimeWindowLow(time_window[0]))
-                        .unwrap();
-                    config_tx
-                        .send(Config::SetTimeWindowHigh(time_window[1]))
+                        .send(Config::SetTimeWindow(time_window.clone()))
                         .unwrap();
                 }
                 time_window[1] = width + time_window[0];
@@ -350,10 +344,7 @@ pub fn right_panel(
                     }
                     time_window[1] = width + time_window[0];
                     config_tx
-                        .send(Config::SetTimeWindowLow(time_window[0]))
-                        .unwrap();
-                    config_tx
-                        .send(Config::SetTimeWindowHigh(time_window[1]))
+                        .send(Config::SetTimeWindow(time_window.clone()))
                         .unwrap();
                 }
 
@@ -361,10 +352,7 @@ pub fn right_panel(
                     time_window[0] += 1.0;
                     time_window[1] = width + time_window[0];
                     config_tx
-                        .send(Config::SetTimeWindowLow(time_window[0]))
-                        .unwrap();
-                    config_tx
-                        .send(Config::SetTimeWindowHigh(time_window[1]))
+                        .send(Config::SetTimeWindow(time_window.clone()))
                         .unwrap();
                 }
 
@@ -372,10 +360,7 @@ pub fn right_panel(
                     time_window[0] -= 1.0;
                     time_window[1] = width + time_window[0];
                     config_tx
-                        .send(Config::SetTimeWindowLow(time_window[0]))
-                        .unwrap();
-                    config_tx
-                        .send(Config::SetTimeWindowHigh(time_window[1]))
+                        .send(Config::SetTimeWindow(time_window.clone()))
                         .unwrap();
                 }
 
