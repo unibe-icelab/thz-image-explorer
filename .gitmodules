@@ -1,3 +1,4 @@
 [submodule "src/teraflash-ctrl"]
 	path = src/teraflash-ctrl
 	url = git@spacegit.unibe.ch:TeraFlash/teraflash-ctrl
+    branch = main
