@@ -6,11 +6,12 @@ use std::sync::{Arc, RwLock};
 
 use eframe::egui;
 use eframe::egui::panel::Side;
-use eframe::egui::plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use eframe::egui::{
-    global_dark_light_mode_buttons, FontFamily, FontId, RichText, Slider, Stroke, Vec2, Visuals,
+    global_dark_light_mode_buttons, vec2, FontFamily, FontId, RichText, Slider, Stroke, Vec2,
+    Visuals,
 };
 use egui_extras::RetainedImage;
+use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use itertools_num::linspace;
 use ndarray::Array1;
 
@@ -31,14 +32,15 @@ pub fn right_panel(
     time_window: &mut [f32; 2],
     config_tx: &Sender<Config>,
     data_lock: &Arc<RwLock<DataPoint>>,
+    scaling_lock: &Arc<RwLock<u8>>,
     print_lock: &Arc<RwLock<Vec<Print>>>,
     log_mode_lock: &Arc<RwLock<bool>>,
     normalize_fft_lock: &Arc<RwLock<bool>>,
     fft_bounds_lock: &Arc<RwLock<[f32; 2]>>,
     fft_filter_bounds_lock: &Arc<RwLock<[f32; 2]>>,
-    hacktica_dark: &RetainedImage,
-    hacktica_light: &RetainedImage,
-    wp: &RetainedImage,
+    hacktica_dark: egui::Image,
+    hacktica_light: egui::Image,
+    wp: egui::Image,
 ) {
     let mut data = DataPoint::default();
     if let Ok(read_guard) = data_lock.read() {
@@ -78,6 +80,9 @@ pub fn right_panel(
                             .add(egui::Slider::new(&mut gui_conf.down_scaling, 1..=10))
                             .changed()
                         {
+                            if let Ok(mut s) = scaling_lock.write() {
+                                *s = gui_conf.down_scaling as u8;
+                            }
                             config_tx.send(Config::SetDownScaling(gui_conf.down_scaling));
                         }
                     });
@@ -493,18 +498,12 @@ pub fn right_panel(
                     let width = (ui.available_size().x - 96.0 - 96.0) / 3.0;
                     ui.add_space(width);
                     if gui_conf.dark_mode == true {
-                        ui.add(egui::Image::new(
-                            hacktica_dark.texture_id(ctx),
-                            [96.0, 38.0],
-                        ));
+                        ui.add(hacktica_dark.fit_to_exact_size(vec2(96.0, 38.0)));
                     } else {
-                        ui.add(egui::Image::new(
-                            hacktica_light.texture_id(ctx),
-                            [96.0, 38.0],
-                        ));
+                        ui.add(hacktica_light.fit_to_exact_size(vec2(96.0, 38.0)));
                     }
                     ui.add_space(50.0);
-                    ui.add(egui::Image::new(wp.texture_id(ctx), [80.0, 38.0]));
+                    ui.add(wp.fit_to_exact_size(vec2(80.0, 38.0)));
                 });
             });
         });

@@ -4,16 +4,16 @@ use std::sync::{Arc, RwLock};
 
 use eframe::egui;
 use eframe::egui::panel::Side;
-use eframe::egui::plot::PlotPoint;
-use eframe::egui::{ColorImage, Spinner};
+use eframe::egui::{vec2, ColorImage, Spinner, Vec2};
 use egui_extras::RetainedImage;
+use egui_plot::PlotPoint;
 use ndarray::Array2;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::gauge::gauge;
-use crate::gui::SelectedPixel;
-use crate::matrix_plot::{make_dummy, plot_matrix, plot_waterfall};
+use crate::matrix_plot::{make_dummy, plot_matrix, SelectedPixel};
+use crate::toggle::toggle_ui;
 use crate::{DataPoint, GuiSettingsContainer, Print};
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -28,15 +28,18 @@ pub fn left_panel(
     left_panel_width: &f32,
     picked_path: &mut String,
     gui_conf: &mut GuiSettingsContainer,
-    coconut_light: &RetainedImage,
-    coconut_dark: &RetainedImage,
+    coconut_light: egui::Image,
+    coconut_dark: egui::Image,
     pixel_selected: &mut SelectedPixel,
     val: &mut PlotPoint,
+    mid_point: &mut f32,
+    bw: &mut bool,
     img_lock: &Arc<RwLock<Array2<f32>>>,
     waterfall_lock: &Arc<RwLock<Array2<f32>>>,
     data_lock: &Arc<RwLock<DataPoint>>,
     print_lock: &Arc<RwLock<Vec<Print>>>,
     pixel_lock: &Arc<RwLock<SelectedPixel>>,
+    scaling_lock: &Arc<RwLock<u8>>,
     config_tx: &Sender<Config>,
     load_tx: &Sender<PathBuf>,
 ) {
@@ -109,8 +112,7 @@ pub fn left_panel(
                 }
             };
 
-            let logo_height =
-                coconut_dark.height() as f32 / coconut_dark.width() as f32 * left_panel_width;
+            let logo_height = 100.0;
             let height = ui.available_size().y - logo_height - 20.0;
 
             let mut img_data = make_dummy();
@@ -121,6 +123,10 @@ pub fn left_panel(
             if let Ok(read_guard) = waterfall_lock.read() {
                 waterfall_data = read_guard.clone();
             }
+            let mut scaling = 1;
+            if let Ok(s) = scaling_lock.read() {
+                scaling = s.clone();
+            }
             let pixel_clicked = plot_matrix(
                 ui,
                 &img_data,
@@ -129,6 +135,9 @@ pub fn left_panel(
                 &mut 0.0,
                 val,
                 pixel_selected,
+                scaling,
+                mid_point,
+                bw,
             );
             if pixel_clicked {
                 config_tx
@@ -141,28 +150,46 @@ pub fn left_panel(
                     *write_guard = pixel_selected.clone();
                 }
             }
-            let img = plot_waterfall(
-                ui,
-                &waterfall_data,
-                &(*left_panel_width as f64),
-                &(*left_panel_width as f64),
-                &mut 0.0,
-                val,
-                pixel_selected,
-            );
+
+            ui.add_space(10.0);
+            ui.label("Black/White");
+            toggle_ui(ui, bw);
+
+            // let img = plot_waterfall(
+            //     ui,
+            //     &waterfall_data,
+            //     &(*left_panel_width as f64),
+            //     &(*left_panel_width as f64),
+            //     &mut 0.0,
+            //     val,
+            //     pixel_selected,
+            //     scaling,
+            // );
 
             let height = ui.available_size().y - logo_height - 20.0;
             ui.add_space(height);
             if gui_conf.dark_mode == true {
-                ui.add(egui::Image::new(
-                    coconut_dark.texture_id(ctx),
-                    coconut_dark.size_vec2() / coconut_dark.width() as f32 * *left_panel_width,
-                ));
+                let size = coconut_dark.size().unwrap_or(Vec2 { x: 200.0, y: 100.0 });
+                ui.add(
+                    coconut_dark
+                        .fit_to_exact_size(vec2(size.y / logo_height * size.x, logo_height)),
+                );
+
+                // ui.add(egui::Image::new(
+                //     coconut_dark.texture_id(ctx),
+                //     coconut_dark.size_vec2() / coconut_dark.width() as f32 * *left_panel_width,
+                // ));
             } else {
-                ui.add(egui::Image::new(
-                    coconut_light.texture_id(ctx),
-                    coconut_light.size_vec2() / coconut_light.width() as f32 * *left_panel_width,
-                ));
+                let size = coconut_light.size().unwrap_or(Vec2 { x: 200.0, y: 100.0 });
+                ui.add(
+                    coconut_light
+                        .fit_to_exact_size(vec2(size.y / logo_height * size.x, logo_height)),
+                );
+
+                // ui.add(egui::Image::new(
+                //     coconut_light.texture_id(ctx),
+                //     coconut_light.size_vec2() / coconut_light.width() as f32 * *left_panel_width,
+                // ));
             }
         });
 }

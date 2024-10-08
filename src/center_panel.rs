@@ -2,10 +2,8 @@ use std::ops::RangeInclusive;
 use std::sync::{Arc, RwLock};
 
 use eframe::egui;
-use eframe::egui::plot::{
-    GridInput, GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine,
-};
 use eframe::egui::{Checkbox, DragValue, Stroke};
+use egui_plot::{GridInput, GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 
 use crate::data::DataPoint;
 use crate::toggle::toggle;
@@ -172,10 +170,11 @@ pub fn center_panel(
                     ]);
                 }
 
-                let t_fmt = |x, _range: &RangeInclusive<f64>| format!("{:4.2} ps", x);
-                let axis_display_offset_2 = axis_display_offset.clone();
-                let s_fmt = move |y, _range: &RangeInclusive<f64>| {
-                    format!("{:4.2} a.u.", y - axis_display_offset as f64)
+                let t_fmt =
+                    |x: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} ps", x.value);
+                let axis_display_offset_2 = axis_display_offset;
+                let s_fmt = move |y: GridMark, _range: &RangeInclusive<f64>| {
+                    format!("{:4.2} nA", y.value - axis_display_offset)
                 };
                 let label_fmt = move |s: &str, val: &PlotPoint| {
                     format!(
@@ -226,56 +225,21 @@ pub fn center_panel(
 
                 ui.add_space(spacing);
 
-                let a_fmt = if gui_conf.log_plot {
-                    move |y: f64, _range: &RangeInclusive<f64>| format!("{:4.2}", 10.0_f64.powf(y))
-                } else {
-                    move |y: f64, _range: &RangeInclusive<f64>| format!("{:4.2} a.u.", y)
-                };
-
-                let label_fmt = if gui_conf.log_plot {
-                    move |s: &str, val: &PlotPoint| {
-                        format!(
-                            "{}\n{:4.2} THz\n{:4.2} a.u.",
-                            s,
-                            val.x,
-                            10.0_f64.powf(val.y)
-                        )
-                    }
-                } else {
-                    move |s: &str, val: &PlotPoint| {
-                        format!("{}\n{:4.2} THz\n{:4.2} a.u.", s, val.x, val.y)
-                    }
-                };
-                let f_fmt = |x, _range: &RangeInclusive<f64>| format!("{:4.2} THz", x);
-
-                let mut fft_plot = Plot::new("fft")
-                    .height(height)
-                    .width(width)
-                    .label_formatter(label_fmt)
-                    .y_axis_formatter(a_fmt)
-                    .x_axis_formatter(f_fmt)
-                    .include_y(0.0)
-                    .include_x(0.0)
-                    .include_x(10.0);
-
-                if gui_conf.log_plot && !gui_conf.phases_visible {
-                    fft_plot = fft_plot.y_grid_spacer(logarithmic_grid_spacer(10));
-                }
-
                 let signal_1_fft: Vec<[f64; 2]> = data
                     .frequencies
                     .iter()
                     .zip(data.signal_1_fft.iter())
                     .map(|(x, y)| {
-                        let mut fft;
+                        let fft;
                         if gui_conf.log_plot {
-                            fft = (*y + 1e-10).log(10.0);
+                            fft = 20.0 * (*y + 1e-10).log(10.0);
                         } else {
                             fft = *y;
                         }
-                        if fft < 0.0 {
-                            fft = 0.0;
-                        }
+                        // TODO: is this needed?
+                        // if fft < 0.0 {
+                        //     fft = 0.0;
+                        // }
                         [*x as f64, fft as f64]
                     })
                     .collect();
@@ -284,48 +248,92 @@ pub fn center_panel(
                     .iter()
                     .zip(data.filtered_signal_1_fft.iter())
                     .map(|(x, y)| {
-                        let mut fft;
+                        let fft;
                         if gui_conf.log_plot {
-                            fft = (*y + 1e-10).log(10.0);
+                            fft = 20.0 * (*y + 1e-10).log(10.0);
                         } else {
                             fft = *y;
                         }
-                        if fft < 0.0 {
-                            fft = 0.0;
-                        }
+                        // TODO: is this needed?
+                        // if fft < 0.0 {
+                        //     fft = 0.0;
+                        // }
                         [*x as f64, fft as f64]
                     })
                     .collect();
-                let ref_1_fft: Vec<[f64; 2]> = data
-                    .frequencies
-                    .iter()
-                    .zip(data.ref_1_fft.iter())
-                    .map(|(x, y)| {
-                        let mut fft;
-                        if gui_conf.log_plot {
-                            fft = (*y + 1e-10).log(10.0);
-                        } else {
-                            fft = *y;
-                        }
-                        if fft < 0.0 {
-                            fft = 0.0;
-                        }
-                        [*x as f64, fft as f64]
-                    })
-                    .collect();
-
                 let phase_1_fft: Vec<[f64; 2]> = data
                     .frequencies
                     .iter()
                     .zip(data.phase_1_fft.iter())
                     .map(|(x, y)| [*x as f64, *y as f64])
                     .collect();
-                let ref_phase_1_fft: Vec<[f64; 2]> = data
+                let filtered_phase_1_fft: Vec<[f64; 2]> = data
                     .frequencies
                     .iter()
-                    .zip(data.ref_phase_1_fft.iter())
+                    .zip(data.filtered_phase_fft.iter())
                     .map(|(x, y)| [*x as f64, *y as f64])
                     .collect();
+
+                let fft_signals = [&signal_1_fft];
+
+                let mut max_fft_signals = fft_signals
+                    .iter()
+                    .flat_map(|v| v.iter().copied())
+                    .map(|x| x[1])
+                    .fold(f64::MIN, |a, b| a.max(b));
+
+                if max_fft_signals < -200.0 {
+                    max_fft_signals = -200.0;
+                }
+
+                let log_plot = gui_conf.log_plot.clone();
+                let phases_visible = gui_conf.phases_visible.clone();
+
+                let a_fmt = move |y: GridMark, _range: &RangeInclusive<f64>| {
+                    if log_plot {
+                        if phases_visible {
+                            format!("{:4.2} °", y.value)
+                        } else {
+                            format!("{:4.2} dB", y.value - max_fft_signals)
+                        }
+                    } else {
+                        format!("{:4.2} a.u.", y.value)
+                    }
+                };
+
+                let label_fmt = move |s: &str, val: &PlotPoint| {
+                    if log_plot {
+                        if phases_visible {
+                            format!("{}\n{:4.2} THz\n{:4.2} °", s, val.x, val.y)
+                        } else {
+                            format!(
+                                "{}\n{:4.2} THz\n{:4.2} dB",
+                                s,
+                                val.x,
+                                val.y - max_fft_signals
+                            )
+                        }
+                    } else {
+                        format!("{}\n{:4.2} THz\n{:4.2} a.u.", s, val.x, val.y)
+                    }
+                };
+                let f_fmt =
+                    |x: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} THz", x.value);
+
+                let mut fft_plot = Plot::new("fft")
+                    .height(height)
+                    .width(width)
+                    //.y_grid_spacer(log10_grid_spacer)
+                    .label_formatter(label_fmt)
+                    .y_axis_formatter(a_fmt)
+                    .x_axis_formatter(f_fmt)
+                    .include_x(0.0)
+                    .include_x(10.0);
+
+                if !gui_conf.phases_visible {
+                    // fft_plot = fft_plot.include_y(-100.0);
+                    fft_plot = fft_plot.include_y(0.0)
+                };
 
                 fft_plot.show(ui, |fft_plot_ui| {
                     if gui_conf.signal_1_visible {
@@ -345,25 +353,17 @@ pub fn center_panel(
                             );
                         }
                     }
-                    if gui_conf.filtered_signal_1_visible {
-                        fft_plot_ui.line(
-                            Line::new(PlotPoints::from(filtered_signal_1_fft))
-                                .color(egui::Color32::BLUE)
-                                .style(LineStyle::Solid)
-                                .name("filtered signal 1"),
-                        );
-                    }
                     if gui_conf.ref_1_visible {
                         if !gui_conf.phases_visible {
                             fft_plot_ui.line(
-                                Line::new(PlotPoints::from(ref_1_fft))
+                                Line::new(PlotPoints::from(filtered_signal_1_fft))
                                     .color(egui::Color32::RED)
                                     .style(LineStyle::Dashed { length: 10.0 })
                                     .name("ref 1"),
                             );
                         } else {
                             fft_plot_ui.line(
-                                Line::new(PlotPoints::from(ref_phase_1_fft))
+                                Line::new(PlotPoints::from(filtered_phase_1_fft))
                                     .color(egui::Color32::RED)
                                     .style(LineStyle::Dashed { length: 10.0 })
                                     .name("ref phase 1"),
@@ -381,6 +381,7 @@ pub fn center_panel(
                         }
                     }
                 });
+                ui.add_space(5.0);
                 ui.horizontal(|ui| {
                     ui.label("Freq Res");
                     if ui
@@ -392,7 +393,6 @@ pub fn center_panel(
                         )
                         .lost_focus()
                     {
-                        // TODO: get range from dataset!
                         if gui_conf.frequency_resolution_temp > 1.0 / data.hk.range {
                             gui_conf.frequency_resolution_temp = 1.0 / data.hk.range;
                         } else if gui_conf.frequency_resolution_temp < 0.0001 {
@@ -405,12 +405,45 @@ pub fn center_panel(
                     }
                     ui.add_space(50.0);
                     ui.label("FFT");
-                    ui.add(toggle(&mut gui_conf.phases_visible));
+                    if ui.add(toggle(&mut gui_conf.phases_visible)).changed() {
+                        if gui_conf.phases_visible {
+                            gui_conf.log_plot = false;
+                        } else {
+                            gui_conf.log_plot = true;
+                        }
+                    };
                     ui.label("Phases");
                     ui.add_space(50.0);
                     ui.add(Checkbox::new(&mut gui_conf.water_lines_visible, ""));
                     ui.colored_label(egui::Color32::BLUE, "— ");
                     ui.label("Water Lines");
+
+                    ui.add_space(ui.available_size().x - 400.0 - right_panel_width);
+
+                    // dynamic range:
+                    let length = data.signal_1_fft.len();
+                    let dr1 = if data.signal_1_fft.len() != 0 {
+                        data.signal_1_fft[length - 100..length].iter().sum::<f32>() / 100.0
+                    } else {
+                        0.0
+                    };
+                    ui.label(format!(
+                        "DR: CH1 {:.1} dB",
+                        20.0 * (dr1.abs() + 1e-10).log(10.0) - max_fft_signals as f32,
+                    ));
+
+                    ui.add_space(50.0);
+
+                    // peak to peak
+                    let ptp1 = if let (Some(min), Some(max)) = (
+                        data.signal_1.iter().cloned().reduce(f32::min),
+                        data.signal_1.iter().cloned().reduce(f32::max),
+                    ) {
+                        max - min
+                    } else {
+                        0.0
+                    };
+                    ui.label(format!("ptp: CH1 {:.1} nA", ptp1));
                 });
             });
         });

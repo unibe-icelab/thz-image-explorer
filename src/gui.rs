@@ -4,9 +4,9 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use eframe::egui::plot::PlotPoint;
 use eframe::{egui, Storage};
 use egui_extras::RetainedImage;
+use egui_plot::PlotPoint;
 use ndarray::Array2;
 use preferences::Preferences;
 use serde::{Deserialize, Serialize};
@@ -15,6 +15,7 @@ use crate::center_panel::center_panel;
 use crate::config::Config;
 use crate::data::DataPoint;
 use crate::left_panel::left_panel;
+use crate::matrix_plot::SelectedPixel;
 use crate::right_panel::right_panel;
 use crate::APP_INFO;
 
@@ -43,27 +44,6 @@ pub fn print_to_console(print_lock: &Arc<RwLock<Vec<Print>>>, message: Print) ->
 pub fn update_in_console(print_lock: &Arc<RwLock<Vec<Print>>>, message: Print, index: usize) {
     if let Ok(mut write_guard) = print_lock.write() {
         write_guard[index] = message;
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SelectedPixel {
-    pub selected: bool,
-    pub rect: Vec<[f64; 2]>,
-    pub x: f64,
-    pub y: f64,
-    pub id: String,
-}
-
-impl Default for SelectedPixel {
-    fn default() -> Self {
-        SelectedPixel {
-            selected: false,
-            rect: vec![],
-            x: 0.0,
-            y: 0.0,
-            id: "0000-0000".to_string(),
-        }
     }
 }
 
@@ -108,7 +88,7 @@ impl GuiSettingsContainer {
     }
 }
 
-pub struct MyApp {
+pub struct MyApp<'a> {
     dark_mode: bool,
     console: Vec<Print>,
     fft_bounds: [f32; 2],
@@ -116,14 +96,16 @@ pub struct MyApp {
     time_window: [f32; 2],
     pixel_selected: SelectedPixel,
     val: PlotPoint,
-    hacktica_light: RetainedImage,
-    hacktica_dark: RetainedImage,
-    connection_error_image_dark: RetainedImage,
-    connection_error_image_light: RetainedImage,
-    coconut_logo_dark: RetainedImage,
-    coconut_logo_light: RetainedImage,
+    mid_point: f32,
+    bw: bool,
+    hacktica_light: egui::Image<'a>,
+    hacktica_dark: egui::Image<'a>,
+    connection_error_image_dark: egui::Image<'a>,
+    connection_error_image_light: egui::Image<'a>,
+    coconut_logo_dark: egui::Image<'a>,
+    coconut_logo_light: egui::Image<'a>,
     water_vapour_lines: Vec<f64>,
-    wp: RetainedImage,
+    wp: egui::Image<'a>,
     dropped_files: Vec<egui::DroppedFile>,
     picked_path: String,
     data: DataPoint,
@@ -138,16 +120,18 @@ pub struct MyApp {
     fft_bounds_lock: Arc<RwLock<[f32; 2]>>,
     fft_filter_bounds_lock: Arc<RwLock<[f32; 2]>>,
     pixel_lock: Arc<RwLock<SelectedPixel>>,
+    scaling_lock: Arc<RwLock<u8>>,
     config_tx: Sender<Config>,
     load_tx: Sender<PathBuf>,
 }
 
-impl MyApp {
+impl<'a> MyApp<'a> {
     pub fn new(
         print_lock: Arc<RwLock<Vec<Print>>>,
         data_lock: Arc<RwLock<DataPoint>>,
         df_lock: Arc<RwLock<f32>>,
         pixel_lock: Arc<RwLock<SelectedPixel>>,
+        scaling_lock: Arc<RwLock<u8>>,
         log_mode_lock: Arc<RwLock<bool>>,
         img_lock: Arc<RwLock<Array2<f32>>>,
         waterfall_lock: Arc<RwLock<Array2<f32>>>,
@@ -166,39 +150,32 @@ impl MyApp {
 
         Self {
             dark_mode: true,
-            hacktica_dark: RetainedImage::from_image_bytes(
-                "Hacktica",
+            hacktica_dark: egui::Image::from_bytes(
+                "Hacktica Dark",
                 include_bytes!("../images/hacktica_inv.png"),
-            )
-            .unwrap(),
-            hacktica_light: RetainedImage::from_image_bytes(
+            ),
+            hacktica_light: egui::Image::from_bytes(
                 "Hacktica",
                 include_bytes!("../images/hacktica.png"),
-            )
-            .unwrap(),
-            connection_error_image_dark: RetainedImage::from_image_bytes(
-                "Hacktica",
+            ),
+            connection_error_image_dark: egui::Image::from_bytes(
+                "Connection Error Dark",
                 include_bytes!("../images/connection_error_inv.png"),
-            )
-            .unwrap(),
-            connection_error_image_light: RetainedImage::from_image_bytes(
-                "Hacktica",
+            ),
+            connection_error_image_light: egui::Image::from_bytes(
+                "Connection Error",
                 include_bytes!("../images/connection_error.png"),
-            )
-            .unwrap(),
-            coconut_logo_dark: RetainedImage::from_image_bytes(
-                "Hacktica",
+            ),
+            coconut_logo_dark: egui::Image::from_bytes(
+                "COCoNuT Dark",
                 include_bytes!("../images/coconut_inv.png"),
-            )
-            .unwrap(),
-            coconut_logo_light: RetainedImage::from_image_bytes(
-                "Hacktica",
+            ),
+            coconut_logo_light: egui::Image::from_bytes(
+                "COCoNuT",
                 include_bytes!("../images/coconut.png"),
-            )
-            .unwrap(),
+            ),
             water_vapour_lines,
-            wp: RetainedImage::from_image_bytes("WP", include_bytes!("../images/WP-Logo.png"))
-                .unwrap(),
+            wp: egui::Image::from_bytes("WP", include_bytes!("../images/WP-Logo.png")),
 
             dropped_files: vec![],
             picked_path: "".to_string(),
@@ -215,6 +192,7 @@ impl MyApp {
             fft_bounds_lock,
             fft_filter_bounds_lock,
             pixel_lock,
+            scaling_lock,
             config_tx,
             load_tx,
             fft_bounds: [1.0, 7.0],
@@ -222,11 +200,13 @@ impl MyApp {
             time_window: [1000.0, 1050.0],
             pixel_selected: SelectedPixel::default(),
             val: PlotPoint { x: 0.0, y: 0.0 },
+            mid_point: 50.0,
+            bw: false,
         }
     }
 }
 
-impl eframe::App for MyApp {
+impl<'a> eframe::App for MyApp<'a> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let left_panel_width = 300.0;
         let right_panel_width = 500.0;
@@ -247,15 +227,18 @@ impl eframe::App for MyApp {
             &left_panel_width,
             &mut self.picked_path,
             &mut self.gui_conf,
-            &self.coconut_logo_light,
-            &self.coconut_logo_dark,
+            self.coconut_logo_light.clone(),
+            self.coconut_logo_dark.clone(),
             &mut self.pixel_selected,
             &mut self.val,
+            &mut self.mid_point,
+            &mut self.bw,
             &self.img_lock,
             &self.waterfall_lock,
             &self.data_lock,
             &self.print_lock,
             &self.pixel_lock,
+            &self.scaling_lock,
             &self.config_tx,
             &self.load_tx,
         );
@@ -271,14 +254,15 @@ impl eframe::App for MyApp {
             &mut self.time_window,
             &self.config_tx,
             &self.data_lock,
+            &self.scaling_lock,
             &self.print_lock,
             &self.log_mode_lock,
             &self.normalize_fft_lock,
             &self.fft_bounds_lock,
             &self.fft_filter_bounds_lock,
-            &self.hacktica_dark,
-            &self.hacktica_light,
-            &self.wp,
+            self.hacktica_dark.clone(),
+            self.hacktica_light.clone(),
+            self.wp.clone(),
         );
 
         self.gui_conf.x = ctx.used_size().x;

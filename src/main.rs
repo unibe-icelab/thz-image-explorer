@@ -11,17 +11,16 @@ use std::sync::{mpsc, Arc, RwLock};
 use std::thread;
 
 use crate::config::Config;
-use eframe::egui::{vec2, Visuals};
-use eframe::IconData;
+use eframe::egui::{vec2, ViewportBuilder, Visuals};
+use eframe::icon_data;
 use ndarray::Array2;
 use preferences::{AppInfo, Preferences};
 
 use crate::data::DataPoint;
 use crate::data_thread::main_thread;
-use crate::gui::{
-    print_to_console, update_in_console, GuiSettingsContainer, MyApp, Print, SelectedPixel,
-};
+use crate::gui::{print_to_console, update_in_console, GuiSettingsContainer, MyApp, Print};
 use crate::math_tools::make_fft;
+use crate::matrix_plot::SelectedPixel;
 
 mod center_panel;
 mod config;
@@ -74,6 +73,7 @@ fn main() {
     let status_lock = Arc::new(RwLock::new("".to_string()));
     let connected_lock = Arc::new(RwLock::new(0));
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
+    let scaling_lock = Arc::new(RwLock::new(1));
     let print_lock = Arc::new(RwLock::new(vec![Print::EMPTY]));
 
     let (config_tx, config_rx): (Sender<Config>, Receiver<Config>) = mpsc::channel();
@@ -90,6 +90,7 @@ fn main() {
     let main_fft_bounds_lock = fft_bounds_lock.clone();
     let main_fft_filter_bounds_lock = fft_filter_bounds_lock.clone();
     let main_pixel_lock = pixel_lock.clone();
+    let main_scaling_lock = scaling_lock.clone();
 
     println!("starting main server..");
     let _main_thread_handler = thread::spawn(|| {
@@ -100,15 +101,17 @@ fn main() {
             main_print_lock,
             config_rx,
             load_rx,
+            main_scaling_lock,
         );
     });
 
     let options = eframe::NativeOptions {
-        follow_system_theme: true,
-        icon_data: Some(IconData::try_from_png_bytes(include_bytes!("../icons/icon.png")).unwrap()),
-        drag_and_drop_support: true,
-        initial_window_size: Option::from(vec2(gui_settings.x, gui_settings.y)),
-        // hardware_acceleration : HardwareAcceleration::Off,
+        viewport: ViewportBuilder::default()
+            .with_drag_and_drop(true)
+            .with_inner_size(vec2(gui_settings.x, gui_settings.y))
+            .with_icon(
+                icon_data::from_png_bytes(&include_bytes!("../icons/icon.png")[..]).unwrap(),
+            ),
         ..Default::default()
     };
 
@@ -124,17 +127,20 @@ fn main() {
     let gui_img_lock = img_lock.clone();
     let gui_waterfall_lock = waterfall_lock.clone();
     let gui_pixel_lock = pixel_lock.clone();
+    let gui_scaling_lock = scaling_lock.clone();
 
     eframe::run_native(
         "COCoNuT Explore",
         options,
         Box::new(|_cc| {
+            egui_extras::install_image_loaders(&_cc.egui_ctx);
             _cc.egui_ctx.set_visuals(Visuals::dark());
-            Box::new(MyApp::new(
+            Ok(Box::new(MyApp::new(
                 gui_print_lock,
                 gui_data_lock,
                 gui_df_lock,
                 gui_pixel_lock,
+                gui_scaling_lock,
                 gui_log_mode_lock,
                 gui_img_lock,
                 gui_waterfall_lock,
@@ -144,7 +150,7 @@ fn main() {
                 gui_settings,
                 config_tx,
                 load_tx,
-            ))
+            )))
         }),
     )
     .expect("Failed to launch GUI");
