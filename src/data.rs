@@ -1,9 +1,7 @@
 use std::ops::AddAssign;
 use std::sync::Arc;
-use std::time::Instant;
 
-use ndarray::{Array, Array1, Array2, Array3, Axis};
-use realfft::num_complex::{Complex, Complex32};
+use ndarray::{Array1, Array2, Array3, Axis};
 use realfft::{ComplexToReal, RealToComplex};
 use serde::{Deserialize, Serialize};
 

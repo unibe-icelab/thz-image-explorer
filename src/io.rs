@@ -1,16 +1,12 @@
 use std::error::Error;
 use std::fs::File;
-use std::io::BufReader;
-use std::ops::SubAssign;
 use std::path::PathBuf;
 
-use csv::{ReaderBuilder, WriterBuilder};
+use csv::ReaderBuilder;
 use ndarray::{Array1, Array2, Array3, Axis};
 use ndarray_npy::NpzReader;
 use ndarray_npy::ReadNpyExt;
-use realfft::num_traits::real::Real;
 use realfft::RealFftPlanner;
-use serde_json::{Number, Value};
 
 use crate::data::{DataPoint, HouseKeeping, Meta, ScannedImage};
 
@@ -171,12 +167,12 @@ pub fn open_json(
 // }
 
 pub fn open_from_npy(
-    data: &mut DataPoint,
-    file_path: &PathBuf,
-    file_path_fft: &PathBuf,
+    _data: &mut DataPoint,
+    fila_path: &PathBuf,
+    _file_path_fft: &PathBuf,
 ) -> Result<(), Box<dyn Error>> {
-    let reader = File::open(file_path)?;
-    let arr = Array2::<f32>::read_npy(reader)?;
+    let reader = File::open(fila_path)?;
+    let _arr = Array2::<f32>::read_npy(reader)?;
     todo!();
     // data.time = arr.row(0).iter().copied().collect();
     // data.signal_1 = arr.row(1).iter().copied().collect();

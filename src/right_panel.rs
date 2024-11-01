@@ -1,16 +1,11 @@
 use std::f32::consts::E;
 use std::f64::NEG_INFINITY;
-use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, RwLock};
 
 use eframe::egui;
 use eframe::egui::panel::Side;
-use eframe::egui::{
-    global_dark_light_mode_buttons, vec2, DragValue, FontFamily, FontId, RichText, Slider, Stroke,
-    Vec2, Visuals,
-};
-use egui_extras::RetainedImage;
+use eframe::egui::{vec2, DragValue, FontFamily, FontId, RichText, Slider, Stroke, Vec2, Visuals};
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use itertools_num::linspace;
 use ndarray::Array1;
@@ -18,7 +13,6 @@ use ndarray::Array1;
 use crate::config::Config;
 use crate::double_slider::DoubleSlider;
 use crate::math_tools::apply_fft_window;
-use crate::plot_slider::{fft_filter, time_filter, windowing};
 use crate::toggle::toggle;
 use crate::{DataPoint, GuiSettingsContainer, Print};
 
@@ -27,7 +21,6 @@ pub fn right_panel(
     right_panel_width: &f32,
     gui_conf: &mut GuiSettingsContainer,
     console: &mut Vec<Print>,
-    picked_path: &mut String,
     filter_bounds: &mut [f32; 2],
     fft_bounds: &mut [f32; 2],
     time_window: &mut [f32; 2],
@@ -54,7 +47,6 @@ pub fn right_panel(
         .resizable(false)
         .show(ctx, |ui| {
             ui.add_enabled_ui(true, |ui| {
-                ui.set_visible(true);
                 ui.horizontal(|ui| {
                     ui.heading("Analysis");
                 });
@@ -312,9 +304,10 @@ pub fn right_panel(
                     .set_margin_fraction(Vec2 { x: 0.0, y: 0.05 })
                     .height(100.0)
                     .allow_scroll(false)
+                    .allow_zoom(false)
                     .width(right_panel_width * 0.9);
-                ui.vertical_centered(|ui| {
-                    let response = time_window_plot.show(ui, |window_plot_ui| {
+                let ui_response = ui.vertical_centered(|ui| {
+                    time_window_plot.show(ui, |window_plot_ui| {
                         window_plot_ui.line(
                             Line::new(PlotPoints::from(window_vals))
                                 .color(egui::Color32::RED)
@@ -332,18 +325,10 @@ pub fn right_panel(
                                 .stroke(Stroke::new(1.0, egui::Color32::GRAY))
                                 .name("Upper Bound"),
                         );
-                    });
-
-                    // scroll through time axis
-                    if response.response.hovered() {
-                        let scroll_delta = ctx.input(|i| i.smooth_scroll_delta);
-                        time_window[1] += scroll_delta.x / 10.0;
-                        time_window[0] += scroll_delta.x / 10.0;
-
-                        time_window[1] += scroll_delta.y / 10.0;
-                        time_window[0] += scroll_delta.y / 10.0;
-                    }
+                    })
                 });
+
+                let plot_response = ui_response.inner;
 
                 let slider_changed = ui.horizontal(|ui| {
                     let right_offset = 0.09 * right_panel_width;
@@ -433,10 +418,28 @@ pub fn right_panel(
                         .unwrap();
                 }
 
+                // scroll through time axis
+                if plot_response.response.hovered() {
+                    let scroll_delta = ctx.input(|i| i.smooth_scroll_delta);
+                    time_window[1] += scroll_delta.x / 10.0;
+                    time_window[0] += scroll_delta.x / 10.0;
+
+                    time_window[1] += scroll_delta.y / 10.0;
+                    time_window[0] += scroll_delta.y / 10.0;
+                    let zoom_delta = ctx.input(|i| i.zoom_delta() - 1.0);
+
+                    time_window[1] += zoom_delta * 2.0;
+                    time_window[0] -= zoom_delta * 2.0;
+
+                    if scroll_delta != Vec2::ZERO || zoom_delta != 0.0 {
+                        config_tx
+                            .send(Config::SetTimeWindow(time_window.clone()))
+                            .unwrap();
+                    }
+                }
+
                 ui.add_space(40.0);
                 ui.separator();
-
-                global_dark_light_mode_buttons(ui);
 
                 gui_conf.dark_mode = ui.visuals() == &Visuals::dark();
 
@@ -446,7 +449,7 @@ pub fn right_panel(
                 ui.separator();
                 let mut task_open = false;
                 egui::ScrollArea::vertical()
-                    .id_source("console_scroll_area")
+                    .id_salt("console_scroll_area")
                     .auto_shrink([false; 2])
                     .stick_to_bottom(true)
                     .max_height(row_height * 5.20)

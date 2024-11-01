@@ -1,27 +1,23 @@
-use std::error::Error;
 use std::f32::consts::PI;
 use std::fs;
-use std::fs::File;
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use eframe::egui::ColorImage;
 use image::RgbaImage;
-use itertools::izip;
 use ndarray::parallel::prelude::*;
-use ndarray::{Array1, Array2, ArrayBase, ArrayViewMut, Axis};
-use ndarray_npy::NpzReader;
+use ndarray::{Array1, Array2, Axis};
 use realfft::num_complex::Complex32;
 use realfft::RealFftPlanner;
 
 use crate::config::{Config, ConfigContainer};
 use crate::data::{DataPoint, ScannedImage};
-use crate::io::{open_conf, open_from_npy, open_from_npz, open_hk, open_json};
-use crate::math_tools::{apply_fft_window, apply_filter, make_ifft, numpy_unwrap};
+use crate::io::{open_conf, open_from_npy, open_from_npz, open_json};
+use crate::math_tools::{apply_fft_window, numpy_unwrap};
 use crate::matrix_plot::SelectedPixel;
-use crate::{make_fft, print_to_console, update_in_console, Print};
+use crate::Print;
 
 fn save_image(img: &ColorImage, file_path: &PathBuf) {
     let height = img.height();
