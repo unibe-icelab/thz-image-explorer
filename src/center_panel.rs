@@ -1,10 +1,11 @@
-use std::ops::RangeInclusive;
-use std::sync::{Arc, RwLock};
-
 use eframe::egui;
 use eframe::egui::{Checkbox, DragValue, Stroke};
 use egui_plot::{GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
+use std::ops::RangeInclusive;
+use std::sync::mpsc::Sender;
+use std::sync::{Arc, RwLock};
 
+use crate::config::Config;
 use crate::data::DataPoint;
 use crate::toggle::toggle;
 use crate::{vec2, GuiSettingsContainer};
@@ -16,8 +17,8 @@ pub fn center_panel(
     left_panel_width: &f32,
     gui_conf: &mut GuiSettingsContainer,
     data: &mut DataPoint,
-    df_lock: &Arc<RwLock<f32>>,
     data_lock: &Arc<RwLock<DataPoint>>,
+    config_tx: &Sender<Config>,
     water_vapour_lines: &Vec<f64>,
 ) {
     egui::CentralPanel::default().show(ctx, |ui| {
@@ -59,7 +60,6 @@ pub fn center_panel(
 
                 let mut axis_display_offset_signal_1 = f64::NEG_INFINITY;
                 let mut axis_display_offset_filtered_signal_1 = f64::NEG_INFINITY;
-                let mut axis_display_offset_ref_1 = f64::NEG_INFINITY;
 
                 if gui_conf.signal_1_visible {
                     axis_display_offset_signal_1 = data
@@ -75,16 +75,8 @@ pub fn center_panel(
                         .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
                         .abs();
                 }
-                if gui_conf.ref_1_visible {
-                    axis_display_offset_ref_1 = data
-                        .ref_1
-                        .iter()
-                        .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
-                        .abs();
-                }
 
-                let axis_display_offset = vec![
-                    axis_display_offset_ref_1,
+                let axis_display_offset = [
                     axis_display_offset_signal_1,
                     axis_display_offset_filtered_signal_1,
                 ]
@@ -97,10 +89,6 @@ pub fn center_panel(
                         data.time[i] as f64,
                         data.signal_1[i] as f64 + axis_display_offset,
                     ]);
-                    // ref_1.push([
-                    //     data.time[i] as f64,
-                    //     data.ref_1[i] as f64 + axis_display_offset,
-                    // ]);
                 }
 
                 for i in 0..data.time.len().min(data.filtered_signal_1.len()) {
@@ -339,9 +327,9 @@ pub fn center_panel(
                             gui_conf.frequency_resolution_temp = 0.0001;
                         }
                         gui_conf.frequency_resolution = gui_conf.frequency_resolution_temp;
-                        if let Ok(mut write_guard) = df_lock.write() {
-                            *write_guard = gui_conf.frequency_resolution;
-                        }
+                        config_tx
+                            .send(Config::SetFFTResolution(gui_conf.frequency_resolution))
+                            .expect("unable to send config");
                     }
                     ui.add_space(50.0);
                     ui.label("FFT");
