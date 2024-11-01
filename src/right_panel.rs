@@ -7,8 +7,8 @@ use std::sync::{Arc, RwLock};
 use eframe::egui;
 use eframe::egui::panel::Side;
 use eframe::egui::{
-    global_dark_light_mode_buttons, vec2, FontFamily, FontId, RichText, Slider, Stroke, Vec2,
-    Visuals,
+    global_dark_light_mode_buttons, vec2, DragValue, FontFamily, FontId, RichText, Slider, Stroke,
+    Vec2, Visuals,
 };
 use egui_extras::RetainedImage;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
@@ -16,6 +16,7 @@ use itertools_num::linspace;
 use ndarray::Array1;
 
 use crate::config::Config;
+use crate::double_slider::DoubleSlider;
 use crate::math_tools::apply_fft_window;
 use crate::plot_slider::{fft_filter, time_filter, windowing};
 use crate::toggle::toggle;
@@ -129,45 +130,55 @@ pub fn right_panel(
                                 .name("Lower Bound"),
                         );
                         window_plot_ui.vline(
-                            VLine::new(data.hk.t_begin + data.hk.range - fft_bounds[1])
+                            VLine::new(data.hk.t_begin + fft_bounds[1])
                                 .stroke(Stroke::new(1.0, egui::Color32::GRAY))
                                 .name("Upper Bound"),
                         );
                     });
                 });
 
-                ui.vertical_centered(|ui| {
-                    if ui
-                        .add(windowing(
-                            &(*right_panel_width * 0.9),
-                            &100.0,
-                            &data.hk.range,
-                            fft_bounds,
-                        ))
-                        .changed()
-                    {
-                        if fft_bounds[0] < 0.0 {
-                            fft_bounds[0] = 0.0;
-                        }
+                let slider_changed = ui.horizontal(|ui| {
+                    let right_offset = 0.09 * right_panel_width;
+                    let left_offset = 0.01 * right_panel_width;
+                    ui.add_space(left_offset);
+                    // Display slider, linked to the same range as the plot
+                    let mut fft_lower_bound = fft_bounds[0];
+                    let mut fft_upper_bound = fft_bounds[1];
 
-                        if fft_bounds[1] < 0.0 {
-                            fft_bounds[1] = 0.0;
-                        }
+                    let slider_changed = ui
+                        .add(
+                            DoubleSlider::new(
+                                &mut fft_lower_bound,
+                                &mut fft_upper_bound,
+                                0.0..=data.hk.range,
+                            )
+                            .separation_distance(2.0)
+                            .invert_highlighting(true)
+                            .width(right_panel_width - left_offset - right_offset),
+                        )
+                        .changed();
+                    *fft_bounds = [fft_lower_bound, fft_upper_bound];
+                    slider_changed
+                });
 
-                        if fft_bounds[0] > data.hk.range {
-                            fft_bounds[0] = data.hk.range;
-                        }
+                ui.horizontal(|ui| {
+                    let val1_changed = ui.add(DragValue::new(&mut fft_bounds[0])).changed();
 
-                        if fft_bounds[1] > data.hk.range {
-                            fft_bounds[1] = data.hk.range;
-                        }
+                    ui.add_space(0.75 * right_panel_width);
+
+                    let mut upper_value = data.hk.range - fft_bounds[1];
+                    let val2_changed = ui.add(DragValue::new(&mut upper_value)).changed();
+
+                    fft_bounds[1] = data.hk.range - upper_value;
+
+                    if slider_changed.inner || val1_changed || val2_changed {
                         config_tx
                             .send(Config::SetFFTWindowLow(fft_bounds[0]))
                             .unwrap();
                         config_tx
                             .send(Config::SetFFTWindowHigh(fft_bounds[1]))
                             .unwrap();
-                    };
+                    }
                 });
 
                 ui.add_space(10.0);
@@ -247,23 +258,44 @@ pub fn right_panel(
                     });
                 });
 
-                ui.vertical_centered(|ui| {
-                    if ui
-                        .add(fft_filter(
-                            &(*right_panel_width * 0.9),
-                            &100.0,
-                            &10.0,
-                            filter_bounds,
-                        ))
-                        .changed()
-                    {
+                let slider_changed = ui.horizontal(|ui| {
+                    let right_offset = 0.09 * right_panel_width;
+                    let left_offset = 0.01 * right_panel_width;
+                    ui.add_space(left_offset);
+                    // Display slider, linked to the same range as the plot
+                    let mut filter_lower_bound = filter_bounds[0];
+                    let mut filter_upper_bound = filter_bounds[1];
+
+                    let slider_changed = ui
+                        .add(
+                            DoubleSlider::new(
+                                &mut filter_lower_bound,
+                                &mut filter_upper_bound,
+                                0.0..=10.0,
+                            )
+                            .separation_distance(0.05)
+                            .width(right_panel_width - left_offset - right_offset),
+                        )
+                        .changed();
+                    *filter_bounds = [filter_lower_bound, filter_upper_bound];
+                    slider_changed
+                });
+
+                ui.horizontal(|ui| {
+                    let val1_changed = ui.add(DragValue::new(&mut filter_bounds[0])).changed();
+
+                    ui.add_space(0.75 * right_panel_width);
+
+                    let val2_changed = ui.add(DragValue::new(&mut filter_bounds[1])).changed();
+
+                    if slider_changed.inner || val1_changed || val2_changed {
                         config_tx
                             .send(Config::SetFFTFilterLow(filter_bounds[0]))
                             .unwrap();
                         config_tx
                             .send(Config::SetFFTFilterHigh(filter_bounds[1]))
                             .unwrap();
-                    };
+                    }
                 });
 
                 ui.add_space(10.0);
@@ -279,9 +311,10 @@ pub fn right_panel(
                     .allow_drag(false)
                     .set_margin_fraction(Vec2 { x: 0.0, y: 0.05 })
                     .height(100.0)
+                    .allow_scroll(false)
                     .width(right_panel_width * 0.9);
                 ui.vertical_centered(|ui| {
-                    time_window_plot.show(ui, |window_plot_ui| {
+                    let response = time_window_plot.show(ui, |window_plot_ui| {
                         window_plot_ui.line(
                             Line::new(PlotPoints::from(window_vals))
                                 .color(egui::Color32::RED)
@@ -300,19 +333,50 @@ pub fn right_panel(
                                 .name("Upper Bound"),
                         );
                     });
+
+                    // scroll through time axis
+                    if response.response.hovered() {
+                        let scroll_delta = ctx.input(|i| i.smooth_scroll_delta);
+                        time_window[1] += scroll_delta.x / 10.0;
+                        time_window[0] += scroll_delta.x / 10.0;
+
+                        time_window[1] += scroll_delta.y / 10.0;
+                        time_window[0] += scroll_delta.y / 10.0;
+                    }
                 });
 
-                ui.vertical_centered(|ui| {
-                    if ui
-                        .add(time_filter(
-                            &(*right_panel_width * 0.9),
-                            &100.0,
-                            &data.time.first().unwrap_or(&1000.0),
-                            &data.time.last().unwrap_or(&1050.0),
-                            time_window,
-                        ))
-                        .changed()
-                    {
+                let slider_changed = ui.horizontal(|ui| {
+                    let right_offset = 0.09 * right_panel_width;
+                    let left_offset = 0.01 * right_panel_width;
+                    ui.add_space(left_offset);
+                    // Display slider, linked to the same range as the plot
+                    let mut time_window_lower_bound = time_window[0];
+                    let mut time_window_upper_bound = time_window[1];
+                    let lower = data.time.first().unwrap_or(&1000.0);
+                    let upper = data.time.last().unwrap_or(&1050.0);
+                    let slider_changed = ui
+                        .add(
+                            DoubleSlider::new(
+                                &mut time_window_lower_bound,
+                                &mut time_window_upper_bound,
+                                *lower..=*upper,
+                            )
+                            .separation_distance(2.0)
+                            .width(right_panel_width - left_offset - right_offset),
+                        )
+                        .changed();
+                    *time_window = [time_window_lower_bound, time_window_upper_bound];
+                    slider_changed
+                });
+
+                ui.horizontal(|ui| {
+                    let val1_changed = ui.add(DragValue::new(&mut time_window[0])).changed();
+
+                    ui.add_space(0.75 * right_panel_width);
+
+                    let val2_changed = ui.add(DragValue::new(&mut time_window[1])).changed();
+
+                    if slider_changed.inner || val1_changed || val2_changed {
                         if time_window[0] == time_window[1] {
                             time_window[0] = *data.time.first().unwrap_or(&1000.0);
                             time_window[1] = *data.time.last().unwrap_or(&1050.0);
@@ -320,7 +384,7 @@ pub fn right_panel(
                         config_tx
                             .send(Config::SetTimeWindow(time_window.clone()))
                             .unwrap();
-                    };
+                    }
                 });
 
                 let mut width = time_window[1] - time_window[0];
