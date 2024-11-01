@@ -4,8 +4,7 @@ use std::sync::{Arc, RwLock};
 
 use eframe::egui;
 use eframe::egui::panel::Side;
-use eframe::egui::{vec2, ColorImage, Spinner, Vec2};
-use egui_extras::RetainedImage;
+use eframe::egui::{vec2, Vec2};
 use egui_plot::PlotPoint;
 use ndarray::Array2;
 use serde::{Deserialize, Serialize};
@@ -55,7 +54,6 @@ pub fn left_panel(
         .resizable(false)
         .show(ctx, |ui| {
             ui.add_enabled_ui(true, |ui| {
-                ui.set_visible(true);
                 ui.horizontal(|ui| {
                     ui.heading("Housekeeping");
                 });

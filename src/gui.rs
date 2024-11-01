@@ -5,7 +5,6 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use eframe::{egui, Storage};
-use egui_extras::RetainedImage;
 use egui_plot::PlotPoint;
 use ndarray::Array2;
 use preferences::Preferences;
@@ -248,7 +247,6 @@ impl<'a> eframe::App for MyApp<'a> {
             &right_panel_width,
             &mut self.gui_conf,
             &mut self.console,
-            &mut self.picked_path,
             &mut self.filter_bounds,
             &mut self.fft_bounds,
             &mut self.time_window,

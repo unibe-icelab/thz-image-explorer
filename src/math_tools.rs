@@ -1,10 +1,8 @@
-use std::cmp::{max, min};
 use std::f32::consts::PI;
 
 use itertools_num::linspace;
-use ndarray::{Array1, Array2, Array3, ArrayViewMut, Ix1};
-use rand::Rng;
-use realfft::num_complex::{Complex32, Complex64};
+use ndarray::{Array1, ArrayViewMut, Ix1};
+use realfft::num_complex::Complex32;
 use realfft::RealFftPlanner;
 
 use crate::data::DataPoint;
@@ -14,12 +12,8 @@ fn blackman_window(n: f32, m: f32) -> f32 {
     let res = 0.42 - 0.5 * (2.0 * PI * n / m).cos() + 0.08 * (4.0 * PI * n / m).cos();
     if res.is_nan() {
         1.0
-    } else if res < 0.0 {
-        0.0
-    } else if res > 1.0 {
-        1.0
     } else {
-        res
+        res.clamp(0.0, 1.0)
     }
 }
 

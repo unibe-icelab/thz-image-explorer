@@ -1,7 +1,9 @@
 use std::f64::{INFINITY, NEG_INFINITY};
 
 use eframe::egui;
-use eframe::egui::{pos2, vec2, Color32, ColorImage, FontId, RichText, Shape, Stroke, Vec2};
+use eframe::egui::{
+    pos2, vec2, Color32, ColorImage, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
+};
 use egui::TextureOptions;
 use egui_plot::{Line, Plot, PlotImage, PlotPoint, PlotPoints};
 use ndarray::{Array2, Axis};
@@ -245,14 +247,14 @@ fn colorbar_with_midpoint_slider(
             let label_text = format!("{:.0}%", percentage); // Removed decimals
 
             // Create a fixed-size rectangle to hold the label at the correct height, using a constant x position
-            ui.allocate_ui_at_rect(
-                egui::Rect::from_min_size(
+            ui.allocate_new_ui(
+                UiBuilder::new().max_rect(egui::Rect::from_min_size(
                     egui::pos2(
                         label_x_offset + triangle_radius,
                         ui.min_rect().top() + label_position,
                     ),
                     egui::vec2(label_width, 20.0), // Fixed size for label
-                ),
+                )),
                 |ui| {
                     ui.label(RichText::new(label_text).font(FontId::proportional(1.35 * 10.0)));
                 },

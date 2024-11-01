@@ -18,8 +18,7 @@ use preferences::{AppInfo, Preferences};
 
 use crate::data::DataPoint;
 use crate::data_thread::main_thread;
-use crate::gui::{print_to_console, update_in_console, GuiSettingsContainer, MyApp, Print};
-use crate::math_tools::make_fft;
+use crate::gui::{GuiSettingsContainer, MyApp, Print};
 use crate::matrix_plot::SelectedPixel;
 
 mod center_panel;
@@ -27,8 +26,6 @@ mod config;
 mod data;
 mod data_thread;
 mod double_slider;
-#[path = "teraflash-ctrl/src/errors.rs"]
-mod errors;
 mod filters;
 mod gauge;
 mod gui;
@@ -36,8 +33,6 @@ mod io;
 mod left_panel;
 mod math_tools;
 mod matrix_plot;
-#[path = "teraflash-ctrl/src/plot_slider.rs"]
-mod plot_slider;
 mod right_panel;
 #[path = "teraflash-ctrl/src/toggle.rs"]
 mod toggle;
