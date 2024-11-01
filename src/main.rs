@@ -25,7 +25,6 @@ mod center_panel;
 mod config;
 mod data;
 mod data_thread;
-mod double_slider;
 mod filters;
 mod gauge;
 mod gui;

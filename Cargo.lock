@@ -790,6 +790,7 @@ dependencies = [
  "approx",
  "csv",
  "eframe",
+ "egui_double_slider",
  "egui_extras",
  "egui_plot",
  "hex",
@@ -1203,6 +1204,14 @@ dependencies = [
  "web-time",
  "webbrowser",
  "winit",
+]
+
+[[package]]
+name = "egui_double_slider"
+version = "0.2.0"
+dependencies = [
+ "eframe",
+ "egui",
 ]
 
 [[package]]

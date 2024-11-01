@@ -22,6 +22,7 @@ pub enum MODE {
     Debug,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn left_panel(
     ctx: &egui::Context,
     left_panel_width: &f32,
