@@ -5,7 +5,9 @@ use std::sync::{Arc, RwLock};
 
 use eframe::egui;
 use eframe::egui::panel::Side;
-use eframe::egui::{vec2, DragValue, FontFamily, FontId, RichText, Slider, Stroke, Vec2, Visuals};
+use eframe::egui::{
+    vec2, DragValue, FontFamily, FontId, RichText, Slider, Stroke, Vec2, Visuals, Widget,
+};
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use itertools_num::linspace;
@@ -55,7 +57,6 @@ pub fn right_panel(
 
                 egui::Grid::new("upper")
                     .num_columns(2)
-                    //.spacing([40.0, 4.0])
                     .striped(true)
                     .show(ui, |ui| {
                         ui.label("Log Mode: ");
@@ -70,6 +71,9 @@ pub fn right_panel(
 
                         ui.end_row();
                         ui.label("Down scaling:");
+
+                        ui.style_mut().spacing.slider_width = ui.available_width();
+
                         if ui
                             .add(egui::Slider::new(&mut gui_conf.down_scaling, 1..=10))
                             .changed()
@@ -385,32 +389,33 @@ pub fn right_panel(
                 let mut width = time_window[1] - time_window[0];
                 let first = *data.time.first().unwrap_or(&1000.0);
                 let last = *data.time.last().unwrap_or(&1050.0);
-                if ui
-                    .add(Slider::new(&mut width, 0.5..=last - first))
-                    .changed()
-                {
-                    if time_window[0] == time_window[1] {
-                        time_window[0] = *data.time.first().unwrap_or(&1000.0);
-                        time_window[1] = *data.time.last().unwrap_or(&1050.0);
-                    }
-                    config_tx
-                        .send(Config::SetTimeWindow(time_window.clone()))
-                        .unwrap();
-                }
-                time_window[1] = width + time_window[0];
-                if ui
-                    .add(Slider::new(&mut time_window[0], first..=last - width))
-                    .changed()
-                {
-                    if time_window[0] == time_window[1] {
-                        time_window[0] = *data.time.first().unwrap_or(&1000.0);
-                        time_window[1] = *data.time.last().unwrap_or(&1050.0);
-                    }
-                    time_window[1] = width + time_window[0];
-                    config_tx
-                        .send(Config::SetTimeWindow(time_window.clone()))
-                        .unwrap();
-                }
+
+                // if ui
+                //     .add(Slider::new(&mut width, 0.5..=last - first))
+                //     .changed()
+                // {
+                //     if time_window[0] == time_window[1] {
+                //         time_window[0] = *data.time.first().unwrap_or(&1000.0);
+                //         time_window[1] = *data.time.last().unwrap_or(&1050.0);
+                //     }
+                //     config_tx
+                //         .send(Config::SetTimeWindow(time_window.clone()))
+                //         .unwrap();
+                // }
+                // time_window[1] = width + time_window[0];
+                // if ui
+                //     .add(Slider::new(&mut time_window[0], first..=last - width))
+                //     .changed()
+                // {
+                //     if time_window[0] == time_window[1] {
+                //         time_window[0] = *data.time.first().unwrap_or(&1000.0);
+                //         time_window[1] = *data.time.last().unwrap_or(&1050.0);
+                //     }
+                //     time_window[1] = width + time_window[0];
+                //     config_tx
+                //         .send(Config::SetTimeWindow(time_window.clone()))
+                //         .unwrap();
+                // }
 
                 if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && time_window[1] < last {
                     time_window[0] += 1.0;

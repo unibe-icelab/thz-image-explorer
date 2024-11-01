@@ -32,7 +32,7 @@ approx = "0.5.1"
 ndarray-npy = { version = "0.9.1", features = ["npz"] }
 serde_json = "1.0.95"
 itertools = "0.13.0"
-egui_double_slider = { path = "../../RustroverProjects/egui_double_slider" }
+egui_double_slider = "0.3.0"
 
 [package.metadata.bundle]
 name = "COExplore"
