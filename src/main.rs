@@ -33,7 +33,6 @@ mod left_panel;
 mod math_tools;
 mod matrix_plot;
 mod right_panel;
-#[path = "teraflash-ctrl/src/toggle.rs"]
 mod toggle;
 
 const APP_INFO: AppInfo = AppInfo {
@@ -61,13 +60,6 @@ fn main() {
     let data_lock = Arc::new(RwLock::new(DataPoint::default()));
     let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
     let waterfall_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
-    let df_lock = Arc::new(RwLock::new(gui_settings.frequency_resolution));
-    let log_mode_lock = Arc::new(RwLock::new(gui_settings.log_plot));
-    let normalize_fft_lock = Arc::new(RwLock::new(gui_settings.normalize_fft));
-    let fft_bounds_lock = Arc::new(RwLock::new([1.0, 7.0]));
-    let fft_filter_bounds_lock = Arc::new(RwLock::new([0.0, 10.0]));
-    let status_lock = Arc::new(RwLock::new("".to_string()));
-    let connected_lock = Arc::new(RwLock::new(0));
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
     let scaling_lock = Arc::new(RwLock::new(1));
     let print_lock = Arc::new(RwLock::new(vec![Print::EMPTY]));
@@ -77,15 +69,8 @@ fn main() {
 
     let main_data_lock = data_lock.clone();
     let main_print_lock = print_lock.clone();
-    let main_log_mode_lock = log_mode_lock.clone();
-    let main_df_lock = df_lock.clone();
     let main_img_lock = img_lock.clone();
     let main_waterfall_lock = waterfall_lock.clone();
-    let main_pixel_lock = pixel_lock.clone();
-    let main_normalize_fft_lock = normalize_fft_lock.clone();
-    let main_fft_bounds_lock = fft_bounds_lock.clone();
-    let main_fft_filter_bounds_lock = fft_filter_bounds_lock.clone();
-    let main_pixel_lock = pixel_lock.clone();
     let main_scaling_lock = scaling_lock.clone();
 
     println!("starting main server..");
@@ -112,13 +97,6 @@ fn main() {
     };
 
     let gui_data_lock = data_lock.clone();
-    let gui_df_lock = df_lock.clone();
-    let gui_log_mode_lock = log_mode_lock.clone();
-    let gui_normalize_fft_lock = normalize_fft_lock.clone();
-    let gui_fft_filter_bounds_lock = fft_filter_bounds_lock.clone();
-    let gui_fft_bounds_lock = fft_bounds_lock.clone();
-    let gui_status_lock = status_lock.clone();
-    let gui_connected_lock = connected_lock.clone();
     let gui_print_lock = print_lock.clone();
     let gui_img_lock = img_lock.clone();
     let gui_waterfall_lock = waterfall_lock.clone();
@@ -134,15 +112,10 @@ fn main() {
             Ok(Box::new(MyApp::new(
                 gui_print_lock,
                 gui_data_lock,
-                gui_df_lock,
                 gui_pixel_lock,
                 gui_scaling_lock,
-                gui_log_mode_lock,
                 gui_img_lock,
                 gui_waterfall_lock,
-                gui_normalize_fft_lock,
-                gui_fft_bounds_lock,
-                gui_fft_filter_bounds_lock,
                 gui_settings,
                 config_tx,
                 load_tx,

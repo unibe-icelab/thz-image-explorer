@@ -5,9 +5,7 @@ use std::sync::{Arc, RwLock};
 
 use eframe::egui;
 use eframe::egui::panel::Side;
-use eframe::egui::{
-    vec2, DragValue, FontFamily, FontId, RichText, Slider, Stroke, Vec2, Visuals, Widget,
-};
+use eframe::egui::{vec2, DragValue, FontFamily, FontId, RichText, Stroke, Vec2, Visuals};
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use itertools_num::linspace;
@@ -31,10 +29,6 @@ pub fn right_panel(
     data_lock: &Arc<RwLock<DataPoint>>,
     scaling_lock: &Arc<RwLock<u8>>,
     print_lock: &Arc<RwLock<Vec<Print>>>,
-    log_mode_lock: &Arc<RwLock<bool>>,
-    normalize_fft_lock: &Arc<RwLock<bool>>,
-    fft_bounds_lock: &Arc<RwLock<[f32; 2]>>,
-    fft_filter_bounds_lock: &Arc<RwLock<[f32; 2]>>,
     hacktica_dark: egui::Image,
     hacktica_light: egui::Image,
     wp: egui::Image,
@@ -60,13 +54,18 @@ pub fn right_panel(
                     .striped(true)
                     .show(ui, |ui| {
                         ui.label("Log Mode: ");
-                        ui.add(toggle(&mut gui_conf.log_plot));
+                        if ui.add(toggle(&mut gui_conf.log_plot)).changed() {
+                            config_tx
+                                .send(Config::SetFFTLogPlot(gui_conf.log_plot))
+                                .expect("unable to send config");
+                        }
                         ui.end_row();
 
                         ui.label("Normalize FFT: ");
-                        ui.add(toggle(&mut gui_conf.normalize_fft));
-                        if let Ok(mut write_guard) = normalize_fft_lock.write() {
-                            *write_guard = gui_conf.normalize_fft.clone();
+                        if ui.add(toggle(&mut gui_conf.normalize_fft)).changed() {
+                            config_tx
+                                .send(Config::SetFFTNormalization(gui_conf.normalize_fft))
+                                .expect("unable to send config");
                         }
 
                         ui.end_row();
@@ -81,7 +80,9 @@ pub fn right_panel(
                             if let Ok(mut s) = scaling_lock.write() {
                                 *s = gui_conf.down_scaling as u8;
                             }
-                            config_tx.send(Config::SetDownScaling(gui_conf.down_scaling));
+                            config_tx
+                                .send(Config::SetDownScaling(gui_conf.down_scaling))
+                                .expect("unable to send config");
                         }
                     });
 
@@ -579,7 +580,7 @@ pub fn right_panel(
                 ui.horizontal_wrapped(|ui| {
                     let width = (ui.available_size().x - 96.0 - 96.0) / 3.0;
                     ui.add_space(width);
-                    if gui_conf.dark_mode == true {
+                    if gui_conf.dark_mode {
                         ui.add(hacktica_dark.fit_to_exact_size(vec2(96.0, 38.0)));
                     } else {
                         ui.add(hacktica_light.fit_to_exact_size(vec2(96.0, 38.0)));

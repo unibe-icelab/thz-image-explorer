@@ -103,11 +103,8 @@ pub fn left_panel(
             });
 
             if ui.button("Load Scan").clicked() {
-                match rfd::FileDialog::new().pick_folder() {
-                    Some(path) => {
-                        config_tx.send(Config::OpenFile(path.clone()));
-                    }
-                    None => {}
+                if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                    config_tx.send(Config::OpenFile(path.clone()));
                 }
             };
 

@@ -55,14 +55,11 @@ pub struct DataPoint {
     pub time: Vec<f32>,
     pub signal_1: Vec<f32>,
     pub filtered_signal_1: Vec<f32>,
-    pub ref_1: Vec<f32>,
     pub frequencies: Vec<f32>,
     pub signal_1_fft: Vec<f32>,
     pub phase_1_fft: Vec<f32>,
     pub filtered_signal_1_fft: Vec<f32>,
     pub filtered_phase_fft: Vec<f32>,
-    pub ref_1_fft: Vec<f32>,
-    pub ref_phase_1_fft: Vec<f32>,
 }
 
 #[derive(Clone)]
