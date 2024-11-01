@@ -3,73 +3,13 @@ use std::sync::{Arc, RwLock};
 
 use eframe::egui;
 use eframe::egui::{Checkbox, DragValue, Stroke};
-use egui_plot::{GridInput, GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
+use egui_plot::{GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 
 use crate::data::DataPoint;
 use crate::toggle::toggle;
 use crate::{vec2, GuiSettingsContainer};
 
-type GridSpacerFn = dyn Fn(GridInput) -> Vec<GridMark>;
-type GridSpacer = Box<GridSpacerFn>;
-
-fn next_power(value: f64, base: f64) -> f64 {
-    assert_ne!(value, 0.0); // can be negative (typical for Y axis)
-    base.powi(value.abs().log(base).ceil() as i32)
-}
-
-/// Fill in all values between [min, max]
-fn generate_marks_log_plot(step_sizes: [f64; 3], bounds: (f64, f64)) -> Vec<GridMark> {
-    let mut steps = vec![];
-    make_marks_log_plot(&mut steps, step_sizes, bounds);
-    steps
-}
-
-/// Fill in all values between [min, max] which are a multiple of `step_size`
-fn make_marks_log_plot(out: &mut Vec<GridMark>, step_size: [f64; 3], (min, max): (f64, f64)) {
-    assert!(max > min);
-    // TODO: pos/neg check
-    let first = (min).floor() as i64;
-    let last = (max).floor() as i64;
-
-    let mut marks_iter = vec![];
-    for i in first..=last {
-        let step = (10_f64.powi(i as i32 + 1) - 10_f64.powi(i as i32)) / 9.0;
-        marks_iter.push(GridMark {
-            value: i as f64,
-            step_size: step_size[1],
-        });
-        for j in 1..9 {
-            let value = 10_f64.powi(i as i32) + j as f64 * step;
-            marks_iter.push(GridMark {
-                value: value.log(10.0),
-                step_size: step_size[0],
-            });
-        }
-    }
-
-    out.extend(marks_iter);
-}
-
-pub fn logarithmic_grid_spacer(log_base: i64) -> GridSpacer {
-    let log_base = log_base as f64;
-    let step_sizes = move |input: GridInput| -> Vec<GridMark> {
-        // The distance between two of the thinnest grid lines is "rounded" up
-        // to the next-bigger power of base
-
-        let smallest_visible_unit = next_power(input.base_step_size, log_base);
-
-        let step_sizes = [
-            smallest_visible_unit,
-            smallest_visible_unit * log_base,
-            smallest_visible_unit * log_base * log_base,
-        ];
-
-        generate_marks_log_plot(step_sizes, input.bounds)
-    };
-
-    Box::new(step_sizes)
-}
-
+#[allow(clippy::too_many_arguments)]
 pub fn center_panel(
     ctx: &egui::Context,
     right_panel_width: &f32,
@@ -84,7 +24,7 @@ pub fn center_panel(
         let height = ui.available_size().y * 0.45;
         let spacing = (ui.available_size().y - 2.0 * height) / 3.0 - 10.0;
         let width = ui.available_size().x - 40.0 - *left_panel_width - *right_panel_width;
-        let mut plot_color = egui::Color32::YELLOW;
+        let mut plot_color;
         if !gui_conf.dark_mode {
             plot_color = egui::Color32::BLUE;
         }
@@ -115,7 +55,7 @@ pub fn center_panel(
 
                 let mut signal_1: Vec<[f64; 2]> = Vec::new();
                 let mut filtered_signal_1: Vec<[f64; 2]> = Vec::new();
-                let mut ref_1: Vec<[f64; 2]> = Vec::new();
+                let ref_1: Vec<[f64; 2]> = Vec::new();
 
                 let mut axis_display_offset_signal_1 = f64::NEG_INFINITY;
                 let mut axis_display_offset_filtered_signal_1 = f64::NEG_INFINITY;

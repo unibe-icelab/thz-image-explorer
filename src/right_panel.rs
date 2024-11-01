@@ -6,16 +6,17 @@ use std::sync::{Arc, RwLock};
 use eframe::egui;
 use eframe::egui::panel::Side;
 use eframe::egui::{vec2, DragValue, FontFamily, FontId, RichText, Slider, Stroke, Vec2, Visuals};
+use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use itertools_num::linspace;
 use ndarray::Array1;
 
 use crate::config::Config;
-use crate::double_slider::DoubleSlider;
 use crate::math_tools::apply_fft_window;
 use crate::toggle::toggle;
 use crate::{DataPoint, GuiSettingsContainer, Print};
 
+#[allow(clippy::too_many_arguments)]
 pub fn right_panel(
     ctx: &egui::Context,
     right_panel_width: &f32,
@@ -105,6 +106,8 @@ pub fn right_panel(
                     .include_y(0.0)
                     .include_y(1.0)
                     .allow_drag(false)
+                    .allow_zoom(false)
+                    .allow_scroll(false)
                     .set_margin_fraction(Vec2 { x: 0.0, y: 0.05 })
                     .height(100.0)
                     .width(right_panel_width * 0.9);
@@ -122,7 +125,7 @@ pub fn right_panel(
                                 .name("Lower Bound"),
                         );
                         window_plot_ui.vline(
-                            VLine::new(data.hk.t_begin + fft_bounds[1])
+                            VLine::new(data.hk.t_begin + data.hk.range - fft_bounds[1])
                                 .stroke(Stroke::new(1.0, egui::Color32::GRAY))
                                 .name("Upper Bound"),
                         );
@@ -135,7 +138,7 @@ pub fn right_panel(
                     ui.add_space(left_offset);
                     // Display slider, linked to the same range as the plot
                     let mut fft_lower_bound = fft_bounds[0];
-                    let mut fft_upper_bound = fft_bounds[1];
+                    let mut fft_upper_bound = data.hk.range - fft_bounds[1];
 
                     let slider_changed = ui
                         .add(
@@ -144,12 +147,14 @@ pub fn right_panel(
                                 &mut fft_upper_bound,
                                 0.0..=data.hk.range,
                             )
+                            .zoom_factor(2.0)
+                            .scroll_factor(0.005)
                             .separation_distance(2.0)
                             .invert_highlighting(true)
                             .width(right_panel_width - left_offset - right_offset),
                         )
                         .changed();
-                    *fft_bounds = [fft_lower_bound, fft_upper_bound];
+                    *fft_bounds = [fft_lower_bound, data.hk.range - fft_upper_bound];
                     slider_changed
                 });
 
@@ -158,10 +163,7 @@ pub fn right_panel(
 
                     ui.add_space(0.75 * right_panel_width);
 
-                    let mut upper_value = data.hk.range - fft_bounds[1];
-                    let val2_changed = ui.add(DragValue::new(&mut upper_value)).changed();
-
-                    fft_bounds[1] = data.hk.range - upper_value;
+                    let val2_changed = ui.add(DragValue::new(&mut fft_bounds[1])).changed();
 
                     if slider_changed.inner || val1_changed || val2_changed {
                         config_tx
@@ -220,6 +222,8 @@ pub fn right_panel(
                     .include_x(10.0)
                     .include_y(0.0)
                     .allow_drag(false)
+                    .allow_zoom(false)
+                    .allow_scroll(false)
                     .set_margin_fraction(Vec2 { x: 0.0, y: 0.05 })
                     .height(100.0)
                     .width(right_panel_width * 0.9);
@@ -265,6 +269,8 @@ pub fn right_panel(
                                 &mut filter_upper_bound,
                                 0.0..=10.0,
                             )
+                            .zoom_factor(2.0)
+                            .scroll_factor(0.005)
                             .separation_distance(0.05)
                             .width(right_panel_width - left_offset - right_offset),
                         )
@@ -294,6 +300,9 @@ pub fn right_panel(
 
                 ui.separator();
                 ui.heading("III. Time Filter: ");
+
+                let zoom_factor = 5.0;
+                let scroll_factor = 0.01;
 
                 let mut window_vals: Vec<[f64; 2]> = Vec::new();
                 for i in 0..data.time.len() {
@@ -346,6 +355,7 @@ pub fn right_panel(
                                 &mut time_window_upper_bound,
                                 *lower..=*upper,
                             )
+                            .zoom_factor(zoom_factor)
                             .separation_distance(2.0)
                             .width(right_panel_width - left_offset - right_offset),
                         )
@@ -421,15 +431,15 @@ pub fn right_panel(
                 // scroll through time axis
                 if plot_response.response.hovered() {
                     let scroll_delta = ctx.input(|i| i.smooth_scroll_delta);
-                    time_window[1] += scroll_delta.x / 10.0;
-                    time_window[0] += scroll_delta.x / 10.0;
+                    time_window[1] += scroll_delta.x * scroll_factor;
+                    time_window[0] += scroll_delta.x * scroll_factor;
 
-                    time_window[1] += scroll_delta.y / 10.0;
-                    time_window[0] += scroll_delta.y / 10.0;
+                    time_window[1] += scroll_delta.y * scroll_factor;
+                    time_window[0] += scroll_delta.y * scroll_factor;
                     let zoom_delta = ctx.input(|i| i.zoom_delta() - 1.0);
 
-                    time_window[1] += zoom_delta * 2.0;
-                    time_window[0] -= zoom_delta * 2.0;
+                    time_window[1] += zoom_delta * zoom_factor;
+                    time_window[0] -= zoom_delta * zoom_factor;
 
                     if scroll_delta != Vec2::ZERO || zoom_delta != 0.0 {
                         config_tx
