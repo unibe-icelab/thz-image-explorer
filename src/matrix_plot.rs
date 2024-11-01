@@ -105,6 +105,7 @@ fn colorbar_with_midpoint_slider(
             .allow_scroll(false)
             .allow_boxed_zoom(false)
             .allow_drag(false)
+            .show_grid(false)
             .show_x(false)
             .show_y(false);
 
