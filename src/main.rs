@@ -26,8 +26,10 @@ mod center_panel;
 mod config;
 mod data;
 mod data_thread;
+mod double_slider;
 #[path = "teraflash-ctrl/src/errors.rs"]
 mod errors;
+mod filters;
 mod gauge;
 mod gui;
 mod io;
