@@ -16,7 +16,6 @@ use crate::data::{DataPoint, ScannedImage};
 use crate::io::{open_from_npz, open_json};
 use crate::math_tools::{apply_fft_window, numpy_unwrap};
 use crate::matrix_plot::SelectedPixel;
-use crate::Print;
 
 fn save_image(img: &ColorImage, file_path: &PathBuf) {
     let height = img.height();
@@ -47,50 +46,10 @@ fn update_intensity_image(scan: &mut ScannedImage, img_lock: &Arc<RwLock<Array2<
     }
 }
 
-fn update_waterfall_image(
-    scan: &mut ScannedImage,
-    pixel_x: usize,
-    waterfall_lock: &Arc<RwLock<Array2<f32>>>,
-    scaling_lock: &Arc<RwLock<u8>>,
-) {
-    if let Some(r2c) = &scan.r2c {
-        if let Ok(mut write_guard) = waterfall_lock.write() {
-            let mut spectrum = r2c.make_output_vec();
-            let mut scaling = 1;
-            if let Ok(s) = scaling_lock.read() {
-                scaling = s.clone();
-            }
-            let pixel_x = pixel_x / scaling as usize;
-            let mut in_data = scan
-                .filtered_data
-                .index_axis(Axis(0), pixel_x)
-                .index_axis(Axis(0), 0)
-                .to_vec();
-            r2c.process(&mut in_data, &mut spectrum).unwrap();
-
-            let m = scan.filtered_data.shape()[0];
-            let n = spectrum.len();
-            let mut img = Array2::zeros((n, m));
-            let data = scan.filtered_data.index_axis(Axis(0), pixel_x);
-            (data.axis_iter(Axis(0)), img.axis_iter_mut(Axis(1)))
-                .into_par_iter()
-                .for_each(|(line, mut img)| {
-                    let mut spectrum = r2c.make_output_vec();
-                    let mut in_data = line.to_vec();
-                    r2c.process(&mut in_data, &mut spectrum).unwrap();
-                    let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
-                    img.assign(&Array1::from_vec(amp));
-                });
-            *write_guard = img;
-        }
-    }
-}
-
 fn filter_time_window(
     config: &ConfigContainer,
     scan: &mut ScannedImage,
     img_lock: &Arc<RwLock<Array2<f32>>>,
-    waterfall_lock: &Arc<RwLock<Array2<f32>>>,
     scaling_lock: &Arc<RwLock<u8>>,
 ) {
     // calculate fft filter and calculate ifft
@@ -135,7 +94,6 @@ fn filter_time_window(
             },
         );
     update_intensity_image(scan, img_lock);
-    update_waterfall_image(scan, config.selected_pixel[0], waterfall_lock, scaling_lock);
     println!("updated data. This took {:?}", start.elapsed());
 }
 
@@ -143,7 +101,6 @@ fn filter(
     config: &ConfigContainer,
     scan: &mut ScannedImage,
     img_lock: &Arc<RwLock<Array2<f32>>>,
-    waterfall_lock: &Arc<RwLock<Array2<f32>>>,
     scaling_lock: &Arc<RwLock<u8>>,
 ) {
     // calculate fft filter and calculate ifft
@@ -248,7 +205,7 @@ fn filter(
     // }
     // update images
     update_intensity_image(scan, img_lock);
-    update_waterfall_image(scan, config.selected_pixel[0], waterfall_lock, scaling_lock);
+    //update_waterfall_image(scan, config.selected_pixel[0], waterfall_lock, scaling_lock);
     println!("updated data. This took {:?}", start.elapsed());
 }
 
@@ -258,7 +215,6 @@ fn load_from_npz(
     scan: &mut ScannedImage,
     config: &mut ConfigContainer,
     img_lock: &Arc<RwLock<Array2<f32>>>,
-    waterfall_lock: &Arc<RwLock<Array2<f32>>>,
     scaling_lock: &Arc<RwLock<u8>>,
 ) {
     let width: usize;
@@ -294,7 +250,6 @@ fn load_from_npz(
     match open_from_npz(scan, &pulse_path) {
         Ok(_) => {
             update_intensity_image(scan, img_lock);
-            update_waterfall_image(scan, config.selected_pixel[0], waterfall_lock, scaling_lock);
         }
         Err(err) => {
             println!("an error occurred while trying to read data.npz {err:?}");
@@ -312,8 +267,6 @@ enum FileType {
 pub fn main_thread(
     data_lock: Arc<RwLock<DataPoint>>,
     img_lock: Arc<RwLock<Array2<f32>>>,
-    waterfall_lock: Arc<RwLock<Array2<f32>>>,
-    print_lock: Arc<RwLock<Vec<Print>>>,
     config_rx: Receiver<Config>,
     load_rx: Receiver<PathBuf>,
     scaling_lock: Arc<RwLock<u8>>,
@@ -344,8 +297,8 @@ pub fn main_thread(
                         })
                         .collect::<Vec<FileType>>();
                     if files.contains(&FileType::Npy) {
-                        println!("[OK] found npy binaries.");
-                        println!("[ERR] npy no implemented...");
+                        log::debug!("[OK] found npy binaries.");
+                        log::error!("[ERR] npy no implemented...");
                         // load_from_npy(
                         //     &opened_folder_path,
                         //     &mut real_planner,
@@ -356,14 +309,13 @@ pub fn main_thread(
                         //     &waterfall_lock,
                         // );
                     } else if files.contains(&FileType::Npz) {
-                        println!("[OK] found a npz binary.");
+                        log::debug!("[OK] found a npz binary.");
                         load_from_npz(
                             &opened_folder_path,
                             &mut data,
                             &mut scan,
                             &mut config,
                             &img_lock,
-                            &waterfall_lock,
                             &scaling_lock,
                         );
 
@@ -387,89 +339,41 @@ pub fn main_thread(
                             }
                         }
                     } else {
-                        println!("[ERR] no binaries found!")
+                        log::error!("[ERR] no binaries found!")
                     }
                     // read HK
                 }
                 Config::SetFFTWindowLow(low) => {
                     config.fft_window[0] = low;
-                    filter(
-                        &config,
-                        &mut scan,
-                        &img_lock,
-                        &waterfall_lock,
-                        &scaling_lock,
-                    );
+                    filter(&config, &mut scan, &img_lock, &scaling_lock);
                 }
                 Config::SetFFTWindowHigh(high) => {
                     config.fft_window[1] = high;
-                    filter(
-                        &config,
-                        &mut scan,
-                        &img_lock,
-                        &waterfall_lock,
-                        &scaling_lock,
-                    );
+                    filter(&config, &mut scan, &img_lock, &scaling_lock);
                 }
                 Config::SetFFTFilterLow(low) => {
                     config.fft_filter[0] = low;
-                    filter(
-                        &config,
-                        &mut scan,
-                        &img_lock,
-                        &waterfall_lock,
-                        &scaling_lock,
-                    );
+                    filter(&config, &mut scan, &img_lock, &scaling_lock);
                 }
                 Config::SetFFTFilterHigh(high) => {
                     config.fft_filter[1] = high;
-                    filter(
-                        &config,
-                        &mut scan,
-                        &img_lock,
-                        &waterfall_lock,
-                        &scaling_lock,
-                    );
+                    filter(&config, &mut scan, &img_lock, &scaling_lock);
                 }
                 Config::SetTimeWindow(time_window) => {
                     config.time_window = time_window;
-                    filter_time_window(
-                        &config,
-                        &mut scan,
-                        &img_lock,
-                        &waterfall_lock,
-                        &scaling_lock,
-                    );
+                    filter_time_window(&config, &mut scan, &img_lock, &scaling_lock);
                 }
                 Config::SetFFTLogPlot(log_plot) => {
                     config.fft_log_plot = log_plot;
-                    filter(
-                        &config,
-                        &mut scan,
-                        &img_lock,
-                        &waterfall_lock,
-                        &scaling_lock,
-                    );
+                    filter(&config, &mut scan, &img_lock, &scaling_lock);
                 }
                 Config::SetFFTNormalization(normalization) => {
                     config.normalize_fft = normalization;
-                    filter(
-                        &config,
-                        &mut scan,
-                        &img_lock,
-                        &waterfall_lock,
-                        &scaling_lock,
-                    );
+                    filter(&config, &mut scan, &img_lock, &scaling_lock);
                 }
                 Config::SetFFTResolution(df) => {
                     config.fft_df = df;
-                    filter(
-                        &config,
-                        &mut scan,
-                        &img_lock,
-                        &waterfall_lock,
-                        &scaling_lock,
-                    );
+                    filter(&config, &mut scan, &img_lock, &scaling_lock);
                 }
                 Config::SetDownScaling(scaling) => {
                     // TODO: rescale selected pixel
@@ -477,22 +381,15 @@ pub fn main_thread(
                     scan.rescale(config.down_scaling);
                     scan.filtered_data = scan.scaled_data.clone();
                     scan.filtered_img = scan.scaled_img.clone();
-                    filter(
-                        &config,
-                        &mut scan,
-                        &img_lock,
-                        &waterfall_lock,
-                        &scaling_lock,
-                    );
+                    filter(&config, &mut scan, &img_lock, &scaling_lock);
                 }
                 Config::SetSelectedPixel(pixel_location) => {
                     config.selected_pixel = pixel_location;
-                    update_waterfall_image(
-                        &mut scan,
-                        config.selected_pixel[0],
-                        &waterfall_lock,
-                        &scaling_lock,
-                    );
+                    // update_waterfall_image(
+                    //     &mut scan,
+                    //     config.selected_pixel[0],
+                    //     &scaling_lock,
+                    // );
                     println!("new pixel: {:?}", config.selected_pixel);
                     // send HK?
                 }

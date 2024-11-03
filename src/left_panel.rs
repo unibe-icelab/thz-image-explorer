@@ -13,7 +13,7 @@ use crate::config::Config;
 use crate::gauge::gauge;
 use crate::matrix_plot::{make_dummy, plot_matrix, SelectedPixel};
 use crate::toggle::toggle_ui;
-use crate::{DataPoint, GuiSettingsContainer, Print};
+use crate::{DataPoint, GuiSettingsContainer};
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub enum MODE {
@@ -35,9 +35,7 @@ pub fn left_panel(
     mid_point: &mut f32,
     bw: &mut bool,
     img_lock: &Arc<RwLock<Array2<f32>>>,
-    waterfall_lock: &Arc<RwLock<Array2<f32>>>,
     data_lock: &Arc<RwLock<DataPoint>>,
-    print_lock: &Arc<RwLock<Vec<Print>>>,
     pixel_lock: &Arc<RwLock<SelectedPixel>>,
     scaling_lock: &Arc<RwLock<u8>>,
     config_tx: &Sender<Config>,

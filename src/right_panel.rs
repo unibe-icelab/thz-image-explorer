@@ -5,7 +5,7 @@ use std::sync::{Arc, RwLock};
 
 use eframe::egui;
 use eframe::egui::panel::Side;
-use eframe::egui::{vec2, DragValue, FontFamily, FontId, RichText, Stroke, Vec2, Visuals};
+use eframe::egui::{vec2, DragValue, Stroke, Vec2, Visuals};
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use itertools_num::linspace;
@@ -14,21 +14,19 @@ use ndarray::Array1;
 use crate::config::Config;
 use crate::math_tools::apply_fft_window;
 use crate::toggle::toggle;
-use crate::{DataPoint, GuiSettingsContainer, Print};
+use crate::{DataPoint, GuiSettingsContainer};
 
 #[allow(clippy::too_many_arguments)]
 pub fn right_panel(
     ctx: &egui::Context,
     right_panel_width: &f32,
     gui_conf: &mut GuiSettingsContainer,
-    console: &mut Vec<Print>,
     filter_bounds: &mut [f32; 2],
     fft_bounds: &mut [f32; 2],
     time_window: &mut [f32; 2],
     config_tx: &Sender<Config>,
     data_lock: &Arc<RwLock<DataPoint>>,
     scaling_lock: &Arc<RwLock<u8>>,
-    print_lock: &Arc<RwLock<Vec<Print>>>,
     hacktica_dark: egui::Image,
     hacktica_light: egui::Image,
     wp: egui::Image,
@@ -405,36 +403,9 @@ pub fn right_panel(
                     }
                 });
 
-                let mut width = time_window[1] - time_window[0];
+                let width = time_window[1] - time_window[0];
                 let first = *data.time.first().unwrap_or(&1000.0);
                 let last = *data.time.last().unwrap_or(&1050.0);
-
-                // if ui
-                //     .add(Slider::new(&mut width, 0.5..=last - first))
-                //     .changed()
-                // {
-                //     if time_window[0] == time_window[1] {
-                //         time_window[0] = *data.time.first().unwrap_or(&1000.0);
-                //         time_window[1] = *data.time.last().unwrap_or(&1050.0);
-                //     }
-                //     config_tx
-                //         .send(Config::SetTimeWindow(time_window.clone()))
-                //         .unwrap();
-                // }
-                // time_window[1] = width + time_window[0];
-                // if ui
-                //     .add(Slider::new(&mut time_window[0], first..=last - width))
-                //     .changed()
-                // {
-                //     if time_window[0] == time_window[1] {
-                //         time_window[0] = *data.time.first().unwrap_or(&1000.0);
-                //         time_window[1] = *data.time.last().unwrap_or(&1050.0);
-                //     }
-                //     time_window[1] = width + time_window[0];
-                //     config_tx
-                //         .send(Config::SetTimeWindow(time_window.clone()))
-                //         .unwrap();
-                // }
 
                 if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && time_window[1] < last {
                     time_window[0] += 1.0;
@@ -477,119 +448,18 @@ pub fn right_panel(
 
                 gui_conf.dark_mode = ui.visuals() == &Visuals::dark();
 
-                let text_style = egui::TextStyle::Body;
-                let row_height = ui.text_style_height(&text_style);
-                let num_rows = console.len();
                 ui.separator();
-                let mut task_open = false;
-                egui::ScrollArea::vertical()
-                    .id_salt("console_scroll_area")
-                    .auto_shrink([false; 2])
-                    .stick_to_bottom(true)
-                    .max_height(row_height * 5.20)
-                    .show_rows(ui, row_height, num_rows, |ui, row_range| {
-                        for row in row_range {
-                            match console[row].clone() {
-                                Print::EMPTY => {}
-                                Print::MESSAGE(s) => {
-                                    let text = "[MSG] ".to_string();
-                                    ui.horizontal_wrapped(|ui| {
-                                        let color: egui::Color32;
-                                        if gui_conf.dark_mode {
-                                            color = egui::Color32::WHITE;
-                                        } else {
-                                            color = egui::Color32::BLACK;
-                                        }
-                                        ui.label(
-                                            RichText::new(text)
-                                                .color(color)
-                                                .font(FontId::new(14.0, FontFamily::Monospace)),
-                                        );
-                                        let text = format!("{}", s);
-                                        ui.label(
-                                            RichText::new(text)
-                                                .font(FontId::new(14.0, FontFamily::Monospace)),
-                                        );
-                                    });
-                                }
-                                Print::ERROR(s) => {
-                                    ui.horizontal_wrapped(|ui| {
-                                        let text = "[ERR] ".to_string();
-                                        ui.label(
-                                            RichText::new(text)
-                                                .color(egui::Color32::RED)
-                                                .font(FontId::new(14.0, FontFamily::Monospace)),
-                                        );
-                                        let text = format!("{}", s);
-                                        ui.label(
-                                            RichText::new(text)
-                                                .font(FontId::new(14.0, FontFamily::Monospace)),
-                                        );
-                                    });
-                                }
-                                Print::DEBUG(s) => {
-                                    if gui_conf.debug {
-                                        let color: egui::Color32;
-                                        if gui_conf.dark_mode {
-                                            color = egui::Color32::YELLOW;
-                                        } else {
-                                            color = egui::Color32::LIGHT_RED;
-                                        }
-                                        ui.horizontal_wrapped(|ui| {
-                                            let text = "[DBG] ".to_string();
-                                            ui.label(
-                                                RichText::new(text)
-                                                    .color(color)
-                                                    .font(FontId::new(14.0, FontFamily::Monospace)),
-                                            );
-                                            let text = format!("{}", s);
-                                            ui.label(
-                                                RichText::new(text)
-                                                    .font(FontId::new(14.0, FontFamily::Monospace)),
-                                            );
-                                        });
-                                    }
-                                }
-                                Print::TASK(s) => {
-                                    task_open = true;
-                                    ui.horizontal_wrapped(|ui| {
-                                        let text = "[  ] ".to_string();
-                                        ui.label(
-                                            RichText::new(text)
-                                                .color(egui::Color32::WHITE)
-                                                .font(FontId::new(14.0, FontFamily::Monospace)),
-                                        );
-                                        let text = format!("{}", s);
-                                        ui.label(
-                                            RichText::new(text)
-                                                .font(FontId::new(14.0, FontFamily::Monospace)),
-                                        );
-                                    });
-                                }
-                                Print::OK(s) => {
-                                    task_open = false;
-                                    ui.horizontal_wrapped(|ui| {
-                                        let text = "[OK] ".to_string();
-                                        ui.label(
-                                            RichText::new(text)
-                                                .color(egui::Color32::GREEN)
-                                                .font(FontId::new(14.0, FontFamily::Monospace)),
-                                        );
-                                        let text = format!("{}", s);
-                                        ui.label(
-                                            RichText::new(text)
-                                                .font(FontId::new(14.0, FontFamily::Monospace)),
-                                        );
-                                    });
-                                }
-                            }
-                        }
-                    });
-                if task_open {
-                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
-                } else {
-                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
-                }
+                ui.collapsing("Debug logs:", |ui| {
+                    egui_logger::logger_ui().show(ui);
+                });
+
+                // let mut task_open = false;
+                // if task_open {
+                //     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
+                // } else {
+                //     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
+                // }
+
                 ui.add_space(5.0);
                 ui.separator();
 
