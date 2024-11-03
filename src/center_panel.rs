@@ -25,10 +25,6 @@ pub fn center_panel(
         let height = ui.available_size().y * 0.45;
         let spacing = (ui.available_size().y - 2.0 * height) / 3.0 - 10.0;
         let width = ui.available_size().x - 40.0 - *left_panel_width - *right_panel_width;
-        let mut plot_color;
-        if !gui_conf.dark_mode {
-            plot_color = egui::Color32::BLUE;
-        }
         ui.add_space(spacing);
         ui.horizontal(|ui| {
             ui.add_space(*left_panel_width + 20.0);

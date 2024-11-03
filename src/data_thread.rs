@@ -268,7 +268,6 @@ pub fn main_thread(
     data_lock: Arc<RwLock<DataPoint>>,
     img_lock: Arc<RwLock<Array2<f32>>>,
     config_rx: Receiver<Config>,
-    load_rx: Receiver<PathBuf>,
     scaling_lock: Arc<RwLock<u8>>,
 ) {
     // reads data from mutex, samples and saves if needed

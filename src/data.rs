@@ -64,11 +64,10 @@ pub struct DataPoint {
 
 #[derive(Clone)]
 pub struct ScannedImage {
-    pub path: String,
-    pub x_min: f32,
-    pub dx: f32,
-    pub y_min: f32,
-    pub dy: f32,
+    pub x_min: Option<f32>,
+    pub dx: Option<f32>,
+    pub y_min: Option<f32>,
+    pub dy: Option<f32>,
     pub height: usize,
     pub width: usize,
     pub scaling: usize,
@@ -87,11 +86,10 @@ pub struct ScannedImage {
 impl Default for ScannedImage {
     fn default() -> Self {
         ScannedImage {
-            path: "".to_string(),
-            x_min: 0.0,
-            dx: 0.0,
-            y_min: 0.0,
-            dy: 0.0,
+            x_min: None,
+            dx: None,
+            y_min: None,
+            dy: None,
             height: 0,
             width: 0,
             scaling: 1,
@@ -119,11 +117,10 @@ impl ScannedImage {
         dy: f32,
     ) -> ScannedImage {
         ScannedImage {
-            path: "test".to_string(),
-            x_min,
-            dx,
-            y_min,
-            dy,
+            x_min: Some(x_min),
+            dx: Some(dx),
+            y_min: Some(y_min),
+            dy: Some(dy),
             height,
             width,
             scaling: 1,

@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, RwLock};
 
@@ -7,7 +6,6 @@ use eframe::egui::panel::Side;
 use eframe::egui::{vec2, Vec2};
 use egui_plot::PlotPoint;
 use ndarray::Array2;
-use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::gauge::gauge;
@@ -15,18 +13,10 @@ use crate::matrix_plot::{make_dummy, plot_matrix, SelectedPixel};
 use crate::toggle::toggle_ui;
 use crate::{DataPoint, GuiSettingsContainer};
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub enum MODE {
-    TimeSeries,
-    Scan,
-    Debug,
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn left_panel(
     ctx: &egui::Context,
     left_panel_width: &f32,
-    picked_path: &mut String,
     gui_conf: &mut GuiSettingsContainer,
     coconut_light: egui::Image,
     coconut_dark: egui::Image,
@@ -39,7 +29,6 @@ pub fn left_panel(
     pixel_lock: &Arc<RwLock<SelectedPixel>>,
     scaling_lock: &Arc<RwLock<u8>>,
     config_tx: &Sender<Config>,
-    load_tx: &Sender<PathBuf>,
 ) {
     let gauge_size = left_panel_width / 2.5;
     let mut data = DataPoint::default();
@@ -108,7 +97,9 @@ pub fn left_panel(
                 .clicked()
             {
                 if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                    config_tx.send(Config::OpenFile(path.clone()));
+                    config_tx
+                        .send(Config::OpenFile(path.clone()))
+                        .expect("unable to send open file cmd");
                 }
             };
 

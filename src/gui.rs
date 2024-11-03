@@ -1,5 +1,4 @@
 use core::f64;
-use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -41,7 +40,7 @@ pub struct GuiSettingsContainer {
 
 impl GuiSettingsContainer {
     pub fn new() -> GuiSettingsContainer {
-        return GuiSettingsContainer {
+        GuiSettingsContainer {
             log_plot: true,
             down_scaling: 1,
             normalize_fft: false,
@@ -57,7 +56,7 @@ impl GuiSettingsContainer {
             dark_mode: true,
             x: 1600.0,
             y: 900.0,
-        };
+        }
     }
 }
 
@@ -72,14 +71,11 @@ pub struct MyApp<'a> {
     bw: bool,
     hacktica_light: egui::Image<'a>,
     hacktica_dark: egui::Image<'a>,
-    connection_error_image_dark: egui::Image<'a>,
-    connection_error_image_light: egui::Image<'a>,
     coconut_logo_dark: egui::Image<'a>,
     coconut_logo_light: egui::Image<'a>,
     water_vapour_lines: Vec<f64>,
     wp: egui::Image<'a>,
     dropped_files: Vec<egui::DroppedFile>,
-    picked_path: String,
     data: DataPoint,
     gui_conf: GuiSettingsContainer,
     img_lock: Arc<RwLock<Array2<f32>>>,
@@ -87,7 +83,6 @@ pub struct MyApp<'a> {
     pixel_lock: Arc<RwLock<SelectedPixel>>,
     scaling_lock: Arc<RwLock<u8>>,
     config_tx: Sender<Config>,
-    load_tx: Sender<PathBuf>,
 }
 
 impl<'a> MyApp<'a> {
@@ -98,7 +93,6 @@ impl<'a> MyApp<'a> {
         img_lock: Arc<RwLock<Array2<f32>>>,
         gui_conf: GuiSettingsContainer,
         config_tx: Sender<Config>,
-        load_tx: Sender<PathBuf>,
     ) -> Self {
         let mut water_vapour_lines: Vec<f64> = Vec::new();
         let buffered = include_str!("../resources/water_lines.csv");
@@ -116,14 +110,6 @@ impl<'a> MyApp<'a> {
                 "Hacktica",
                 include_bytes!("../images/hacktica.png"),
             ),
-            connection_error_image_dark: egui::Image::from_bytes(
-                "Connection Error Dark",
-                include_bytes!("../images/connection_error_inv.png"),
-            ),
-            connection_error_image_light: egui::Image::from_bytes(
-                "Connection Error",
-                include_bytes!("../images/connection_error.png"),
-            ),
             coconut_logo_dark: egui::Image::from_bytes(
                 "COCoNuT Dark",
                 include_bytes!("../images/coconut_inv.png"),
@@ -136,7 +122,6 @@ impl<'a> MyApp<'a> {
             wp: egui::Image::from_bytes("WP", include_bytes!("../images/WP-Logo.png")),
 
             dropped_files: vec![],
-            picked_path: "".to_string(),
             data: DataPoint::default(),
             gui_conf,
             img_lock,
@@ -144,7 +129,6 @@ impl<'a> MyApp<'a> {
             pixel_lock,
             scaling_lock,
             config_tx,
-            load_tx,
             fft_bounds: [1.0, 7.0],
             filter_bounds: [0.0, 10.0],
             time_window: [1000.0, 1050.0],
@@ -175,7 +159,6 @@ impl<'a> eframe::App for MyApp<'a> {
         left_panel(
             &ctx,
             &left_panel_width,
-            &mut self.picked_path,
             &mut self.gui_conf,
             self.coconut_logo_light.clone(),
             self.coconut_logo_dark.clone(),
@@ -188,7 +171,6 @@ impl<'a> eframe::App for MyApp<'a> {
             &self.pixel_lock,
             &self.scaling_lock,
             &self.config_tx,
-            &self.load_tx,
         );
 
         right_panel(
