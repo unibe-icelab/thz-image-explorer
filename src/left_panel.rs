@@ -102,7 +102,13 @@ pub fn left_panel(
                 });
             });
 
-            if ui.button("Load Scan").clicked() {
+            if ui
+                .button(egui::RichText::new(format!(
+                    "{} Load Scan",
+                    egui_phosphor::regular::FOLDER_OPEN
+                )))
+                .clicked()
+            {
                 if let Some(path) = rfd::FileDialog::new().pick_folder() {
                     config_tx.send(Config::OpenFile(path.clone()));
                 }
@@ -112,12 +118,8 @@ pub fn left_panel(
             let height = ui.available_size().y - logo_height - 20.0;
 
             let mut img_data = make_dummy();
-            let mut waterfall_data = make_dummy();
             if let Ok(read_guard) = img_lock.read() {
                 img_data = read_guard.clone();
-            }
-            if let Ok(read_guard) = waterfall_lock.read() {
-                waterfall_data = read_guard.clone();
             }
             let mut scaling = 1;
             if let Ok(s) = scaling_lock.read() {
@@ -151,41 +153,20 @@ pub fn left_panel(
             ui.label("Black/White");
             toggle_ui(ui, bw);
 
-            // let img = plot_waterfall(
-            //     ui,
-            //     &waterfall_data,
-            //     &(*left_panel_width as f64),
-            //     &(*left_panel_width as f64),
-            //     &mut 0.0,
-            //     val,
-            //     pixel_selected,
-            //     scaling,
-            // );
-
             let height = ui.available_size().y - logo_height - 20.0;
             ui.add_space(height);
-            if gui_conf.dark_mode == true {
+            if gui_conf.dark_mode {
                 let size = coconut_dark.size().unwrap_or(Vec2 { x: 200.0, y: 100.0 });
                 ui.add(
                     coconut_dark
                         .fit_to_exact_size(vec2(size.y / logo_height * size.x, logo_height)),
                 );
-
-                // ui.add(egui::Image::new(
-                //     coconut_dark.texture_id(ctx),
-                //     coconut_dark.size_vec2() / coconut_dark.width() as f32 * *left_panel_width,
-                // ));
             } else {
                 let size = coconut_light.size().unwrap_or(Vec2 { x: 200.0, y: 100.0 });
                 ui.add(
                     coconut_light
                         .fit_to_exact_size(vec2(size.y / logo_height * size.x, logo_height)),
                 );
-
-                // ui.add(egui::Image::new(
-                //     coconut_light.texture_id(ctx),
-                //     coconut_light.size_vec2() / coconut_light.width() as f32 * *left_panel_width,
-                // ));
             }
         });
 }

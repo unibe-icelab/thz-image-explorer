@@ -71,7 +71,7 @@ pub fn right_panel(
                         ui.end_row();
                         ui.label("Down scaling:");
 
-                        ui.style_mut().spacing.slider_width = ui.available_width();
+                        ui.style_mut().spacing.slider_width = 320.0;
 
                         if ui
                             .add(egui::Slider::new(&mut gui_conf.down_scaling, 1..=10))
@@ -158,6 +158,10 @@ pub fn right_panel(
                             .invert_highlighting(true)
                             .width(right_panel_width - left_offset - right_offset),
                         )
+                        .on_hover_text(egui::RichText::new(format!(
+                            "{} Scroll and Zoom to adjust the sliders.",
+                            egui_phosphor::regular::INFO
+                        )))
                         .changed();
                     *fft_bounds = [fft_lower_bound, data.hk.range - fft_upper_bound];
                     slider_changed
@@ -279,6 +283,10 @@ pub fn right_panel(
                             .separation_distance(0.05)
                             .width(right_panel_width - left_offset - right_offset),
                         )
+                        .on_hover_text(egui::RichText::new(format!(
+                            "{} Scroll and Zoom to adjust the sliders.",
+                            egui_phosphor::regular::INFO
+                        )))
                         .changed();
                     *filter_bounds = [filter_lower_bound, filter_upper_bound];
                     slider_changed
@@ -342,6 +350,12 @@ pub fn right_panel(
                     })
                 });
 
+                ui_response
+                    .response
+                    .on_hover_text(egui::RichText::new(format!(
+                        "{} Scroll and Zoom to adjust the sliders.",
+                        egui_phosphor::regular::INFO
+                    )));
                 let plot_response = ui_response.inner;
 
                 let slider_changed = ui.horizontal(|ui| {
@@ -364,6 +378,10 @@ pub fn right_panel(
                             .separation_distance(2.0)
                             .width(right_panel_width - left_offset - right_offset),
                         )
+                        .on_hover_text(egui::RichText::new(format!(
+                            "{} Scroll and Zoom to adjust the sliders.",
+                            egui_phosphor::regular::INFO
+                        )))
                         .changed();
                     *time_window = [time_window_lower_bound, time_window_upper_bound];
                     slider_changed
