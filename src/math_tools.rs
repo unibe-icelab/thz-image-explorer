@@ -1,11 +1,5 @@
-use std::f32::consts::PI;
-
-use itertools_num::linspace;
 use ndarray::{Array1, ArrayViewMut, Ix1};
-use realfft::num_complex::Complex32;
-use realfft::RealFftPlanner;
-
-use crate::data::DataPoint;
+use std::f32::consts::PI;
 
 fn blackman_window(n: f32, m: f32) -> f32 {
     // blackman window as implemented by numpy (python)
@@ -37,104 +31,6 @@ pub fn apply_fft_window(
             *s *= bw;
         }
     }
-}
-
-pub fn apply_filter(data: &mut DataPoint, bounds: &[f32; 2]) {
-    for ((f, amplitude), filtered_amplitude) in data
-        .frequencies
-        .iter()
-        .zip(data.signal_1_fft.iter())
-        .zip(data.filtered_signal_1_fft.iter_mut())
-    {
-        if (*f >= bounds[0]) && (*f <= bounds[1]) {
-            *filtered_amplitude = *amplitude;
-        } else {
-            *filtered_amplitude = 0.0;
-        }
-    }
-}
-
-pub fn make_fft(
-    real_planner: &mut RealFftPlanner<f32>,
-    t_in: &[f32],
-    p_in: &[f32],
-    normalize: bool,
-    df: &f32,
-    lower_bound: &f32,
-    upper_bound: &f32,
-) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
-    // implement zero padding!
-    let dt = t_in[1] - t_in[0];
-    let zero_padding = (1.0 / (*df * dt)) as usize;
-    let padding_length;
-
-    let mut t = t_in.to_vec();
-    let p_zero = p_in[0];
-    let mut p = p_in.iter().map(|p| p - p_zero).collect::<Vec<f32>>();
-
-    // apply fft window (modified blackman window as specified by Toptica)
-    //apply_fft_window(&mut p, &t, lower_bound, upper_bound);
-
-    if zero_padding > t.len() {
-        padding_length = zero_padding - t.len();
-        let t_padded_bound = t[0] + dt * (zero_padding as f32);
-        t = linspace::<f32>(t[0], t_padded_bound, zero_padding).collect();
-        p.append(&mut vec![0.0; padding_length]);
-    }
-
-    // create a FFT
-    let r2c = real_planner.plan_fft_forward(t.len());
-    // make input and output vectors
-    let mut in_data: Vec<f32> = p.to_vec();
-    let mut spectrum = r2c.make_output_vec();
-    // Forward transform the input data
-    r2c.process(&mut in_data, &mut spectrum).unwrap();
-
-    let mut amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
-    let rng = t[t.len() - 1] - t[0];
-    let freq: Vec<f32> = (0..spectrum.len()).map(|i| i as f32 / rng).collect();
-    let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
-    if normalize {
-        let mut max_amp = amp.iter().fold(f32::NEG_INFINITY, |ai, &bi| ai.max(bi));
-        if max_amp == 0.0 {
-            max_amp = 1.0;
-        }
-        amp = amp.iter().map(|a| *a / max_amp).collect();
-    }
-    (freq, amp, numpy_unwrap(&phase, Some(2.0 * PI)))
-}
-
-pub fn make_ifft(
-    real_planner: &mut RealFftPlanner<f32>,
-    frequencies: &[f32],
-    amplitudes: &[f32],
-    phases: &[f32],
-) -> Vec<f32> {
-    let mut spectrum: Vec<Complex32> = vec![];
-    // spectrum = spectrum.iter_mut().zip(amplitudes.iter().zip(phases.iter()))
-    //     .map(|(s,(a,p))| {
-    //         *s = Complex64::new(*a,*p)
-    //     }).collect();
-    for (a, p) in amplitudes.iter().zip(phases.iter()) {
-        spectrum.push(Complex32::from_polar(*a, *p));
-    }
-
-    // create a iFFT
-    let c2r = real_planner.plan_fft_inverse((frequencies.len() - 1) * 2);
-    // make input and output vectors
-    let mut output = c2r.make_output_vec();
-
-    // Forward transform the input data
-    if c2r.process(&mut spectrum, &mut output).is_ok() {};
-    let length = output.len();
-    let output = output.iter().map(|p| *p / length as f32).collect();
-    // let mut pulse: Vec<f64> = vec![];
-    // for (i, p) in output.iter().enumerate() {
-    //     if i % 2 == 0 {
-    //         pulse.push(*p)
-    //     }
-    // };
-    output
 }
 
 pub fn numpy_unwrap(x: &[f32], period: Option<f32>) -> Vec<f32> {

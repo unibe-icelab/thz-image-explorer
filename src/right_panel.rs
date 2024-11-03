@@ -443,13 +443,11 @@ pub fn right_panel(
                     }
                 }
 
-                ui.add_space(40.0);
-                ui.separator();
-
                 gui_conf.dark_mode = ui.visuals() == &Visuals::dark();
 
                 ui.separator();
                 ui.collapsing("Debug logs:", |ui| {
+                    ui.set_height(175.0);
                     egui_logger::logger_ui().show(ui);
                 });
 

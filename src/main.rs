@@ -6,7 +6,6 @@ extern crate csv;
 extern crate preferences;
 extern crate serde;
 
-use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, RwLock};
 use std::thread;
@@ -66,7 +65,6 @@ fn main() {
     let scaling_lock = Arc::new(RwLock::new(1));
 
     let (config_tx, config_rx): (Sender<Config>, Receiver<Config>) = mpsc::channel();
-    let (load_tx, load_rx): (Sender<PathBuf>, Receiver<PathBuf>) = mpsc::channel();
 
     let main_data_lock = data_lock.clone();
     let main_img_lock = img_lock.clone();
@@ -74,13 +72,7 @@ fn main() {
 
     println!("starting main server..");
     let _main_thread_handler = thread::spawn(|| {
-        main_thread(
-            main_data_lock,
-            main_img_lock,
-            config_rx,
-            load_rx,
-            main_scaling_lock,
-        );
+        main_thread(main_data_lock, main_img_lock, config_rx, main_scaling_lock);
     });
 
     let options = eframe::NativeOptions {
@@ -114,7 +106,6 @@ fn main() {
                 gui_img_lock,
                 gui_settings,
                 config_tx,
-                load_tx,
             )))
         }),
     )
