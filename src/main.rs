@@ -19,7 +19,7 @@ use preferences::{AppInfo, Preferences};
 
 use crate::data::DataPoint;
 use crate::data_thread::main_thread;
-use crate::gui::{GuiSettingsContainer, MyApp, Print};
+use crate::gui::{GuiSettingsContainer, MyApp};
 use crate::matrix_plot::SelectedPixel;
 
 mod center_panel;
@@ -42,6 +42,8 @@ const APP_INFO: AppInfo = AppInfo {
 };
 
 fn main() {
+    egui_logger::builder().init().unwrap();
+
     let mut gui_settings = GuiSettingsContainer::new();
     let prefs_key = "config/gui";
     let load_result = GuiSettingsContainer::load(&APP_INFO, prefs_key);
@@ -60,18 +62,14 @@ fn main() {
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
     let data_lock = Arc::new(RwLock::new(DataPoint::default()));
     let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
-    let waterfall_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
     let scaling_lock = Arc::new(RwLock::new(1));
-    let print_lock = Arc::new(RwLock::new(vec![Print::EMPTY]));
 
     let (config_tx, config_rx): (Sender<Config>, Receiver<Config>) = mpsc::channel();
     let (load_tx, load_rx): (Sender<PathBuf>, Receiver<PathBuf>) = mpsc::channel();
 
     let main_data_lock = data_lock.clone();
-    let main_print_lock = print_lock.clone();
     let main_img_lock = img_lock.clone();
-    let main_waterfall_lock = waterfall_lock.clone();
     let main_scaling_lock = scaling_lock.clone();
 
     println!("starting main server..");
@@ -79,8 +77,6 @@ fn main() {
         main_thread(
             main_data_lock,
             main_img_lock,
-            main_waterfall_lock,
-            main_print_lock,
             config_rx,
             load_rx,
             main_scaling_lock,
@@ -98,9 +94,7 @@ fn main() {
     };
 
     let gui_data_lock = data_lock.clone();
-    let gui_print_lock = print_lock.clone();
     let gui_img_lock = img_lock.clone();
-    let gui_waterfall_lock = waterfall_lock.clone();
     let gui_pixel_lock = pixel_lock.clone();
     let gui_scaling_lock = scaling_lock.clone();
 
@@ -114,12 +108,10 @@ fn main() {
             egui_extras::install_image_loaders(&_cc.egui_ctx);
             _cc.egui_ctx.set_visuals(Visuals::dark());
             Ok(Box::new(MyApp::new(
-                gui_print_lock,
                 gui_data_lock,
                 gui_pixel_lock,
                 gui_scaling_lock,
                 gui_img_lock,
-                gui_waterfall_lock,
                 gui_settings,
                 config_tx,
                 load_tx,

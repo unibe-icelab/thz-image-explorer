@@ -20,32 +20,6 @@ use crate::APP_INFO;
 
 const MAX_FPS: f64 = 24.0;
 
-#[derive(Clone)]
-#[allow(unused)]
-pub enum Print {
-    EMPTY,
-    MESSAGE(String),
-    ERROR(String),
-    DEBUG(String),
-    TASK(String),
-    OK(String),
-}
-
-pub fn print_to_console(print_lock: &Arc<RwLock<Vec<Print>>>, message: Print) -> usize {
-    let mut index: usize = 0;
-    if let Ok(mut write_guard) = print_lock.write() {
-        write_guard.push(message);
-        index = write_guard.len() - 1;
-    }
-    index
-}
-
-pub fn update_in_console(print_lock: &Arc<RwLock<Vec<Print>>>, message: Print, index: usize) {
-    if let Ok(mut write_guard) = print_lock.write() {
-        write_guard[index] = message;
-    }
-}
-
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct GuiSettingsContainer {
     pub log_plot: bool,
@@ -89,7 +63,6 @@ impl GuiSettingsContainer {
 
 pub struct MyApp<'a> {
     dark_mode: bool,
-    console: Vec<Print>,
     fft_bounds: [f32; 2],
     filter_bounds: [f32; 2],
     time_window: [f32; 2],
@@ -108,10 +81,8 @@ pub struct MyApp<'a> {
     dropped_files: Vec<egui::DroppedFile>,
     picked_path: String,
     data: DataPoint,
-    print_lock: Arc<RwLock<Vec<Print>>>,
     gui_conf: GuiSettingsContainer,
     img_lock: Arc<RwLock<Array2<f32>>>,
-    waterfall_lock: Arc<RwLock<Array2<f32>>>,
     data_lock: Arc<RwLock<DataPoint>>,
     pixel_lock: Arc<RwLock<SelectedPixel>>,
     scaling_lock: Arc<RwLock<u8>>,
@@ -121,12 +92,10 @@ pub struct MyApp<'a> {
 
 impl<'a> MyApp<'a> {
     pub fn new(
-        print_lock: Arc<RwLock<Vec<Print>>>,
         data_lock: Arc<RwLock<DataPoint>>,
         pixel_lock: Arc<RwLock<SelectedPixel>>,
         scaling_lock: Arc<RwLock<u8>>,
         img_lock: Arc<RwLock<Array2<f32>>>,
-        waterfall_lock: Arc<RwLock<Array2<f32>>>,
         gui_conf: GuiSettingsContainer,
         config_tx: Sender<Config>,
         load_tx: Sender<PathBuf>,
@@ -169,11 +138,8 @@ impl<'a> MyApp<'a> {
             dropped_files: vec![],
             picked_path: "".to_string(),
             data: DataPoint::default(),
-            console: vec![Print::MESSAGE("".to_string())],
-            print_lock,
             gui_conf,
             img_lock,
-            waterfall_lock,
             data_lock,
             pixel_lock,
             scaling_lock,
@@ -218,9 +184,7 @@ impl<'a> eframe::App for MyApp<'a> {
             &mut self.mid_point,
             &mut self.bw,
             &self.img_lock,
-            &self.waterfall_lock,
             &self.data_lock,
-            &self.print_lock,
             &self.pixel_lock,
             &self.scaling_lock,
             &self.config_tx,
@@ -231,14 +195,12 @@ impl<'a> eframe::App for MyApp<'a> {
             &ctx,
             &right_panel_width,
             &mut self.gui_conf,
-            &mut self.console,
             &mut self.filter_bounds,
             &mut self.fft_bounds,
             &mut self.time_window,
             &self.config_tx,
             &self.data_lock,
             &self.scaling_lock,
-            &self.print_lock,
             self.hacktica_dark.clone(),
             self.hacktica_light.clone(),
             self.wp.clone(),
