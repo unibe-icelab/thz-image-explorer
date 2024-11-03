@@ -13,7 +13,7 @@ use std::thread;
 
 use crate::config::Config;
 use eframe::egui::{vec2, ViewportBuilder, Visuals};
-use eframe::icon_data;
+use eframe::{egui, icon_data};
 use ndarray::Array2;
 use preferences::{AppInfo, Preferences};
 
@@ -108,6 +108,9 @@ fn main() {
         "COCoNuT Explore",
         options,
         Box::new(|_cc| {
+            let mut fonts = egui::FontDefinitions::default();
+            egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
+            _cc.egui_ctx.set_fonts(fonts);
             egui_extras::install_image_loaders(&_cc.egui_ctx);
             _cc.egui_ctx.set_visuals(Visuals::dark());
             Ok(Box::new(MyApp::new(
