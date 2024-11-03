@@ -1,15 +1,15 @@
+use csv::ReaderBuilder;
+use eframe::egui::ColorImage;
+use image::RgbaImage;
+use ndarray::parallel::prelude::*;
+use ndarray::{Array1, Array2, Axis};
+use realfft::num_complex::Complex32;
 use std::f32::consts::PI;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
-
-use eframe::egui::ColorImage;
-use image::RgbaImage;
-use ndarray::parallel::prelude::*;
-use ndarray::{Array1, Array2, Axis};
-use realfft::num_complex::Complex32;
 
 use crate::config::{Config, ConfigContainer};
 use crate::data::{DataPoint, ScannedImage};
@@ -275,7 +275,7 @@ pub fn main_thread(
     let mut scan = ScannedImage::default();
     let mut config = ConfigContainer::default();
     let mut pixel = SelectedPixel::default();
-
+    let mut hk_csv = None;
     loop {
         if let Ok(config_command) = config_rx.recv() {
             match config_command {
@@ -341,6 +341,19 @@ pub fn main_thread(
                         log::error!("[ERR] no binaries found!")
                     }
                     // read HK
+                    match ReaderBuilder::new()
+                        .delimiter(b',')
+                        .has_headers(true)
+                        .from_path(opened_folder_path.join("hk.csv"))
+                    {
+                        Ok(rdr) => {
+                            hk_csv = Some(rdr);
+                        }
+                        Err(e) => {
+                            hk_csv = None;
+                            log::warn!("failed reading HK: {}", e)
+                        }
+                    }
                 }
                 Config::SetFFTWindowLow(low) => {
                     config.fft_window[0] = low;
@@ -406,6 +419,38 @@ pub fn main_thread(
                         .index_axis(Axis(0), config.selected_pixel[0] / scaling as usize)
                         .index_axis(Axis(0), config.selected_pixel[1] / scaling as usize)
                         .to_vec();
+                    if let Some(ref mut hk) = hk_csv {
+                        for result in hk.records() {
+                            let record = result.unwrap();
+                            // Check if the "pixel" column matches the target pixel
+                            if record.get(0)
+                                == Some(
+                                    format!(
+                                        "{:05}-{:05}",
+                                        config.selected_pixel[0], config.selected_pixel[1]
+                                    )
+                                    .as_str(),
+                                )
+                            {
+                                if let Some(rh_value) = record.get(9) {
+                                    data.hk.ambient_humidity =
+                                        rh_value.parse::<f64>().unwrap_or(0.0);
+                                }
+                                if let Some(rh_value) = record.get(8) {
+                                    data.hk.ambient_pressure =
+                                        rh_value.parse::<f64>().unwrap_or(0.0);
+                                }
+                                if let Some(rh_value) = record.get(6) {
+                                    data.hk.sample_temperature =
+                                        rh_value.parse::<f64>().unwrap_or(0.0);
+                                }
+                                if let Some(rh_value) = record.get(5) {
+                                    data.hk.ambient_temperature =
+                                        rh_value.parse::<f64>().unwrap_or(0.0);
+                                }
+                            }
+                        }
+                    }
                     let mut in_data: Vec<f32> = data.signal_1.to_vec();
                     let mut spectrum = r2c.make_output_vec();
                     // Forward transform the input data
