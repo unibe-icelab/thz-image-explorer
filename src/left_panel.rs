@@ -30,7 +30,7 @@ pub fn left_panel(
     scaling_lock: &Arc<RwLock<u8>>,
     config_tx: &Sender<Config>,
 ) {
-    let gauge_size = left_panel_width / 2.5;
+    let gauge_size = left_panel_width / 3.0;
     let mut data = DataPoint::default();
     if let Ok(read_guard) = data_lock.read() {
         data = read_guard.clone();

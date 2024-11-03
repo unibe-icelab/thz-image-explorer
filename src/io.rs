@@ -2,64 +2,11 @@ use std::error::Error;
 use std::fs::File;
 use std::path::PathBuf;
 
-use csv::ReaderBuilder;
 use ndarray::{Array1, Array2, Array3, Axis};
 use ndarray_npy::NpzReader;
-use ndarray_npy::ReadNpyExt;
 use realfft::RealFftPlanner;
 
-use crate::data::{DataPoint, HouseKeeping, Meta, ScannedImage};
-
-pub fn open_hk(
-    hk: &mut HouseKeeping,
-    file_path: &PathBuf,
-) -> Result<(usize, usize), Box<dyn Error>> {
-    let mut rdr = ReaderBuilder::new()
-        .delimiter(b',')
-        .has_headers(true)
-        .from_path(file_path)?;
-    // data
-    let mut x = 0;
-    let mut y = 0;
-    if let Some(result) = rdr.records().next() {
-        let record = result?;
-        x = record[1].parse::<f64>().unwrap() as usize;
-        y = record[2].parse::<f64>().unwrap() as usize;
-        hk.ambient_temperature = record[3].parse::<f64>().unwrap();
-        hk.sample_temperature = record[4].parse::<f64>().unwrap();
-        hk.ambient_pressure = record[5].parse::<f64>().unwrap();
-        hk.ambient_humidity = record[6].parse::<f64>().unwrap();
-    }
-    Ok((x, y))
-}
-
-pub fn open_conf(
-    hk: &mut HouseKeeping,
-    file_path: &PathBuf,
-) -> Result<(usize, usize), Box<dyn Error>> {
-    let mut rdr = ReaderBuilder::new()
-        .delimiter(b',')
-        .has_headers(true)
-        .from_path(file_path)?;
-    let mut width = 0;
-    let mut height = 0;
-    if let Some(result) = rdr.records().next() {
-        let record = result?;
-        width = record[1].parse::<usize>().unwrap();
-        height = record[2].parse::<usize>().unwrap();
-        hk.dx = record[3].parse::<f32>().unwrap();
-        hk.x_range[0] = record[4].parse::<f32>().unwrap();
-        hk.x_range[1] = record[5].parse::<f32>().unwrap();
-        hk.dy = record[6].parse::<f32>().unwrap();
-        hk.y_range[0] = record[7].parse::<f32>().unwrap();
-        hk.y_range[1] = record[8].parse::<f32>().unwrap();
-        hk.ambient_temperature = record[9].parse::<f64>().unwrap();
-        hk.sample_temperature = record[10].parse::<f64>().unwrap();
-        hk.ambient_pressure = record[11].parse::<f64>().unwrap();
-        hk.ambient_humidity = record[12].parse::<f64>().unwrap();
-    }
-    Ok((width, height))
-}
+use crate::data::{HouseKeeping, Meta, ScannedImage};
 
 pub fn open_json(
     hk: &mut HouseKeeping,
@@ -166,30 +113,6 @@ pub fn open_json(
 //     Ok(())
 // }
 
-pub fn open_from_npy(
-    _data: &mut DataPoint,
-    fila_path: &PathBuf,
-    _file_path_fft: &PathBuf,
-) -> Result<(), Box<dyn Error>> {
-    let reader = File::open(fila_path)?;
-    let _arr = Array2::<f32>::read_npy(reader)?;
-    todo!();
-    // data.time = arr.row(0).iter().copied().collect();
-    // data.signal_1 = arr.row(1).iter().copied().collect();
-    // data.ref_1 = arr.row(2).iter().copied().collect();
-    //
-    // let reader = File::open(file_path_fft)?;
-    // let arr = Array2::<f32>::read_npy(reader)?;
-    //
-    // data.frequencies_fft = arr.row(0).iter().copied().collect();
-    // data.signal_1_fft = arr.row(1).iter().copied().collect();
-    // data.phase_1_fft = arr.row(2).iter().copied().collect();
-    // data.ref_1_fft = arr.row(3).iter().copied().collect();
-    // data.ref_phase_1_fft = arr.row(4).iter().copied().collect();
-    //
-    // Ok(())
-}
-
 pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(), Box<dyn Error>> {
     let file = File::open(file_path)?;
     let mut npz = NpzReader::new(file)?;
@@ -235,21 +158,4 @@ pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(),
     scan.r2c = Some(r2c);
     scan.c2r = Some(c2r);
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-
-    use crate::data::DataPoint;
-    use crate::io::open_from_npy;
-
-    #[test]
-    fn open_binary() {
-        let path = PathBuf::from("pixel_ID=00000-00000.npy");
-        let fft_path = PathBuf::from("pixel_ID=00000-00000_spectrum.npy");
-        let mut data = DataPoint::default();
-
-        open_from_npy(&mut data, &path, &fft_path).expect("TODO: panic message");
-    }
 }
