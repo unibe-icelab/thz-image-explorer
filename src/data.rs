@@ -1,7 +1,6 @@
-use std::ops::AddAssign;
 use std::sync::Arc;
 
-use ndarray::{Array1, Array2, Array3, Axis};
+use ndarray::{Array1, Array2, Array3};
 use realfft::{ComplexToReal, RealToComplex};
 use serde::{Deserialize, Serialize};
 

@@ -152,7 +152,7 @@ pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(),
     let mut real_planner = RealFftPlanner::<f32>::new();
     let r2c = real_planner.plan_fft_forward(n);
     let c2r = real_planner.plan_fft_inverse(n);
-    let mut spectrum = r2c.make_output_vec();
+    let spectrum = r2c.make_output_vec();
     let freq = (0..spectrum.len()).map(|i| i as f32 / rng).collect();
     scan.frequencies = freq;
     scan.r2c = Some(r2c);

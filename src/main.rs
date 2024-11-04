@@ -58,7 +58,6 @@ fn main() {
         }
     }
 
-    let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
     let data_lock = Arc::new(RwLock::new(DataPoint::default()));
     let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));

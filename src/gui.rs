@@ -169,7 +169,6 @@ impl<'a> eframe::App for MyApp<'a> {
             &self.img_lock,
             &self.data_lock,
             &self.pixel_lock,
-            &self.scaling_lock,
             &self.config_tx,
         );
 

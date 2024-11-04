@@ -50,12 +50,11 @@ fn filter_time_window(
     config: &ConfigContainer,
     scan: &mut ScannedImage,
     img_lock: &Arc<RwLock<Array2<f32>>>,
-    scaling_lock: &Arc<RwLock<u8>>,
 ) {
     // calculate fft filter and calculate ifft
     println!("updating data");
     let start = Instant::now();
-    let mut lower = scan
+    let lower = scan
         .time
         .iter()
         .position(|t| *t == config.time_window[0].round())
@@ -81,28 +80,21 @@ fn filter_time_window(
                     filtered_img_columns.axis_iter_mut(Axis(0)),
                 )
                     .into_par_iter()
-                    .for_each(
-                        |(mut scaled_data, mut filtered_data, mut filtered_img)| {
-                            *filtered_img.into_scalar() = filtered_data
-                                .iter()
-                                .skip(lower)
-                                .take(upper - lower)
-                                .map(|xi| xi * xi)
-                                .sum::<f32>();
-                        },
-                    );
+                    .for_each(|(_scaled_data, filtered_data, filtered_img)| {
+                        *filtered_img.into_scalar() = filtered_data
+                            .iter()
+                            .skip(lower)
+                            .take(upper - lower)
+                            .map(|xi| xi * xi)
+                            .sum::<f32>();
+                    });
             },
         );
     update_intensity_image(scan, img_lock);
     println!("updated data. This took {:?}", start.elapsed());
 }
 
-fn filter(
-    config: &ConfigContainer,
-    scan: &mut ScannedImage,
-    img_lock: &Arc<RwLock<Array2<f32>>>,
-    scaling_lock: &Arc<RwLock<u8>>,
-) {
+fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLock<Array2<f32>>>) {
     // calculate fft filter and calculate ifft
     println!("updating data");
     let start = Instant::now();
@@ -137,7 +129,7 @@ fn filter(
                         )
                             .into_par_iter()
                             .for_each(
-                                |(mut scaled_data, mut filtered_data, mut filtered_img)| {
+                                |(scaled_data, mut filtered_data, filtered_img)| {
                                     filtered_data.assign(&scaled_data);
                                     apply_fft_window(
                                         &mut filtered_data,
@@ -212,9 +204,7 @@ fn load_from_npz(
     opened_directory_path: &PathBuf,
     data: &mut DataPoint,
     scan: &mut ScannedImage,
-    config: &mut ConfigContainer,
     img_lock: &Arc<RwLock<Array2<f32>>>,
-    scaling_lock: &Arc<RwLock<u8>>,
 ) {
     let width: usize;
     let height: usize;
@@ -309,14 +299,7 @@ pub fn main_thread(
                         // );
                     } else if files.contains(&FileType::Npz) {
                         log::debug!("[OK] found a npz binary.");
-                        load_from_npz(
-                            &opened_folder_path,
-                            &mut data,
-                            &mut scan,
-                            &mut config,
-                            &img_lock,
-                            &scaling_lock,
-                        );
+                        load_from_npz(&opened_folder_path, &mut data, &mut scan, &img_lock);
 
                         if let Some(r2c) = &scan.r2c {
                             if let Ok(mut data) = data_lock.write() {
@@ -357,35 +340,35 @@ pub fn main_thread(
                 }
                 Config::SetFFTWindowLow(low) => {
                     config.fft_window[0] = low;
-                    filter(&config, &mut scan, &img_lock, &scaling_lock);
+                    filter(&config, &mut scan, &img_lock);
                 }
                 Config::SetFFTWindowHigh(high) => {
                     config.fft_window[1] = high;
-                    filter(&config, &mut scan, &img_lock, &scaling_lock);
+                    filter(&config, &mut scan, &img_lock);
                 }
                 Config::SetFFTFilterLow(low) => {
                     config.fft_filter[0] = low;
-                    filter(&config, &mut scan, &img_lock, &scaling_lock);
+                    filter(&config, &mut scan, &img_lock);
                 }
                 Config::SetFFTFilterHigh(high) => {
                     config.fft_filter[1] = high;
-                    filter(&config, &mut scan, &img_lock, &scaling_lock);
+                    filter(&config, &mut scan, &img_lock);
                 }
                 Config::SetTimeWindow(time_window) => {
                     config.time_window = time_window;
-                    filter_time_window(&config, &mut scan, &img_lock, &scaling_lock);
+                    filter_time_window(&config, &mut scan, &img_lock);
                 }
                 Config::SetFFTLogPlot(log_plot) => {
                     config.fft_log_plot = log_plot;
-                    filter(&config, &mut scan, &img_lock, &scaling_lock);
+                    filter(&config, &mut scan, &img_lock);
                 }
                 Config::SetFFTNormalization(normalization) => {
                     config.normalize_fft = normalization;
-                    filter(&config, &mut scan, &img_lock, &scaling_lock);
+                    filter(&config, &mut scan, &img_lock);
                 }
                 Config::SetFFTResolution(df) => {
                     config.fft_df = df;
-                    filter(&config, &mut scan, &img_lock, &scaling_lock);
+                    filter(&config, &mut scan, &img_lock);
                 }
                 Config::SetDownScaling => {
                     if let Ok(scaling) = scaling_lock.read() {
@@ -464,7 +447,7 @@ pub fn main_thread(
                     let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
                     data.signal_1_fft = amp;
                     data.phase_1_fft = numpy_unwrap(&phase, Some(2.0 * PI));
-                    let d = data.clone();
+                    // let d = data.clone();
                 }
             }
         }

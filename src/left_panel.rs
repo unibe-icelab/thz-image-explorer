@@ -27,7 +27,6 @@ pub fn left_panel(
     img_lock: &Arc<RwLock<Array2<f32>>>,
     data_lock: &Arc<RwLock<DataPoint>>,
     pixel_lock: &Arc<RwLock<SelectedPixel>>,
-    scaling_lock: &Arc<RwLock<u8>>,
     config_tx: &Sender<Config>,
 ) {
     let gauge_size = left_panel_width / 3.0;
@@ -110,10 +109,6 @@ pub fn left_panel(
             if let Ok(read_guard) = img_lock.read() {
                 img_data = read_guard.clone();
             }
-            let mut scaling = 1;
-            if let Ok(s) = scaling_lock.read() {
-                scaling = s.clone();
-            }
             let pixel_clicked = plot_matrix(
                 ui,
                 &img_data,
@@ -122,7 +117,6 @@ pub fn left_panel(
                 &mut 0.0,
                 val,
                 pixel_selected,
-                scaling,
                 mid_point,
                 bw,
             );

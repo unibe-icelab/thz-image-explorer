@@ -271,7 +271,6 @@ pub fn plot_matrix(
     cut_off: &mut f64,
     val: &mut PlotPoint,
     pixel_selected: &mut SelectedPixel,
-    scaling: u8,
     midpoint_position: &mut f32,
     bw: &mut bool,
 ) -> bool {
