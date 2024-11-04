@@ -1,3 +1,4 @@
+use crate::matrix_plot::SelectedPixel;
 use std::path::PathBuf;
 
 pub enum Config {
@@ -10,8 +11,8 @@ pub enum Config {
     SetFFTLogPlot(bool),
     SetFFTNormalization(bool),
     SetFFTResolution(f32),
-    SetDownScaling(usize),
-    SetSelectedPixel([usize; 2]),
+    SetDownScaling,
+    SetSelectedPixel(SelectedPixel),
 }
 
 #[derive(Clone)]

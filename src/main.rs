@@ -69,10 +69,17 @@ fn main() {
     let main_data_lock = data_lock.clone();
     let main_img_lock = img_lock.clone();
     let main_scaling_lock = scaling_lock.clone();
+    let main_pixel_lock = pixel_lock.clone();
 
     println!("starting main server..");
     let _main_thread_handler = thread::spawn(|| {
-        main_thread(main_data_lock, main_img_lock, config_rx, main_scaling_lock);
+        main_thread(
+            main_data_lock,
+            main_img_lock,
+            config_rx,
+            main_scaling_lock,
+            main_pixel_lock,
+        );
     });
 
     let options = eframe::NativeOptions {

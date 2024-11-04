@@ -180,6 +180,8 @@ impl<'a> eframe::App for MyApp<'a> {
             &mut self.filter_bounds,
             &mut self.fft_bounds,
             &mut self.time_window,
+            &mut self.pixel_selected,
+            &self.pixel_lock,
             &self.config_tx,
             &self.data_lock,
             &self.scaling_lock,

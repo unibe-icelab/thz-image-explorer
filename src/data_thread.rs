@@ -191,21 +191,20 @@ fn filter(
         };
     };
 
-    // for x in 0..scan.width {
-    //     for y in 0..scan.height {
-    //         // calculate the intensity by summing the squares
-    //         let sig_squared_sum = scan
-    //             .raw_data
-    //             .index_axis(Axis(0), x)
-    //             .index_axis(Axis(0), y)
-    //             .mapv(|xi| xi * xi)
-    //             .sum();
-    //         scan.raw_img[[x, y]] = sig_squared_sum;
-    //     }
-    // }
+    for x in 0..scan.width {
+        for y in 0..scan.height {
+            // calculate the intensity by summing the squares
+            let sig_squared_sum = scan
+                .raw_data
+                .index_axis(Axis(0), x)
+                .index_axis(Axis(0), y)
+                .mapv(|xi| xi * xi)
+                .sum();
+            scan.raw_img[[x, y]] = sig_squared_sum;
+        }
+    }
     // update images
     update_intensity_image(scan, img_lock);
-    //update_waterfall_image(scan, config.selected_pixel[0], waterfall_lock, scaling_lock);
     println!("updated data. This took {:?}", start.elapsed());
 }
 
@@ -269,12 +268,13 @@ pub fn main_thread(
     img_lock: Arc<RwLock<Array2<f32>>>,
     config_rx: Receiver<Config>,
     scaling_lock: Arc<RwLock<u8>>,
+    pixel_lock: Arc<RwLock<SelectedPixel>>,
 ) {
     // reads data from mutex, samples and saves if needed
     let mut data = DataPoint::default();
     let mut scan = ScannedImage::default();
     let mut config = ConfigContainer::default();
-    let mut pixel = SelectedPixel::default();
+    let mut selected_pixel = SelectedPixel::default();
     let mut hk_csv = None;
     loop {
         if let Ok(config_command) = config_rx.recv() {
@@ -387,37 +387,41 @@ pub fn main_thread(
                     config.fft_df = df;
                     filter(&config, &mut scan, &img_lock, &scaling_lock);
                 }
-                Config::SetDownScaling(scaling) => {
-                    // TODO: rescale selected pixel
-                    config.down_scaling = scaling;
-                    scan.rescale(config.down_scaling);
-                    scan.filtered_data = scan.scaled_data.clone();
-                    scan.filtered_img = scan.scaled_img.clone();
-                    filter(&config, &mut scan, &img_lock, &scaling_lock);
+                Config::SetDownScaling => {
+                    if let Ok(scaling) = scaling_lock.read() {
+                        scan.scaling = *scaling as usize;
+                        scan.rescale()
+                    }
+                    if let Ok(mut write_guard) = img_lock.write() {
+                        *write_guard = scan.scaled_img.clone();
+                    }
                 }
-                Config::SetSelectedPixel(pixel_location) => {
-                    config.selected_pixel = pixel_location;
-                    // update_waterfall_image(
-                    //     &mut scan,
-                    //     config.selected_pixel[0],
-                    //     &scaling_lock,
-                    // );
-                    println!("new pixel: {:?}", config.selected_pixel);
+                Config::SetSelectedPixel(pixel) => {
+                    selected_pixel = pixel.clone();
+                    if let Ok(scaling) = scaling_lock.read() {
+                        scan.scaling = *scaling as usize;
+                        scan.rescale()
+                    }
+                    if let Ok(mut write_guard) = img_lock.write() {
+                        *write_guard = scan.scaled_img.clone();
+                    }
+                    println!("new pixel: {:} {:}", selected_pixel.x, selected_pixel.y);
                     // send HK?
                 }
             }
-            let mut scaling = 1;
-            if let Ok(s) = scaling_lock.read() {
-                scaling = s.clone();
+
+            if let Ok(pixel) = pixel_lock.read() {
+                selected_pixel = pixel.clone();
             }
+
             if let Some(r2c) = &scan.r2c {
                 if let Ok(mut data) = data_lock.write() {
                     data.time = scan.time.to_vec();
                     data.frequencies = scan.frequencies.to_vec();
                     data.signal_1 = scan
-                        .filtered_data
-                        .index_axis(Axis(0), config.selected_pixel[0] / scaling as usize)
-                        .index_axis(Axis(0), config.selected_pixel[1] / scaling as usize)
+                        .scaled_data
+                        .index_axis(Axis(0), selected_pixel.x / scan.scaling)
+                        .index_axis(Axis(0), selected_pixel.y / scan.scaling)
                         .to_vec();
                     if let Some(ref mut hk) = hk_csv {
                         for result in hk.records() {
@@ -427,7 +431,8 @@ pub fn main_thread(
                                 == Some(
                                     format!(
                                         "{:05}-{:05}",
-                                        config.selected_pixel[0], config.selected_pixel[1]
+                                        selected_pixel.x / scan.scaling,
+                                        selected_pixel.y / scan.scaling,
                                     )
                                     .as_str(),
                                 )
