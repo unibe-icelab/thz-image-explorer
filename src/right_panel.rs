@@ -13,6 +13,7 @@ use ndarray::Array1;
 
 use crate::config::Config;
 use crate::math_tools::apply_fft_window;
+use crate::matrix_plot::SelectedPixel;
 use crate::toggle::toggle;
 use crate::{DataPoint, GuiSettingsContainer};
 
@@ -24,6 +25,8 @@ pub fn right_panel(
     filter_bounds: &mut [f32; 2],
     fft_bounds: &mut [f32; 2],
     time_window: &mut [f32; 2],
+    pixel_selected: &mut SelectedPixel,
+    pixel_lock: &Arc<RwLock<SelectedPixel>>,
     config_tx: &Sender<Config>,
     data_lock: &Arc<RwLock<DataPoint>>,
     scaling_lock: &Arc<RwLock<u8>>,
@@ -75,11 +78,36 @@ pub fn right_panel(
                             .add(egui::Slider::new(&mut gui_conf.down_scaling, 1..=10))
                             .changed()
                         {
+                            pixel_selected.rect = vec![
+                                [
+                                    (pixel_selected.x as f64) / gui_conf.down_scaling as f64,
+                                    (pixel_selected.y as f64) / gui_conf.down_scaling as f64,
+                                ],
+                                [
+                                    (pixel_selected.x as f64) / gui_conf.down_scaling as f64 + 1.0,
+                                    (pixel_selected.y as f64) / gui_conf.down_scaling as f64,
+                                ],
+                                [
+                                    (pixel_selected.x as f64) / gui_conf.down_scaling as f64 + 1.0,
+                                    (pixel_selected.y as f64) / gui_conf.down_scaling as f64 + 1.0,
+                                ],
+                                [
+                                    (pixel_selected.x as f64) / gui_conf.down_scaling as f64,
+                                    (pixel_selected.y as f64) / gui_conf.down_scaling as f64 + 1.0,
+                                ],
+                                [
+                                    (pixel_selected.x as f64) / gui_conf.down_scaling as f64,
+                                    (pixel_selected.y as f64) / gui_conf.down_scaling as f64,
+                                ],
+                            ];
                             if let Ok(mut s) = scaling_lock.write() {
                                 *s = gui_conf.down_scaling as u8;
                             }
+                            if let Ok(mut write_guard) = pixel_lock.write() {
+                                *write_guard = pixel_selected.clone();
+                            }
                             config_tx
-                                .send(Config::SetDownScaling(gui_conf.down_scaling))
+                                .send(Config::SetDownScaling)
                                 .expect("unable to send config");
                         }
                     });

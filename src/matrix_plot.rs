@@ -12,8 +12,8 @@ use ndarray::{Array2, Axis};
 pub struct SelectedPixel {
     pub selected: bool,
     pub rect: Vec<[f64; 2]>,
-    pub x: f64,
-    pub y: f64,
+    pub x: usize,
+    pub y: usize,
     pub id: String,
 }
 
@@ -21,9 +21,9 @@ impl Default for SelectedPixel {
     fn default() -> Self {
         SelectedPixel {
             selected: false,
-            rect: vec![],
-            x: 0.0,
-            y: 0.0,
+            rect: vec![[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]],
+            x: 0,
+            y: 0,
             id: "0000-0000".to_string(),
         }
     }
@@ -296,13 +296,10 @@ pub fn plot_matrix(
 
     for y in 0..height {
         for x in 0..width {
-            match data.get((x, y)) {
-                Some(i) => {
-                    img[(x, y)] = color_from_intensity(i, &max, cut_off, midpoint_position, bw);
-                    intensity_matrix[x][height - 1 - y] = *i as f64 / max * 100.0;
-                    id_matrix[x][height - 1 - y] = format!("{:05}-{:05}", x, y);
-                }
-                None => {}
+            if let Some(i) = data.get((x, y)) {
+                img[(x, y)] = color_from_intensity(i, &max, cut_off, midpoint_position, bw);
+                intensity_matrix[x][height - 1 - y] = *i as f64 / max * 100.0;
+                id_matrix[x][height - 1 - y] = format!("{:05}-{:05}", x, y);
             }
         }
     }
@@ -351,8 +348,8 @@ pub fn plot_matrix(
 
         if plot_response.response.clicked() {
             pixel_clicked = true;
-            if pixel_selected.x == val.x.floor() * scaling as f64
-                && pixel_selected.y == height as f64 - 1.0 - val.y.floor() * scaling as f64
+            if pixel_selected.x == val.x.floor() as usize
+                && pixel_selected.y == height - 1 - val.y.floor() as usize
                 && pixel_selected.selected
             {
                 println!("pixel unselected");
@@ -360,29 +357,15 @@ pub fn plot_matrix(
             } else {
                 pixel_selected.selected = true;
                 pixel_selected.rect = vec![
-                    [
-                        val.x.floor() * scaling as f64,
-                        val.y.floor() * scaling as f64,
-                    ],
-                    [
-                        val.x.floor() * scaling as f64 + 1.0,
-                        val.y.floor() * scaling as f64,
-                    ],
-                    [val.x.floor() + 1.0, val.y.floor() * scaling as f64 + 1.0],
-                    [
-                        val.x.floor() * scaling as f64,
-                        val.y.floor() * scaling as f64 + 1.0,
-                    ],
-                    [
-                        val.x.floor() * scaling as f64,
-                        val.y.floor() * scaling as f64,
-                    ],
+                    [val.x.floor(), val.y.floor()],
+                    [val.x.floor() + 1.0, val.y.floor()],
+                    [val.x.floor() + 1.0, val.y.floor() + 1.0],
+                    [val.x.floor(), val.y.floor() + 1.0],
+                    [val.x.floor(), val.y.floor()],
                 ];
-                pixel_selected.x = val.x.floor() * scaling as f64;
-                pixel_selected.y = height as f64 - 1.0 - val.y.floor() * scaling as f64;
-                pixel_selected.id = id_matrix[pixel_selected.x as usize / scaling as usize]
-                    [pixel_selected.y as usize / scaling as usize]
-                    .clone();
+                pixel_selected.x = val.x.floor() as usize;
+                pixel_selected.y = height - 1 - val.y.floor() as usize;
+                pixel_selected.id = id_matrix[pixel_selected.x][pixel_selected.y].clone();
                 println!("pixel selected");
             }
         }

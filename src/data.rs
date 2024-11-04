@@ -161,40 +161,54 @@ impl ScannedImage {
     //     self.raw_img[x * self.width + y] = val;
     // }
 
-    pub fn rescale(&mut self, scaling: usize) {
-        self.scaled_img = Array2::zeros((self.width / scaling, self.height / scaling));
-        self.scaled_data =
-            Array3::zeros((self.width / scaling, self.height / scaling, self.time.len()));
+    pub fn rescale(&mut self) {
+        let scale = self.scaling;
+        if scale <= 1 {
+            // No rescaling needed if scale is 1 or less
+            self.scaled_img = self.raw_img.clone();
+            self.scaled_data = self.raw_data.clone();
+            return;
+        }
 
-        for x in 0..self.width / scaling {
-            for y in 0..self.height / scaling {
-                // calculate the intensity by summing the squares
-                let mut averaged_pulse: Array1<f32> = Array1::zeros(self.time.len());
-                for x_step in 0..scaling {
-                    for y_step in 0..scaling {
-                        averaged_pulse.add_assign(
-                            &self
-                                .raw_data
-                                .index_axis(Axis(0), x * scaling + x_step)
-                                .index_axis(Axis(0), y * scaling + y_step),
-                        );
+        let new_height = self.height / scale;
+        let new_width = self.width / scale;
+
+        // Initialize scaled_img with the new dimensions
+        self.scaled_img = Array2::zeros((new_height, new_width));
+
+        // Rescale the raw_img into scaled_img
+        for y in 0..new_height {
+            for x in 0..new_width {
+                // Calculate the sum of the scale x scale block
+                let mut sum = 0.0;
+                for dy in 0..scale {
+                    for dx in 0..scale {
+                        sum += self.raw_img[(x * scale + dx, y * scale + dy)];
                     }
                 }
-                averaged_pulse
-                    .view_mut()
-                    .mapv_inplace(|p| p / (scaling * scaling) as f32);
+                // Average and store in scaled_img
+                self.scaled_img[(x, y)] = sum / (scale * scale) as f32;
+            }
+        }
 
-                self.scaled_data
-                    .index_axis_mut(Axis(0), x)
-                    .index_axis_mut(Axis(0), y)
-                    .assign(&averaged_pulse);
-                let sig_squared_sum = self
-                    .scaled_data
-                    .index_axis(Axis(0), x)
-                    .index_axis(Axis(0), y)
-                    .mapv(|xi| xi * xi)
-                    .sum();
-                self.scaled_img[[x, y]] = sig_squared_sum;
+        // Initialize scaled_data with the new dimensions and depth
+        let depth = self.time.len();
+        self.scaled_data = Array3::zeros((new_height, new_width, depth));
+
+        // Rescale each layer in raw_data into scaled_data
+        for y in 0..new_height {
+            for x in 0..new_width {
+                for d in 0..depth {
+                    // Calculate the sum of the scale x scale block for each depth slice
+                    let mut sum = 0.0;
+                    for dy in 0..scale {
+                        for dx in 0..scale {
+                            sum += self.raw_data[(x * scale + dx, y * scale + dy, d)];
+                        }
+                    }
+                    // Average and store in scaled_data
+                    self.scaled_data[(x, y, d)] = sum / (scale * scale) as f32;
+                }
             }
         }
     }
