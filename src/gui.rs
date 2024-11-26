@@ -1,4 +1,7 @@
 use core::f64;
+use dotthz::{DotthzFile, DotthzMetaData};
+use egui_file_dialog::information_panel::InformationPanel;
+use egui_file_dialog::FileDialog;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -19,6 +22,12 @@ use crate::APP_INFO;
 
 const MAX_FPS: f64 = 24.0;
 
+#[derive(Clone)]
+pub enum FileDialogState {
+    Open,
+    Save,
+    None,
+}
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct GuiSettingsContainer {
     pub log_plot: bool,
@@ -77,7 +86,11 @@ pub struct MyApp<'a> {
     wp: egui::Image<'a>,
     dropped_files: Vec<egui::DroppedFile>,
     data: DataPoint,
+    file_dialog_state: FileDialogState,
+    file_dialog: FileDialog,
+    information_panel: InformationPanel,
     gui_conf: GuiSettingsContainer,
+    md_lock: Arc<RwLock<DotthzMetaData>>,
     img_lock: Arc<RwLock<Array2<f32>>>,
     data_lock: Arc<RwLock<DataPoint>>,
     pixel_lock: Arc<RwLock<SelectedPixel>>,
@@ -87,6 +100,8 @@ pub struct MyApp<'a> {
 
 impl<'a> MyApp<'a> {
     pub fn new(
+        cc: &eframe::CreationContext,
+        md_lock: Arc<RwLock<DotthzMetaData>>,
         data_lock: Arc<RwLock<DataPoint>>,
         pixel_lock: Arc<RwLock<SelectedPixel>>,
         scaling_lock: Arc<RwLock<u8>>,
@@ -98,6 +113,48 @@ impl<'a> MyApp<'a> {
         let buffered = include_str!("../resources/water_lines.csv");
         for line in buffered.lines() {
             water_vapour_lines.push(line.trim().parse().unwrap());
+        }
+
+        let mut file_dialog = FileDialog::default()
+            //.initial_directory(PathBuf::from("/path/to/app"))
+            .default_file_name("measurement.thz")
+            .default_size([600.0, 400.0])
+            // .add_quick_access("Project", |s| {
+            //     s.add_path("☆  Examples", "examples");
+            //     s.add_path("📷  Media", "media");
+            //     s.add_path("📂  Source", "src");
+            // })
+            .set_file_icon(
+                "🖹",
+                Arc::new(|path| path.extension().unwrap_or_default().to_ascii_lowercase() == "md"),
+            )
+            .set_file_icon(
+                "",
+                Arc::new(|path| {
+                    path.file_name().unwrap_or_default().to_ascii_lowercase() == ".gitignore"
+                }),
+            )
+            .add_file_filter(
+                "dotTHz files",
+                Arc::new(|p| p.extension().unwrap_or_default().to_ascii_lowercase() == "thz"),
+            )
+            .add_file_filter(
+                "npy files",
+                Arc::new(|p| p.extension().unwrap_or_default().to_ascii_lowercase() == "npy"),
+            )
+            .add_file_filter(
+                "npz files",
+                Arc::new(|p| p.extension().unwrap_or_default().to_ascii_lowercase() == "npz"),
+            )
+            .add_file_filter(
+                "CSV files",
+                Arc::new(|p| p.extension().unwrap_or_default().to_ascii_lowercase() == "csv"),
+            );
+        // Load the persistent data of the file dialog.
+        // Alternatively, you can also use the `FileDialog::storage` builder method.
+        if let Some(storage) = cc.storage {
+            *file_dialog.storage_mut() =
+                eframe::get_value(storage, "file_dialog_storage").unwrap_or_default()
         }
 
         Self {
@@ -123,7 +180,51 @@ impl<'a> MyApp<'a> {
 
             dropped_files: vec![],
             data: DataPoint::default(),
+            file_dialog_state: FileDialogState::None,
+            file_dialog,
+            information_panel: InformationPanel::default()
+                .add_file_preview("csv", |ui, item| {
+                    ui.label("CSV preview:");
+                    if let Some(content) = item.content() {
+                        egui::ScrollArea::vertical()
+                            .max_height(150.0)
+                            .show(ui, |ui| {
+                                ui.add(
+                                    egui::TextEdit::multiline(&mut content.clone()).code_editor(),
+                                );
+                            });
+                    }
+                })
+                .add_metadata_loader("thz", |other_data, path| {
+                    if let Ok(file) = DotthzFile::load(&path.to_path_buf()) {
+                        if let Ok(group_names) = file.get_group_names() {
+                            other_data.insert(
+                                "Groups: ".to_string(),
+                                format!("{:}", group_names.join(", ")),
+                            );
+                            if let Some(group_name) = group_names.first() {
+                                if let Ok(meta_data) = file.get_meta_data(group_name) {
+                                    other_data.insert(
+                                        "Description".to_string(),
+                                        meta_data.description.clone(),
+                                    );
+                                    for (name, md) in meta_data.md.clone() {
+                                        other_data.insert(name, md);
+                                    }
+                                    other_data.insert("Mode".to_string(), meta_data.mode.clone());
+                                    other_data
+                                        .insert("Version".to_string(), meta_data.version.clone());
+                                    other_data.insert(
+                                        "Instrument".to_string(),
+                                        meta_data.instrument.clone(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }),
             gui_conf,
+            md_lock,
             img_lock,
             data_lock,
             pixel_lock,
@@ -166,6 +267,10 @@ impl<'a> eframe::App for MyApp<'a> {
             &mut self.val,
             &mut self.mid_point,
             &mut self.bw,
+            &mut self.file_dialog_state,
+            &mut self.file_dialog,
+            &mut self.information_panel,
+            &self.md_lock,
             &self.img_lock,
             &self.data_lock,
             &self.pixel_lock,
@@ -195,7 +300,7 @@ impl<'a> eframe::App for MyApp<'a> {
         std::thread::sleep(Duration::from_millis((1000.0 / MAX_FPS) as u64));
     }
 
-    fn save(&mut self, _storage: &mut dyn Storage) {
+    fn save(&mut self, storage: &mut dyn Storage) {
         let prefs_key = "config/gui";
         match self.gui_conf.save(&APP_INFO, prefs_key) {
             Ok(_) => {}
@@ -203,5 +308,11 @@ impl<'a> eframe::App for MyApp<'a> {
                 println!("error saving gui_conf: {err:?}");
             }
         }
+        // Save the persistent data of the file dialog
+        eframe::set_value(
+            storage,
+            "file_dialog_storage",
+            self.file_dialog.storage_mut(),
+        );
     }
 }

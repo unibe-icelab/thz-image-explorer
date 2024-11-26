@@ -1,12 +1,11 @@
+use crate::data::{HouseKeeping, Meta, ScannedImage};
+use dotthz::{DotthzFile, DotthzMetaData};
+use ndarray::{arr3, Array1, Array2, Array3, ArrayBase, Axis, Ix3, OwnedRepr};
+use ndarray_npy::NpzReader;
+use realfft::RealFftPlanner;
 use std::error::Error;
 use std::fs::File;
 use std::path::PathBuf;
-
-use ndarray::{Array1, Array2, Array3, Axis};
-use ndarray_npy::NpzReader;
-use realfft::RealFftPlanner;
-
-use crate::data::{HouseKeeping, Meta, ScannedImage};
 
 pub fn open_json(
     hk: &mut HouseKeeping,
@@ -157,5 +156,154 @@ pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(),
     scan.frequencies = freq;
     scan.r2c = Some(r2c);
     scan.c2r = Some(c2r);
+    Ok(())
+}
+
+//
+// // Function to save the data and metadata to an HDF5 file
+// pub fn save_to_thz(
+//     data_container: OutputFile,
+//     metadata: &DotthzMetaData,
+// ) -> Result<(), Box<dyn Error>> {
+//     let data_signal_1 = arr2(
+//         &data_container
+//             .data
+//             .time
+//             .iter()
+//             .zip(data_container.data.signal_1.iter())
+//             .map(|(t, r)| [*t, *r]) // Interleave time and ref data
+//             .collect::<Vec<[f32; 2]>>(),
+//     );
+//
+//     let data_ref_1 = Array2::from_shape_vec(
+//         (data_container.data.time_ref_1.len(), 2), // N rows, 2 columns
+//         data_container
+//             .data
+//             .time_ref_1
+//             .iter()
+//             .zip(data_container.data.ref_1.iter())
+//             .flat_map(|(t, r)| vec![*t, *r]) // Flatten and interleave the two vectors
+//             .collect(), // Collect them into a Vec
+//     )?;
+//
+//     let data_signal_2 = Array2::from_shape_vec(
+//         (data_container.data.time_2.len(), 2), // Shape of the data: (N, 2)
+//         data_container
+//             .data
+//             .time_2
+//             .iter()
+//             .zip(data_container.data.signal_2.iter())
+//             .flat_map(|(t, r)| vec![*t, *r]) // Interleave time and ref data
+//             .collect(),
+//     )?;
+//
+//     let data_ref_2 = Array2::from_shape_vec(
+//         (data_container.data.time_ref_2.len(), 2), // Shape of the data: (N, 2)
+//         data_container
+//             .data
+//             .time_ref_2
+//             .iter()
+//             .zip(data_container.data.ref_2.iter())
+//             .flat_map(|(t, r)| vec![*t, *r]) // Interleave time and ref data
+//             .collect(),
+//     )?;
+//
+//     let mut file = DotthzFile::new();
+//
+//     let mut measurement = DotthzMeasurement::default();
+//     measurement
+//         .datasets
+//         .insert("Sample 1".to_string(), data_signal_1);
+//     measurement
+//         .datasets
+//         .insert("Reference 1".to_string(), data_ref_1);
+//     measurement
+//         .datasets
+//         .insert("Sample 2".to_string(), data_signal_2);
+//     measurement
+//         .datasets
+//         .insert("Reference 2".to_string(), data_ref_2);
+//     measurement.meta_data = metadata.clone();
+//
+//     file.groups.insert("Measurement 1".to_string(), measurement);
+//
+//     file.save(&data_container.filename)?; // open for writing
+//
+//     Ok(())
+// }
+
+// Function to open and read an HDF5 file
+pub fn open_from_thz(
+    file_path: &PathBuf,
+    scan: &mut ScannedImage,
+    metadata: &mut DotthzMetaData,
+) -> Result<(), Box<dyn Error>> {
+    // Open the HDF5 file for reading
+    let file = DotthzFile::load(file_path)?;
+
+    if let Some(group_name) = file.get_group_names()?.first() {
+        if file.get_groups()?.len() > 1 {
+            println!("found more than one group, opening only the first");
+        }
+
+        // For TeraFlash measurements we always just get the first entry
+        let group = file.get_group(group_name)?;
+
+        // get the metadata
+        *metadata = file.get_meta_data(group_name)?;
+
+        // Read datasets and populate DataContainer fields, skipping any that are missing
+        // we do not care about the names given for the datasets, we assume the first is time, second contains the image cube
+        if let Some(ds) = group.datasets()?.first() {
+            if let Ok(arr) = ds.read_1d() {
+                scan.time = arr;
+            }
+        }
+        if let Some(ds) = group.datasets()?.get(1) {
+            if let Ok(arr) = ds.read_dyn::<f32>() {
+                if let Ok(arr3) = arr.into_dimensionality::<ndarray::Ix3>() {
+                    scan.raw_data = arr3;
+                }
+            }
+        }
+    }
+
+    for x in 0..scan.width {
+        for y in 0..scan.height {
+            // subtract bias
+            let offset = scan.raw_data[[x, y, 0]];
+            scan.raw_data
+                .index_axis_mut(Axis(0), x)
+                .index_axis_mut(Axis(0), y)
+                .mapv_inplace(|p| p - offset);
+
+            // calculate the intensity by summing the squares
+            let sig_squared_sum = scan
+                .raw_data
+                .index_axis(Axis(0), x)
+                .index_axis(Axis(0), y)
+                .mapv(|xi| xi * xi)
+                .sum();
+            scan.raw_img[[x, y]] = sig_squared_sum;
+        }
+    }
+
+    scan.scaled_data = scan.raw_data.clone();
+    scan.scaled_img = scan.raw_img.clone();
+
+    scan.filtered_data = scan.scaled_data.clone();
+    scan.filtered_img = scan.scaled_img.clone();
+
+    let n = scan.time.len();
+    let rng = scan.time[n - 1] - scan.time[0];
+    let mut real_planner = RealFftPlanner::<f32>::new();
+    let r2c = real_planner.plan_fft_forward(n);
+    let c2r = real_planner.plan_fft_inverse(n);
+    let spectrum = r2c.make_output_vec();
+    let freq = (0..spectrum.len()).map(|i| i as f32 / rng).collect();
+    scan.frequencies = freq;
+    scan.r2c = Some(r2c);
+    scan.c2r = Some(c2r);
+
     Ok(())
 }

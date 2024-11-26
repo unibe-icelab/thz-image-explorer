@@ -1,21 +1,20 @@
+use crate::config::{Config, ConfigContainer};
+use crate::data::{DataPoint, ScannedImage};
+use crate::io::{open_from_npz, open_from_thz, open_json};
+use crate::math_tools::{apply_fft_window, numpy_unwrap};
+use crate::matrix_plot::SelectedPixel;
 use csv::ReaderBuilder;
+use dotthz::DotthzMetaData;
 use eframe::egui::ColorImage;
 use image::RgbaImage;
 use ndarray::parallel::prelude::*;
 use ndarray::{Array1, Array2, Axis};
 use realfft::num_complex::Complex32;
 use std::f32::consts::PI;
-use std::fs;
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
-
-use crate::config::{Config, ConfigContainer};
-use crate::data::{DataPoint, ScannedImage};
-use crate::io::{open_from_npz, open_json};
-use crate::math_tools::{apply_fft_window, numpy_unwrap};
-use crate::matrix_plot::SelectedPixel;
 
 fn save_image(img: &ColorImage, file_path: &PathBuf) {
     let height = img.height();
@@ -200,53 +199,6 @@ fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLo
     println!("updated data. This took {:?}", start.elapsed());
 }
 
-fn load_from_npz(
-    opened_directory_path: &PathBuf,
-    data: &mut DataPoint,
-    scan: &mut ScannedImage,
-    img_lock: &Arc<RwLock<Array2<f32>>>,
-) {
-    let width: usize;
-    let height: usize;
-
-    let mut json_path = opened_directory_path.clone();
-    json_path.push("meta.json");
-
-    match open_json(&mut data.hk, &json_path) {
-        Ok((w, h)) => {
-            width = w;
-            height = h;
-        }
-        Err(err) => {
-            println!("failed to open json @ {json_path:?}... {err}");
-            width = 0;
-            height = 0;
-        }
-    }
-
-    *scan = ScannedImage::new(
-        height,
-        width,
-        data.hk.x_range[0],
-        data.hk.y_range[0],
-        data.hk.dx,
-        data.hk.dy,
-    );
-
-    let mut pulse_path = opened_directory_path.clone();
-    pulse_path.push("data.npz");
-    dbg!(&pulse_path);
-    match open_from_npz(scan, &pulse_path) {
-        Ok(_) => {
-            update_intensity_image(scan, img_lock);
-        }
-        Err(err) => {
-            println!("an error occurred while trying to read data.npz {err:?}");
-        }
-    }
-    println!("opened npz");
-}
-
 #[derive(Clone, PartialEq)]
 enum FileType {
     Npy,
@@ -254,6 +206,7 @@ enum FileType {
 }
 
 pub fn main_thread(
+    md_lock: Arc<RwLock<DotthzMetaData>>,
     data_lock: Arc<RwLock<DataPoint>>,
     img_lock: Arc<RwLock<Array2<f32>>>,
     config_rx: Receiver<Config>,
@@ -265,76 +218,115 @@ pub fn main_thread(
     let mut scan = ScannedImage::default();
     let mut config = ConfigContainer::default();
     let mut selected_pixel = SelectedPixel::default();
+    let mut meta_data = DotthzMetaData::default();
     let mut hk_csv = None;
     loop {
         if let Ok(config_command) = config_rx.recv() {
             match config_command {
-                Config::OpenFile(opened_folder_path) => {
-                    let files = fs::read_dir(&opened_folder_path)
-                        .unwrap()
-                        .filter_map(Result::ok)
-                        .filter_map(|entry| {
-                            if let Some(extension) = entry.path().extension() {
-                                match extension.to_str().unwrap() {
-                                    "npy" => Some(FileType::Npy),
-                                    "npz" => Some(FileType::Npz),
-                                    _ => None,
-                                }
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<FileType>>();
-                    if files.contains(&FileType::Npy) {
-                        log::debug!("[OK] found npy binaries.");
-                        log::error!("[ERR] npy no implemented...");
-                        // load_from_npy(
-                        //     &opened_folder_path,
-                        //     &mut real_planner,
-                        //     &mut data,
-                        //     &mut scan,
-                        //     &mut config,
-                        //     &img_lock,
-                        //     &waterfall_lock,
-                        // );
-                    } else if files.contains(&FileType::Npz) {
-                        log::debug!("[OK] found a npz binary.");
-                        load_from_npz(&opened_folder_path, &mut data, &mut scan, &img_lock);
+                Config::OpenFile(selected_file_path) => {
+                    if let Some(file_ending) = selected_file_path.extension() {
+                        match file_ending.to_str().unwrap() {
+                            "npz" => {
+                                // check if meta.json exists in the same folder
+                                let width: usize;
+                                let height: usize;
 
-                        if let Some(r2c) = &scan.r2c {
-                            if let Ok(mut data) = data_lock.write() {
-                                data.time = scan.time.to_vec();
-                                data.frequencies = scan.frequencies.to_vec();
-                                data.signal_1 = scan
-                                    .raw_data
-                                    .index_axis(Axis(0), 0)
-                                    .index_axis(Axis(0), 0)
-                                    .to_vec();
-                                let mut in_data: Vec<f32> = data.signal_1.to_vec();
-                                let mut spectrum = r2c.make_output_vec();
-                                // Forward transform the input data
-                                r2c.process(&mut in_data, &mut spectrum).unwrap();
-                                let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
-                                let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
-                                data.signal_1_fft = amp;
-                                data.phase_1_fft = numpy_unwrap(&phase, Some(2.0 * PI));
+                                let json_path = selected_file_path.with_file_name("meta.json");
+
+                                match open_json(&mut data.hk, &json_path) {
+                                    Ok((w, h)) => {
+                                        width = w;
+                                        height = h;
+                                    }
+                                    Err(err) => {
+                                        println!("failed to open json @ {json_path:?}... {err}");
+                                        width = 0;
+                                        height = 0;
+                                    }
+                                }
+
+                                scan = ScannedImage::new(
+                                    height,
+                                    width,
+                                    data.hk.x_range[0],
+                                    data.hk.y_range[0],
+                                    data.hk.dx,
+                                    data.hk.dy,
+                                );
+
+                                let hk_path = selected_file_path.with_file_name("hk.csv");
+
+                                // read HK
+                                match ReaderBuilder::new()
+                                    .delimiter(b',')
+                                    .has_headers(true)
+                                    .from_path(hk_path)
+                                {
+                                    Ok(rdr) => {
+                                        hk_csv = Some(rdr);
+                                    }
+                                    Err(e) => {
+                                        hk_csv = None;
+                                        log::warn!("failed reading HK: {}", e)
+                                    }
+                                }
+
+                                let pulse_path = selected_file_path.with_file_name("data.npz");
+
+                                dbg!(&pulse_path);
+                                match open_from_npz(&mut scan, &pulse_path) {
+                                    Ok(_) => {
+                                        update_intensity_image(&mut scan, &img_lock);
+                                    }
+                                    Err(err) => {
+                                        println!("an error occurred while trying to read data.npz {err:?}");
+                                    }
+                                }
+                                // if let Some(r2c) = &scan.r2c {
+                                //     if let Ok(mut data) = data_lock.write() {
+                                //         data.time = scan.time.to_vec();
+                                //         data.frequencies = scan.frequencies.to_vec();
+                                //         data.signal_1 = scan
+                                //             .raw_data
+                                //             .index_axis(Axis(0), 0)
+                                //             .index_axis(Axis(0), 0)
+                                //             .to_vec();
+                                //         let mut in_data: Vec<f32> = data.signal_1.to_vec();
+                                //         let mut spectrum = r2c.make_output_vec();
+                                //         // Forward transform the input data
+                                //         r2c.process(&mut in_data, &mut spectrum).unwrap();
+                                //         let amp: Vec<f32> =
+                                //             spectrum.iter().map(|s| s.norm()).collect();
+                                //         let phase: Vec<f32> =
+                                //             spectrum.iter().map(|s| s.arg()).collect();
+                                //         data.signal_1_fft = amp;
+                                //         data.phase_1_fft = numpy_unwrap(&phase, Some(2.0 * PI));
+                                //     }
+                                // }
                             }
-                        }
-                    } else {
-                        log::error!("[ERR] no binaries found!")
-                    }
-                    // read HK
-                    match ReaderBuilder::new()
-                        .delimiter(b',')
-                        .has_headers(true)
-                        .from_path(opened_folder_path.join("hk.csv"))
-                    {
-                        Ok(rdr) => {
-                            hk_csv = Some(rdr);
-                        }
-                        Err(e) => {
-                            hk_csv = None;
-                            log::warn!("failed reading HK: {}", e)
+                            "npy" => {
+                                println!("file ending not supported");
+                            }
+                            "thz" => {
+                                match open_from_thz(&selected_file_path, &mut scan, &mut meta_data)
+                                {
+                                    Ok(_) => log::info!("opened {:?}", selected_file_path),
+                                    Err(err) => {
+                                        log::error!(
+                                            "failed opening {:?}: {:?}",
+                                            selected_file_path,
+                                            err
+                                        )
+                                    }
+                                };
+                                if let Ok(mut md) = md_lock.write() {
+                                    *md = meta_data.clone();
+                                }
+                            }
+                            _ => {
+                                log::warn!("file not supported: {:?} \n Close the file to connect to a spectrometer or open another file.", selected_file_path);
+                                continue;
+                            }
                         }
                     }
                 }

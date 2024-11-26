@@ -1,14 +1,17 @@
-use std::sync::mpsc::Sender;
-use std::sync::{Arc, RwLock};
-
+use dotthz::DotthzMetaData;
 use eframe::egui;
 use eframe::egui::panel::Side;
 use eframe::egui::{vec2, Vec2};
+use egui_file_dialog::information_panel::InformationPanel;
+use egui_file_dialog::FileDialog;
 use egui_plot::PlotPoint;
 use ndarray::Array2;
+use std::sync::mpsc::Sender;
+use std::sync::{Arc, RwLock};
 
 use crate::config::Config;
 use crate::gauge::gauge;
+use crate::gui::FileDialogState;
 use crate::matrix_plot::{make_dummy, plot_matrix, SelectedPixel};
 use crate::toggle::toggle_ui;
 use crate::{DataPoint, GuiSettingsContainer};
@@ -24,6 +27,10 @@ pub fn left_panel(
     val: &mut PlotPoint,
     mid_point: &mut f32,
     bw: &mut bool,
+    file_dialog_state: &mut FileDialogState,
+    file_dialog: &mut FileDialog,
+    information_panel: &mut InformationPanel,
+    md_lock: &Arc<RwLock<DotthzMetaData>>,
     img_lock: &Arc<RwLock<Array2<f32>>>,
     data_lock: &Arc<RwLock<DataPoint>>,
     pixel_lock: &Arc<RwLock<SelectedPixel>>,
@@ -95,12 +102,47 @@ pub fn left_panel(
                 )))
                 .clicked()
             {
-                if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                    config_tx
-                        .send(Config::OpenFile(path.clone()))
-                        .expect("unable to send open file cmd");
-                }
+                *file_dialog_state = FileDialogState::Open;
+                file_dialog.select_file();
             };
+
+            file_dialog.set_right_panel_width(300.0);
+
+            match file_dialog_state {
+                FileDialogState::Open => {
+                    if let Some(path) = file_dialog
+                        .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                            information_panel.ui(ui, dia);
+                        })
+                        .selected()
+                    {
+                        *file_dialog_state = FileDialogState::None;
+                        config_tx
+                            .send(Config::OpenFile(path.to_path_buf()))
+                            .expect("unable to send open file cmd");
+                    }
+                }
+                FileDialogState::Save => {
+                    if let Some(path) = file_dialog.update(ctx).selected() {
+                        *file_dialog_state = FileDialogState::None;
+                        // match tera_flash_conf.filetype {
+                        //     FileType::Csv => {
+                        //         picked_path.set_extension("csv");
+                        //     }
+                        //     FileType::Binary => {
+                        //         picked_path.set_extension("npy");
+                        //     }
+                        //     FileType::DotTHz => {
+                        //         picked_path.set_extension("thz");
+                        //     }
+                        // }
+                        // if let Err(e) = save_tx.send(picked_path.clone()) {
+                        //
+                        // }
+                    }
+                }
+                FileDialogState::None => {}
+            }
 
             let logo_height = 100.0;
             let height = ui.available_size().y - logo_height - 20.0;
@@ -132,6 +174,56 @@ pub fn left_panel(
             ui.add_space(10.0);
             ui.label("Black/White");
             toggle_ui(ui, bw);
+            ui.label(format!("Pixel: {}", pixel_selected.id));
+            ui.label(format!("x: {}", pixel_selected.x));
+            ui.label(format!("y: {}", pixel_selected.y));
+
+            let mut meta_data = DotthzMetaData::default();
+            if let Ok(md) = md_lock.read() {
+                meta_data = md.clone();
+            }
+            ui.label("Meta Data:");
+            egui::ScrollArea::vertical()
+                .max_height(200.0)
+                .show(ui, |ui| {
+                    egui::Grid::new("meta_data")
+                        .num_columns(2)
+                        .striped(true)
+                        .show(ui, |ui| {
+                            for (name, value) in meta_data.md {
+                                ui.label(name);
+                                ui.label(value);
+                                ui.end_row()
+                            }
+                            ui.label("User:");
+                            ui.label(meta_data.user);
+                            ui.end_row();
+                            ui.label("E-mail:");
+                            ui.label(meta_data.email);
+                            ui.end_row();
+                            ui.label("ORCID:");
+                            ui.label(meta_data.orcid);
+                            ui.end_row();
+                            ui.label("Institution:");
+                            ui.label(meta_data.institution);
+                            ui.end_row();
+                            ui.label("Instrument:");
+                            ui.label(meta_data.instrument);
+                            ui.end_row();
+                            ui.label("Version:");
+                            ui.label(meta_data.version);
+                            ui.end_row();
+                            ui.label("Mode:");
+                            ui.label(meta_data.mode);
+                            ui.end_row();
+                            ui.label("Date:");
+                            ui.label(meta_data.date);
+                            ui.end_row();
+                            ui.label("Time:");
+                            ui.label(meta_data.time);
+                            ui.end_row();
+                        });
+                });
 
             let height = ui.available_size().y - logo_height - 20.0;
             ui.add_space(height);
