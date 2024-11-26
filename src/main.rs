@@ -6,15 +6,15 @@ extern crate csv;
 extern crate preferences;
 extern crate serde;
 
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{mpsc, Arc, RwLock};
-use std::thread;
-
 use crate::config::Config;
+use dotthz::DotthzMetaData;
 use eframe::egui::{vec2, ViewportBuilder, Visuals};
 use eframe::{egui, icon_data};
 use ndarray::Array2;
 use preferences::{AppInfo, Preferences};
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{mpsc, Arc, RwLock};
+use std::thread;
 
 use crate::data::DataPoint;
 use crate::data_thread::main_thread;
@@ -36,7 +36,7 @@ mod right_panel;
 mod toggle;
 
 const APP_INFO: AppInfo = AppInfo {
-    name: "COExplore",
+    name: "THz Image Explorer",
     author: "Linus Leo Stöckli",
 };
 
@@ -62,6 +62,7 @@ fn main() {
     let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
     let scaling_lock = Arc::new(RwLock::new(1));
+    let md_lock = Arc::new(RwLock::new(DotthzMetaData::default()));
 
     let (config_tx, config_rx): (Sender<Config>, Receiver<Config>) = mpsc::channel();
 
@@ -69,10 +70,12 @@ fn main() {
     let main_img_lock = img_lock.clone();
     let main_scaling_lock = scaling_lock.clone();
     let main_pixel_lock = pixel_lock.clone();
+    let main_md_lock = md_lock.clone();
 
     println!("starting main server..");
     let _main_thread_handler = thread::spawn(|| {
         main_thread(
+            main_md_lock,
             main_data_lock,
             main_img_lock,
             config_rx,
@@ -95,17 +98,20 @@ fn main() {
     let gui_img_lock = img_lock.clone();
     let gui_pixel_lock = pixel_lock.clone();
     let gui_scaling_lock = scaling_lock.clone();
+    let gui_md_lock = md_lock.clone();
 
     eframe::run_native(
-        "COCoNuT Explore",
+        "THz Image Explorer",
         options,
-        Box::new(|_cc| {
+        Box::new(|ctx| {
             let mut fonts = egui::FontDefinitions::default();
             egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
-            _cc.egui_ctx.set_fonts(fonts);
-            egui_extras::install_image_loaders(&_cc.egui_ctx);
-            _cc.egui_ctx.set_visuals(Visuals::dark());
+            ctx.egui_ctx.set_fonts(fonts);
+            egui_extras::install_image_loaders(&ctx.egui_ctx);
+            ctx.egui_ctx.set_visuals(Visuals::dark());
             Ok(Box::new(MyApp::new(
+                ctx,
+                gui_md_lock,
                 gui_data_lock,
                 gui_pixel_lock,
                 gui_scaling_lock,
