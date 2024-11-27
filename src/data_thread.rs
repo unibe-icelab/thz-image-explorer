@@ -310,7 +310,10 @@ pub fn main_thread(
                             "thz" => {
                                 match open_from_thz(&selected_file_path, &mut scan, &mut meta_data)
                                 {
-                                    Ok(_) => log::info!("opened {:?}", selected_file_path),
+                                    Ok(_) => {
+                                        log::info!("opened {:?}", selected_file_path);
+                                        update_intensity_image(&mut scan, &img_lock);
+                                    }
                                     Err(err) => {
                                         log::error!(
                                             "failed opening {:?}: {:?}",

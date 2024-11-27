@@ -858,38 +858,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "coconut-explorer"
-version = "0.2.1"
-dependencies = [
- "approx",
- "chrono",
- "csv",
- "dotthz",
- "eframe",
- "egui-file-dialog",
- "egui-phosphor",
- "egui_double_slider",
- "egui_extras",
- "egui_logger",
- "egui_plot",
- "hex",
- "image",
- "itertools",
- "itertools-num",
- "log",
- "ndarray",
- "ndarray-npy",
- "preferences",
- "rand",
- "realfft",
- "regex",
- "rfd",
- "safe-transmute",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "codespan-reporting"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3830,6 +3798,38 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.79",
+]
+
+[[package]]
+name = "thz-image-explorer"
+version = "0.2.1"
+dependencies = [
+ "approx",
+ "chrono",
+ "csv",
+ "dotthz",
+ "eframe",
+ "egui-file-dialog",
+ "egui-phosphor",
+ "egui_double_slider",
+ "egui_extras",
+ "egui_logger",
+ "egui_plot",
+ "hex",
+ "image",
+ "itertools",
+ "itertools-num",
+ "log",
+ "ndarray",
+ "ndarray-npy",
+ "preferences",
+ "rand",
+ "realfft",
+ "regex",
+ "rfd",
+ "safe-transmute",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
