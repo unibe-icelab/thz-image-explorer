@@ -1,0 +1,152 @@
+Index: src/teraflash-ctrl/src/plot_slider.rs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>use eframe::egui;\nuse eframe::egui::{Color32, DragValue, Pos2, Stroke, Visuals};\nuse eframe::epaint::PathShape;\n\nuse crate::plot_slider::egui::Shape::Path;\n\nfn make_triangle(pos: Pos2, size: f32) -> Vec<Pos2> {\n    vec![\n        Pos2 {\n            x: pos.x - size / 2.0,\n            y: pos.y + size / 2.0,\n        },\n        Pos2 {\n            x: pos.x,\n            y: pos.y - size / 2.0,\n        },\n        Pos2 {\n            x: pos.x + size / 2.0,\n            y: pos.y + size / 2.0,\n        },\n    ]\n}\n\npub fn windowing_ui(\n    ui: &mut egui::Ui,\n    width: &f32,\n    height: &f32,\n    range: &f32,\n    bounds: &mut [f32; 2],\n) -> egui::Response {\n    let desired_size = egui::vec2(*width as f32, *height as f32 / 10.0);\n    let (rect, mut response) = ui.allocate_exact_size(desired_size, egui::Sense::click_and_drag());\n    let color: Color32 = if ui.visuals() == &Visuals::dark() {\n        Color32::WHITE\n    } else {\n        Color32::BLACK\n    };\n    if ui.is_rect_visible(rect) {\n        // let visuals = ui.style().interact(&response);\n        let bar_line = vec![rect.left_center(), rect.right_center()];\n        ui.painter().add(Path(PathShape::line(\n            bar_line,\n            Stroke::new(*height as f32 / 20.0, Color32::GRAY),\n        )));\n\n        // TODO: check if we need to clone here:\n        let mut bounds_i = *bounds;\n        bounds_i[0] = bounds_i[0] / range * width;\n        bounds_i[1] = bounds_i[1] / range * width;\n        let mut lb_pos = Pos2 {\n            x: rect.left_center().x + bounds_i[0] as f32,\n            y: rect.left_center().y,\n        };\n        let mut ub_pos = Pos2 {\n            x: rect.right_center().x - bounds_i[1] as f32,\n            y: rect.right_center().y,\n        };\n\n        if response.dragged() {\n            response.mark_changed();\n\n            let pos = response.interact_pointer_pos();\n\n            match pos {\n                None => {}\n                Some(p) => {\n                    if lb_pos.x - *width as f32 / 10.0 < p.x\n                        && p.x < lb_pos.x + *width as f32 / 10.0\n                        && lb_pos.y - *height as f32 / 5.0 < p.y\n                        && p.y < lb_pos.y + *height as f32 / 5.0\n                    {\n                        // dragging the lower one\n                        lb_pos.x = p.x;\n                    } else if ub_pos.x - *width as f32 / 10.0 < p.x\n                        && p.x < ub_pos.x + *width as f32 / 10.0\n                        && ub_pos.y - *height as f32 / 5.0 < p.y\n                        && p.y < ub_pos.y + *height as f32 / 5.0\n                    {\n                        // dragging the upper one\n                        ub_pos.x = p.x;\n                    }\n                }\n            }\n        }\n\n        bounds_i[0] = lb_pos.x - rect.left_center().x;\n        bounds[0] = bounds_i[0] / width * range;\n        bounds_i[1] = -ub_pos.x + rect.right_center().x;\n        bounds[1] = bounds_i[1] / width * range;\n\n        ui.painter().add(Path(PathShape::convex_polygon(\n            make_triangle(lb_pos, *height / 10.0),\n            color,\n            Stroke::new(1.0, color),\n        )));\n        ui.painter().add(Path(PathShape::convex_polygon(\n            make_triangle(ub_pos, *height / 10.0),\n            color,\n            Stroke::new(1.0, color),\n        )));\n        ui.vertical_centered(|ui| {\n            ui.horizontal(|ui| {\n                if ui\n                    .add(\n                        DragValue::new(&mut bounds[0])\n                            .fixed_decimals(1)\n                            .suffix(\"ps\")\n                            .clamp_range(0.0..=*range),\n                    )\n                    .changed()\n                {\n                    response.mark_changed();\n                };\n                ui.add_space(2.0 * ui.available_width() - *width as f32 / 0.85);\n                if ui\n                    .add(\n                        DragValue::new(&mut bounds[1])\n                            .fixed_decimals(1)\n                            .suffix(\"ps\")\n                            .clamp_range(0.0..=*range),\n                    )\n                    .changed()\n                {\n                    response.mark_changed();\n                };\n            });\n        });\n    }\n    response\n}\n\n// A wrapper that allows the more idiomatic usage pattern: `ui.add(gauge(&temperatue, \"temperature\"))`\npub fn windowing<'a>(\n    width: &'a f32,\n    height: &'a f32,\n    range: &'a f32,\n    bounds: &'a mut [f32; 2],\n) -> impl egui::Widget + 'a {\n    move |ui: &mut egui::Ui| windowing_ui(ui, width, height, range, bounds)\n}\n\n#[allow(unused)]\npub fn filter_ui(\n    ui: &mut egui::Ui,\n    width: &f32,\n    height: &f32,\n    range: &f32,\n    bounds: &mut [f32; 2],\n) -> egui::Response {\n    let desired_size = egui::vec2(*width as f32, *height as f32 / 10.0);\n    let (rect, mut response) = ui.allocate_exact_size(desired_size, egui::Sense::click_and_drag());\n    let color: Color32 = if ui.visuals() == &Visuals::dark() {\n        Color32::WHITE\n    } else {\n        Color32::BLACK\n    };\n    if ui.is_rect_visible(rect) {\n        // let visuals = ui.style().interact(&response);\n        let bar_line = vec![rect.left_center(), rect.right_center()];\n        ui.painter().add(Path(PathShape::line(\n            bar_line,\n            Stroke::new(*height as f32 / 20.0, Color32::GRAY),\n        )));\n        let mut bounds_i = bounds.clone();\n        bounds_i[0] = bounds_i[0] / range * width;\n        bounds_i[1] = bounds_i[1] / range * width;\n        let mut lb_pos = Pos2 {\n            x: rect.left_center().x + bounds_i[0] as f32,\n            y: rect.left_center().y,\n        };\n        let mut ub_pos = Pos2 {\n            x: rect.left_center().x + bounds_i[1] as f32,\n            y: rect.right_center().y,\n        };\n\n        if response.dragged() {\n            response.mark_changed();\n            let pos = response.interact_pointer_pos();\n\n            match pos {\n                None => {}\n                Some(p) => {\n                    if lb_pos.x - *width as f32 / 10.0 < p.x\n                        && p.x < lb_pos.x + *width as f32 / 10.0\n                        && lb_pos.y - *height as f32 / 5.0 < p.y\n                        && p.y < lb_pos.y + *height as f32 / 5.0\n                    {\n                        // dragging the lower one\n                        lb_pos.x = p.x;\n                    } else if ub_pos.x - *width as f32 / 10.0 < p.x\n                        && p.x < ub_pos.x + *width as f32 / 10.0\n                        && ub_pos.y - *height as f32 / 5.0 < p.y\n                        && p.y < ub_pos.y + *height as f32 / 5.0\n                    {\n                        // dragging the upper one\n                        ub_pos.x = p.x;\n                    }\n                }\n            }\n        }\n\n        bounds_i[0] = lb_pos.x - rect.left_center().x;\n        bounds[0] = bounds_i[0] / width * range;\n        bounds_i[1] = ub_pos.x - rect.left_center().x;\n        bounds[1] = bounds_i[1] / width * range;\n\n        ui.painter().add(Path(PathShape::convex_polygon(\n            make_triangle(lb_pos, *height / 10.0),\n            color,\n            Stroke::new(1.0, color),\n        )));\n        ui.painter().add(Path(PathShape::convex_polygon(\n            make_triangle(ub_pos, *height / 10.0),\n            color,\n            Stroke::new(1.0, color),\n        )));\n        ui.vertical_centered(|ui| {\n            ui.horizontal(|ui| {\n                if ui\n                    .add(\n                        DragValue::new(&mut bounds[0])\n                            .fixed_decimals(1)\n                            .suffix(\"THz\")\n                            .clamp_range(0.0..=*range),\n                    )\n                    .changed()\n                {\n                    response.mark_changed();\n                }\n                ui.add_space(2.0 * ui.available_width() - *width as f32 / 0.85);\n                if ui\n                    .add(\n                        DragValue::new(&mut bounds[1])\n                            .fixed_decimals(1)\n                            .suffix(\"THz\")\n                            .clamp_range(0.0..=*range),\n                    )\n                    .changed()\n                {\n                    response.mark_changed();\n                }\n            });\n        });\n    }\n    response\n}\n\n// A wrapper that allows the more idiomatic usage pattern: `ui.add(gauge(&temperatue, \"temperature\"))`\n#[allow(unused)]\npub fn filter<'a>(\n    width: &'a f32,\n    height: &'a f32,\n    range: &'a f32,\n    bounds: &'a mut [f32; 2],\n) -> impl egui::Widget + 'a {\n    move |ui: &mut egui::Ui| filter_ui(ui, width, height, range, bounds)\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/teraflash-ctrl/src/plot_slider.rs b/src/teraflash-ctrl/src/plot_slider.rs
+--- a/src/teraflash-ctrl/src/plot_slider.rs	(revision 47fecefff843a3faa63b4e6075d684950ea839af)
++++ b/src/teraflash-ctrl/src/plot_slider.rs	(date 1682082617292)
+@@ -140,7 +140,7 @@
+ }
+ 
+ #[allow(unused)]
+-pub fn filter_ui(
++pub fn fft_filter_ui(
+     ui: &mut egui::Ui,
+     width: &f32,
+     height: &f32,
+@@ -247,11 +247,130 @@
+ 
+ // A wrapper that allows the more idiomatic usage pattern: `ui.add(gauge(&temperatue, "temperature"))`
+ #[allow(unused)]
+-pub fn filter<'a>(
++pub fn fft_filter<'a>(
+     width: &'a f32,
+     height: &'a f32,
+     range: &'a f32,
+     bounds: &'a mut [f32; 2],
+ ) -> impl egui::Widget + 'a {
+-    move |ui: &mut egui::Ui| filter_ui(ui, width, height, range, bounds)
++    move |ui: &mut egui::Ui| fft_filter_ui(ui, width, height, range, bounds)
++}
++
++#[allow(unused)]
++pub fn time_filter_ui(
++    ui: &mut egui::Ui,
++    width: &f32,
++    height: &f32,
++    range_low: &f32,
++    range_up: &f32,
++    bounds: &mut [f32; 2],
++) -> egui::Response {
++    let desired_size = egui::vec2(*width as f32, *height as f32 / 10.0);
++    let (rect, mut response) = ui.allocate_exact_size(desired_size, egui::Sense::click_and_drag());
++    let color: Color32 = if ui.visuals() == &Visuals::dark() {
++        Color32::WHITE
++    } else {
++        Color32::BLACK
++    };
++    if ui.is_rect_visible(rect) {
++        // let visuals = ui.style().interact(&response);
++        let bar_line = vec![rect.left_center(), rect.right_center()];
++        ui.painter().add(Path(PathShape::line(
++            bar_line,
++            Stroke::new(*height as f32 / 20.0, Color32::GRAY),
++        )));
++        let mut bounds_i = bounds.clone();
++        bounds_i[0] = (bounds_i[0] - range_low) / (range_up - range_low) * width;
++        bounds_i[1] = (bounds_i[1] - range_low) / (range_up - range_low) * width;
++        let mut lb_pos = Pos2 {
++            x: rect.left_center().x + bounds_i[0] as f32,
++            y: rect.left_center().y,
++        };
++        let mut ub_pos = Pos2 {
++            x: rect.left_center().x + bounds_i[1] as f32,
++            y: rect.right_center().y,
++        };
++
++        if response.dragged() {
++            response.mark_changed();
++            let pos = response.interact_pointer_pos();
++
++            match pos {
++                None => {}
++                Some(p) => {
++                    if lb_pos.x - *width as f32 / 10.0 < p.x
++                        && p.x < lb_pos.x + *width as f32 / 10.0
++                        && lb_pos.y - *height as f32 / 5.0 < p.y
++                        && p.y < lb_pos.y + *height as f32 / 5.0
++                    {
++                        // dragging the lower one
++                        lb_pos.x = p.x;
++                    } else if ub_pos.x - *width as f32 / 10.0 < p.x
++                        && p.x < ub_pos.x + *width as f32 / 10.0
++                        && ub_pos.y - *height as f32 / 5.0 < p.y
++                        && p.y < ub_pos.y + *height as f32 / 5.0
++                    {
++                        // dragging the upper one
++                        ub_pos.x = p.x;
++                    }
++                }
++            }
++        }
++
++        bounds_i[0] = lb_pos.x - rect.left_center().x;
++        bounds[0] = bounds_i[0] / width * (range_up - range_low) + range_low;
++        bounds_i[1] = ub_pos.x - rect.left_center().x;
++        bounds[1] = bounds_i[1] / width * (range_up - range_low) + range_low;
++
++        ui.painter().add(Path(PathShape::convex_polygon(
++            make_triangle(lb_pos, *height / 10.0),
++            color,
++            Stroke::new(1.0, color),
++        )));
++        ui.painter().add(Path(PathShape::convex_polygon(
++            make_triangle(ub_pos, *height / 10.0),
++            color,
++            Stroke::new(1.0, color),
++        )));
++        ui.vertical_centered(|ui| {
++            ui.horizontal(|ui| {
++                if ui
++                    .add(
++                        DragValue::new(&mut bounds[0])
++                            .fixed_decimals(1)
++                            .suffix("ps")
++                            .clamp_range(*range_low..=*range_up),
++                    )
++                    .changed()
++                {
++                    response.mark_changed();
++                }
++                ui.add_space(2.0 * ui.available_width() - *width as f32 / 0.85);
++                if ui
++                    .add(
++                        DragValue::new(&mut bounds[1])
++                            .fixed_decimals(1)
++                            .suffix("ps")
++                            .clamp_range(*range_low..=*range_up),
++                    )
++                    .changed()
++                {
++                    response.mark_changed();
++                }
++            });
++        });
++    }
++    response
++}
++
++// A wrapper that allows the more idiomatic usage pattern: `ui.add(gauge(&temperatue, "temperature"))`
++#[allow(unused)]
++pub fn time_filter<'a>(
++    width: &'a f32,
++    height: &'a f32,
++    range_low: &'a f32,
++    range_up: &'a f32,
++    bounds: &'a mut [f32; 2],
++) -> impl egui::Widget + 'a {
++    move |ui: &mut egui::Ui| time_filter_ui(ui, width, height, range_low, range_up, bounds)
+ }
