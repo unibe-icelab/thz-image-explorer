@@ -371,6 +371,5 @@ pub fn center_panel(
                 });
             });
         });
-        ctx.request_repaint()
     });
 }

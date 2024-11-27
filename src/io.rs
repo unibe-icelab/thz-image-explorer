@@ -267,6 +267,19 @@ pub fn open_from_thz(
             }
         }
     }
+    if let Some(w) = metadata.md.get("width") {
+        if let Ok(width) = w.parse::<usize>() {
+            scan.width = width;
+        }
+    }
+
+    if let Some(h) = metadata.md.get("height") {
+        if let Ok(height) = h.parse::<usize>() {
+            scan.height = height;
+        }
+    }
+
+    scan.raw_img = Array2::zeros((scan.width, scan.height));
 
     for x in 0..scan.width {
         for y in 0..scan.height {

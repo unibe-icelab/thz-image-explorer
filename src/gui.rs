@@ -4,7 +4,6 @@ use egui_file_dialog::information_panel::InformationPanel;
 use egui_file_dialog::FileDialog;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
 
 use eframe::{egui, Storage};
 use egui_plot::PlotPoint;
@@ -19,9 +18,6 @@ use crate::left_panel::left_panel;
 use crate::matrix_plot::SelectedPixel;
 use crate::right_panel::right_panel;
 use crate::APP_INFO;
-
-const MAX_FPS: f64 = 24.0;
-
 #[derive(Clone)]
 pub enum FileDialogState {
     Open,
@@ -296,8 +292,6 @@ impl<'a> eframe::App for MyApp<'a> {
 
         self.gui_conf.x = ctx.used_size().x;
         self.gui_conf.y = ctx.used_size().y;
-
-        std::thread::sleep(Duration::from_millis((1000.0 / MAX_FPS) as u64));
     }
 
     fn save(&mut self, storage: &mut dyn Storage) {
