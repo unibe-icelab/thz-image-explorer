@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/coconut-explorer.iml" filepath="$PROJECT_DIR$/.idea/coconut-explorer.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/thz-image-explorer.iml" filepath="$PROJECT_DIR$/.idea/thz-image-explorer.iml" />
     </modules>
   </component>
 </project>
