@@ -39,7 +39,7 @@ fn save_image(img: &ColorImage, file_path: &PathBuf) {
     //TODO: implement large image saving
 }
 
-fn update_intensity_image(scan: &mut ScannedImage, img_lock: &Arc<RwLock<Array2<f32>>>) {
+fn update_intensity_image(scan: &ScannedImage, img_lock: &Arc<RwLock<Array2<f32>>>) {
     if let Ok(mut write_guard) = img_lock.write() {
         *write_guard = scan.filtered_img.clone();
     }
@@ -106,7 +106,7 @@ fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLo
         .time
         .iter()
         .position(|t| *t == config.time_window[1].round())
-        .unwrap_or(0);
+        .unwrap_or(scan.time.len());
     if let Some(r2c) = &scan.r2c {
         if let Some(c2r) = &scan.c2r {
             (
@@ -117,10 +117,10 @@ fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLo
                 .into_par_iter()
                 .for_each(
                     |(
-                        mut scaled_data_columns,
-                        mut filtered_data_columns,
-                        mut filtered_img_columns,
-                    )| {
+                         mut scaled_data_columns,
+                         mut filtered_data_columns,
+                         mut filtered_img_columns,
+                     )| {
                         (
                             scaled_data_columns.axis_iter_mut(Axis(0)),
                             filtered_data_columns.axis_iter_mut(Axis(0)),
@@ -181,19 +181,6 @@ fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLo
                 );
         };
     };
-
-    for x in 0..scan.width {
-        for y in 0..scan.height {
-            // calculate the intensity by summing the squares
-            let sig_squared_sum = scan
-                .raw_data
-                .index_axis(Axis(0), x)
-                .index_axis(Axis(0), y)
-                .mapv(|xi| xi * xi)
-                .sum();
-            scan.raw_img[[x, y]] = sig_squared_sum;
-        }
-    }
     // update images
     update_intensity_image(scan, img_lock);
     println!("updated data. This took {:?}", start.elapsed());
@@ -370,18 +357,13 @@ pub fn main_thread(
                         scan.scaling = *scaling as usize;
                         scan.rescale()
                     }
-                    if let Ok(mut write_guard) = img_lock.write() {
-                        *write_guard = scan.scaled_img.clone();
-                    }
+                    update_intensity_image(&scan, &img_lock);
                 }
                 Config::SetSelectedPixel(pixel) => {
                     selected_pixel = pixel.clone();
                     if let Ok(scaling) = scaling_lock.read() {
                         scan.scaling = *scaling as usize;
                         scan.rescale()
-                    }
-                    if let Ok(mut write_guard) = img_lock.write() {
-                        *write_guard = scan.scaled_img.clone();
                     }
                     println!("new pixel: {:} {:}", selected_pixel.x, selected_pixel.y);
                     // send HK?
@@ -407,13 +389,13 @@ pub fn main_thread(
                             // Check if the "pixel" column matches the target pixel
                             if record.get(0)
                                 == Some(
-                                    format!(
-                                        "{:05}-{:05}",
-                                        selected_pixel.x / scan.scaling,
-                                        selected_pixel.y / scan.scaling,
-                                    )
-                                    .as_str(),
+                                format!(
+                                    "{:05}-{:05}",
+                                    selected_pixel.x / scan.scaling,
+                                    selected_pixel.y / scan.scaling,
                                 )
+                                    .as_str(),
+                            )
                             {
                                 if let Some(rh_value) = record.get(9) {
                                     data.hk.ambient_humidity =
