@@ -7,32 +7,25 @@ description = "Explorer Software for THz TDS images."
 license = "GPL-3.0"
 
 [dependencies]
-eframe = { version = "0.29", features = ["persistence"] }
-egui_extras = { version = "0.29", features = ["image"] }
-egui-phosphor = "0.7.3"
-egui_plot = "0.29"
-egui_logger = "0.6.1"
-egui-file-dialog = { version = "0.7.0", git = "https://github.com/hacknus/egui-file-dialog", branch = "show_meta_data", features = ["info_panel"] }
-egui_double_slider = "0.3.0"
-log = "0.4.1"
-image = { version = "0.25", default-features = false, features = ["png"] }
-rand = "0.8"
+eframe = { version = "0.30.0", features = ["persistence", "wayland", "x11"] }
+egui_extras = { version = "0.30", features = ["image"] }
+egui-phosphor = "0.8.0"
+egui_plot = "0.30"
+egui_logger = { git = "https://github.com/hacknus/egui_logger" }
+egui-file-dialog = { version = "0.8.0", git = "https://github.com/hacknus/egui-file-dialog", branch = "sort_by_metadata", features = ["information_view"] }
+egui_double_slider = "0.3.3"
+log = "0.4.22"
+image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "gif", "png", "tiff", "rayon"] }
 itertools-num = "0.1"
-realfft = { git = "https://github.com/HEnquist/realfft/" }
-rfd = "0.15"
-hex = "0.4"
-safe-transmute = "0.11.2"
-preferences = { git = "https://github.com/andybarron/preferences-rs" }
+realfft = "3.4.0"
+preferences = "2.0.0"
 serde = { version = "1.0", features = ["derive"] }
-regex = "1"
 csv = "1.1.6"
 ndarray = { version = "0.16.1", features = ["rayon"] }
-approx = "0.5.1"
 ndarray-npy = { version = "0.9.1", features = ["npz"] }
 serde_json = "1.0.95"
 itertools = "0.13.0"
-dotthz = { version = "0.2.3", features = ["serde", "hdf5-sys-static"] }
-chrono = "0.4.38"
+dotthz = { version = "0.2.4", features = ["serde", "hdf5-sys-static"] }
 
 [package.metadata.bundle]
 name = "THz Image Explorer"
