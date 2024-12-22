@@ -1,6 +1,6 @@
 use crate::data::{HouseKeeping, Meta, ScannedImage};
 use dotthz::{DotthzFile, DotthzMetaData};
-use ndarray::{arr3, Array1, Array2, Array3, ArrayBase, Axis, Ix3, OwnedRepr};
+use ndarray::{Array1, Array2, Array3, Axis};
 use ndarray_npy::NpzReader;
 use realfft::RealFftPlanner;
 use std::error::Error;
