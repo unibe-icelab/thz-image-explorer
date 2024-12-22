@@ -103,7 +103,7 @@ pub fn left_panel(
                 .clicked()
             {
                 *file_dialog_state = FileDialogState::Open;
-                file_dialog.select_file();
+                file_dialog.pick_file();
             };
 
             file_dialog.set_right_panel_width(300.0);
@@ -114,7 +114,7 @@ pub fn left_panel(
                         .update_with_right_panel_ui(ctx, &mut |ui, dia| {
                             information_panel.ui(ui, dia);
                         })
-                        .selected()
+                        .picked()
                     {
                         *file_dialog_state = FileDialogState::None;
                         config_tx
@@ -123,7 +123,7 @@ pub fn left_panel(
                     }
                 }
                 FileDialogState::Save => {
-                    if let Some(path) = file_dialog.update(ctx).selected() {
+                    if let Some(path) = file_dialog.update(ctx).picked() {
                         *file_dialog_state = FileDialogState::None;
                         // match tera_flash_conf.filetype {
                         //     FileType::Csv => {
