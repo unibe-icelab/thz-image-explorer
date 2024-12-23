@@ -8,7 +8,7 @@ use dotthz::DotthzMetaData;
 use eframe::egui::ColorImage;
 use image::RgbaImage;
 use ndarray::parallel::prelude::*;
-use ndarray::{Array1, Array2, Axis};
+use ndarray::{Array1, Array2, Array3, Axis};
 use realfft::num_complex::Complex32;
 use std::f32::consts::PI;
 use std::path::PathBuf;
@@ -108,6 +108,7 @@ fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLo
         .position(|t| *t == config.time_window[1].round())
         .unwrap_or(scan.time.len());
     if let Some(r2c) = &scan.r2c {
+        scan.filtered_img = Array2::zeros((scan.scaled_data.shape()[0], scan.scaled_data.shape()[1]));
         if let Some(c2r) = &scan.c2r {
             (
                 scan.scaled_data.axis_iter_mut(Axis(0)),
@@ -357,6 +358,7 @@ pub fn main_thread(
                         scan.scaling = *scaling as usize;
                         scan.rescale()
                     }
+                    filter(&config, &mut scan, &img_lock);
                     update_intensity_image(&scan, &img_lock);
                 }
                 Config::SetSelectedPixel(pixel) => {

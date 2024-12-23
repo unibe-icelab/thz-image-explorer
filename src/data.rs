@@ -173,7 +173,7 @@ impl ScannedImage {
         let new_width = self.width / scale;
 
         // Initialize scaled_img with the new dimensions
-        self.scaled_img = Array2::zeros((new_height, new_width));
+        self.scaled_img = Array2::zeros((new_width, new_height));
 
         // Rescale the raw_img into scaled_img
         for y in 0..new_height {
@@ -192,7 +192,7 @@ impl ScannedImage {
 
         // Initialize scaled_data with the new dimensions and depth
         let depth = self.time.len();
-        self.scaled_data = Array3::zeros((new_height, new_width, depth));
+        self.scaled_data = Array3::zeros((new_width, new_height, depth));
 
         // Rescale each layer in raw_data into scaled_data
         for y in 0..new_height {
