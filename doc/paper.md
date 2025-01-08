@@ -13,6 +13,7 @@ authors:
     corresponding: true # (This is how to denote the corresponding author)
     affiliation: "1"
   - name: Nicolas Thomas
+    orcid: 0000-0002-0146-0071
     affiliation: "1"
 affiliations:
   - name: University of Bern, Bern, Switzerland
