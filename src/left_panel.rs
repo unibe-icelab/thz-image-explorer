@@ -276,6 +276,27 @@ pub fn left_panel(
 
             file_dialog.set_right_panel_width(300.0);
 
+            let mut repaint = false;
+            ctx.input(|i| {
+                // Check if files were dropped
+                if let Some(dropped_file) = i.raw.dropped_files.last() {
+                    let path = dropped_file.clone().path.unwrap();
+                    *other_files = find_files_with_same_extension(&path).unwrap();
+                    *selected_file_name = path.file_name().unwrap().to_str().unwrap().to_string();
+                    *scroll_to_selection = true;
+                    file_dialog.config_mut().initial_directory = path.clone();
+                    config_tx
+                        .send(Config::OpenFile(path))
+                        .expect("unable to send open file cmd");
+                    repaint = true;
+                }
+            });
+
+            // Update GUI if we dropped a file
+            if repaint {
+                ctx.request_repaint();
+            }
+
             match file_dialog_state {
                 FileDialogState::Open => {
                     if let Some(path) = file_dialog
