@@ -1046,9 +1046,9 @@ dependencies = [
 
 [[package]]
 name = "dotthz"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69d3c21c62cc75cc3f0316293c0ac7062a23f1de7c8b09f84114469ccdf85683"
+checksum = "4a87f63126164353a35c25f5756cbf5d9ce35a75c0b9b35f7f58cb025bda14af"
 dependencies = [
  "hdf5-metno",
  "indexmap",

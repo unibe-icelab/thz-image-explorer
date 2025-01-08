@@ -25,16 +25,16 @@ ndarray = { version = "0.16.1", features = ["rayon"] }
 ndarray-npy = { version = "0.9.1", features = ["npz"] }
 serde_json = "1.0.95"
 itertools = "0.14.0"
-dotthz = { version = "0.2.4", features = ["serde", "hdf5-sys-static"] }
+dotthz = { version = "0.2.5", features = ["serde", "hdf5-sys-static"] }
 
 [package.metadata.bundle]
 name = "THz Image Explorer"
-identifier = "com.unibe.coconut"
+identifier = "com.unibe.thzimageexplorer"
 icon = ["./icons/install.png"]
 version = "0.2.2"
-copyright = "Copyright (c) Linus Leo Stöckli 2022. All rights reserved."
+copyright = "Copyright (c) Linus Leo Stöckli 2025. All rights reserved."
 category = "Developer Tool"
-short_description = "Explorer Software for Data of the COCoNuT Experiment."
+short_description = "Explorer Software for THz time domain images."
 license = "GPL-3.0"
 osx_minimum_system_version = "10.8"
 
