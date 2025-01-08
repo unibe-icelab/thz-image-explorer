@@ -76,7 +76,6 @@ pub struct MyApp<'a> {
     bw: bool,
     water_vapour_lines: Vec<f64>,
     wp: egui::Image<'a>,
-    dropped_files: Vec<egui::DroppedFile>,
     data: DataPoint,
     file_dialog_state: FileDialogState,
     file_dialog: FileDialog,
@@ -157,8 +156,6 @@ impl MyApp<'_> {
         Self {
             water_vapour_lines,
             wp: egui::Image::from_bytes("WP", include_bytes!("../images/WP-Logo.png")),
-
-            dropped_files: vec![],
             data: DataPoint::default(),
             file_dialog_state: FileDialogState::None,
             file_dialog,
