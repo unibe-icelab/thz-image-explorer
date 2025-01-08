@@ -23,36 +23,13 @@ pub fn gauge_ui(
 ) -> egui::Response {
     let min = -45;
     let max = 150;
-    // Widget code can be broken up in four steps:
-    //  1. Decide a size for the widget
-    //  2. Allocate space for it
-    //  3. Handle interactions with the widget (if any)
-    //  4. Paint the widget
 
-    // 1. Deciding widget size:
-    // You can query the `ui` how much space is available,
-    // but in this example we have a fixed size widget based on the height of a standard button:
     let desired_size = egui::vec2(size as f32, size as f32);
 
-    // 2. Allocating space:
-    // This is where we get a region of the screen assigned.
-    // We also tell the Ui to sense clicks in the allocated region.
     let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
 
-    // Attach some meta-data to the response which can be used by screen readers:
-    //response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, *on, ""));
-
-    // 4. Paint!
-    // Make sure we need to paint:
     if ui.is_rect_visible(rect) {
-        // Let's ask for a simple animation from egui.
-        // egui keeps track of changes in the boolean associated with the id and
-        // returns an animated value in the 0-1 range for how much "on" we are.
-        // We will follow the current style by asking
-        // "how should something that is being interacted with be painted?".
-        // This will, for instance, give us different colors when the widget is hovered or clicked.
         let visuals = ui.style().noninteractive();
-        // All coordinates are in absolute screen coordinates so we use `rect` to place the elements.
         let rect = rect.expand(visuals.expansion);
 
         let mut color_values: Vec<Pos2> = Vec::new();
@@ -62,6 +39,10 @@ pub fn gauge_ui(
         let mut r = rect.height() / 2.0;
         let width_out = 2.0;
         let width_in = 10.0;
+
+        let log_scale = suffix.contains("mbar");
+
+        // Populate white arc
         for phi in min..=max {
             let phi = (phi as f64) / 180.0 * PI;
             white_values.push(Pos2 {
@@ -70,43 +51,70 @@ pub fn gauge_ui(
             });
         }
 
-        // TODO: add function for cool steps
-        for phi in (min..=max).step_by(50) {
-            let phi = (phi as f64) / 180.0 * PI;
-            let tick_pos = vec![
-                Pos2 {
-                    x: rect.center().x - r * (phi as f32).cos(),
-                    y: rect.center().y - r * (phi as f32).sin(),
-                },
-                Pos2 {
-                    x: rect.center().x - (r + size as f32 * 0.035 + width_out) * (phi as f32).cos(),
-                    y: rect.center().y - (r + size as f32 * 0.035 + width_out) * (phi as f32).sin(),
-                },
-            ];
-            major_tick_values.push(tick_pos);
-        }
-        for phi in (min..=max).step_by(10) {
-            let phi = (phi as f64) / 180.0 * PI;
-            let tick_pos = vec![
-                Pos2 {
-                    x: rect.center().x - r * (phi as f32).cos(),
-                    y: rect.center().y - r * (phi as f32).sin(),
-                },
-                Pos2 {
-                    x: rect.center().x - (r + size as f32 * 0.01 + width_out) * (phi as f32).cos(),
-                    y: rect.center().y - (r + size as f32 * 0.01 + width_out) * (phi as f32).sin(),
-                },
-            ];
-            minor_tick_values.push(tick_pos);
+        // Generate ticks
+        let mut generate_ticks = |step: usize, is_major: bool| {
+            for phi in (min..=max).step_by(step) {
+                let phi = (phi as f64) / 180.0 * PI;
+                let tick_length = if is_major {
+                    size as f32 * 0.035 + width_out
+                } else {
+                    size as f32 * 0.01 + width_out
+                };
+                let tick_pos = vec![
+                    Pos2 {
+                        x: rect.center().x - r * (phi as f32).cos(),
+                        y: rect.center().y - r * (phi as f32).sin(),
+                    },
+                    Pos2 {
+                        x: rect.center().x - (r + tick_length) * (phi as f32).cos(),
+                        y: rect.center().y - (r + tick_length) * (phi as f32).sin(),
+                    },
+                ];
+                if is_major {
+                    major_tick_values.push(tick_pos);
+                } else {
+                    minor_tick_values.push(tick_pos);
+                }
+            }
+        };
+
+        if log_scale {
+            // Logarithmic scaling for mbar
+            generate_ticks(30, true); // Major ticks every 30 degrees
+            generate_ticks(10, false); // Minor ticks every 10 degrees
+        } else {
+            // Linear scaling
+            generate_ticks(50, true); // Major ticks every 50 degrees
+            generate_ticks(10, false); // Minor ticks every 10 degrees
         }
 
-        r = r - width_in / 2.0 - width_out / 2.0;
-        for phi in min..(map(value, min as f64, max as f64, min_i, max_i) as i32) {
-            let phi = (phi as f64) / 180.0 * PI;
-            color_values.push(Pos2 {
-                x: rect.center().x - r * (phi as f32).cos(),
-                y: rect.center().y - r * (phi as f32).sin(),
-            });
+        // generate color arc
+
+        if log_scale {
+            r = r - width_in / 2.0 - width_out / 2.0;
+            for phi in min..(map(
+                &value.log10(),
+                min as f64,
+                max as f64,
+                min_i.log10(),
+                max_i.log10(),
+            ) as i32)
+            {
+                let phi = (phi as f64) / 180.0 * PI;
+                color_values.push(Pos2 {
+                    x: rect.center().x - r * (phi as f32).cos(),
+                    y: rect.center().y - r * (phi as f32).sin(),
+                });
+            }
+        } else {
+            r = r - width_in / 2.0 - width_out / 2.0;
+            for phi in min..(map(value, min as f64, max as f64, min_i, max_i) as i32) {
+                let phi = (phi as f64) / 180.0 * PI;
+                color_values.push(Pos2 {
+                    x: rect.center().x - r * (phi as f32).cos(),
+                    y: rect.center().y - r * (phi as f32).sin(),
+                });
+            }
         }
 
         // ui.painter()
@@ -118,16 +126,15 @@ pub fn gauge_ui(
             Color32::BLACK
         };
 
-        let values_color: Color32;
-        if (*value as f32) > min as f32 + (max - min) as f32 * 0.25
+        let values_color = if (*value as f32) > min as f32 + (max - min) as f32 * 0.25
             || (*value as f32) < min as f32 + (max - min) as f32 * 0.75
         {
-            values_color = Color32::GREEN;
+            Color32::GREEN
         } else if *value as f32 <= min as f32 + (max - min) as f32 * 0.25 {
-            values_color = Color32::YELLOW;
+            Color32::YELLOW
         } else {
-            values_color = Color32::RED;
-        }
+            Color32::RED
+        };
 
         ui.painter().add(Path(PathShape::line(
             white_values,
@@ -144,23 +151,29 @@ pub fn gauge_ui(
                 Stroke::new(width_out, color),
             )));
         }
-        // for tick in minor_tick_values.iter() {
-        //     ui.painter().add(Path(PathShape::line(
-        //         tick.clone(),
-        //         Stroke::new(width_out, color),
-        //     )));
-        // }
 
-        let value_size = ui
-            .painter()
-            .text(
-                rect.center(),
-                Align2::CENTER_CENTER,
-                format!("{:.1}", value),
-                FontId::new(20.0, FontFamily::Monospace),
-                color,
-            )
-            .size();
+        let value_size = if log_scale {
+            ui.painter()
+                .text(
+                    rect.center(),
+                    Align2::CENTER_CENTER,
+                    format!("{:.1e}", value),
+                    FontId::new(20.0, FontFamily::Monospace),
+                    color,
+                )
+                .size()
+        } else {
+            ui.painter()
+                .text(
+                    rect.center(),
+                    Align2::CENTER_CENTER,
+                    format!("{:.1}", value),
+                    FontId::new(20.0, FontFamily::Monospace),
+                    color,
+                )
+                .size()
+        };
+
         let suffix_pos = pos2(rect.center().x, rect.center().y + value_size.y);
         ui.painter().text(
             suffix_pos,
@@ -178,14 +191,8 @@ pub fn gauge_ui(
             FontId::new(15.0, FontFamily::Monospace),
             color,
         );
-        // Paint the circle, animating it from left to right with `how_on`:
-        //let circle_x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), how_on);
-        //ui.painter()
-        //    .circle(center, 0.75 * radius, visuals.bg_fill, visuals.fg_stroke);
     }
 
-    // All done! Return the interaction response so the user can check what happened
-    // (hovered, clicked, ...) and maybe show a tooltip:
     response
 }
 
