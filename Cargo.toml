@@ -1,7 +1,7 @@
 [package]
 name = "thz-image-explorer"
 authors = ["Linus Leo Stöckli"]
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 description = "Explorer Software for THz TDS images."
 license = "GPL-3.0"
@@ -31,7 +31,7 @@ dotthz = { version = "0.2.4", features = ["serde", "hdf5-sys-static"] }
 name = "THz Image Explorer"
 identifier = "com.unibe.coconut"
 icon = ["./icons/install.png"]
-version = "0.2.1"
+version = "0.2.2"
 copyright = "Copyright (c) Linus Leo Stöckli 2022. All rights reserved."
 category = "Developer Tool"
 short_description = "Explorer Software for Data of the COCoNuT Experiment."
@@ -44,7 +44,7 @@ dbg-name = false
 name = "THz Image Explorer"
 no-build = false
 output = "target/wix/THzImageExplorerInstaller.msi"
-version = "0.2.1"
+version = "0.2.2"
 license = "GPL-3.0"
 
 [profile.release]
