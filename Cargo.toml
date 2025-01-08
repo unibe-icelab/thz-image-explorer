@@ -45,7 +45,6 @@ name = "THz Image Explorer"
 no-build = false
 output = "target/wix/THzImageExplorerInstaller.msi"
 version = "0.2.2"
-license = "GPL-3.0"
 
 [profile.release]
 debug = 1
