@@ -53,7 +53,7 @@ jobs:
       - name: Build
         run: cargo bundle --release
       - name: Compress
-        run: cd target/release/bundle/osx && ls && zip -r thz-image-explorer.app.zip TeraFlash.app/*
+        run: cd target/release/bundle/osx && ls && zip -r thz-image-explorer.app.zip thz-image-explorer.app/*
       - name: Upload
         uses: actions/upload-release-asset@v1.0.1
         env:
@@ -79,7 +79,7 @@ jobs:
       - name: Build
         run: cargo bundle --release
       - name: Compress
-        run: cd target/release/bundle/osx && ls && zip -r thz-image-explorer.app.zip TeraFlash.app/*
+        run: cd target/release/bundle/osx && ls && zip -r thz-image-explorer.app.zip thz-image-explorer.app/*
       - name: Upload
         uses: actions/upload-release-asset@v1.0.1
         env:
