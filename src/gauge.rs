@@ -4,15 +4,23 @@
 use std::f64::consts::PI;
 
 use eframe::egui;
-use eframe::egui::{Align2, Color32, FontId, Pos2, pos2, Stroke, Visuals};
 use eframe::egui::Shape::Path;
+use eframe::egui::{pos2, Align2, Color32, FontId, Pos2, Stroke, Visuals};
 use eframe::epaint::{FontFamily, PathShape};
 
 pub fn map(x: &f64, min: f64, max: f64, min_i: f64, max_i: f64) -> f64 {
     (*x - min_i) / (max_i - min_i) * (max - min) + min
 }
 
-pub fn gauge_ui(ui: &mut egui::Ui, value: &f64, min_i: f64, max_i: f64, size: f64, suffix: &str, text: &str) -> egui::Response {
+pub fn gauge_ui(
+    ui: &mut egui::Ui,
+    value: &f64,
+    min_i: f64,
+    max_i: f64,
+    size: f64,
+    suffix: &str,
+    text: &str,
+) -> egui::Response {
     let min = -45;
     let max = 150;
     // Widget code can be broken up in four steps:
@@ -56,23 +64,38 @@ pub fn gauge_ui(ui: &mut egui::Ui, value: &f64, min_i: f64, max_i: f64, size: f6
         let width_in = 10.0;
         for phi in min..=max {
             let phi = (phi as f64) / 180.0 * PI;
-            white_values.push(Pos2 { x: rect.center().x - r * (phi as f32).cos(), y: rect.center().y - r * (phi as f32).sin() });
+            white_values.push(Pos2 {
+                x: rect.center().x - r * (phi as f32).cos(),
+                y: rect.center().y - r * (phi as f32).sin(),
+            });
         }
 
         // TODO: add function for cool steps
         for phi in (min..=max).step_by(50) {
             let phi = (phi as f64) / 180.0 * PI;
             let tick_pos = vec![
-                Pos2 { x: rect.center().x - r * (phi as f32).cos(), y: rect.center().y - r * (phi as f32).sin() },
-                Pos2 { x: rect.center().x - (r + size as f32 * 0.035 + width_out) * (phi as f32).cos(), y: rect.center().y - (r + size as f32 * 0.035 + width_out) * (phi as f32).sin() },
+                Pos2 {
+                    x: rect.center().x - r * (phi as f32).cos(),
+                    y: rect.center().y - r * (phi as f32).sin(),
+                },
+                Pos2 {
+                    x: rect.center().x - (r + size as f32 * 0.035 + width_out) * (phi as f32).cos(),
+                    y: rect.center().y - (r + size as f32 * 0.035 + width_out) * (phi as f32).sin(),
+                },
             ];
             major_tick_values.push(tick_pos);
         }
         for phi in (min..=max).step_by(10) {
             let phi = (phi as f64) / 180.0 * PI;
             let tick_pos = vec![
-                Pos2 { x: rect.center().x - r * (phi as f32).cos(), y: rect.center().y - r * (phi as f32).sin() },
-                Pos2 { x: rect.center().x - (r + size as f32 * 0.01 + width_out) * (phi as f32).cos(), y: rect.center().y - (r + size as f32 * 0.01 + width_out) * (phi as f32).sin() },
+                Pos2 {
+                    x: rect.center().x - r * (phi as f32).cos(),
+                    y: rect.center().y - r * (phi as f32).sin(),
+                },
+                Pos2 {
+                    x: rect.center().x - (r + size as f32 * 0.01 + width_out) * (phi as f32).cos(),
+                    y: rect.center().y - (r + size as f32 * 0.01 + width_out) * (phi as f32).sin(),
+                },
             ];
             minor_tick_values.push(tick_pos);
         }
@@ -80,22 +103,25 @@ pub fn gauge_ui(ui: &mut egui::Ui, value: &f64, min_i: f64, max_i: f64, size: f6
         r = r - width_in / 2.0 - width_out / 2.0;
         for phi in min..(map(value, min as f64, max as f64, min_i, max_i) as i32) {
             let phi = (phi as f64) / 180.0 * PI;
-            color_values.push(Pos2 { x: rect.center().x - r * (phi as f32).cos(), y: rect.center().y - r * (phi as f32).sin() });
+            color_values.push(Pos2 {
+                x: rect.center().x - r * (phi as f32).cos(),
+                y: rect.center().y - r * (phi as f32).sin(),
+            });
         }
-
 
         // ui.painter()
         //    .circle(center, radius, visuals.bg_fill, visuals.bg_stroke);
 
-        let color: Color32;
-        if ui.visuals() == &Visuals::dark() {
-            color = Color32::WHITE;
+        let color = if ui.visuals() == &Visuals::dark() {
+            Color32::WHITE
         } else {
-            color = Color32::BLACK;
-        }
+            Color32::BLACK
+        };
 
         let values_color: Color32;
-        if (*value as f32) > min as f32 + (max - min) as f32 * 0.25 || (*value as f32) < min as f32 + (max - min) as f32 * 0.75 {
+        if (*value as f32) > min as f32 + (max - min) as f32 * 0.25
+            || (*value as f32) < min as f32 + (max - min) as f32 * 0.75
+        {
             values_color = Color32::GREEN;
         } else if *value as f32 <= min as f32 + (max - min) as f32 * 0.25 {
             values_color = Color32::YELLOW;
@@ -125,18 +151,33 @@ pub fn gauge_ui(ui: &mut egui::Ui, value: &f64, min_i: f64, max_i: f64, size: f6
         //     )));
         // }
 
-        let value_size = ui.painter().text(rect.center(), Align2::CENTER_CENTER, format!("{:.1}", value),
-                                           FontId::new(20.0, FontFamily::Monospace),
-                                           color).size();
+        let value_size = ui
+            .painter()
+            .text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                format!("{:.1}", value),
+                FontId::new(20.0, FontFamily::Monospace),
+                color,
+            )
+            .size();
         let suffix_pos = pos2(rect.center().x, rect.center().y + value_size.y);
-        ui.painter().text(suffix_pos, Align2::CENTER_CENTER, format!("{}", suffix),
-                          FontId::new(15.0, FontFamily::Monospace),
-                          color);
+        ui.painter().text(
+            suffix_pos,
+            Align2::CENTER_CENTER,
+            suffix.to_string(),
+            FontId::new(15.0, FontFamily::Monospace),
+            color,
+        );
 
         let text_pos = pos2(rect.center().x, rect.center().y - value_size.y);
-        ui.painter().text(text_pos, Align2::CENTER_CENTER, text,
-                          FontId::new(15.0, FontFamily::Monospace),
-                          color);
+        ui.painter().text(
+            text_pos,
+            Align2::CENTER_CENTER,
+            text,
+            FontId::new(15.0, FontFamily::Monospace),
+            color,
+        );
         // Paint the circle, animating it from left to right with `how_on`:
         //let circle_x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), how_on);
         //ui.painter()
@@ -148,8 +189,14 @@ pub fn gauge_ui(ui: &mut egui::Ui, value: &f64, min_i: f64, max_i: f64, size: f6
     response
 }
 
-
 // A wrapper that allows the more idiomatic usage pattern: `ui.add(gauge(&temperatue, "temperature"))`
-pub fn gauge<'a>(value: &'a f64, min: f64, max: f64, size: f64, suffix: &'a str, text: &'a str) -> impl egui::Widget + 'a {
+pub fn gauge<'a>(
+    value: &'a f64,
+    min: f64,
+    max: f64,
+    size: f64,
+    suffix: &'a str,
+    text: &'a str,
+) -> impl egui::Widget + 'a {
     move |ui: &mut egui::Ui| gauge_ui(ui, value, min, max, size, suffix, text)
 }

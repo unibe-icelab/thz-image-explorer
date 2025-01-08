@@ -4,8 +4,34 @@ use ndarray::{Array1, Array2, Array3, Axis};
 use ndarray_npy::NpzReader;
 use realfft::RealFftPlanner;
 use std::error::Error;
+use std::fs;
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+pub fn find_files_with_same_extension(file_path: &Path) -> std::io::Result<Vec<PathBuf>> {
+    // Convert the input path to a Path
+    let path = Path::new(file_path);
+
+    // Get the directory and extension of the file
+    if let (Some(dir), Some(extension)) = (path.parent(), path.extension()) {
+        // List all files in the directory
+        let mut matching_files = Vec::new();
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let entry_path = entry.path();
+
+            // Check if the entry is a file and has the same extension
+            if entry_path.is_file() && entry_path.extension() == Some(extension) {
+                matching_files.push(entry_path);
+            }
+        }
+        matching_files.sort();
+        Ok(matching_files)
+    } else {
+        // Return an empty list if the file has no directory or extension
+        Ok(Vec::new())
+    }
+}
 
 pub fn open_json(
     hk: &mut HouseKeeping,
@@ -143,10 +169,9 @@ pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(),
     }
 
     scan.scaled_data = scan.raw_data.clone();
-    scan.scaled_img = scan.raw_img.clone();
 
     scan.filtered_data = scan.scaled_data.clone();
-    scan.filtered_img = scan.scaled_img.clone();
+    scan.filtered_img = scan.raw_img.clone();
 
     let mut real_planner = RealFftPlanner::<f32>::new();
     let r2c = real_planner.plan_fft_forward(n);
@@ -302,10 +327,9 @@ pub fn open_from_thz(
     }
 
     scan.scaled_data = scan.raw_data.clone();
-    scan.scaled_img = scan.raw_img.clone();
 
     scan.filtered_data = scan.scaled_data.clone();
-    scan.filtered_img = scan.scaled_img.clone();
+    scan.filtered_img = scan.raw_img.clone();
 
     let n = scan.time.len();
     let rng = scan.time[n - 1] - scan.time[0];

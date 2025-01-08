@@ -2,6 +2,7 @@ use core::f64;
 use dotthz::{DotthzFile, DotthzMetaData};
 use egui_file_dialog::information_panel::InformationPanel;
 use egui_file_dialog::FileDialog;
+use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, RwLock};
 
@@ -66,7 +67,6 @@ impl GuiSettingsContainer {
 }
 
 pub struct MyApp<'a> {
-    dark_mode: bool,
     fft_bounds: [f32; 2],
     filter_bounds: [f32; 2],
     time_window: [f32; 2],
@@ -74,10 +74,6 @@ pub struct MyApp<'a> {
     val: PlotPoint,
     mid_point: f32,
     bw: bool,
-    hacktica_light: egui::Image<'a>,
-    hacktica_dark: egui::Image<'a>,
-    coconut_logo_dark: egui::Image<'a>,
-    coconut_logo_light: egui::Image<'a>,
     water_vapour_lines: Vec<f64>,
     wp: egui::Image<'a>,
     dropped_files: Vec<egui::DroppedFile>,
@@ -85,6 +81,9 @@ pub struct MyApp<'a> {
     file_dialog_state: FileDialogState,
     file_dialog: FileDialog,
     information_panel: InformationPanel,
+    other_files: Vec<PathBuf>,
+    selected_file_name: String,
+    scroll_to_selection: bool,
     gui_conf: GuiSettingsContainer,
     md_lock: Arc<RwLock<DotthzMetaData>>,
     img_lock: Arc<RwLock<Array2<f32>>>,
@@ -94,7 +93,8 @@ pub struct MyApp<'a> {
     config_tx: Sender<Config>,
 }
 
-impl<'a> MyApp<'a> {
+impl MyApp<'_> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         cc: &eframe::CreationContext,
         md_lock: Arc<RwLock<DotthzMetaData>>,
@@ -145,7 +145,8 @@ impl<'a> MyApp<'a> {
             .add_file_filter(
                 "CSV files",
                 Arc::new(|p| p.extension().unwrap_or_default().to_ascii_lowercase() == "csv"),
-            );
+            )
+            .default_file_filter("dotTHz files");
         // Load the persistent data of the file dialog.
         // Alternatively, you can also use the `FileDialog::storage` builder method.
         if let Some(storage) = cc.storage {
@@ -154,23 +155,6 @@ impl<'a> MyApp<'a> {
         }
 
         Self {
-            dark_mode: true,
-            hacktica_dark: egui::Image::from_bytes(
-                "Hacktica Dark",
-                include_bytes!("../images/hacktica_inv.png"),
-            ),
-            hacktica_light: egui::Image::from_bytes(
-                "Hacktica",
-                include_bytes!("../images/hacktica.png"),
-            ),
-            coconut_logo_dark: egui::Image::from_bytes(
-                "COCoNuT Dark",
-                include_bytes!("../images/coconut_inv.png"),
-            ),
-            coconut_logo_light: egui::Image::from_bytes(
-                "COCoNuT",
-                include_bytes!("../images/coconut.png"),
-            ),
             water_vapour_lines,
             wp: egui::Image::from_bytes("WP", include_bytes!("../images/WP-Logo.png")),
 
@@ -186,7 +170,8 @@ impl<'a> MyApp<'a> {
                             .max_height(150.0)
                             .show(ui, |ui| {
                                 ui.add(
-                                    egui::TextEdit::multiline(&mut content.clone()).code_editor(),
+                                    egui::TextEdit::multiline(&mut content.to_string())
+                                        .code_editor(),
                                 );
                             });
                     }
@@ -194,10 +179,8 @@ impl<'a> MyApp<'a> {
                 .add_metadata_loader("thz", |other_data, path| {
                     if let Ok(file) = DotthzFile::load(&path.to_path_buf()) {
                         if let Ok(group_names) = file.get_group_names() {
-                            other_data.insert(
-                                "Groups: ".to_string(),
-                                format!("{:}", group_names.join(", ")),
-                            );
+                            other_data
+                                .insert("Groups: ".to_string(), group_names.join(", ").to_string());
                             if let Some(group_name) = group_names.first() {
                                 if let Ok(meta_data) = file.get_meta_data(group_name) {
                                     other_data.insert(
@@ -219,6 +202,9 @@ impl<'a> MyApp<'a> {
                         }
                     }
                 }),
+            other_files: vec![],
+            selected_file_name: "".to_string(),
+            scroll_to_selection: false,
             gui_conf,
             md_lock,
             img_lock,
@@ -237,13 +223,13 @@ impl<'a> MyApp<'a> {
     }
 }
 
-impl<'a> eframe::App for MyApp<'a> {
+impl eframe::App for MyApp<'_> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let left_panel_width = 300.0;
         let right_panel_width = 500.0;
 
         center_panel(
-            &ctx,
+            ctx,
             &right_panel_width,
             &left_panel_width,
             &mut self.gui_conf,
@@ -254,11 +240,8 @@ impl<'a> eframe::App for MyApp<'a> {
         );
 
         left_panel(
-            &ctx,
+            ctx,
             &left_panel_width,
-            &mut self.gui_conf,
-            self.coconut_logo_light.clone(),
-            self.coconut_logo_dark.clone(),
             &mut self.pixel_selected,
             &mut self.val,
             &mut self.mid_point,
@@ -266,6 +249,9 @@ impl<'a> eframe::App for MyApp<'a> {
             &mut self.file_dialog_state,
             &mut self.file_dialog,
             &mut self.information_panel,
+            &mut self.other_files,
+            &mut self.selected_file_name,
+            &mut self.scroll_to_selection,
             &self.md_lock,
             &self.img_lock,
             &self.data_lock,
@@ -274,7 +260,7 @@ impl<'a> eframe::App for MyApp<'a> {
         );
 
         right_panel(
-            &ctx,
+            ctx,
             &right_panel_width,
             &mut self.gui_conf,
             &mut self.filter_bounds,
@@ -285,8 +271,6 @@ impl<'a> eframe::App for MyApp<'a> {
             &self.config_tx,
             &self.data_lock,
             &self.scaling_lock,
-            self.hacktica_dark.clone(),
-            self.hacktica_light.clone(),
             self.wp.clone(),
         );
 

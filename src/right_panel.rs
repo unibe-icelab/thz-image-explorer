@@ -1,5 +1,4 @@
 use std::f32::consts::E;
-use std::f64::NEG_INFINITY;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, RwLock};
 
@@ -30,8 +29,6 @@ pub fn right_panel(
     config_tx: &Sender<Config>,
     data_lock: &Arc<RwLock<DataPoint>>,
     scaling_lock: &Arc<RwLock<u8>>,
-    hacktica_dark: egui::Image,
-    hacktica_light: egui::Image,
     wp: egui::Image,
 ) {
     let mut data = DataPoint::default();
@@ -236,20 +233,17 @@ pub fn right_panel(
                     .collect();
                 let max = spectrum_vals
                     .iter()
-                    .fold(NEG_INFINITY, |ai, &bi| (ai as f64).max(bi[1]));
+                    .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi[1]));
 
                 let mut filter_vals: Vec<[f64; 2]> = Vec::new();
                 let filter_f: Vec<f64> = linspace::<f64>(0.0, 10.0, data.time.len()).collect();
-                for i in 0..filter_f.len() {
-                    let a: f64;
-                    if filter_f[i] >= filter_bounds[0] as f64
-                        && filter_f[i] <= filter_bounds[1] as f64
-                    {
-                        a = max;
+                for fi in filter_f {
+                    let a = if fi >= filter_bounds[0] as f64 && fi <= filter_bounds[1] as f64 {
+                        max
                     } else {
-                        a = 0.0;
-                    }
-                    filter_vals.push([filter_f[i], a]);
+                        0.0
+                    };
+                    filter_vals.push([fi, a]);
                 }
 
                 let window_plot = Plot::new("FFT Filter")
@@ -425,9 +419,7 @@ pub fn right_panel(
                             time_window[0] = *data.time.first().unwrap_or(&1000.0);
                             time_window[1] = *data.time.last().unwrap_or(&1050.0);
                         }
-                        config_tx
-                            .send(Config::SetTimeWindow(time_window.clone()))
-                            .unwrap();
+                        config_tx.send(Config::SetTimeWindow(*time_window)).unwrap();
                     }
                 });
 
@@ -438,17 +430,13 @@ pub fn right_panel(
                 if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && time_window[1] < last {
                     time_window[0] += 1.0;
                     time_window[1] = width + time_window[0];
-                    config_tx
-                        .send(Config::SetTimeWindow(time_window.clone()))
-                        .unwrap();
+                    config_tx.send(Config::SetTimeWindow(*time_window)).unwrap();
                 }
 
                 if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) && time_window[0] > first {
                     time_window[0] -= 1.0;
                     time_window[1] = width + time_window[0];
-                    config_tx
-                        .send(Config::SetTimeWindow(time_window.clone()))
-                        .unwrap();
+                    config_tx.send(Config::SetTimeWindow(*time_window)).unwrap();
                 }
 
                 // scroll through time axis
@@ -465,9 +453,7 @@ pub fn right_panel(
                     time_window[0] -= zoom_delta * zoom_factor;
 
                     if scroll_delta != Vec2::ZERO || zoom_delta != 0.0 {
-                        config_tx
-                            .send(Config::SetTimeWindow(time_window.clone()))
-                            .unwrap();
+                        config_tx.send(Config::SetTimeWindow(*time_window)).unwrap();
                     }
                 }
 
@@ -491,15 +477,7 @@ pub fn right_panel(
 
                 let height = ui.available_size().y - 38.0 - 20.0;
                 ui.add_space(height);
-                ui.horizontal_wrapped(|ui| {
-                    let width = (ui.available_size().x - 96.0 - 96.0) / 3.0;
-                    ui.add_space(width);
-                    if gui_conf.dark_mode {
-                        ui.add(hacktica_dark.fit_to_exact_size(vec2(96.0, 38.0)));
-                    } else {
-                        ui.add(hacktica_light.fit_to_exact_size(vec2(96.0, 38.0)));
-                    }
-                    ui.add_space(50.0);
+                ui.centered_and_justified(|ui| {
                     ui.add(wp.fit_to_exact_size(vec2(80.0, 38.0)));
                 });
             });
