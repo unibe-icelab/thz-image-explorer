@@ -126,6 +126,16 @@ pub fn left_panel(
     if let Ok(read_guard) = data_lock.read() {
         data = read_guard.clone();
     }
+    let mut meta_data = DotthzMetaData::default();
+    if let Ok(md) = md_lock.read() {
+        meta_data = md.clone();
+    }
+    if let Some(t_s) = meta_data.md.get("T_S [K]") {
+        data.hk.sample_temperature = t_s.parse().unwrap();
+    }
+    if let Some(pressure) = meta_data.md.get("P [mbar]") {
+        data.hk.ambient_pressure = pressure.parse().unwrap();
+    }
 
     egui::SidePanel::new(Side::Left, "Left Panel Settings")
         .min_width(*left_panel_width)
@@ -141,45 +151,26 @@ pub fn left_panel(
                 ui.horizontal(|ui| {
                     ui.add_space((left_panel_width - 2.0 * gauge_size) / 3.0);
                     ui.add(gauge(
-                        &data.hk.ambient_temperature,
-                        -273.15,
-                        100.0,
-                        gauge_size as f64,
-                        "°C",
-                        "T_A",
-                    ));
-                    ui.add_space((left_panel_width - 2.0 * gauge_size) / 3.0);
-                    ui.add(gauge(
                         &data.hk.sample_temperature,
-                        -273.15,
-                        100.0,
-                        gauge_size as f64,
-                        "°C",
-                        "T_S",
-                    ));
-                });
-                ui.horizontal(|ui| {
-                    ui.add_space((left_panel_width - 2.0 * gauge_size) / 3.0);
-                    ui.add(gauge(
-                        &data.hk.ambient_humidity,
                         0.0,
-                        100.0,
+                        400.0,
                         gauge_size as f64,
-                        "%",
-                        "RH",
+                        "K",
+                        "T_S",
                     ));
                     ui.add_space((left_panel_width - 2.0 * gauge_size) / 3.0);
                     ui.add(gauge(
                         &data.hk.ambient_pressure,
-                        900.0,
-                        1100.0,
+                        1.0e-8,
+                        1.0e+3,
                         gauge_size as f64,
-                        "hpa",
+                        "mbar",
                         "p0",
                     ));
                 });
             });
-
+            ui.separator();
+            ui.heading("Data Source");
             if ui
                 .button(egui::RichText::new(format!(
                     "{} Load Scan",
@@ -192,6 +183,7 @@ pub fn left_panel(
             };
 
             if !other_files.is_empty() {
+                ui.add_space(5.0);
                 ui.label("Files in same directory:");
                 let row_height = ui
                     .style()
@@ -330,6 +322,8 @@ pub fn left_panel(
             let logo_height = 100.0;
             let height = ui.available_size().y - logo_height - 20.0;
 
+            ui.separator();
+            ui.heading("Scan");
             let mut img_data = make_dummy();
             if let Ok(read_guard) = img_lock.read() {
                 img_data = read_guard.clone();
@@ -361,12 +355,9 @@ pub fn left_panel(
             ui.label(format!("x: {}", pixel_selected.x));
             ui.label(format!("y: {}", pixel_selected.y));
 
-            let mut meta_data = DotthzMetaData::default();
-            if let Ok(md) = md_lock.read() {
-                meta_data = md.clone();
-            }
-            ui.label("Meta Data:");
-            egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.separator();
+            ui.heading("Meta Data");
+            egui::ScrollArea::both().show(ui, |ui| {
                 egui::Grid::new("meta_data")
                     .num_columns(2)
                     .striped(true)
