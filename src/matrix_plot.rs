@@ -1,5 +1,3 @@
-use std::f64::{INFINITY, NEG_INFINITY};
-
 use eframe::egui;
 use eframe::egui::{
     pos2, vec2, Color32, ColorImage, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
@@ -32,8 +30,7 @@ impl Default for SelectedPixel {
 pub fn make_dummy() -> Array2<f32> {
     let width = 20;
     let height = 20;
-    let data = Array2::from_shape_fn((width, height), |(i, _)| i as f32);
-    data
+    Array2::from_shape_fn((width, height), |(i, _)| i as f32)
 }
 
 pub fn color_from_intensity(
@@ -263,6 +260,7 @@ fn colorbar_with_midpoint_slider(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn plot_matrix(
     ui: &mut egui::Ui,
     data: &Array2<f32>,
@@ -276,7 +274,9 @@ pub fn plot_matrix(
 ) -> bool {
     let mut pixel_clicked = false;
 
-    let max = data.iter().fold(NEG_INFINITY, |ai, &bi| ai.max(bi as f64));
+    let max = data
+        .iter()
+        .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi as f64));
 
     ui.horizontal(|ui| {
         ui.label("Noise gate:");
@@ -287,7 +287,7 @@ pub fn plot_matrix(
     let height = data.len_of(Axis(1));
     let size = [plot_width / width as f64, plot_height / height as f64]
         .iter()
-        .fold(INFINITY, |ai, &bi| ai.min(bi));
+        .fold(f64::INFINITY, |ai, &bi| ai.min(bi));
 
     let mut img = ColorImage::new([width, height], Color32::TRANSPARENT);
     let mut intensity_matrix = vec![vec![0.0; height]; width];

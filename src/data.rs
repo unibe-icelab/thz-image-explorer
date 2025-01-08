@@ -76,7 +76,6 @@ pub struct ScannedImage {
     pub frequencies: Array1<f32>,
     pub raw_img: Array2<f32>,
     pub raw_data: Array3<f32>,
-    pub scaled_img: Array2<f32>,
     pub scaled_data: Array3<f32>,
     pub filtered_img: Array2<f32>,
     pub filtered_data: Array3<f32>,
@@ -98,7 +97,6 @@ impl Default for ScannedImage {
             frequencies: Array1::default(1),
             raw_img: Array2::default((1, 1)),
             raw_data: Array3::default((1, 1, 1)),
-            scaled_img: Array2::default((1, 1)),
             scaled_data: Array3::default((1, 1, 1)),
             filtered_img: Array2::default((1, 1)),
             filtered_data: Array3::default((1, 1, 1)),
@@ -129,7 +127,6 @@ impl ScannedImage {
             frequencies: Array1::default(1),
             raw_img: Array2::default((1, 1)),
             raw_data: Array3::default((1, 1, 1)),
-            scaled_img: Array2::default((1, 1)),
             scaled_data: Array3::default((1, 1, 1)),
             filtered_img: Array2::default((1, 1)),
             filtered_data: Array3::default((1, 1, 1)),
@@ -164,7 +161,6 @@ impl ScannedImage {
         let scale = self.scaling;
         if scale <= 1 {
             // No rescaling needed if scale is 1 or less
-            self.scaled_img = self.raw_img.clone();
             self.scaled_data = self.raw_data.clone();
             return;
         }
@@ -173,7 +169,7 @@ impl ScannedImage {
         let new_width = self.width / scale;
 
         // Initialize scaled_img with the new dimensions
-        self.scaled_img = Array2::zeros((new_width, new_height));
+        self.filtered_img = Array2::zeros((new_width, new_height));
 
         // Rescale the raw_img into scaled_img
         for y in 0..new_height {
@@ -186,7 +182,7 @@ impl ScannedImage {
                     }
                 }
                 // Average and store in scaled_img
-                self.scaled_img[(x, y)] = sum / (scale * scale) as f32;
+                self.filtered_img[(x, y)] = sum / (scale * scale) as f32;
             }
         }
 

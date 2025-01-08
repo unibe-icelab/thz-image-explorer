@@ -19,7 +19,7 @@ pub fn center_panel(
     data: &mut DataPoint,
     data_lock: &Arc<RwLock<DataPoint>>,
     config_tx: &Sender<Config>,
-    water_vapour_lines: &Vec<f64>,
+    water_vapour_lines: &[f64],
 ) {
     egui::CentralPanel::default().show(ctx, |ui| {
         let height = ui.available_size().y * 0.45;
@@ -105,7 +105,7 @@ pub fn center_panel(
                         "{}\n{:4.2} ps\n{:4.2} a.u.",
                         s,
                         val.x,
-                        val.y - axis_display_offset_2 as f64
+                        val.y - axis_display_offset_2
                     )
                 };
 
@@ -154,12 +154,11 @@ pub fn center_panel(
                     .iter()
                     .zip(data.signal_1_fft.iter())
                     .map(|(x, y)| {
-                        let fft;
-                        if gui_conf.log_plot {
-                            fft = 20.0 * (*y + 1e-10).log(10.0);
+                        let fft = if gui_conf.log_plot {
+                            20.0 * (*y + 1e-10).log(10.0)
                         } else {
-                            fft = *y;
-                        }
+                            *y
+                        };
                         // TODO: is this needed?
                         // if fft < 0.0 {
                         //     fft = 0.0;
@@ -172,12 +171,11 @@ pub fn center_panel(
                     .iter()
                     .zip(data.filtered_signal_1_fft.iter())
                     .map(|(x, y)| {
-                        let fft;
-                        if gui_conf.log_plot {
-                            fft = 20.0 * (*y + 1e-10).log(10.0);
+                        let fft = if gui_conf.log_plot {
+                            20.0 * (*y + 1e-10).log(10.0)
                         } else {
-                            fft = *y;
-                        }
+                            *y
+                        };
                         // TODO: is this needed?
                         // if fft < 0.0 {
                         //     fft = 0.0;
@@ -210,8 +208,8 @@ pub fn center_panel(
                     max_fft_signals = -200.0;
                 }
 
-                let log_plot = gui_conf.log_plot.clone();
-                let phases_visible = gui_conf.phases_visible.clone();
+                let log_plot = gui_conf.log_plot;
+                let phases_visible = gui_conf.phases_visible;
 
                 let a_fmt = move |y: GridMark, _range: &RangeInclusive<f64>| {
                     if log_plot {
@@ -330,11 +328,7 @@ pub fn center_panel(
                     ui.add_space(50.0);
                     ui.label("FFT");
                     if ui.add(toggle(&mut gui_conf.phases_visible)).changed() {
-                        if gui_conf.phases_visible {
-                            gui_conf.log_plot = false;
-                        } else {
-                            gui_conf.log_plot = true;
-                        }
+                        gui_conf.log_plot = !gui_conf.phases_visible;
                     };
                     ui.label("Phases");
                     ui.add_space(50.0);
@@ -346,7 +340,7 @@ pub fn center_panel(
 
                     // dynamic range:
                     let length = data.signal_1_fft.len();
-                    let dr1 = if data.signal_1_fft.len() != 0 {
+                    let dr1 = if !data.signal_1_fft.is_empty() {
                         data.signal_1_fft[length - 100..length].iter().sum::<f32>() / 100.0
                     } else {
                         0.0

@@ -11,12 +11,12 @@ use ndarray::parallel::prelude::*;
 use ndarray::{Array1, Array2, Array3, Axis};
 use realfft::num_complex::Complex32;
 use std::f32::consts::PI;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
-fn save_image(img: &ColorImage, file_path: &PathBuf) {
+fn save_image(img: &ColorImage, file_path: &Path) {
     let height = img.height();
     let width = img.width();
     let mut raw: Vec<u8> = vec![];
@@ -28,7 +28,7 @@ fn save_image(img: &ColorImage, file_path: &PathBuf) {
     }
     let img_to_save = RgbaImage::from_raw(width as u32, height as u32, raw)
         .expect("container should have the right size for the image dimensions");
-    let mut image_path = file_path.clone();
+    let mut image_path = file_path.to_path_buf();
     image_path.push("image.png");
     match img_to_save.save(image_path) {
         Ok(_) => {}
@@ -108,7 +108,13 @@ fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLo
         .position(|t| *t == config.time_window[1].round())
         .unwrap_or(scan.time.len());
     if let Some(r2c) = &scan.r2c {
-        scan.filtered_img = Array2::zeros((scan.scaled_data.shape()[0], scan.scaled_data.shape()[1]));
+        scan.filtered_img =
+            Array2::zeros((scan.scaled_data.shape()[0], scan.scaled_data.shape()[1]));
+        scan.filtered_data = Array3::zeros((
+            scan.scaled_data.shape()[0],
+            scan.scaled_data.shape()[1],
+            scan.scaled_data.shape()[2],
+        ));
         if let Some(c2r) = &scan.c2r {
             (
                 scan.scaled_data.axis_iter_mut(Axis(0)),
@@ -118,10 +124,10 @@ fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLo
                 .into_par_iter()
                 .for_each(
                     |(
-                         mut scaled_data_columns,
-                         mut filtered_data_columns,
-                         mut filtered_img_columns,
-                     )| {
+                        mut scaled_data_columns,
+                        mut filtered_data_columns,
+                        mut filtered_img_columns,
+                    )| {
                         (
                             scaled_data_columns.axis_iter_mut(Axis(0)),
                             filtered_data_columns.axis_iter_mut(Axis(0)),
@@ -264,7 +270,7 @@ pub fn main_thread(
                                 dbg!(&pulse_path);
                                 match open_from_npz(&mut scan, &pulse_path) {
                                     Ok(_) => {
-                                        update_intensity_image(&mut scan, &img_lock);
+                                        update_intensity_image(&scan, &img_lock);
                                     }
                                     Err(err) => {
                                         println!("an error occurred while trying to read data.npz {err:?}");
@@ -300,7 +306,7 @@ pub fn main_thread(
                                 {
                                     Ok(_) => {
                                         log::info!("opened {:?}", selected_file_path);
-                                        update_intensity_image(&mut scan, &img_lock);
+                                        update_intensity_image(&scan, &img_lock);
                                     }
                                     Err(err) => {
                                         log::error!(
@@ -391,13 +397,13 @@ pub fn main_thread(
                             // Check if the "pixel" column matches the target pixel
                             if record.get(0)
                                 == Some(
-                                format!(
-                                    "{:05}-{:05}",
-                                    selected_pixel.x / scan.scaling,
-                                    selected_pixel.y / scan.scaling,
-                                )
+                                    format!(
+                                        "{:05}-{:05}",
+                                        selected_pixel.x / scan.scaling,
+                                        selected_pixel.y / scan.scaling,
+                                    )
                                     .as_str(),
-                            )
+                                )
                             {
                                 if let Some(rh_value) = record.get(9) {
                                     data.hk.ambient_humidity =
