@@ -39,9 +39,9 @@ pub fn center_panel(
                     ui.colored_label(egui::Color32::BLUE, "— ");
                     ui.label("Filtered Signal 1");
                     ui.add_space(50.0);
-                    ui.add(Checkbox::new(&mut gui_conf.ref_1_visible, ""));
-                    ui.colored_label(egui::Color32::RED, "--- ");
-                    ui.label("Ref 1");
+                    ui.add(Checkbox::new(&mut gui_conf.avg_signal_1_visible, ""));
+                    ui.colored_label(egui::Color32::YELLOW, "--- ");
+                    ui.label("Averaged Signal 1");
                 });
 
                 if let Ok(read_guard) = data_lock.read() {
@@ -52,10 +52,11 @@ pub fn center_panel(
 
                 let mut signal_1: Vec<[f64; 2]> = Vec::new();
                 let mut filtered_signal_1: Vec<[f64; 2]> = Vec::new();
-                let ref_1: Vec<[f64; 2]> = Vec::new();
+                let mut avg_signal_1: Vec<[f64; 2]> = Vec::new();
 
                 let mut axis_display_offset_signal_1 = f64::NEG_INFINITY;
                 let mut axis_display_offset_filtered_signal_1 = f64::NEG_INFINITY;
+                let mut axis_display_offset_avg_signal_1 = f64::NEG_INFINITY;
 
                 if gui_conf.signal_1_visible {
                     axis_display_offset_signal_1 = data
@@ -71,10 +72,18 @@ pub fn center_panel(
                         .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
                         .abs();
                 }
+                if gui_conf.avg_signal_1_visible {
+                    axis_display_offset_avg_signal_1 = data
+                        .avg_signal_1
+                        .iter()
+                        .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
+                        .abs();
+                }
 
                 let axis_display_offset = [
                     axis_display_offset_signal_1,
                     axis_display_offset_filtered_signal_1,
+                    axis_display_offset_avg_signal_1
                 ]
                 .iter()
                 .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi))
@@ -91,6 +100,13 @@ pub fn center_panel(
                     filtered_signal_1.push([
                         data.time[i] as f64,
                         data.filtered_signal_1[i] as f64 + axis_display_offset,
+                    ]);
+                }
+
+                for i in 0..data.time.len().min(data.avg_signal_1.len()) {
+                    avg_signal_1.push([
+                        data.time[i] as f64,
+                        data.avg_signal_1[i] as f64 + axis_display_offset,
                     ]);
                 }
 
@@ -126,6 +142,7 @@ pub fn center_panel(
                             Line::new(PlotPoints::from(signal_1))
                                 .color(egui::Color32::RED)
                                 .style(LineStyle::Solid)
+                                .width(2.0)
                                 .name("signal 1"),
                         );
                     }
@@ -134,14 +151,16 @@ pub fn center_panel(
                             Line::new(PlotPoints::from(filtered_signal_1))
                                 .color(egui::Color32::BLUE)
                                 .style(LineStyle::Solid)
+                                .width(2.0)
                                 .name("filtered signal 1"),
                         );
                     }
-                    if gui_conf.ref_1_visible {
+                    if gui_conf.avg_signal_1_visible {
                         signal_plot_ui.line(
-                            Line::new(PlotPoints::from(ref_1))
-                                .color(egui::Color32::RED)
+                            Line::new(PlotPoints::from(avg_signal_1))
+                                .color(egui::Color32::YELLOW)
                                 .style(LineStyle::Dashed { length: 10.0 })
+                                .width(2.0)
                                 .name("ref 1"),
                         );
                     }
@@ -183,6 +202,23 @@ pub fn center_panel(
                         [*x as f64, fft as f64]
                     })
                     .collect();
+                let avg_signal_1_fft: Vec<[f64; 2]> = data
+                    .frequencies
+                    .iter()
+                    .zip(data.avg_signal_1_fft.iter())
+                    .map(|(x, y)| {
+                        let fft = if gui_conf.log_plot {
+                            20.0 * (*y + 1e-10).log(10.0)
+                        } else {
+                            *y
+                        };
+                        // TODO: is this needed?
+                        // if fft < 0.0 {
+                        //     fft = 0.0;
+                        // }
+                        [*x as f64, fft as f64]
+                    })
+                    .collect();
                 let phase_1_fft: Vec<[f64; 2]> = data
                     .frequencies
                     .iter()
@@ -193,6 +229,12 @@ pub fn center_panel(
                     .frequencies
                     .iter()
                     .zip(data.filtered_phase_fft.iter())
+                    .map(|(x, y)| [*x as f64, *y as f64])
+                    .collect();
+                let avg_phase_1_fft: Vec<[f64; 2]> = data
+                    .frequencies
+                    .iter()
+                    .zip(data.avg_phase_fft.iter())
                     .map(|(x, y)| [*x as f64, *y as f64])
                     .collect();
 
@@ -264,31 +306,54 @@ pub fn center_panel(
                                 Line::new(PlotPoints::from(signal_1_fft))
                                     .color(egui::Color32::RED)
                                     .style(LineStyle::Solid)
-                                    .name("signal 1"),
+                                    .width(2.0)
+                                    .name("amplitude 1"),
                             );
                         } else {
                             fft_plot_ui.line(
                                 Line::new(PlotPoints::from(phase_1_fft))
                                     .color(egui::Color32::RED)
                                     .style(LineStyle::Solid)
+                                    .width(2.0)
                                     .name("phase 1"),
                             );
                         }
                     }
-                    if gui_conf.ref_1_visible {
+                    if gui_conf.filtered_signal_1_visible {
                         if !gui_conf.phases_visible {
                             fft_plot_ui.line(
                                 Line::new(PlotPoints::from(filtered_signal_1_fft))
-                                    .color(egui::Color32::RED)
+                                    .color(egui::Color32::BLUE)
                                     .style(LineStyle::Dashed { length: 10.0 })
-                                    .name("ref 1"),
-                            );
+                                    .width(2.0)
+                                    .name("filtered amplitude 1"),
+                            )
                         } else {
                             fft_plot_ui.line(
                                 Line::new(PlotPoints::from(filtered_phase_1_fft))
-                                    .color(egui::Color32::RED)
+                                    .color(egui::Color32::BLUE)
                                     .style(LineStyle::Dashed { length: 10.0 })
-                                    .name("ref phase 1"),
+                                    .width(2.0)
+                                    .name("filtered phase 1"),
+                            );
+                        }
+                    }
+                    if gui_conf.avg_signal_1_visible {
+                        if !gui_conf.phases_visible {
+                            fft_plot_ui.line(
+                                Line::new(PlotPoints::from(avg_signal_1_fft))
+                                    .color(egui::Color32::YELLOW)
+                                    .style(LineStyle::Dashed { length: 10.0 })
+                                    .width(2.0)
+                                    .name("avg amplitude 1"),
+                            )
+                        } else {
+                            fft_plot_ui.line(
+                                Line::new(PlotPoints::from(avg_phase_1_fft))
+                                    .color(egui::Color32::YELLOW)
+                                    .style(LineStyle::Dashed { length: 10.0 })
+                                    .width(2.0)
+                                    .name("avg phase 1"),
                             );
                         }
                     }
@@ -298,6 +363,7 @@ pub fn center_panel(
                             fft_plot_ui.vline(
                                 VLine::new(*line)
                                     .stroke(Stroke::new(1.0, egui::Color32::BLUE))
+                                    .width(2.0)
                                     .name("water vapour"),
                             );
                         }

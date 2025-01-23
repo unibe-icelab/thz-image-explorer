@@ -432,7 +432,56 @@ pub fn main_thread(
                     let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
                     data.signal_1_fft = amp;
                     data.phase_1_fft = numpy_unwrap(&phase, Some(2.0 * PI));
-                    // let d = data.clone();
+
+                    // get avg and filtered data
+                    data.filtered_signal_1 = scan
+                        .filtered_data
+                        .index_axis(Axis(0), selected_pixel.x / scan.scaling)
+                        .index_axis(Axis(0), selected_pixel.y / scan.scaling)
+                        .to_vec();
+
+                    let mut in_data: Vec<f32> = data.filtered_signal_1.to_vec();
+                    let mut spectrum = r2c.make_output_vec();
+                    // Forward transform the input data
+                    r2c.process(&mut in_data, &mut spectrum).unwrap();
+                    let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
+                    let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
+                    data.filtered_signal_1_fft = amp;
+                    data.filtered_phase_fft = numpy_unwrap(&phase, Some(2.0 * PI));
+
+                    data.avg_signal_1 = scan.filtered_data.mean_axis(Axis(0)).expect("Axis 2 mean failed").mean_axis(Axis(0)).expect("Axis 1 mean failed").to_vec();
+
+                    data.avg_signal_1_fft = vec![0.0; data.signal_1_fft.len()];
+                    data.avg_phase_fft = vec![0.0; data.phase_1_fft.len()];
+
+                    for x in 0..scan.filtered_data.shape()[0] {
+                        for y in 0..scan.filtered_data.shape()[1] {
+                            let mut in_data: Vec<f32> = scan
+                                .filtered_data
+                                .index_axis(Axis(0), x)
+                                .index_axis(Axis(0), y)
+                                .to_vec();
+                            let mut spectrum = r2c.make_output_vec();
+                            // Forward transform the input data
+                            r2c.process(&mut in_data, &mut spectrum).unwrap();
+                            let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
+                            let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
+                            data.avg_signal_1_fft = data.avg_signal_1_fft.iter()
+                                .zip(amp.iter())  // Combine the two iterators
+                                .map(|(a, b)| a + b)  // Add the elements together
+                                .collect();
+                            data.filtered_phase_fft = data.filtered_phase_fft.iter()
+                                .zip(numpy_unwrap(&phase, Some(2.0 * PI)).iter())  // Combine the two iterators
+                                .map(|(a, b)| a + b)  // Add the elements together
+                                .collect();
+                        }
+                    }
+                    data.avg_signal_1_fft = data.avg_signal_1_fft.iter()
+                        .map(|&i| i / (scan.filtered_data.shape()[0] * scan.filtered_data.shape()[1]) as f32) // Perform division
+                        .collect();
+                    data.avg_phase_fft = data.avg_phase_fft.iter()
+                        .map(|&i| i / (scan.filtered_data.shape()[0] * scan.filtered_data.shape()[1]) as f32) // Perform division
+                        .collect();
                 }
             }
         }

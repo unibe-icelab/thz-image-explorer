@@ -3998,6 +3998,7 @@ dependencies = [
  "egui_extras",
  "egui_logger",
  "egui_plot",
+ "home",
  "image",
  "itertools 0.14.0",
  "itertools-num",

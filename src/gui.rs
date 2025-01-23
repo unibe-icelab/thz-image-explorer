@@ -8,6 +8,7 @@ use std::sync::{Arc, RwLock};
 
 use eframe::{egui, Storage};
 use egui_plot::PlotPoint;
+use home::home_dir;
 use ndarray::Array2;
 use preferences::Preferences;
 use serde::{Deserialize, Serialize};
@@ -27,11 +28,12 @@ pub enum FileDialogState {
 }
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct GuiSettingsContainer {
+    pub selected_path: PathBuf,
     pub log_plot: bool,
     pub down_scaling: usize,
     pub normalize_fft: bool,
     pub signal_1_visible: bool,
-    pub ref_1_visible: bool,
+    pub avg_signal_1_visible: bool,
     pub filtered_signal_1_visible: bool,
     pub water_lines_visible: bool,
     pub phases_visible: bool,
@@ -47,11 +49,12 @@ pub struct GuiSettingsContainer {
 impl GuiSettingsContainer {
     pub fn new() -> GuiSettingsContainer {
         GuiSettingsContainer {
+            selected_path:  home_dir().unwrap_or_else(|| PathBuf::from("/")),
             log_plot: true,
             down_scaling: 1,
             normalize_fft: false,
             signal_1_visible: true,
-            ref_1_visible: false,
+            avg_signal_1_visible: false,
             filtered_signal_1_visible: false,
             water_lines_visible: false,
             phases_visible: false,
@@ -145,6 +148,7 @@ impl MyApp<'_> {
                 "CSV files",
                 Arc::new(|p| p.extension().unwrap_or_default().to_ascii_lowercase() == "csv"),
             )
+            .initial_directory(gui_conf.selected_path.clone())
             .default_file_filter("dotTHz files");
         // Load the persistent data of the file dialog.
         // Alternatively, you can also use the `FileDialog::storage` builder method.
@@ -238,6 +242,7 @@ impl eframe::App for MyApp<'_> {
 
         left_panel(
             ctx,
+            &mut self.gui_conf,
             &left_panel_width,
             &mut self.pixel_selected,
             &mut self.val,

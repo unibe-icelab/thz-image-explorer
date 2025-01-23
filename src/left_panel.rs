@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::gauge::gauge;
-use crate::gui::FileDialogState;
+use crate::gui::{FileDialogState, GuiSettingsContainer};
 use crate::io::find_files_with_same_extension;
 use crate::matrix_plot::{make_dummy, plot_matrix, SelectedPixel};
 use crate::toggle::toggle_ui;
@@ -104,6 +104,7 @@ pub fn truncate_filename(ui: &egui::Ui, item: &Path, max_length: f32) -> String 
 #[allow(clippy::too_many_arguments)]
 pub fn left_panel(
     ctx: &egui::Context,
+    gui_conf: &mut GuiSettingsContainer,
     left_panel_width: &f32,
     pixel_selected: &mut SelectedPixel,
     val: &mut PlotPoint,
@@ -315,7 +316,8 @@ pub fn left_panel(
                         *selected_file_name =
                             path.file_name().unwrap().to_str().unwrap().to_string();
                         *scroll_to_selection = true;
-                        file_dialog.config_mut().initial_directory = path;
+                        file_dialog.config_mut().initial_directory = path.clone();
+                        gui_conf.selected_path = path;
                     }
                 }
                 FileDialogState::Save => {

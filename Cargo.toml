@@ -26,6 +26,7 @@ ndarray-npy = { version = "0.9.1", features = ["npz"] }
 serde_json = "1.0.95"
 itertools = "0.14.0"
 dotthz = { version = "0.2.5", features = ["serde", "hdf5-sys-static"] }
+home = "0.5.11"
 
 [package.metadata.bundle]
 name = "THz Image Explorer"
