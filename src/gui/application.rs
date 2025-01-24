@@ -15,11 +15,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::data::DataPoint;
+use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::gui::right_panel::right_panel;
 use crate::APP_INFO;
-use crate::gui::center_panel::center_panel;
 
 #[derive(Clone)]
 pub enum FileDialogState {
@@ -50,7 +50,7 @@ pub struct GuiSettingsContainer {
 impl GuiSettingsContainer {
     pub fn new() -> GuiSettingsContainer {
         GuiSettingsContainer {
-            selected_path:  home_dir().unwrap_or_else(|| PathBuf::from("/")),
+            selected_path: home_dir().unwrap_or_else(|| PathBuf::from("/")),
             log_plot: true,
             down_scaling: 1,
             normalize_fft: false,

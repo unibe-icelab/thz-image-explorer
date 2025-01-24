@@ -1,8 +1,8 @@
 use crate::config::{Config, ConfigContainer};
 use crate::data::{DataPoint, ScannedImage};
+use crate::gui::matrix_plot::SelectedPixel;
 use crate::io::{open_from_npz, open_from_thz, open_json};
 use crate::math_tools::{apply_fft_window, numpy_unwrap};
-use crate::gui::matrix_plot::SelectedPixel;
 use csv::ReaderBuilder;
 use dotthz::DotthzMetaData;
 use eframe::egui::ColorImage;
@@ -449,7 +449,13 @@ pub fn main_thread(
                     data.filtered_signal_1_fft = amp;
                     data.filtered_phase_fft = numpy_unwrap(&phase, Some(2.0 * PI));
 
-                    data.avg_signal_1 = scan.filtered_data.mean_axis(Axis(0)).expect("Axis 2 mean failed").mean_axis(Axis(0)).expect("Axis 1 mean failed").to_vec();
+                    data.avg_signal_1 = scan
+                        .filtered_data
+                        .mean_axis(Axis(0))
+                        .expect("Axis 2 mean failed")
+                        .mean_axis(Axis(0))
+                        .expect("Axis 1 mean failed")
+                        .to_vec();
 
                     data.avg_signal_1_fft = vec![0.0; data.signal_1_fft.len()];
                     data.avg_phase_fft = vec![0.0; data.phase_1_fft.len()];
@@ -466,21 +472,35 @@ pub fn main_thread(
                             r2c.process(&mut in_data, &mut spectrum).unwrap();
                             let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
                             let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
-                            data.avg_signal_1_fft = data.avg_signal_1_fft.iter()
-                                .zip(amp.iter())  // Combine the two iterators
-                                .map(|(a, b)| a + b)  // Add the elements together
+                            data.avg_signal_1_fft = data
+                                .avg_signal_1_fft
+                                .iter()
+                                .zip(amp.iter()) // Combine the two iterators
+                                .map(|(a, b)| a + b) // Add the elements together
                                 .collect();
-                            data.filtered_phase_fft = data.filtered_phase_fft.iter()
-                                .zip(numpy_unwrap(&phase, Some(2.0 * PI)).iter())  // Combine the two iterators
-                                .map(|(a, b)| a + b)  // Add the elements together
+                            data.filtered_phase_fft = data
+                                .filtered_phase_fft
+                                .iter()
+                                .zip(numpy_unwrap(&phase, Some(2.0 * PI)).iter()) // Combine the two iterators
+                                .map(|(a, b)| a + b) // Add the elements together
                                 .collect();
                         }
                     }
-                    data.avg_signal_1_fft = data.avg_signal_1_fft.iter()
-                        .map(|&i| i / (scan.filtered_data.shape()[0] * scan.filtered_data.shape()[1]) as f32) // Perform division
+                    data.avg_signal_1_fft = data
+                        .avg_signal_1_fft
+                        .iter()
+                        .map(|&i| {
+                            i / (scan.filtered_data.shape()[0] * scan.filtered_data.shape()[1])
+                                as f32
+                        }) // Perform division
                         .collect();
-                    data.avg_phase_fft = data.avg_phase_fft.iter()
-                        .map(|&i| i / (scan.filtered_data.shape()[0] * scan.filtered_data.shape()[1]) as f32) // Perform division
+                    data.avg_phase_fft = data
+                        .avg_phase_fft
+                        .iter()
+                        .map(|&i| {
+                            i / (scan.filtered_data.shape()[0] * scan.filtered_data.shape()[1])
+                                as f32
+                        }) // Perform division
                         .collect();
                 }
             }

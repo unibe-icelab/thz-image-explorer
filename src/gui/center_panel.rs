@@ -83,7 +83,7 @@ pub fn center_panel(
                 let axis_display_offset = [
                     axis_display_offset_signal_1,
                     axis_display_offset_filtered_signal_1,
-                    axis_display_offset_avg_signal_1
+                    axis_display_offset_avg_signal_1,
                 ]
                 .iter()
                 .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi))
