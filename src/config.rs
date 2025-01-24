@@ -1,4 +1,4 @@
-use crate::matrix_plot::SelectedPixel;
+use crate::gui::matrix_plot::SelectedPixel;
 use std::path::PathBuf;
 
 pub enum Config {

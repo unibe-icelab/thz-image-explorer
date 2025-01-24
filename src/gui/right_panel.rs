@@ -12,7 +12,7 @@ use ndarray::Array1;
 
 use crate::config::Config;
 use crate::math_tools::apply_fft_window;
-use crate::matrix_plot::SelectedPixel;
+use crate::gui::matrix_plot::SelectedPixel;
 use crate::toggle::toggle;
 use crate::{DataPoint, GuiSettingsContainer};
 

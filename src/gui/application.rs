@@ -13,13 +13,14 @@ use ndarray::Array2;
 use preferences::Preferences;
 use serde::{Deserialize, Serialize};
 
-use crate::center_panel::center_panel;
 use crate::config::Config;
 use crate::data::DataPoint;
-use crate::left_panel::left_panel;
-use crate::matrix_plot::SelectedPixel;
-use crate::right_panel::right_panel;
+use crate::gui::left_panel::left_panel;
+use crate::gui::matrix_plot::SelectedPixel;
+use crate::gui::right_panel::right_panel;
 use crate::APP_INFO;
+use crate::gui::center_panel::center_panel;
+
 #[derive(Clone)]
 pub enum FileDialogState {
     Open,
@@ -108,7 +109,7 @@ impl MyApp<'_> {
         config_tx: Sender<Config>,
     ) -> Self {
         let mut water_vapour_lines: Vec<f64> = Vec::new();
-        let buffered = include_str!("../resources/water_lines.csv");
+        let buffered = include_str!("../../resources/water_lines.csv");
         for line in buffered.lines() {
             water_vapour_lines.push(line.trim().parse().unwrap());
         }
@@ -159,7 +160,7 @@ impl MyApp<'_> {
 
         Self {
             water_vapour_lines,
-            wp: egui::Image::from_bytes("WP", include_bytes!("../images/WP-Logo.png")),
+            wp: egui::Image::from_bytes("WP", include_bytes!("../../images/WP-Logo.png")),
             data: DataPoint::default(),
             file_dialog_state: FileDialogState::None,
             file_dialog,

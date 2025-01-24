@@ -18,22 +18,18 @@ use std::thread;
 
 use crate::data::DataPoint;
 use crate::data_thread::main_thread;
-use crate::gui::{GuiSettingsContainer, MyApp};
-use crate::matrix_plot::SelectedPixel;
+use crate::gui::application::{GuiSettingsContainer, MyApp};
+use crate::gui::matrix_plot::SelectedPixel;
 
-mod center_panel;
 mod config;
 mod data;
 mod data_thread;
 mod filters;
 mod gauge;
-mod gui;
 mod io;
-mod left_panel;
 mod math_tools;
-mod matrix_plot;
-mod right_panel;
 mod toggle;
+mod gui;
 
 const APP_INFO: AppInfo = AppInfo {
     name: "THz Image Explorer",

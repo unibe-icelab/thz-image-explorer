@@ -11,7 +11,7 @@ eframe = { version = "0.30.0", features = ["persistence", "wayland", "x11"] }
 egui_extras = { version = "0.30", features = ["all_loaders"] }
 egui-phosphor = "0.8.0"
 egui_plot = "0.30"
-egui_logger = { git = "https://github.com/hacknus/egui_logger" }
+egui_logger = "0.6.2"
 egui-file-dialog = { version = "0.8.0", git = "https://github.com/hacknus/egui-file-dialog", branch = "sort_by_metadata", features = ["information_view"] }
 egui_double_slider = "0.3.3"
 log = "0.4.22"
@@ -32,12 +32,12 @@ home = "0.5.11"
 name = "THz Image Explorer"
 identifier = "com.unibe.thzimageexplorer"
 icon = ["./icons/install.png"]
-version = "0.2.2"
 copyright = "Copyright (c) Linus Leo Stöckli 2025. All rights reserved."
 category = "Developer Tool"
 short_description = "Explorer Software for THz time domain images."
+long_description = "THz Image Explorer is an application for THz time-domain images, developed by the Planetary Imaging Group of the Space Science and Planetology Division at the University of Bern, Switzerland."
 license = "GPL-3.0"
-osx_minimum_system_version = "10.8"
+osx_minimum_system_version = "10.12"
 
 [package.metadata.wix]
 dbg-build = false
@@ -45,7 +45,6 @@ dbg-name = false
 name = "THz Image Explorer"
 no-build = false
 output = "target/wix/THzImageExplorerInstaller.msi"
-version = "0.2.2"
 
 [profile.release]
 debug = 1

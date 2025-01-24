@@ -2,7 +2,7 @@ use crate::config::{Config, ConfigContainer};
 use crate::data::{DataPoint, ScannedImage};
 use crate::io::{open_from_npz, open_from_thz, open_json};
 use crate::math_tools::{apply_fft_window, numpy_unwrap};
-use crate::matrix_plot::SelectedPixel;
+use crate::gui::matrix_plot::SelectedPixel;
 use csv::ReaderBuilder;
 use dotthz::DotthzMetaData;
 use eframe::egui::ColorImage;
