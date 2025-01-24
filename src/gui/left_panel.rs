@@ -1,9 +1,9 @@
 use crate::config::Config;
-use crate::gauge::gauge;
 use crate::gui::application::{FileDialogState, GuiSettingsContainer};
+use crate::gui::gauge_widget::gauge;
 use crate::gui::matrix_plot::{make_dummy, plot_matrix, SelectedPixel};
+use crate::gui::toggle_widget::toggle_ui;
 use crate::io::find_files_with_same_extension;
-use crate::toggle::toggle_ui;
 use crate::DataPoint;
 use dotthz::DotthzMetaData;
 use eframe::egui;

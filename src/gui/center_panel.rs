@@ -7,7 +7,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::config::Config;
 use crate::data::DataPoint;
-use crate::toggle::toggle;
+use crate::gui::toggle_widget::toggle;
 use crate::{vec2, GuiSettingsContainer};
 
 #[allow(clippy::too_many_arguments)]

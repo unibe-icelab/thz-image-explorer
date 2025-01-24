@@ -12,8 +12,8 @@ use ndarray::Array1;
 
 use crate::config::Config;
 use crate::gui::matrix_plot::SelectedPixel;
+use crate::gui::toggle_widget::toggle;
 use crate::math_tools::apply_fft_window;
-use crate::toggle::toggle;
 use crate::{DataPoint, GuiSettingsContainer};
 
 #[allow(clippy::too_many_arguments)]

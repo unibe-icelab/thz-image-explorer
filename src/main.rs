@@ -25,11 +25,9 @@ mod config;
 mod data;
 mod data_thread;
 mod filters;
-mod gauge;
 mod gui;
 mod io;
 mod math_tools;
-mod toggle;
 
 const APP_INFO: AppInfo = AppInfo {
     name: "THz Image Explorer",
