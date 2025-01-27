@@ -2,23 +2,19 @@ use eframe::egui;
 use eframe::egui::{Checkbox, DragValue, Stroke};
 use egui_plot::{GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 use std::ops::RangeInclusive;
-use std::sync::mpsc::Sender;
-use std::sync::{Arc, RwLock};
 
-use crate::config::Config;
+use crate::config::{ConfigCommand, GuiThreadCommunication};
 use crate::data::DataPoint;
 use crate::gui::toggle_widget::toggle;
-use crate::{vec2, GuiSettingsContainer};
+use crate::vec2;
 
 #[allow(clippy::too_many_arguments)]
 pub fn center_panel(
     ctx: &egui::Context,
     right_panel_width: &f32,
     left_panel_width: &f32,
-    gui_conf: &mut GuiSettingsContainer,
+    thread_communication: &mut GuiThreadCommunication,
     data: &mut DataPoint,
-    data_lock: &Arc<RwLock<DataPoint>>,
-    config_tx: &Sender<Config>,
     water_vapour_lines: &[f64],
 ) {
     egui::CentralPanel::default().show(ctx, |ui| {
@@ -31,20 +27,29 @@ pub fn center_panel(
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
                     ui.add_space(50.0);
-                    ui.add(Checkbox::new(&mut gui_conf.signal_1_visible, ""));
+                    ui.add(Checkbox::new(
+                        &mut thread_communication.gui_settings.signal_1_visible,
+                        "",
+                    ));
                     ui.colored_label(egui::Color32::RED, "— ");
                     ui.label("Signal 1");
                     ui.add_space(50.0);
-                    ui.add(Checkbox::new(&mut gui_conf.filtered_signal_1_visible, ""));
+                    ui.add(Checkbox::new(
+                        &mut thread_communication.gui_settings.filtered_signal_1_visible,
+                        "",
+                    ));
                     ui.colored_label(egui::Color32::BLUE, "— ");
                     ui.label("Filtered Signal 1");
                     ui.add_space(50.0);
-                    ui.add(Checkbox::new(&mut gui_conf.avg_signal_1_visible, ""));
+                    ui.add(Checkbox::new(
+                        &mut thread_communication.gui_settings.avg_signal_1_visible,
+                        "",
+                    ));
                     ui.colored_label(egui::Color32::YELLOW, "--- ");
                     ui.label("Averaged Signal 1");
                 });
 
-                if let Ok(read_guard) = data_lock.read() {
+                if let Ok(read_guard) = thread_communication.data_lock.read() {
                     *data = read_guard.clone();
                     // self.data.time = linspace::<f64>(self.tera_flash_conf.t_begin as f64,
                     //                                  (self.tera_flash_conf.t_begin + self.tera_flash_conf.range) as f64, NUM_PULSE_LINES).collect();
@@ -58,21 +63,21 @@ pub fn center_panel(
                 let mut axis_display_offset_filtered_signal_1 = f64::NEG_INFINITY;
                 let mut axis_display_offset_avg_signal_1 = f64::NEG_INFINITY;
 
-                if gui_conf.signal_1_visible {
+                if thread_communication.gui_settings.signal_1_visible {
                     axis_display_offset_signal_1 = data
                         .signal_1
                         .iter()
                         .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
                         .abs();
                 }
-                if gui_conf.filtered_signal_1_visible {
+                if thread_communication.gui_settings.filtered_signal_1_visible {
                     axis_display_offset_filtered_signal_1 = data
                         .filtered_signal_1
                         .iter()
                         .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
                         .abs();
                 }
-                if gui_conf.avg_signal_1_visible {
+                if thread_communication.gui_settings.avg_signal_1_visible {
                     axis_display_offset_avg_signal_1 = data
                         .avg_signal_1
                         .iter()
@@ -137,7 +142,7 @@ pub fn center_panel(
                     .min_size(vec2(50.0, 100.0));
 
                 signal_plot.show(ui, |signal_plot_ui| {
-                    if gui_conf.signal_1_visible {
+                    if thread_communication.gui_settings.signal_1_visible {
                         signal_plot_ui.line(
                             Line::new(PlotPoints::from(signal_1))
                                 .color(egui::Color32::RED)
@@ -146,7 +151,7 @@ pub fn center_panel(
                                 .name("signal 1"),
                         );
                     }
-                    if gui_conf.filtered_signal_1_visible {
+                    if thread_communication.gui_settings.filtered_signal_1_visible {
                         signal_plot_ui.line(
                             Line::new(PlotPoints::from(filtered_signal_1))
                                 .color(egui::Color32::BLUE)
@@ -155,7 +160,7 @@ pub fn center_panel(
                                 .name("filtered signal 1"),
                         );
                     }
-                    if gui_conf.avg_signal_1_visible {
+                    if thread_communication.gui_settings.avg_signal_1_visible {
                         signal_plot_ui.line(
                             Line::new(PlotPoints::from(avg_signal_1))
                                 .color(egui::Color32::YELLOW)
@@ -173,7 +178,7 @@ pub fn center_panel(
                     .iter()
                     .zip(data.signal_1_fft.iter())
                     .map(|(x, y)| {
-                        let fft = if gui_conf.log_plot {
+                        let fft = if thread_communication.gui_settings.log_plot {
                             20.0 * (*y + 1e-10).log(10.0)
                         } else {
                             *y
@@ -190,7 +195,7 @@ pub fn center_panel(
                     .iter()
                     .zip(data.filtered_signal_1_fft.iter())
                     .map(|(x, y)| {
-                        let fft = if gui_conf.log_plot {
+                        let fft = if thread_communication.gui_settings.log_plot {
                             20.0 * (*y + 1e-10).log(10.0)
                         } else {
                             *y
@@ -207,7 +212,7 @@ pub fn center_panel(
                     .iter()
                     .zip(data.avg_signal_1_fft.iter())
                     .map(|(x, y)| {
-                        let fft = if gui_conf.log_plot {
+                        let fft = if thread_communication.gui_settings.log_plot {
                             20.0 * (*y + 1e-10).log(10.0)
                         } else {
                             *y
@@ -250,8 +255,8 @@ pub fn center_panel(
                     max_fft_signals = -200.0;
                 }
 
-                let log_plot = gui_conf.log_plot;
-                let phases_visible = gui_conf.phases_visible;
+                let log_plot = thread_communication.gui_settings.log_plot;
+                let phases_visible = thread_communication.gui_settings.phases_visible;
 
                 let a_fmt = move |y: GridMark, _range: &RangeInclusive<f64>| {
                     if log_plot {
@@ -294,14 +299,14 @@ pub fn center_panel(
                     .include_x(0.0)
                     .include_x(10.0);
 
-                if !gui_conf.phases_visible {
+                if !thread_communication.gui_settings.phases_visible {
                     // fft_plot = fft_plot.include_y(-100.0);
                     fft_plot = fft_plot.include_y(0.0)
                 };
 
                 fft_plot.show(ui, |fft_plot_ui| {
-                    if gui_conf.signal_1_visible {
-                        if !gui_conf.phases_visible {
+                    if thread_communication.gui_settings.signal_1_visible {
+                        if !thread_communication.gui_settings.phases_visible {
                             fft_plot_ui.line(
                                 Line::new(PlotPoints::from(signal_1_fft))
                                     .color(egui::Color32::RED)
@@ -319,8 +324,8 @@ pub fn center_panel(
                             );
                         }
                     }
-                    if gui_conf.filtered_signal_1_visible {
-                        if !gui_conf.phases_visible {
+                    if thread_communication.gui_settings.filtered_signal_1_visible {
+                        if !thread_communication.gui_settings.phases_visible {
                             fft_plot_ui.line(
                                 Line::new(PlotPoints::from(filtered_signal_1_fft))
                                     .color(egui::Color32::BLUE)
@@ -338,8 +343,8 @@ pub fn center_panel(
                             );
                         }
                     }
-                    if gui_conf.avg_signal_1_visible {
-                        if !gui_conf.phases_visible {
+                    if thread_communication.gui_settings.avg_signal_1_visible {
+                        if !thread_communication.gui_settings.phases_visible {
                             fft_plot_ui.line(
                                 Line::new(PlotPoints::from(avg_signal_1_fft))
                                     .color(egui::Color32::YELLOW)
@@ -358,7 +363,7 @@ pub fn center_panel(
                         }
                     }
 
-                    if gui_conf.water_lines_visible {
+                    if thread_communication.gui_settings.water_lines_visible {
                         for line in water_vapour_lines.iter() {
                             fft_plot_ui.vline(
                                 VLine::new(*line)
@@ -374,31 +379,47 @@ pub fn center_panel(
                     ui.label("Freq Res");
                     if ui
                         .add(
-                            DragValue::new(&mut gui_conf.frequency_resolution_temp)
-                                .min_decimals(4)
-                                .max_decimals(4)
-                                .suffix(" THz".to_string()),
+                            DragValue::new(
+                                &mut thread_communication.gui_settings.frequency_resolution_temp,
+                            )
+                            .min_decimals(4)
+                            .max_decimals(4)
+                            .suffix(" THz".to_string()),
                         )
                         .lost_focus()
                     {
-                        if gui_conf.frequency_resolution_temp > 1.0 / data.hk.range {
-                            gui_conf.frequency_resolution_temp = 1.0 / data.hk.range;
-                        } else if gui_conf.frequency_resolution_temp < 0.0001 {
-                            gui_conf.frequency_resolution_temp = 0.0001;
+                        if thread_communication.gui_settings.frequency_resolution_temp
+                            > 1.0 / data.hk.range
+                        {
+                            thread_communication.gui_settings.frequency_resolution_temp =
+                                1.0 / data.hk.range;
+                        } else if thread_communication.gui_settings.frequency_resolution_temp < 0.0001 {
+                            thread_communication.gui_settings.frequency_resolution_temp = 0.0001;
                         }
-                        gui_conf.frequency_resolution = gui_conf.frequency_resolution_temp;
-                        config_tx
-                            .send(Config::SetFFTResolution(gui_conf.frequency_resolution))
+                        thread_communication.gui_settings.frequency_resolution =
+                            thread_communication.gui_settings.frequency_resolution_temp;
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::SetFFTResolution(
+                                thread_communication.gui_settings.frequency_resolution,
+                            ))
                             .expect("unable to send config");
                     }
                     ui.add_space(50.0);
                     ui.label("FFT");
-                    if ui.add(toggle(&mut gui_conf.phases_visible)).changed() {
-                        gui_conf.log_plot = !gui_conf.phases_visible;
+                    if ui
+                        .add(toggle(&mut thread_communication.gui_settings.phases_visible))
+                        .changed()
+                    {
+                        thread_communication.gui_settings.log_plot =
+                            !thread_communication.gui_settings.phases_visible;
                     };
                     ui.label("Phases");
                     ui.add_space(50.0);
-                    ui.add(Checkbox::new(&mut gui_conf.water_lines_visible, ""));
+                    ui.add(Checkbox::new(
+                        &mut thread_communication.gui_settings.water_lines_visible,
+                        "",
+                    ));
                     ui.colored_label(egui::Color32::BLUE, "— ");
                     ui.label("Water Lines");
 

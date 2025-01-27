@@ -1,7 +1,3 @@
-use std::f32::consts::E;
-use std::sync::mpsc::Sender;
-use std::sync::{Arc, RwLock};
-
 use eframe::egui;
 use eframe::egui::panel::Side;
 use eframe::egui::{vec2, DragValue, Stroke, Vec2, Visuals};
@@ -9,30 +5,27 @@ use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use itertools_num::linspace;
 use ndarray::Array1;
+use std::f32::consts::E;
 
-use crate::config::Config;
+use crate::config::{ConfigCommand, GuiThreadCommunication};
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::gui::toggle_widget::toggle;
 use crate::math_tools::apply_fft_window;
-use crate::{DataPoint, GuiSettingsContainer};
+use crate::DataPoint;
 
 #[allow(clippy::too_many_arguments)]
 pub fn right_panel(
     ctx: &egui::Context,
     right_panel_width: &f32,
-    gui_conf: &mut GuiSettingsContainer,
+    thread_communication: &mut GuiThreadCommunication,
     filter_bounds: &mut [f32; 2],
     fft_bounds: &mut [f32; 2],
     time_window: &mut [f32; 2],
     pixel_selected: &mut SelectedPixel,
-    pixel_lock: &Arc<RwLock<SelectedPixel>>,
-    config_tx: &Sender<Config>,
-    data_lock: &Arc<RwLock<DataPoint>>,
-    scaling_lock: &Arc<RwLock<u8>>,
     wp: egui::Image,
 ) {
     let mut data = DataPoint::default();
-    if let Ok(read_guard) = data_lock.read() {
+    if let Ok(read_guard) = thread_communication.data_lock.read() {
         data = read_guard.clone();
     }
 
@@ -52,17 +45,29 @@ pub fn right_panel(
                     .striped(true)
                     .show(ui, |ui| {
                         ui.label("Log Mode: ");
-                        if ui.add(toggle(&mut gui_conf.log_plot)).changed() {
-                            config_tx
-                                .send(Config::SetFFTLogPlot(gui_conf.log_plot))
+                        if ui
+                            .add(toggle(&mut thread_communication.gui_settings.log_plot))
+                            .changed()
+                        {
+                            thread_communication
+                                .config_tx
+                                .send(ConfigCommand::SetFFTLogPlot(
+                                    thread_communication.gui_settings.log_plot,
+                                ))
                                 .expect("unable to send config");
                         }
                         ui.end_row();
 
                         ui.label("Normalize FFT: ");
-                        if ui.add(toggle(&mut gui_conf.normalize_fft)).changed() {
-                            config_tx
-                                .send(Config::SetFFTNormalization(gui_conf.normalize_fft))
+                        if ui
+                            .add(toggle(&mut thread_communication.gui_settings.normalize_fft))
+                            .changed()
+                        {
+                            thread_communication
+                                .config_tx
+                                .send(ConfigCommand::SetFFTNormalization(
+                                    thread_communication.gui_settings.normalize_fft,
+                                ))
                                 .expect("unable to send config");
                         }
 
@@ -72,39 +77,57 @@ pub fn right_panel(
                         ui.style_mut().spacing.slider_width = 320.0;
 
                         if ui
-                            .add(egui::Slider::new(&mut gui_conf.down_scaling, 1..=10))
+                            .add(egui::Slider::new(
+                                &mut thread_communication.gui_settings.down_scaling,
+                                1..=10,
+                            ))
                             .changed()
                         {
                             pixel_selected.rect = vec![
                                 [
-                                    (pixel_selected.x as f64) / gui_conf.down_scaling as f64,
-                                    (pixel_selected.y as f64) / gui_conf.down_scaling as f64,
+                                    (pixel_selected.x as f64)
+                                        / thread_communication.gui_settings.down_scaling as f64,
+                                    (pixel_selected.y as f64)
+                                        / thread_communication.gui_settings.down_scaling as f64,
                                 ],
                                 [
-                                    (pixel_selected.x as f64) / gui_conf.down_scaling as f64 + 1.0,
-                                    (pixel_selected.y as f64) / gui_conf.down_scaling as f64,
+                                    (pixel_selected.x as f64)
+                                        / thread_communication.gui_settings.down_scaling as f64
+                                        + 1.0,
+                                    (pixel_selected.y as f64)
+                                        / thread_communication.gui_settings.down_scaling as f64,
                                 ],
                                 [
-                                    (pixel_selected.x as f64) / gui_conf.down_scaling as f64 + 1.0,
-                                    (pixel_selected.y as f64) / gui_conf.down_scaling as f64 + 1.0,
+                                    (pixel_selected.x as f64)
+                                        / thread_communication.gui_settings.down_scaling as f64
+                                        + 1.0,
+                                    (pixel_selected.y as f64)
+                                        / thread_communication.gui_settings.down_scaling as f64
+                                        + 1.0,
                                 ],
                                 [
-                                    (pixel_selected.x as f64) / gui_conf.down_scaling as f64,
-                                    (pixel_selected.y as f64) / gui_conf.down_scaling as f64 + 1.0,
+                                    (pixel_selected.x as f64)
+                                        / thread_communication.gui_settings.down_scaling as f64,
+                                    (pixel_selected.y as f64)
+                                        / thread_communication.gui_settings.down_scaling as f64
+                                        + 1.0,
                                 ],
                                 [
-                                    (pixel_selected.x as f64) / gui_conf.down_scaling as f64,
-                                    (pixel_selected.y as f64) / gui_conf.down_scaling as f64,
+                                    (pixel_selected.x as f64)
+                                        / thread_communication.gui_settings.down_scaling as f64,
+                                    (pixel_selected.y as f64)
+                                        / thread_communication.gui_settings.down_scaling as f64,
                                 ],
                             ];
-                            if let Ok(mut s) = scaling_lock.write() {
-                                *s = gui_conf.down_scaling as u8;
+                            if let Ok(mut s) = thread_communication.scaling_lock.write() {
+                                *s = thread_communication.gui_settings.down_scaling as u8;
                             }
-                            if let Ok(mut write_guard) = pixel_lock.write() {
+                            if let Ok(mut write_guard) = thread_communication.pixel_lock.write() {
                                 *write_guard = pixel_selected.clone();
                             }
-                            config_tx
-                                .send(Config::SetDownScaling)
+                            thread_communication
+                                .config_tx
+                                .send(ConfigCommand::SetDownScaling)
                                 .expect("unable to send config");
                         }
                     });
@@ -198,11 +221,13 @@ pub fn right_panel(
                     let val2_changed = ui.add(DragValue::new(&mut fft_bounds[1])).changed();
 
                     if slider_changed.inner || val1_changed || val2_changed {
-                        config_tx
-                            .send(Config::SetFFTWindowLow(fft_bounds[0]))
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::SetFFTWindowLow(fft_bounds[0]))
                             .unwrap();
-                        config_tx
-                            .send(Config::SetFFTWindowHigh(fft_bounds[1]))
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::SetFFTWindowHigh(fft_bounds[1]))
                             .unwrap();
                     }
                 });
@@ -220,7 +245,7 @@ pub fn right_panel(
                     .zip(data.signal_1_fft.iter())
                     .map(|(x, y)| {
                         let mut fft;
-                        if gui_conf.log_plot {
+                        if thread_communication.gui_settings.log_plot {
                             fft = (*y + 1.0).log(E);
                         } else {
                             fft = *y;
@@ -320,11 +345,13 @@ pub fn right_panel(
                     let val2_changed = ui.add(DragValue::new(&mut filter_bounds[1])).changed();
 
                     if slider_changed.inner || val1_changed || val2_changed {
-                        config_tx
-                            .send(Config::SetFFTFilterLow(filter_bounds[0]))
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::SetFFTFilterLow(filter_bounds[0]))
                             .unwrap();
-                        config_tx
-                            .send(Config::SetFFTFilterHigh(filter_bounds[1]))
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::SetFFTFilterHigh(filter_bounds[1]))
                             .unwrap();
                     }
                 });
@@ -419,7 +446,10 @@ pub fn right_panel(
                             time_window[0] = *data.time.first().unwrap_or(&1000.0);
                             time_window[1] = *data.time.last().unwrap_or(&1050.0);
                         }
-                        config_tx.send(Config::SetTimeWindow(*time_window)).unwrap();
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::SetTimeWindow(*time_window))
+                            .unwrap();
                     }
                 });
 
@@ -430,13 +460,19 @@ pub fn right_panel(
                 if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && time_window[1] < last {
                     time_window[0] += 1.0;
                     time_window[1] = width + time_window[0];
-                    config_tx.send(Config::SetTimeWindow(*time_window)).unwrap();
+                    thread_communication
+                        .config_tx
+                        .send(ConfigCommand::SetTimeWindow(*time_window))
+                        .unwrap();
                 }
 
                 if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) && time_window[0] > first {
                     time_window[0] -= 1.0;
                     time_window[1] = width + time_window[0];
-                    config_tx.send(Config::SetTimeWindow(*time_window)).unwrap();
+                    thread_communication
+                        .config_tx
+                        .send(ConfigCommand::SetTimeWindow(*time_window))
+                        .unwrap();
                 }
 
                 // scroll through time axis
@@ -453,11 +489,14 @@ pub fn right_panel(
                     time_window[0] -= zoom_delta * zoom_factor;
 
                     if scroll_delta != Vec2::ZERO || zoom_delta != 0.0 {
-                        config_tx.send(Config::SetTimeWindow(*time_window)).unwrap();
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::SetTimeWindow(*time_window))
+                            .unwrap();
                     }
                 }
 
-                gui_conf.dark_mode = ui.visuals() == &Visuals::dark();
+                thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
 
                 ui.separator();
                 ui.collapsing("Debug logs:", |ui| {

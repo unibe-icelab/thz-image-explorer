@@ -27,20 +27,20 @@ bibliography: paper.bib
 THz time-domain spectroscopy (TDS) is a fast-growing field with applications to perform non-destructive studies of
 material properties [@neu_tutorial_2018].
 Different sources of THz radiations have been implemented in commercial products, e.g. photo-conductive antennas. The
-pulses can either be measured in transmission or reflection and are recorded in the time domain. By transforming the
-acquired trace into frequency domain (Fourier space), the magnitude and phase can be extracted, which allows to
-investigate the complex
-refractive index and absorption coefficient of the sample.
-By placing either the sample or the optical setup on a moving stage, the sample can be imaged in 2D. Analysing these
-images pixel by pixel without an interactive user interface can be tedious.
+pulses can either be measured after passing through (transmission spectrum) or after being reflected (reflection
+spectrum) by a sample and are recorded in the time domain. By transforming the
+acquired trace into frequency domain (Fourier space), the magnitude and phase can be extracted to
+investigate the complex refractive index and absorption coefficient of the sample.
+By placing either the sample or the optical setup on a moving stage the sample can be imaged in 2D. Analysing these
+images pixel by pixel or by selecting a region of interest (ROI) without an interactive user interface can be tedious.
 
 ![THz Image Explorer icon.\label{fig:icon}](icon.png){#id .class width=20%}
 
 We developed an interactive graphical user interface (GUI), written in [rust](https://www.rust-lang.org), to aid
 investigating acquired 2D scans. The
-application implements the dotTHz standard [@lee_dotthz_2023] and is cross-platform and open source, thus making it
-easier to maintain and making it available to the
-entire scientific community.
+application implements the dotTHz standard [@lee_dotthz_2023] and is platform independent and open source, thus making
+it
+easier to maintain and increasing its reach.
 
 # Statement of need
 
@@ -94,11 +94,12 @@ or to only build the executable without running:
 cargo build --release
 ```
 
-With default settings `cmake` is required to install HDF5, which is required for the implementation of the dotTHz
+With default settings `cmake` is required to build HDF5 from source, which is required for the implementation of the
+dotTHz
 standard. If HDF5 is already installed on the
 system, the user can change remove the `hdf5-sys-static` feature from the `dotthz` dependency in the `Cargo.toml` file.
 
-On Linux, the following dependencies need to be installed first as a requirement for egui:
+On Linux, the following dependencies need to be installed first as a requirement for `egui`:
 
 - `libclang-dev`
 - `libgtk-3-dev`
@@ -134,6 +135,8 @@ The left side-panel contains the intensity plot of the 2D scan along with the me
 the possible filters with configuration settings.
 A pixel can be (de-)selected by clicking inside the intensity plot.
 
+A sample scan is available in the `sample_data` directory.
+
 ## IO
 
 THz Image Explorer is able to load scans saved as `.npy` files and scans in the `.thz` (dotTHz) format,
@@ -163,12 +166,6 @@ sub-surface layers [@koch-dandolo_reflection_2015].
 
 cite Arnaud's paper
 
-### Custom Filters
-
-The code-base can easily be extended with custom filters. The user needs to create a custom file in the `src/filters`
-directory with a struct that implements the `Filter` trait.
-Minor adaptations in required in the `right_panel.rs` file to implement the input parameters in the GUI. (TODO)
-
 Single dollars ($) are required for inline mathematics e.g. $f(x) = e^{\pi/x}$
 
 Double dollars make self-standing equations:
@@ -184,14 +181,50 @@ You can also use plain \LaTeX for equations
 \end{equation}
 and refer to \autoref{eq:fourier} from text.
 
-# Figures
+### Custom Filters
 
-Figures can be included like this:
-![Caption for example figure.\label{fig:example}](figure.png)
-and referenced from text using \autoref{fig:example}.
+The code-base can easily be extended with custom filters. The user needs to create a custom file in the `src/filters`
+directory with a struct that implements the `Filter` trait.
 
-Figure sizes can be customized by adding an optional second parameter:
-![Caption for example figure.](figure.png){ width=20% }
+```rust
+pub struct CustomFilter {
+    pub param1: f32,
+    pub param2: f32,
+    pub param3: usize,
+}
+
+impl Filter for CustomFilter {
+    const DOMAIN: FilterDomain = FilterDomain::Frequency;
+
+    fn filter(&self, scan: &mut ScannedImage) {
+        todo!()
+    }
+
+    fn config(&self) -> FilterConfig {
+        FilterConfig {
+            name: "Custom Filter".to_string(),
+            parameters: vec![
+                FilterParameter {
+                    name: "Parameter 1".to_string(),
+                    kind: ParameterKind::Float(self.param1),
+                },
+                FilterParameter {
+                    name: "Parameter 2".to_string(),
+                    kind: ParameterKind::Float(self.param2),
+                },
+                FilterParameter {
+                    name: "Parameter 3".to_string(),
+                    kind: ParameterKind::UInt(self.param3),
+                },
+            ],
+        }
+    }
+}
+```
+
+Minor adaptations in required in the `right_panel.rs` file to implement the input parameters in the GUI.
+To implement more complex methods, further adaptations are required, but the code structure has been set up with
+modularity and simplicity in mind.
 
 # Summary
 

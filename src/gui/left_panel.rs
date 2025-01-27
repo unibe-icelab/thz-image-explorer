@@ -1,5 +1,5 @@
-use crate::config::Config;
-use crate::gui::application::{FileDialogState, GuiSettingsContainer};
+use crate::config::{ConfigCommand, GuiThreadCommunication};
+use crate::gui::application::FileDialogState;
 use crate::gui::gauge_widget::gauge;
 use crate::gui::matrix_plot::{make_dummy, plot_matrix, SelectedPixel};
 use crate::gui::toggle_widget::toggle_ui;
@@ -13,10 +13,7 @@ use egui_extras::{Column, TableBuilder};
 use egui_file_dialog::information_panel::InformationPanel;
 use egui_file_dialog::FileDialog;
 use egui_plot::PlotPoint;
-use ndarray::Array2;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::Sender;
-use std::sync::{Arc, RwLock};
 
 /// Calculates the width of a single char.
 fn calc_char_width(ui: &egui::Ui, char: char) -> f32 {
@@ -104,7 +101,7 @@ pub fn truncate_filename(ui: &egui::Ui, item: &Path, max_length: f32) -> String 
 #[allow(clippy::too_many_arguments)]
 pub fn left_panel(
     ctx: &egui::Context,
-    gui_conf: &mut GuiSettingsContainer,
+    thread_communication: &mut GuiThreadCommunication,
     left_panel_width: &f32,
     pixel_selected: &mut SelectedPixel,
     val: &mut PlotPoint,
@@ -116,19 +113,14 @@ pub fn left_panel(
     other_files: &mut Vec<PathBuf>,
     selected_file_name: &mut String,
     scroll_to_selection: &mut bool,
-    md_lock: &Arc<RwLock<DotthzMetaData>>,
-    img_lock: &Arc<RwLock<Array2<f32>>>,
-    data_lock: &Arc<RwLock<DataPoint>>,
-    pixel_lock: &Arc<RwLock<SelectedPixel>>,
-    config_tx: &Sender<Config>,
 ) {
     let gauge_size = left_panel_width / 3.0;
     let mut data = DataPoint::default();
-    if let Ok(read_guard) = data_lock.read() {
+    if let Ok(read_guard) = thread_communication.data_lock.read() {
         data = read_guard.clone();
     }
     let mut meta_data = DotthzMetaData::default();
-    if let Ok(md) = md_lock.read() {
+    if let Ok(md) = thread_communication.md_lock.read() {
         meta_data = md.clone();
     }
     if let Some(t_s) = meta_data.md.get("T_S [K]") {
@@ -242,8 +234,9 @@ pub fn left_panel(
                             if row.response().clicked() {
                                 *selected_file_name =
                                     item.file_name().unwrap().to_str().unwrap().to_string();
-                                config_tx
-                                    .send(Config::OpenFile(item.to_path_buf()))
+                                thread_communication
+                                    .config_tx
+                                    .send(ConfigCommand::OpenFile(item.to_path_buf()))
                                     .expect("unable to send open file cmd");
                             }
                         }
@@ -258,8 +251,9 @@ pub fn left_panel(
                         let item = other_files[selected_index + 1].clone();
                         *selected_file_name =
                             item.file_name().unwrap().to_str().unwrap().to_string();
-                        config_tx
-                            .send(Config::OpenFile(item.to_path_buf()))
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::OpenFile(item.to_path_buf()))
                             .expect("unable to send open file cmd");
                         *scroll_to_selection = true;
                     }
@@ -267,8 +261,9 @@ pub fn left_panel(
                         let item = other_files[selected_index - 1].clone();
                         *selected_file_name =
                             item.file_name().unwrap().to_str().unwrap().to_string();
-                        config_tx
-                            .send(Config::OpenFile(item.to_path_buf()))
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::OpenFile(item.to_path_buf()))
                             .expect("unable to send open file cmd");
                         *scroll_to_selection = true;
                     }
@@ -286,8 +281,9 @@ pub fn left_panel(
                     *selected_file_name = path.file_name().unwrap().to_str().unwrap().to_string();
                     *scroll_to_selection = true;
                     file_dialog.config_mut().initial_directory = path.clone();
-                    config_tx
-                        .send(Config::OpenFile(path))
+                    thread_communication
+                        .config_tx
+                        .send(ConfigCommand::OpenFile(path))
                         .expect("unable to send open file cmd");
                     repaint = true;
                 }
@@ -307,8 +303,9 @@ pub fn left_panel(
                         .picked()
                     {
                         *file_dialog_state = FileDialogState::None;
-                        config_tx
-                            .send(Config::OpenFile(path.to_path_buf()))
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::OpenFile(path.to_path_buf()))
                             .expect("unable to send open file cmd");
                     }
                     if let Some(path) = file_dialog.take_picked() {
@@ -317,7 +314,7 @@ pub fn left_panel(
                             path.file_name().unwrap().to_str().unwrap().to_string();
                         *scroll_to_selection = true;
                         file_dialog.config_mut().initial_directory = path.clone();
-                        gui_conf.selected_path = path;
+                        thread_communication.gui_settings.selected_path = path;
                     }
                 }
                 FileDialogState::Save => {
@@ -348,7 +345,7 @@ pub fn left_panel(
             ui.separator();
             ui.heading("Scan");
             let mut img_data = make_dummy();
-            if let Ok(read_guard) = img_lock.read() {
+            if let Ok(read_guard) = thread_communication.img_lock.read() {
                 img_data = read_guard.clone();
             }
             let pixel_clicked = plot_matrix(
@@ -363,10 +360,11 @@ pub fn left_panel(
                 bw,
             );
             if pixel_clicked {
-                config_tx
-                    .send(Config::SetSelectedPixel(pixel_selected.clone()))
+                thread_communication
+                    .config_tx
+                    .send(ConfigCommand::SetSelectedPixel(pixel_selected.clone()))
                     .unwrap();
-                if let Ok(mut write_guard) = pixel_lock.write() {
+                if let Ok(mut write_guard) = thread_communication.pixel_lock.write() {
                     *write_guard = pixel_selected.clone();
                 }
             }

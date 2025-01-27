@@ -1,7 +1,13 @@
+use crate::data::DataPoint;
+use crate::gui::application::GuiSettingsContainer;
 use crate::gui::matrix_plot::SelectedPixel;
+use dotthz::DotthzMetaData;
+use ndarray::Array2;
 use std::path::PathBuf;
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, RwLock};
 
-pub enum Config {
+pub enum ConfigCommand {
     OpenFile(PathBuf),
     SetFFTWindowLow(f32),
     SetFFTWindowHigh(f32),
@@ -36,4 +42,23 @@ impl Default for ConfigContainer {
             fft_df: 1.0,
         }
     }
+}
+
+pub struct GuiThreadCommunication {
+    pub md_lock: Arc<RwLock<DotthzMetaData>>,
+    pub data_lock: Arc<RwLock<DataPoint>>,
+    pub pixel_lock: Arc<RwLock<SelectedPixel>>,
+    pub scaling_lock: Arc<RwLock<u8>>,
+    pub img_lock: Arc<RwLock<Array2<f32>>>,
+    pub gui_settings: GuiSettingsContainer,
+    pub config_tx: Sender<ConfigCommand>,
+}
+
+pub struct MainThreadCommunication {
+    pub md_lock: Arc<RwLock<DotthzMetaData>>,
+    pub data_lock: Arc<RwLock<DataPoint>>,
+    pub pixel_lock: Arc<RwLock<SelectedPixel>>,
+    pub scaling_lock: Arc<RwLock<u8>>,
+    pub img_lock: Arc<RwLock<Array2<f32>>>,
+    pub config_rx: Receiver<ConfigCommand>,
 }

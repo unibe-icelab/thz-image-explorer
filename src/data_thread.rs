@@ -1,4 +1,4 @@
-use crate::config::{Config, ConfigContainer};
+use crate::config::{ConfigCommand, ConfigContainer, MainThreadCommunication};
 use crate::data::{DataPoint, ScannedImage};
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::io::{open_from_npz, open_from_thz, open_json};
@@ -12,7 +12,6 @@ use ndarray::{Array1, Array2, Array3, Axis};
 use realfft::num_complex::Complex32;
 use std::f32::consts::PI;
 use std::path::Path;
-use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -199,14 +198,7 @@ enum FileType {
     Npz,
 }
 
-pub fn main_thread(
-    md_lock: Arc<RwLock<DotthzMetaData>>,
-    data_lock: Arc<RwLock<DataPoint>>,
-    img_lock: Arc<RwLock<Array2<f32>>>,
-    config_rx: Receiver<Config>,
-    scaling_lock: Arc<RwLock<u8>>,
-    pixel_lock: Arc<RwLock<SelectedPixel>>,
-) {
+pub fn main_thread(thread_communication: MainThreadCommunication) {
     // reads data from mutex, samples and saves if needed
     let mut data = DataPoint::default();
     let mut scan = ScannedImage::default();
@@ -215,9 +207,9 @@ pub fn main_thread(
     let mut meta_data = DotthzMetaData::default();
     let mut hk_csv = None;
     loop {
-        if let Ok(config_command) = config_rx.recv() {
+        if let Ok(config_command) = thread_communication.config_rx.recv() {
             match config_command {
-                Config::OpenFile(selected_file_path) => {
+                ConfigCommand::OpenFile(selected_file_path) => {
                     if let Some(file_ending) = selected_file_path.extension() {
                         match file_ending.to_str().unwrap() {
                             "npz" => {
@@ -270,7 +262,10 @@ pub fn main_thread(
                                 dbg!(&pulse_path);
                                 match open_from_npz(&mut scan, &pulse_path) {
                                     Ok(_) => {
-                                        update_intensity_image(&scan, &img_lock);
+                                        update_intensity_image(
+                                            &scan,
+                                            &thread_communication.img_lock,
+                                        );
                                     }
                                     Err(err) => {
                                         println!("an error occurred while trying to read data.npz {err:?}");
@@ -306,7 +301,10 @@ pub fn main_thread(
                                 {
                                     Ok(_) => {
                                         log::info!("opened {:?}", selected_file_path);
-                                        update_intensity_image(&scan, &img_lock);
+                                        update_intensity_image(
+                                            &scan,
+                                            &thread_communication.img_lock,
+                                        );
                                     }
                                     Err(err) => {
                                         log::error!(
@@ -316,7 +314,7 @@ pub fn main_thread(
                                         )
                                     }
                                 };
-                                if let Ok(mut md) = md_lock.write() {
+                                if let Ok(mut md) = thread_communication.md_lock.write() {
                                     *md = meta_data.clone();
                                 }
                             }
@@ -327,49 +325,49 @@ pub fn main_thread(
                         }
                     }
                 }
-                Config::SetFFTWindowLow(low) => {
+                ConfigCommand::SetFFTWindowLow(low) => {
                     config.fft_window[0] = low;
-                    filter(&config, &mut scan, &img_lock);
+                    filter(&config, &mut scan, &thread_communication.img_lock);
                 }
-                Config::SetFFTWindowHigh(high) => {
+                ConfigCommand::SetFFTWindowHigh(high) => {
                     config.fft_window[1] = high;
-                    filter(&config, &mut scan, &img_lock);
+                    filter(&config, &mut scan, &thread_communication.img_lock);
                 }
-                Config::SetFFTFilterLow(low) => {
+                ConfigCommand::SetFFTFilterLow(low) => {
                     config.fft_filter[0] = low;
-                    filter(&config, &mut scan, &img_lock);
+                    filter(&config, &mut scan, &thread_communication.img_lock);
                 }
-                Config::SetFFTFilterHigh(high) => {
+                ConfigCommand::SetFFTFilterHigh(high) => {
                     config.fft_filter[1] = high;
-                    filter(&config, &mut scan, &img_lock);
+                    filter(&config, &mut scan, &thread_communication.img_lock);
                 }
-                Config::SetTimeWindow(time_window) => {
+                ConfigCommand::SetTimeWindow(time_window) => {
                     config.time_window = time_window;
-                    filter_time_window(&config, &mut scan, &img_lock);
+                    filter_time_window(&config, &mut scan, &thread_communication.img_lock);
                 }
-                Config::SetFFTLogPlot(log_plot) => {
+                ConfigCommand::SetFFTLogPlot(log_plot) => {
                     config.fft_log_plot = log_plot;
-                    filter(&config, &mut scan, &img_lock);
+                    filter(&config, &mut scan, &thread_communication.img_lock);
                 }
-                Config::SetFFTNormalization(normalization) => {
+                ConfigCommand::SetFFTNormalization(normalization) => {
                     config.normalize_fft = normalization;
-                    filter(&config, &mut scan, &img_lock);
+                    filter(&config, &mut scan, &thread_communication.img_lock);
                 }
-                Config::SetFFTResolution(df) => {
+                ConfigCommand::SetFFTResolution(df) => {
                     config.fft_df = df;
-                    filter(&config, &mut scan, &img_lock);
+                    filter(&config, &mut scan, &thread_communication.img_lock);
                 }
-                Config::SetDownScaling => {
-                    if let Ok(scaling) = scaling_lock.read() {
+                ConfigCommand::SetDownScaling => {
+                    if let Ok(scaling) = thread_communication.scaling_lock.read() {
                         scan.scaling = *scaling as usize;
                         scan.rescale()
                     }
-                    filter(&config, &mut scan, &img_lock);
-                    update_intensity_image(&scan, &img_lock);
+                    filter(&config, &mut scan, &thread_communication.img_lock);
+                    update_intensity_image(&scan, &thread_communication.img_lock);
                 }
-                Config::SetSelectedPixel(pixel) => {
+                ConfigCommand::SetSelectedPixel(pixel) => {
                     selected_pixel = pixel.clone();
-                    if let Ok(scaling) = scaling_lock.read() {
+                    if let Ok(scaling) = thread_communication.scaling_lock.read() {
                         scan.scaling = *scaling as usize;
                         scan.rescale()
                     }
@@ -378,12 +376,12 @@ pub fn main_thread(
                 }
             }
 
-            if let Ok(pixel) = pixel_lock.read() {
+            if let Ok(pixel) = thread_communication.pixel_lock.read() {
                 selected_pixel = pixel.clone();
             }
 
             if let Some(r2c) = &scan.r2c {
-                if let Ok(mut data) = data_lock.write() {
+                if let Ok(mut data) = thread_communication.data_lock.write() {
                     data.time = scan.time.to_vec();
                     data.frequencies = scan.frequencies.to_vec();
                     data.signal_1 = scan

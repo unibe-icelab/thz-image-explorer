@@ -1,19 +1,17 @@
 use core::f64;
-use dotthz::{DotthzFile, DotthzMetaData};
+use dotthz::DotthzFile;
 use egui_file_dialog::information_panel::InformationPanel;
 use egui_file_dialog::FileDialog;
 use std::path::PathBuf;
-use std::sync::mpsc::Sender;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use eframe::{egui, Storage};
 use egui_plot::PlotPoint;
 use home::home_dir;
-use ndarray::Array2;
 use preferences::Preferences;
 use serde::{Deserialize, Serialize};
 
-use crate::config::Config;
+use crate::config::GuiThreadCommunication;
 use crate::data::DataPoint;
 use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
@@ -70,7 +68,7 @@ impl GuiSettingsContainer {
     }
 }
 
-pub struct MyApp<'a> {
+pub struct THzImageExplorer<'a> {
     fft_bounds: [f32; 2],
     filter_bounds: [f32; 2],
     time_window: [f32; 2],
@@ -87,27 +85,12 @@ pub struct MyApp<'a> {
     other_files: Vec<PathBuf>,
     selected_file_name: String,
     scroll_to_selection: bool,
-    gui_conf: GuiSettingsContainer,
-    md_lock: Arc<RwLock<DotthzMetaData>>,
-    img_lock: Arc<RwLock<Array2<f32>>>,
-    data_lock: Arc<RwLock<DataPoint>>,
-    pixel_lock: Arc<RwLock<SelectedPixel>>,
-    scaling_lock: Arc<RwLock<u8>>,
-    config_tx: Sender<Config>,
+    thread_communication: GuiThreadCommunication,
 }
 
-impl MyApp<'_> {
+impl THzImageExplorer<'_> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        cc: &eframe::CreationContext,
-        md_lock: Arc<RwLock<DotthzMetaData>>,
-        data_lock: Arc<RwLock<DataPoint>>,
-        pixel_lock: Arc<RwLock<SelectedPixel>>,
-        scaling_lock: Arc<RwLock<u8>>,
-        img_lock: Arc<RwLock<Array2<f32>>>,
-        gui_conf: GuiSettingsContainer,
-        config_tx: Sender<Config>,
-    ) -> Self {
+    pub fn new(cc: &eframe::CreationContext, thread_communication: GuiThreadCommunication) -> Self {
         let mut water_vapour_lines: Vec<f64> = Vec::new();
         let buffered = include_str!("../../resources/water_lines.csv");
         for line in buffered.lines() {
@@ -149,7 +132,7 @@ impl MyApp<'_> {
                 "CSV files",
                 Arc::new(|p| p.extension().unwrap_or_default().to_ascii_lowercase() == "csv"),
             )
-            .initial_directory(gui_conf.selected_path.clone())
+            .initial_directory(thread_communication.gui_settings.selected_path.clone())
             .default_file_filter("dotTHz files");
         // Load the persistent data of the file dialog.
         // Alternatively, you can also use the `FileDialog::storage` builder method.
@@ -207,13 +190,6 @@ impl MyApp<'_> {
             other_files: vec![],
             selected_file_name: "".to_string(),
             scroll_to_selection: false,
-            gui_conf,
-            md_lock,
-            img_lock,
-            data_lock,
-            pixel_lock,
-            scaling_lock,
-            config_tx,
             fft_bounds: [1.0, 7.0],
             filter_bounds: [0.0, 10.0],
             time_window: [1000.0, 1050.0],
@@ -221,11 +197,12 @@ impl MyApp<'_> {
             val: PlotPoint { x: 0.0, y: 0.0 },
             mid_point: 50.0,
             bw: false,
+            thread_communication,
         }
     }
 }
 
-impl eframe::App for MyApp<'_> {
+impl eframe::App for THzImageExplorer<'_> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let left_panel_width = 300.0;
         let right_panel_width = 500.0;
@@ -234,16 +211,14 @@ impl eframe::App for MyApp<'_> {
             ctx,
             &right_panel_width,
             &left_panel_width,
-            &mut self.gui_conf,
+            &mut self.thread_communication,
             &mut self.data,
-            &self.data_lock,
-            &self.config_tx,
             &self.water_vapour_lines,
         );
 
         left_panel(
             ctx,
-            &mut self.gui_conf,
+            &mut self.thread_communication,
             &left_panel_width,
             &mut self.pixel_selected,
             &mut self.val,
@@ -255,35 +230,30 @@ impl eframe::App for MyApp<'_> {
             &mut self.other_files,
             &mut self.selected_file_name,
             &mut self.scroll_to_selection,
-            &self.md_lock,
-            &self.img_lock,
-            &self.data_lock,
-            &self.pixel_lock,
-            &self.config_tx,
         );
 
         right_panel(
             ctx,
             &right_panel_width,
-            &mut self.gui_conf,
+            &mut self.thread_communication,
             &mut self.filter_bounds,
             &mut self.fft_bounds,
             &mut self.time_window,
             &mut self.pixel_selected,
-            &self.pixel_lock,
-            &self.config_tx,
-            &self.data_lock,
-            &self.scaling_lock,
             self.wp.clone(),
         );
 
-        self.gui_conf.x = ctx.used_size().x;
-        self.gui_conf.y = ctx.used_size().y;
+        self.thread_communication.gui_settings.x = ctx.used_size().x;
+        self.thread_communication.gui_settings.y = ctx.used_size().y;
     }
 
     fn save(&mut self, storage: &mut dyn Storage) {
         let prefs_key = "config/gui";
-        match self.gui_conf.save(&APP_INFO, prefs_key) {
+        match self
+            .thread_communication
+            .gui_settings
+            .save(&APP_INFO, prefs_key)
+        {
             Ok(_) => {}
             Err(err) => {
                 println!("error saving gui_conf: {err:?}");

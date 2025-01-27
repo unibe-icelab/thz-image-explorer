@@ -6,7 +6,7 @@ extern crate csv;
 extern crate preferences;
 extern crate serde;
 
-use crate::config::Config;
+use crate::config::{ConfigCommand, GuiThreadCommunication, MainThreadCommunication};
 use dotthz::DotthzMetaData;
 use eframe::egui::{vec2, ViewportBuilder, Visuals};
 use eframe::{egui, icon_data};
@@ -18,7 +18,7 @@ use std::thread;
 
 use crate::data::DataPoint;
 use crate::data_thread::main_thread;
-use crate::gui::application::{GuiSettingsContainer, MyApp};
+use crate::gui::application::{GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::SelectedPixel;
 
 mod config;
@@ -58,24 +58,30 @@ fn main() {
     let scaling_lock = Arc::new(RwLock::new(1));
     let md_lock = Arc::new(RwLock::new(DotthzMetaData::default()));
 
-    let (config_tx, config_rx): (Sender<Config>, Receiver<Config>) = mpsc::channel();
+    let (config_tx, config_rx): (Sender<ConfigCommand>, Receiver<ConfigCommand>) = mpsc::channel();
 
-    let main_data_lock = data_lock.clone();
-    let main_img_lock = img_lock.clone();
-    let main_scaling_lock = scaling_lock.clone();
-    let main_pixel_lock = pixel_lock.clone();
-    let main_md_lock = md_lock.clone();
+    let gui_communication = GuiThreadCommunication {
+        md_lock: md_lock.clone(),
+        data_lock: data_lock.clone(),
+        pixel_lock: pixel_lock.clone(),
+        scaling_lock: scaling_lock.clone(),
+        img_lock: img_lock.clone(),
+        gui_settings: gui_settings.clone(),
+        config_tx,
+    };
+
+    let main_communication = MainThreadCommunication {
+        md_lock,
+        data_lock,
+        pixel_lock,
+        scaling_lock,
+        img_lock,
+        config_rx,
+    };
 
     println!("starting main server..");
     let _main_thread_handler = thread::spawn(|| {
-        main_thread(
-            main_md_lock,
-            main_data_lock,
-            main_img_lock,
-            config_rx,
-            main_scaling_lock,
-            main_pixel_lock,
-        );
+        main_thread(main_communication);
     });
 
     let options = eframe::NativeOptions {
@@ -88,12 +94,6 @@ fn main() {
         ..Default::default()
     };
 
-    let gui_data_lock = data_lock.clone();
-    let gui_img_lock = img_lock.clone();
-    let gui_pixel_lock = pixel_lock.clone();
-    let gui_scaling_lock = scaling_lock.clone();
-    let gui_md_lock = md_lock.clone();
-
     eframe::run_native(
         "THz Image Explorer",
         options,
@@ -103,16 +103,7 @@ fn main() {
             ctx.egui_ctx.set_fonts(fonts);
             egui_extras::install_image_loaders(&ctx.egui_ctx);
             ctx.egui_ctx.set_visuals(Visuals::dark());
-            Ok(Box::new(MyApp::new(
-                ctx,
-                gui_md_lock,
-                gui_data_lock,
-                gui_pixel_lock,
-                gui_scaling_lock,
-                gui_img_lock,
-                gui_settings,
-                config_tx,
-            )))
+            Ok(Box::new(THzImageExplorer::new(ctx, gui_communication)))
         }),
     )
     .expect("Failed to launch GUI");
