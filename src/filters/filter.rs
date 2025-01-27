@@ -1,4 +1,4 @@
-use crate::data::ScannedImage;
+use crate::data_container::ScannedImage;
 
 pub trait Filter {
     const DOMAIN: FilterDomain;

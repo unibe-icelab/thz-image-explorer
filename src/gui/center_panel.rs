@@ -4,7 +4,7 @@ use egui_plot::{GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 use std::ops::RangeInclusive;
 
 use crate::config::{ConfigCommand, GuiThreadCommunication};
-use crate::data::DataPoint;
+use crate::data_container::DataPoint;
 use crate::gui::toggle_widget::toggle;
 use crate::vec2;
 

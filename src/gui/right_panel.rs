@@ -2,7 +2,10 @@ use crate::config::{ConfigCommand, GuiThreadCommunication};
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::gui::settings_window::settings_window;
 use crate::gui::toggle_widget::toggle;
-use crate::math_tools::apply_fft_window;
+use crate::math_tools::{
+    apply_adapted_blackman_window, apply_blackman, apply_flat_top, apply_hamming, apply_hanning,
+    FftWindowType,
+};
 use crate::update::check_update;
 use crate::DataPoint;
 use eframe::egui;
@@ -24,6 +27,7 @@ pub fn right_panel(
     thread_communication: &mut GuiThreadCommunication,
     filter_bounds: &mut [f32; 2],
     fft_bounds: &mut [f32; 2],
+    fft_window_type: &mut FftWindowType,
     time_window: &mut [f32; 2],
     pixel_selected: &mut SelectedPixel,
     wp: egui::Image,
@@ -139,26 +143,70 @@ pub fn right_panel(
 
                 ui.separator();
                 ui.heading("I. FFT window bounds: ");
-
-                // TODO: implement different windows
+                if data.time.is_empty() {
+                    data.time = (0..=((1050.0 - 1000.0) / 0.25) as usize)
+                        .map(|i| 1000.0 + i as f32 * 0.25)
+                        .collect();
+                    data.signal_1 = vec![1.0; data.time.len()];
+                }
 
                 let mut window_vals: Vec<[f64; 2]> = Vec::new();
                 let mut p = Array1::from_vec(vec![1.0; data.time.len()]);
-                let t: Array1<f32> = linspace::<f32>(
-                    data.hk.t_begin,
-                    data.hk.t_begin + data.hk.range,
-                    data.time.len(),
-                )
-                .collect();
+                let t: Array1<f32> = data.time.clone().into();
 
-                apply_fft_window(&mut p.view_mut(), &t, &fft_bounds[0], &fft_bounds[1]);
+                ui.add_space(5.0);
+
+                let fft_window_type_old = fft_window_type.clone();
+
+                egui::ComboBox::from_id_salt("Window Type")
+                    .selected_text(fft_window_type.to_string())
+                    .width(80.0)
+                    .show_ui(ui, |ui| {
+                        [
+                            FftWindowType::AdaptedBlackman,
+                            FftWindowType::Blackman,
+                            FftWindowType::Hanning,
+                            FftWindowType::Haming,
+                            FftWindowType::FlatTop,
+                        ]
+                        .iter()
+                        .for_each(|window_type| {
+                            ui.selectable_value(
+                                fft_window_type,
+                                *window_type,
+                                window_type.to_string(),
+                            );
+                        });
+                    });
+                if fft_window_type_old != *fft_window_type {
+                    println!("changing type");
+                    thread_communication
+                        .config_tx
+                        .send(ConfigCommand::SetFftWindowType(fft_window_type.clone()))
+                        .unwrap();
+                }
+
+                ui.add_space(5.0);
+
+                match fft_window_type {
+                    FftWindowType::AdaptedBlackman => {
+                        apply_adapted_blackman_window(
+                            &mut p.view_mut(),
+                            &t,
+                            &fft_bounds[0],
+                            &fft_bounds[1],
+                        );
+                    }
+                    FftWindowType::Blackman => apply_blackman(&mut p.view_mut(), &t),
+                    FftWindowType::Hanning => apply_hanning(&mut p.view_mut(), &t),
+                    FftWindowType::Haming => apply_hamming(&mut p.view_mut(), &t),
+                    FftWindowType::FlatTop => apply_flat_top(&mut p.view_mut(), &t),
+                }
 
                 for i in 0..t.len() {
                     window_vals.push([t[i] as f64, p[i] as f64]);
                 }
                 let fft_window_plot = Plot::new("FFT Window")
-                    .include_x(data.hk.t_begin)
-                    .include_x(data.hk.t_begin + data.hk.range)
                     .include_y(0.0)
                     .include_y(1.0)
                     .allow_drag(false)
@@ -173,20 +221,23 @@ pub fn right_panel(
                             Line::new(PlotPoints::from(window_vals))
                                 .color(egui::Color32::RED)
                                 .style(LineStyle::Solid)
-                                .name("Blackman Window"),
+                                .name("Window"),
                         );
                         window_plot_ui.vline(
-                            VLine::new(data.hk.t_begin + fft_bounds[0])
+                            VLine::new(data.time.first().unwrap_or(&1000.0) + fft_bounds[0])
                                 .stroke(Stroke::new(1.0, egui::Color32::GRAY))
                                 .name("Lower Bound"),
                         );
                         window_plot_ui.vline(
-                            VLine::new(data.hk.t_begin + data.hk.range - fft_bounds[1])
+                            VLine::new(data.time.last().unwrap_or(&1050.0) - fft_bounds[1])
                                 .stroke(Stroke::new(1.0, egui::Color32::GRAY))
                                 .name("Upper Bound"),
                         );
                     });
                 });
+
+                let range =
+                    data.time.last().unwrap_or(&1050.0) - data.time.first().unwrap_or(&1000.0);
 
                 let slider_changed = ui.horizontal(|ui| {
                     let right_offset = 0.09 * right_panel_width;
@@ -194,14 +245,14 @@ pub fn right_panel(
                     ui.add_space(left_offset);
                     // Display slider, linked to the same range as the plot
                     let mut fft_lower_bound = fft_bounds[0];
-                    let mut fft_upper_bound = data.hk.range - fft_bounds[1];
+                    let mut fft_upper_bound = range - fft_bounds[1];
 
                     let slider_changed = ui
                         .add(
                             DoubleSlider::new(
                                 &mut fft_lower_bound,
                                 &mut fft_upper_bound,
-                                0.0..=data.hk.range,
+                                0.0..=range,
                             )
                             .zoom_factor(2.0)
                             .scroll_factor(0.005)
@@ -214,7 +265,7 @@ pub fn right_panel(
                             egui_phosphor::regular::INFO
                         )))
                         .changed();
-                    *fft_bounds = [fft_lower_bound, data.hk.range - fft_upper_bound];
+                    *fft_bounds = [fft_lower_bound, range - fft_upper_bound];
                     slider_changed
                 });
 

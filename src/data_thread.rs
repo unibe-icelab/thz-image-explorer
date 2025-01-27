@@ -1,8 +1,11 @@
 use crate::config::{ConfigCommand, ConfigContainer, MainThreadCommunication};
-use crate::data::{DataPoint, ScannedImage};
+use crate::data_container::{DataPoint, ScannedImage};
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::io::{open_from_npz, open_from_thz, open_json};
-use crate::math_tools::{apply_fft_window, numpy_unwrap};
+use crate::math_tools::{
+    apply_adapted_blackman_window, apply_blackman, apply_flat_top, apply_hamming, apply_hanning,
+    numpy_unwrap, FftWindowType,
+};
 use csv::ReaderBuilder;
 use dotthz::DotthzMetaData;
 use eframe::egui::ColorImage;
@@ -87,10 +90,10 @@ fn filter_time_window(
             },
         );
     update_intensity_image(scan, img_lock);
-    println!("updated data. This took {:?}", start.elapsed());
+    println!("updated time data. This took {:?}", start.elapsed());
 }
 
-fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLock<Array2<f32>>>) {
+fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLock<Array2<f32>>>, ) {
     // calculate fft filter and calculate ifft
     let start = Instant::now();
     let lower = scan
@@ -133,12 +136,29 @@ fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLo
                             .for_each(
                                 |(scaled_data, mut filtered_data, filtered_img)| {
                                     filtered_data.assign(&scaled_data);
-                                    apply_fft_window(
-                                        &mut filtered_data,
-                                        &scan.time,
-                                        &config.fft_window[0],
-                                        &config.fft_window[1],
-                                    );
+
+                                    match config.fft_window_type {
+                                        FftWindowType::AdaptedBlackman => {
+                                            apply_adapted_blackman_window(
+                                                &mut filtered_data,
+                                                &scan.time,
+                                                &config.fft_window[0],
+                                                &config.fft_window[1],
+                                            );
+                                        }
+                                        FftWindowType::Blackman => {
+                                            apply_blackman(&mut filtered_data, &scan.time)
+                                        }
+                                        FftWindowType::Hanning => {
+                                            apply_hanning(&mut filtered_data, &scan.time)
+                                        }
+                                        FftWindowType::Haming => {
+                                            apply_hamming(&mut filtered_data, &scan.time)
+                                        }
+                                        FftWindowType::FlatTop => {
+                                            apply_flat_top(&mut filtered_data, &scan.time)
+                                        }
+                                    }
 
                                     // calculate fft
                                     let mut spectrum = r2c.make_output_vec();
@@ -352,6 +372,10 @@ pub fn main_thread(thread_communication: MainThreadCommunication) {
                 }
                 ConfigCommand::SetFFTResolution(df) => {
                     config.fft_df = df;
+                    filter(&config, &mut scan, &thread_communication.img_lock);
+                }
+                ConfigCommand::SetFftWindowType(wt) => {
+                    config.fft_window_type = wt;
                     filter(&config, &mut scan, &thread_communication.img_lock);
                 }
                 ConfigCommand::SetDownScaling => {

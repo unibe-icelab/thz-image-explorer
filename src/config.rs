@@ -1,4 +1,4 @@
-use crate::data::DataPoint;
+use crate::data_container::DataPoint;
 use crate::gui::application::GuiSettingsContainer;
 use crate::gui::matrix_plot::SelectedPixel;
 use dotthz::DotthzMetaData;
@@ -6,6 +6,7 @@ use ndarray::Array2;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
+use crate::math_tools::FftWindowType;
 
 pub enum ConfigCommand {
     OpenFile(PathBuf),
@@ -17,6 +18,7 @@ pub enum ConfigCommand {
     SetFFTLogPlot(bool),
     SetFFTNormalization(bool),
     SetFFTResolution(f32),
+    SetFftWindowType(FftWindowType),
     SetDownScaling,
     SetSelectedPixel(SelectedPixel),
 }
@@ -26,6 +28,7 @@ pub struct ConfigContainer {
     pub fft_window: [f32; 2],
     pub fft_filter: [f32; 2],
     pub time_window: [f32; 2],
+    pub fft_window_type: FftWindowType,
     pub fft_log_plot: bool,
     pub normalize_fft: bool,
     pub fft_df: f32,
@@ -37,6 +40,7 @@ impl Default for ConfigContainer {
             fft_window: [1.0, 7.0],
             fft_filter: [0.0, 10.0],
             time_window: [1000.0, 1050.0],
+            fft_window_type: FftWindowType::AdaptedBlackman,
             fft_log_plot: false,
             normalize_fft: false,
             fft_df: 1.0,

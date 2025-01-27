@@ -1,4 +1,4 @@
-use crate::data::ScannedImage;
+use crate::data_container::ScannedImage;
 use crate::filters::filter::{Filter, FilterConfig, FilterDomain, FilterParameter, ParameterKind};
 
 pub struct Deconvolution {

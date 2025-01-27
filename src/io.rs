@@ -1,4 +1,4 @@
-use crate::data::{HouseKeeping, Meta, ScannedImage};
+use crate::data_container::{HouseKeeping, Meta, ScannedImage};
 use dotthz::{DotthzFile, DotthzMetaData};
 use ndarray::{Array1, Array2, Array3, Axis};
 use ndarray_npy::NpzReader;

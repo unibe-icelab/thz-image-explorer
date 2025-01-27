@@ -14,12 +14,13 @@ use self_update::update::Release;
 use serde::{Deserialize, Serialize};
 
 use crate::config::GuiThreadCommunication;
-use crate::data::DataPoint;
+use crate::data_container::DataPoint;
 use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::gui::right_panel::right_panel;
 use crate::APP_INFO;
+use crate::math_tools::FftWindowType;
 
 #[derive(Clone)]
 pub enum FileDialogState {
@@ -74,6 +75,7 @@ impl GuiSettingsContainer {
 
 pub struct THzImageExplorer<'a> {
     fft_bounds: [f32; 2],
+    fft_window_type: FftWindowType,
     filter_bounds: [f32; 2],
     time_window: [f32; 2],
     pixel_selected: SelectedPixel,
@@ -199,6 +201,7 @@ impl THzImageExplorer<'_> {
             selected_file_name: "".to_string(),
             scroll_to_selection: false,
             fft_bounds: [1.0, 7.0],
+            fft_window_type: FftWindowType::AdaptedBlackman,
             filter_bounds: [0.0, 10.0],
             time_window: [1000.0, 1050.0],
             pixel_selected: SelectedPixel::default(),
@@ -252,6 +255,7 @@ impl eframe::App for THzImageExplorer<'_> {
             &mut self.thread_communication,
             &mut self.filter_bounds,
             &mut self.fft_bounds,
+            &mut self.fft_window_type,
             &mut self.time_window,
             &mut self.pixel_selected,
             self.wp.clone(),
