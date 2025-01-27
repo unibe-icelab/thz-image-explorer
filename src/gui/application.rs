@@ -256,7 +256,7 @@ impl eframe::App for THzImageExplorer<'_> {
         {
             Ok(_) => {}
             Err(err) => {
-                println!("error saving gui_conf: {err:?}");
+                log::error!("error saving gui_conf: {err:?}");
             }
         }
         // Save the persistent data of the file dialog

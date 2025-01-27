@@ -393,7 +393,9 @@ pub fn center_panel(
                         {
                             thread_communication.gui_settings.frequency_resolution_temp =
                                 1.0 / data.hk.range;
-                        } else if thread_communication.gui_settings.frequency_resolution_temp < 0.0001 {
+                        } else if thread_communication.gui_settings.frequency_resolution_temp
+                            < 0.0001
+                        {
                             thread_communication.gui_settings.frequency_resolution_temp = 0.0001;
                         }
                         thread_communication.gui_settings.frequency_resolution =
@@ -408,7 +410,9 @@ pub fn center_panel(
                     ui.add_space(50.0);
                     ui.label("FFT");
                     if ui
-                        .add(toggle(&mut thread_communication.gui_settings.phases_visible))
+                        .add(toggle(
+                            &mut thread_communication.gui_settings.phases_visible,
+                        ))
                         .changed()
                     {
                         thread_communication.gui_settings.log_plot =

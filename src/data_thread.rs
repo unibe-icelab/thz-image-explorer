@@ -32,7 +32,7 @@ fn save_image(img: &ColorImage, file_path: &Path) {
     match img_to_save.save(image_path) {
         Ok(_) => {}
         Err(err) => {
-            println!("error in saving image: {err:?}");
+            log::error!("error in saving image: {err:?}");
         }
     }
     //TODO: implement large image saving
@@ -62,8 +62,6 @@ fn filter_time_window(
         .iter()
         .position(|t| *t == config.time_window[1].round())
         .unwrap_or(0);
-    println!("lower: {}, upper: {}", lower, upper);
-
     (
         scan.scaled_data.axis_iter_mut(Axis(0)),
         scan.filtered_data.axis_iter_mut(Axis(0)),
@@ -94,7 +92,6 @@ fn filter_time_window(
 
 fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLock<Array2<f32>>>) {
     // calculate fft filter and calculate ifft
-    println!("updating data");
     let start = Instant::now();
     let lower = scan
         .time
@@ -166,7 +163,7 @@ fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLo
                                     match c2r.process(&mut spectrum, &mut output) {
                                         Ok(_) => {}
                                         Err(err) => {
-                                            println!("error in iFFT: {err:?}");
+                                            log::error!("error in iFFT: {err:?}");
                                         }
                                     };
                                     let length = output.len();
@@ -225,7 +222,7 @@ pub fn main_thread(thread_communication: MainThreadCommunication) {
                                         height = h;
                                     }
                                     Err(err) => {
-                                        println!("failed to open json @ {json_path:?}... {err}");
+                                        log::error!("failed to open json @ {json_path:?}... {err}");
                                         width = 0;
                                         height = 0;
                                     }
@@ -268,7 +265,7 @@ pub fn main_thread(thread_communication: MainThreadCommunication) {
                                         );
                                     }
                                     Err(err) => {
-                                        println!("an error occurred while trying to read data.npz {err:?}");
+                                        log::error!("an error occurred while trying to read data.npz {err:?}");
                                     }
                                 }
                                 // if let Some(r2c) = &scan.r2c {
@@ -294,7 +291,7 @@ pub fn main_thread(thread_communication: MainThreadCommunication) {
                                 // }
                             }
                             "npy" => {
-                                println!("file ending not supported");
+                                log::error!("file ending not supported");
                             }
                             "thz" => {
                                 match open_from_thz(&selected_file_path, &mut scan, &mut meta_data)

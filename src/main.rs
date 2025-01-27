@@ -15,7 +15,7 @@ use preferences::{AppInfo, Preferences};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, RwLock};
 use std::thread;
-
+use log::log;
 use crate::data::DataPoint;
 use crate::data_thread::main_thread;
 use crate::gui::application::{GuiSettingsContainer, THzImageExplorer};
@@ -47,7 +47,7 @@ fn main() {
         match gui_settings.save(&APP_INFO, prefs_key) {
             Ok(_) => {}
             Err(err) => {
-                println!("error in saving gui_settings send: {err:?}");
+                log::error!("error in saving gui_settings send: {err:?}");
             }
         }
     }
@@ -79,7 +79,6 @@ fn main() {
         config_rx,
     };
 
-    println!("starting main server..");
     let _main_thread_handler = thread::spawn(|| {
         main_thread(main_communication);
     });

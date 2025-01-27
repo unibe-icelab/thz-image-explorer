@@ -268,7 +268,7 @@ pub fn open_from_thz(
 
     if let Some(group_name) = file.get_group_names()?.first() {
         if file.get_groups()?.len() > 1 {
-            println!("found more than one group, opening only the first");
+            log::info!("found more than one group, opening only the first");
         }
 
         // For TeraFlash measurements we always just get the first entry

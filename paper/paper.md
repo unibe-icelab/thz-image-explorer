@@ -71,6 +71,9 @@ set in the GUI are sent to the Data thread
 via multiple-producer-single-consumer (MPSC) channels.
 The Data thread then handles the computation of the applied filters.
 The output of the computation is then shared via mutexes with the GUI thread.
+The entire thread communication is handled with the `GuiThreadCommunication` and `MainThreadCommunication` structs. To
+extend the communication for additional data-types, these two structs need to be extended with `Arc<RwLock<T>>` or
+`mpsc::Sender<T>`/`mpsc::Receiver<T>`.
 
 # Installation
 
@@ -183,7 +186,41 @@ and refer to \autoref{eq:fourier} from text.
 
 ### Custom Filters
 
-The code-base can easily be extended with custom filters. The user needs to create a custom file in the `src/filters`
+The code-base can easily be extended with custom filters. The individual filter parameters will be wrapped in
+`ParameterKind` structs to define how they should be displayed in the GUI. Each filter can be set to either be applied
+in the time or frequency domain with the `FilterDomain` enum.
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FilterDomain {
+    Time,
+    Frequency,
+}
+
+#[derive(Debug, Clone)]
+pub enum ParameterKind {
+    Int(isize),
+    UInt(usize),
+    Float(f64),
+    Boolean(bool),
+    Slider {
+        value: f64,
+        show_in_plot: bool,
+        min: f64,
+        max: f64,
+    },
+    DoubleSlider {
+        values: [f64; 2],
+        show_in_plot: bool,
+        minimum_separation: f64,
+        inverted: bool,
+        min: f64,
+        max: f64,
+    },
+}
+```
+
+The user needs to create a custom file in the `src/filters`
 directory with a struct that implements the `Filter` trait.
 
 ```rust
