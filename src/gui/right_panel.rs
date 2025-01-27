@@ -516,6 +516,29 @@ pub fn right_panel(
                 //     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
                 // }
 
+                ui.add_space(20.0);
+
+                if ui
+                    .button(format!("{} Settings", egui_phosphor::regular::GEAR_FINE))
+                    .clicked()
+                {
+                    #[cfg(feature = "self_update")]
+                    {
+                        *new_release = check_update();
+                    }
+                    *settings_window_open = true;
+                }
+                if *settings_window_open {
+                    settings_window(
+                        ui.ctx(),
+                        &mut thread_communication.gui_settings,
+                        #[cfg(feature = "self_update")]
+                        new_release,
+                        settings_window_open,
+                        update_text,
+                    );
+                }
+
                 ui.add_space(5.0);
                 ui.separator();
 
@@ -525,27 +548,5 @@ pub fn right_panel(
                     ui.add(wp.fit_to_exact_size(vec2(80.0, 38.0)));
                 });
             });
-            ui.add_space(20.0);
-
-            if ui
-                .button(format!("{} Settings", egui_phosphor::regular::GEAR_FINE))
-                .clicked()
-            {
-                #[cfg(feature = "self_update")]
-                {
-                    *new_release = check_update();
-                }
-                *settings_window_open = true;
-            }
-            if *settings_window_open {
-                settings_window(
-                    ui.ctx(),
-                    &mut thread_communication.gui_settings,
-                    #[cfg(feature = "self_update")]
-                    new_release,
-                    settings_window_open,
-                    update_text,
-                );
-            }
         });
 }
