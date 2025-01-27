@@ -1,3 +1,10 @@
+use crate::config::{ConfigCommand, GuiThreadCommunication};
+use crate::gui::matrix_plot::SelectedPixel;
+use crate::gui::settings_window::settings_window;
+use crate::gui::toggle_widget::toggle;
+use crate::math_tools::apply_fft_window;
+use crate::update::check_update;
+use crate::DataPoint;
 use eframe::egui;
 use eframe::egui::panel::Side;
 use eframe::egui::{vec2, DragValue, Stroke, Vec2, Visuals};
@@ -5,17 +12,14 @@ use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use itertools_num::linspace;
 use ndarray::Array1;
+use self_update::update::Release;
 use std::f32::consts::E;
-
-use crate::config::{ConfigCommand, GuiThreadCommunication};
-use crate::gui::matrix_plot::SelectedPixel;
-use crate::gui::toggle_widget::toggle;
-use crate::math_tools::apply_fft_window;
-use crate::DataPoint;
 
 #[allow(clippy::too_many_arguments)]
 pub fn right_panel(
     ctx: &egui::Context,
+    settings_window_open: &mut bool,
+    update_text: &mut String,
     right_panel_width: &f32,
     thread_communication: &mut GuiThreadCommunication,
     filter_bounds: &mut [f32; 2],
@@ -23,6 +27,7 @@ pub fn right_panel(
     time_window: &mut [f32; 2],
     pixel_selected: &mut SelectedPixel,
     wp: egui::Image,
+    #[cfg(feature = "self_update")] new_release: &mut Option<Release>,
 ) {
     let mut data = DataPoint::default();
     if let Ok(read_guard) = thread_communication.data_lock.read() {
@@ -520,5 +525,27 @@ pub fn right_panel(
                     ui.add(wp.fit_to_exact_size(vec2(80.0, 38.0)));
                 });
             });
+            ui.add_space(20.0);
+
+            if ui
+                .button(format!("{} Settings", egui_phosphor::regular::GEAR_FINE))
+                .clicked()
+            {
+                #[cfg(feature = "self_update")]
+                {
+                    *new_release = check_update();
+                }
+                *settings_window_open = true;
+            }
+            if *settings_window_open {
+                settings_window(
+                    ui.ctx(),
+                    &mut thread_communication.gui_settings,
+                    #[cfg(feature = "self_update")]
+                    new_release,
+                    settings_window_open,
+                    update_text,
+                );
+            }
         });
 }

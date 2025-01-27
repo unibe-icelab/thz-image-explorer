@@ -5,10 +5,12 @@ use egui_file_dialog::FileDialog;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use eframe::egui::ThemePreference;
 use eframe::{egui, Storage};
 use egui_plot::PlotPoint;
 use home::home_dir;
 use preferences::Preferences;
+use self_update::update::Release;
 use serde::{Deserialize, Serialize};
 
 use crate::config::GuiThreadCommunication;
@@ -43,6 +45,7 @@ pub struct GuiSettingsContainer {
     pub dark_mode: bool,
     pub x: f32,
     pub y: f32,
+    pub theme_preference: ThemePreference,
 }
 
 impl GuiSettingsContainer {
@@ -64,6 +67,7 @@ impl GuiSettingsContainer {
             dark_mode: true,
             x: 1600.0,
             y: 900.0,
+            theme_preference: ThemePreference::System,
         }
     }
 }
@@ -86,6 +90,10 @@ pub struct THzImageExplorer<'a> {
     selected_file_name: String,
     scroll_to_selection: bool,
     thread_communication: GuiThreadCommunication,
+    settings_window_open: bool,
+    update_text: String,
+    #[cfg(feature = "self_update")]
+    new_release: Option<Release>,
 }
 
 impl THzImageExplorer<'_> {
@@ -198,6 +206,10 @@ impl THzImageExplorer<'_> {
             mid_point: 50.0,
             bw: false,
             thread_communication,
+            settings_window_open: false,
+            update_text: "".to_string(),
+            #[cfg(feature = "self_update")]
+            new_release: None,
         }
     }
 }
@@ -234,6 +246,8 @@ impl eframe::App for THzImageExplorer<'_> {
 
         right_panel(
             ctx,
+            &mut self.settings_window_open,
+            &mut self.update_text,
             &right_panel_width,
             &mut self.thread_communication,
             &mut self.filter_bounds,
@@ -241,6 +255,8 @@ impl eframe::App for THzImageExplorer<'_> {
             &mut self.time_window,
             &mut self.pixel_selected,
             self.wp.clone(),
+            #[cfg(feature = "self_update")]
+            &mut self.new_release,
         );
 
         self.thread_communication.gui_settings.x = ctx.used_size().x;

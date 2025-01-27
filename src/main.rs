@@ -7,6 +7,10 @@ extern crate preferences;
 extern crate serde;
 
 use crate::config::{ConfigCommand, GuiThreadCommunication, MainThreadCommunication};
+use crate::data::DataPoint;
+use crate::data_thread::main_thread;
+use crate::gui::application::{GuiSettingsContainer, THzImageExplorer};
+use crate::gui::matrix_plot::SelectedPixel;
 use dotthz::DotthzMetaData;
 use eframe::egui::{vec2, ViewportBuilder, Visuals};
 use eframe::{egui, icon_data};
@@ -15,11 +19,6 @@ use preferences::{AppInfo, Preferences};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, RwLock};
 use std::thread;
-use log::log;
-use crate::data::DataPoint;
-use crate::data_thread::main_thread;
-use crate::gui::application::{GuiSettingsContainer, THzImageExplorer};
-use crate::gui::matrix_plot::SelectedPixel;
 
 mod config;
 mod data;
@@ -28,6 +27,7 @@ mod filters;
 mod gui;
 mod io;
 mod math_tools;
+mod update;
 
 const APP_INFO: AppInfo = AppInfo {
     name: "THz Image Explorer",
