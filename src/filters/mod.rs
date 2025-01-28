@@ -1,3 +1,3 @@
 pub mod deconvolution;
-mod filter;
+pub mod filter;
 pub mod psf;

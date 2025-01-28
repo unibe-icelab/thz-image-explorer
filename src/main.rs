@@ -9,6 +9,7 @@ extern crate serde;
 use crate::config::{ConfigCommand, GuiThreadCommunication, MainThreadCommunication};
 use crate::data_container::DataPoint;
 use crate::data_thread::main_thread;
+use crate::filters::filter::FILTER_REGISTRY;
 use crate::gui::application::{GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::SelectedPixel;
 use dotthz::DotthzMetaData;

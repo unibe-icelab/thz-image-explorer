@@ -1,9 +1,17 @@
 use crate::data_container::ScannedImage;
+use once_cell::sync::Lazy;
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::sync::Mutex;
 
-pub trait Filter {
-    const DOMAIN: FilterDomain;
-
+pub trait Filter: Send + Sync + Debug {
+    fn new() -> Self
+    where
+        Self: Sized;
     fn filter(&self, t: &mut ScannedImage);
+    fn name() -> &'static str
+    where
+        Self: Sized;
 
     fn config(&self) -> FilterConfig;
 }
@@ -18,6 +26,7 @@ pub enum FilterDomain {
 #[derive(Debug, Clone)]
 pub struct FilterConfig {
     pub name: String,
+    pub domain: FilterDomain,
     pub parameters: Vec<FilterParameter>,
 }
 
@@ -48,3 +57,34 @@ pub struct FilterParameter {
     pub name: String,
     pub kind: ParameterKind,
 }
+
+#[derive(Debug)]
+pub struct FilterRegistry {
+    filters: HashMap<String, Box<dyn Filter>>,
+}
+
+impl FilterRegistry {
+    pub fn register_filter<F: Filter + 'static>() {
+        let mut registry = FILTER_REGISTRY.lock().unwrap();
+        let name = F::name().to_string();
+        registry.filters.insert(name, Box::new(F::new()));
+    }
+
+    pub fn get_filter(&self, name: &str) -> Option<&Box<dyn Filter>> {
+        self.filters.get(name)
+    }
+}
+
+/// Global, thread-safe registry
+/// '''rust
+/// if let Some(filter) = FILTER_REGISTRY.lock().unwrap().get_filter("Deconvolution") {
+///     println!("Filter found: {}", filter.name());
+/// } else {
+///     println!("Filter not found");
+/// }
+/// '''
+pub static FILTER_REGISTRY: Lazy<Mutex<FilterRegistry>> = Lazy::new(|| {
+    Mutex::new(FilterRegistry {
+        filters: HashMap::new(),
+    })
+});

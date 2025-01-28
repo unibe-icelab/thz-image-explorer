@@ -1,27 +1,38 @@
 use crate::data_container::ScannedImage;
 use crate::filters::filter::{Filter, FilterConfig, FilterDomain, FilterParameter, ParameterKind};
+use filter_macros::register_filter;
 
+#[derive(Debug)]
+#[register_filter]
 pub struct Deconvolution {
-    // the number of filters (i.e. the frequency resolution)
     pub filter_number: usize,
-    // the start frequency (the first filter is a low pass filter averaging all frequencies below the cutoff)
     pub start_frequency: f64,
-    // the end frequency (the last filter is a high pass filter)
     pub end_frequency: f64,
-    // the number of iterations of the Richardson-Lucy algorithm
     pub n_iterations: usize,
 }
 
 impl Filter for Deconvolution {
-    const DOMAIN: FilterDomain = FilterDomain::Frequency;
+    fn new() -> Self {
+        Deconvolution {
+            filter_number: 10,
+            start_frequency: 0.0,
+            end_frequency: 10.0,
+            n_iterations: 10,
+        }
+    }
 
     fn filter(&self, _t: &mut ScannedImage) {
-        todo!()
+        // Implement your Richardson-Lucy algorithm here
+    }
+
+    fn name() -> &'static str {
+        "Deconvolution"
     }
 
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Deconvolution".to_string(),
+            domain: FilterDomain::Frequency,
             parameters: vec![
                 FilterParameter {
                     name: "Filter Number".to_string(),
