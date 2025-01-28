@@ -25,10 +25,6 @@ impl Filter for Deconvolution {
         // Implement your Richardson-Lucy algorithm here
     }
 
-    fn name() -> &'static str {
-        "Deconvolution"
-    }
-
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Deconvolution".to_string(),

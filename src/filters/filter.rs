@@ -9,9 +9,6 @@ pub trait Filter: Send + Sync + Debug {
     where
         Self: Sized;
     fn filter(&self, t: &mut ScannedImage);
-    fn name() -> &'static str
-    where
-        Self: Sized;
 
     fn config(&self) -> FilterConfig;
 }
@@ -65,8 +62,14 @@ pub struct FilterRegistry {
 
 impl FilterRegistry {
     pub fn register_filter<F: Filter + 'static>() {
+        // Create an instance of the filter
+        let filter_instance = F::new();
+
+        // Extract the name from the filter's config
+        let name = filter_instance.config().name.clone();
+
+        // Register the filter in the registry
         let mut registry = FILTER_REGISTRY.lock().unwrap();
-        let name = F::name().to_string();
         registry.filters.insert(name, Box::new(F::new()));
     }
 

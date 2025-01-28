@@ -10,7 +10,10 @@ pub fn register_filter(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Convert struct name to snake_case
     let fn_name_str = heck::ToSnakeCase::to_snake_case(struct_name.to_string().as_str());
-    let fn_name = syn::Ident::new(&format!("register_filter_{}", fn_name_str), struct_name.span());
+    let fn_name = syn::Ident::new(
+        &format!("register_filter_{}", fn_name_str),
+        struct_name.span(),
+    );
 
     let expanded = quote! {
         // The original struct definition

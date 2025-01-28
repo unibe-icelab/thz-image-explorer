@@ -248,10 +248,6 @@ impl Filter for CustomFilter {
         // Implement your filter algorithm here
     }
 
-    fn name() -> &'static str {
-        "Deconvolution"
-    }
-
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Custom Filter".to_string(),
