@@ -509,5 +509,11 @@ pub fn load_psfs(
         }
     }
 
-    Ok((Array1::from_vec(xx), Array1::from_vec(yy), np_psf_t_x, np_psf_t_y, times.unwrap()))
+    Ok((
+        Array1::from_vec(xx),
+        Array1::from_vec(yy),
+        np_psf_t_x,
+        np_psf_t_y,
+        times.unwrap(),
+    ))
 }

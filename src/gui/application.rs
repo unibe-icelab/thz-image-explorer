@@ -76,7 +76,7 @@ impl GuiSettingsContainer {
             theme_preference: ThemePreference::System,
             beam_shape: vec![],
             beam_shape_path: home_dir().unwrap_or_else(|| PathBuf::from("/")),
-            psf: Array2::zeros((1,1)),
+            psf: Array2::zeros((1, 1)),
         }
     }
 }

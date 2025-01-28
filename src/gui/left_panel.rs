@@ -332,10 +332,19 @@ pub fn left_panel(
                             let n_min = 0;
                             let n_max = 100;
                             thread_communication.gui_settings.beam_shape = vec![];
-                            let (x, y, psfx, xi, psfy, yi) = get_center(&xx, &yy, &np_psf_t_x, &np_psf_t_y, n_min, n_max).unwrap();
+                            let (x, y, psfx, xi, psfy, yi) =
+                                get_center(&xx, &yy, &np_psf_t_x, &np_psf_t_y, n_min, n_max)
+                                    .unwrap();
 
                             // TODO: this does not yet work!
-                            let (xx, yy, psf) = create_psf_2d(psfx.to_vec(), psfy.to_vec(), xi.to_vec(), yi.to_vec(), 1.0, 1.0);
+                            let (xx, yy, psf) = create_psf_2d(
+                                psfx.to_vec(),
+                                psfy.to_vec(),
+                                xi.to_vec(),
+                                yi.to_vec(),
+                                1.0,
+                                1.0,
+                            );
                             for (pos, intensity) in psfx.iter().zip(xi.iter()) {
                                 thread_communication
                                     .gui_settings
