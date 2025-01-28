@@ -77,6 +77,10 @@ impl FilterRegistry {
 
 /// Global, thread-safe registry
 /// '''rust
+///
+/// use crate::filters::filter::FILTER_REGISTRY;
+///
+///
 /// if let Some(filter) = FILTER_REGISTRY.lock().unwrap().get_filter("Deconvolution") {
 ///     println!("Filter found: {}", filter.name());
 /// } else {

@@ -8,11 +8,9 @@ pub fn register_filter(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemStruct);
     let struct_name = &input.ident;
 
-    // Generate the registration function name, like register_filter_Deconvolution
-    let fn_name = syn::Ident::new(
-        &format!("register_filter_{}", struct_name),
-        struct_name.span(),
-    );
+    // Convert struct name to snake_case
+    let fn_name_str = heck::ToSnakeCase::to_snake_case(struct_name.to_string().as_str());
+    let fn_name = syn::Ident::new(&format!("register_filter_{}", fn_name_str), struct_name.span());
 
     let expanded = quote! {
         // The original struct definition

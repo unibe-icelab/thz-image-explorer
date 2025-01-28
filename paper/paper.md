@@ -230,6 +230,12 @@ The user needs to create a custom file in the `src/filters`
 directory with a struct that implements the `Filter` trait.
 
 ```rust
+use crate::data_container::ScannedImage;
+use crate::filters::filter::{Filter, FilterConfig, FilterDomain, FilterParameter, ParameterKind};
+use filter_macros::register_filter;
+
+#[derive(Debug)]
+#[register_filter]
 pub struct CustomFilter {
     pub param1: f32,
     pub param2: f32,
@@ -237,15 +243,19 @@ pub struct CustomFilter {
 }
 
 impl Filter for CustomFilter {
-    const DOMAIN: FilterDomain = FilterDomain::Frequency;
+    fn filter(&self, _t: &mut ScannedImage) {
+        todo!();
+        // Implement your filter algorithm here
+    }
 
-    fn filter(&self, scan: &mut ScannedImage) {
-        todo!()
+    fn name() -> &'static str {
+        "Deconvolution"
     }
 
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Custom Filter".to_string(),
+            domain: FilterDomain::Frequency,
             parameters: vec![
                 FilterParameter {
                     name: "Parameter 1".to_string(),

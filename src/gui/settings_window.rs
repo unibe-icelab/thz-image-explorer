@@ -1,5 +1,4 @@
 use crate::gui::application::{FileDialogState, GuiSettingsContainer};
-use crate::gui::matrix_plot::color_from_intensity;
 #[cfg(feature = "self_update")]
 use crate::update::{check_update, update};
 use eframe::egui;
@@ -127,7 +126,7 @@ pub fn settings_window(
                 .iter()
                 .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi as f64));
 
-            let mut img = ColorImage::new([width, height], Color32::TRANSPARENT);
+            let img = ColorImage::new([width, height], Color32::TRANSPARENT);
             let mut intensity_matrix = vec![vec![0.0; height]; width];
             let mut id_matrix = vec![vec!["".to_string(); height]; width];
 
@@ -149,7 +148,7 @@ pub fn settings_window(
                 img.height() as f32 * vec2(texture.aspect_ratio(), 1.0),
             );
 
-            let plot_response = plot.show(ui, |plot_ui| {
+            let _plot_response = plot.show(ui, |plot_ui| {
                 plot_ui.image(im);
             });
 
