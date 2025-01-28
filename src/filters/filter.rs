@@ -3,6 +3,8 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Mutex;
+#[allow(unused_imports)]
+use ctor::ctor; // this dependency is required by the `register_filter` macro
 
 pub trait Filter: Send + Sync + Debug {
     fn new() -> Self
