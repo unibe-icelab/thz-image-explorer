@@ -1,12 +1,12 @@
 use crate::data_container::DataPoint;
 use crate::gui::application::GuiSettingsContainer;
 use crate::gui::matrix_plot::SelectedPixel;
+use crate::math_tools::FftWindowType;
 use dotthz::DotthzMetaData;
 use ndarray::Array2;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
-use crate::math_tools::FftWindowType;
 
 pub enum ConfigCommand {
     OpenFile(PathBuf),

@@ -1,4 +1,5 @@
 use crate::config::{ConfigCommand, GuiThreadCommunication};
+use crate::gui::application::FileDialogState;
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::gui::settings_window::settings_window;
 use crate::gui::toggle_widget::toggle;
@@ -12,6 +13,7 @@ use eframe::egui;
 use eframe::egui::panel::Side;
 use eframe::egui::{vec2, DragValue, Stroke, Vec2, Visuals};
 use egui_double_slider::DoubleSlider;
+use egui_file_dialog::FileDialog;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use itertools_num::linspace;
 use ndarray::Array1;
@@ -31,6 +33,8 @@ pub fn right_panel(
     time_window: &mut [f32; 2],
     pixel_selected: &mut SelectedPixel,
     wp: egui::Image,
+    file_dialog_state: &mut FileDialogState,
+    file_dialog: &mut FileDialog,
     #[cfg(feature = "self_update")] new_release: &mut Option<Release>,
 ) {
     let mut data = DataPoint::default();
@@ -587,6 +591,8 @@ pub fn right_panel(
                         new_release,
                         settings_window_open,
                         update_text,
+                        file_dialog_state,
+                        file_dialog,
                     );
                 }
 

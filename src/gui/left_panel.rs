@@ -317,6 +317,17 @@ pub fn left_panel(
                         thread_communication.gui_settings.selected_path = path;
                     }
                 }
+                FileDialogState::OpenPSF => {
+                    if let Some(path) = file_dialog
+                        .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                            information_panel.ui(ui, dia);
+                        })
+                        .picked()
+                    {
+                        *file_dialog_state = FileDialogState::None;
+                        // TODO: load PSF
+                    }
+                }
                 FileDialogState::Save => {
                     if let Some(_path) = file_dialog.update(ctx).picked() {
                         *file_dialog_state = FileDialogState::None;

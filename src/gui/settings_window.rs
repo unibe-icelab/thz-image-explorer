@@ -1,8 +1,9 @@
-use crate::gui::application::GuiSettingsContainer;
+use crate::gui::application::{FileDialogState, GuiSettingsContainer};
 #[cfg(feature = "self_update")]
 use crate::update::{check_update, update};
 use eframe::egui;
 use eframe::egui::{Align2, InnerResponse, Vec2, Visuals};
+use egui_file_dialog::FileDialog;
 use egui_theme_switch::ThemeSwitch;
 #[cfg(feature = "self_update")]
 use self_update::restart::restart;
@@ -17,6 +18,8 @@ pub fn settings_window(
     #[cfg(feature = "self_update")] new_release: &mut Option<Release>,
     settings_window_open: &mut bool,
     update_text: &mut String,
+    file_dialog_state: &mut FileDialogState,
+    file_dialog: &mut FileDialog,
 ) -> Option<InnerResponse<Option<()>>> {
     egui::Window::new("Settings")
         .fixed_size(Vec2 { x: 600.0, y: 200.0 })
@@ -26,6 +29,7 @@ pub fn settings_window(
             egui::Grid::new("theme settings")
                 .striped(true)
                 .show(ui, |ui| {
+                    ui.label("Theme: ");
                     if ui
                         .add(ThemeSwitch::new(&mut gui_conf.theme_preference))
                         .changed()
@@ -36,7 +40,33 @@ pub fn settings_window(
 
                     ui.end_row();
                     ui.end_row();
+                    ui.label("PSF: ");
+                    if ui
+                        .button(egui::RichText::new(format!(
+                            "{} Open PSF",
+                            egui_phosphor::regular::FOLDER_OPEN
+                        )))
+                        .on_hover_text("The PSF raw data should be located in a directory.")
+                        .clicked()
+                    {
+                        *file_dialog_state = FileDialogState::OpenPSF;
+                        file_dialog.pick_file();
+                    }
+                    if ui
+                        .selectable_label(false, format!("{}", egui_phosphor::regular::INFO))
+                        .clicked()
+                    {
+                        // TODO: add description of PSF format
+                    }
+                    if gui_conf.beam_shape.is_empty() {
+                        ui.colored_label(egui::Color32::RED, "No PSF loaded.");
+                    } else {
+                        ui.label(gui_conf.beam_shape_path.to_str().unwrap_or("invalid path"));
+                    }
+                    ui.end_row();
+                    ui.end_row();
                 });
+            ui.label("");
             #[cfg(feature = "self_update")]
             egui::Grid::new("update settings")
                 .striped(true)

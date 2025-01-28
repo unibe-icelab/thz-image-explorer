@@ -93,7 +93,7 @@ fn filter_time_window(
     println!("updated time data. This took {:?}", start.elapsed());
 }
 
-fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLock<Array2<f32>>>, ) {
+fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLock<Array2<f32>>>) {
     // calculate fft filter and calculate ifft
     let start = Instant::now();
     let lower = scan

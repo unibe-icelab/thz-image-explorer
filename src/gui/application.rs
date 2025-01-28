@@ -19,12 +19,13 @@ use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::gui::right_panel::right_panel;
-use crate::APP_INFO;
 use crate::math_tools::FftWindowType;
+use crate::APP_INFO;
 
 #[derive(Clone)]
 pub enum FileDialogState {
     Open,
+    OpenPSF,
     Save,
     None,
 }
@@ -47,6 +48,8 @@ pub struct GuiSettingsContainer {
     pub x: f32,
     pub y: f32,
     pub theme_preference: ThemePreference,
+    pub beam_shape: Vec<[f64; 2]>,
+    pub beam_shape_path: PathBuf,
 }
 
 impl GuiSettingsContainer {
@@ -69,6 +72,8 @@ impl GuiSettingsContainer {
             x: 1600.0,
             y: 900.0,
             theme_preference: ThemePreference::System,
+            beam_shape: vec![],
+            beam_shape_path: home_dir().unwrap_or_else(|| PathBuf::from("/")),
         }
     }
 }
@@ -259,6 +264,8 @@ impl eframe::App for THzImageExplorer<'_> {
             &mut self.time_window,
             &mut self.pixel_selected,
             self.wp.clone(),
+            &mut self.file_dialog_state,
+            &mut self.file_dialog,
             #[cfg(feature = "self_update")]
             &mut self.new_release,
         );
