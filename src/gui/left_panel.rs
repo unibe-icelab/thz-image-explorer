@@ -1,9 +1,10 @@
 use crate::config::{ConfigCommand, GuiThreadCommunication};
+use crate::filters::psf::{create_psf_2d, get_center};
 use crate::gui::application::FileDialogState;
 use crate::gui::gauge_widget::gauge;
 use crate::gui::matrix_plot::{make_dummy, plot_matrix, SelectedPixel};
 use crate::gui::toggle_widget::toggle_ui;
-use crate::io::find_files_with_same_extension;
+use crate::io::{find_files_with_same_extension, load_psfs};
 use crate::DataPoint;
 use dotthz::DotthzMetaData;
 use eframe::egui;
@@ -325,7 +326,25 @@ pub fn left_panel(
                         .picked()
                     {
                         *file_dialog_state = FileDialogState::None;
-                        // TODO: load PSF
+                        if let Ok((xx, yy, np_psf_t_x, np_psf_t_y, times)) =
+                            load_psfs(&path.to_path_buf(), true)
+                        {
+                            let n_min = 0;
+                            let n_max = 100;
+                            thread_communication.gui_settings.beam_shape = vec![];
+                            let (x, y, psfx, xi, psfy, yi) = get_center(&xx, &yy, &np_psf_t_x, &np_psf_t_y, n_min, n_max).unwrap();
+
+                            // TODO: this does not yet work!
+                            let (xx, yy, psf) = create_psf_2d(psfx.to_vec(), psfy.to_vec(), xi.to_vec(), yi.to_vec(), 1.0, 1.0);
+                            for (pos, intensity) in psfx.iter().zip(xi.iter()) {
+                                thread_communication
+                                    .gui_settings
+                                    .beam_shape
+                                    .push([*pos, *intensity]);
+                            }
+                            dbg!(&psf);
+                            thread_communication.gui_settings.psf = psf;
+                        }
                     }
                 }
                 FileDialogState::Save => {

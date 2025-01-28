@@ -1,5 +1,7 @@
 use crate::data_container::{HouseKeeping, Meta, ScannedImage};
+use csv::ReaderBuilder;
 use dotthz::{DotthzFile, DotthzMetaData};
+use glob::glob;
 use ndarray::{Array1, Array2, Array3, Axis};
 use ndarray_npy::NpzReader;
 use realfft::RealFftPlanner;
@@ -7,7 +9,6 @@ use std::error::Error;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
-
 pub fn find_files_with_same_extension(file_path: &Path) -> std::io::Result<Vec<PathBuf>> {
     // Convert the input path to a Path
     let path = Path::new(file_path);
@@ -343,4 +344,170 @@ pub fn open_from_thz(
     scan.c2r = Some(c2r);
 
     Ok(())
+}
+
+/// Helper function to extract a substring between two delimiters.
+fn extract_substring(text: &str, start: &str, end: &str) -> Option<String> {
+    let start_idx = text.find(start)? + start.len();
+    let end_idx = text[start_idx..].find(end)? + start_idx;
+    Some(text[start_idx..end_idx].to_string())
+}
+
+/// Helper function for trimming signals (placeholder; implement your logic here).
+pub fn get_windowed_signal(
+    signal: &Vec<f64>,
+    ratio: f64,
+    lr: &str,
+    window: &str,
+    alpha: f64,
+) -> (Vec<f64>, Vec<f64>) {
+    // Implement signal processing logic here
+    (signal.clone(), vec![1.0; signal.len()]) // Placeholder
+}
+
+pub fn load_psfs(
+    raw_psf_path: &PathBuf,
+    trim: bool,
+) -> Result<(Array1<f64>, Array1<f64>, Array2<f64>, Array2<f64>, Vec<f64>), Box<dyn Error>> {
+    let dirs = fs::read_dir(raw_psf_path)?
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    let mut psf_t_x = Vec::new();
+    let mut psf_t_y = Vec::new();
+    let mut pos_x = Vec::new();
+    let mut pos_y = Vec::new();
+    let mut xx = Vec::new();
+    let mut yy = Vec::new();
+    let mut times = None;
+    let mut len_traces = None;
+    let mut nx = 0;
+    let mut ny = 0;
+
+    for dir in dirs.iter() {
+        let path = dir.to_str().unwrap();
+        if glob(&format!("{}/x*.csv", path))?.count() > 0 {
+            nx += 1;
+            for entry in glob(&format!("{}/x*.csv", path))? {
+                let file = entry.unwrap();
+                let x = extract_substring(file.to_str().unwrap(), "x=", ".csv")
+                    .unwrap()
+                    .parse::<f64>()?;
+                pos_x.push(x);
+
+                let mut reader = ReaderBuilder::new().has_headers(true).from_path(file)?;
+                let df: Vec<f64> = reader
+                    .records()
+                    .map(|r| r.unwrap().get(1).unwrap().parse::<f64>().unwrap())
+                    .collect();
+
+                if times.is_none() {
+                    times = Some(
+                        reader
+                            .records()
+                            .map(|r| r.unwrap().get(0).unwrap().parse::<f64>().unwrap())
+                            .collect(),
+                    );
+                }
+                if len_traces.is_none() {
+                    len_traces = Some(df.len());
+                }
+            }
+            xx = pos_x.clone();
+            xx.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        }
+
+        if glob(&format!("{}/y*.csv", path))?.count() > 0 {
+            ny += 1;
+            for entry in glob(&format!("{}/y*.csv", path))? {
+                let file = entry.unwrap();
+                let y = extract_substring(file.to_str().unwrap(), "y=", ".csv")
+                    .unwrap()
+                    .parse::<f64>()?;
+                pos_y.push(y);
+
+                let mut reader = ReaderBuilder::new().has_headers(true).from_path(file)?;
+                let df: Vec<f64> = reader
+                    .records()
+                    .map(|r| r.unwrap().get(1).unwrap().parse::<f64>().unwrap())
+                    .collect();
+
+                if times.is_none() {
+                    times = Some(
+                        reader
+                            .records()
+                            .map(|r| r.unwrap().get(0).unwrap().parse::<f64>().unwrap())
+                            .collect(),
+                    );
+                }
+                if len_traces.is_none() {
+                    len_traces = Some(df.len());
+                }
+            }
+            yy = pos_y.clone();
+            yy.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        }
+    }
+
+    for &x in &xx {
+        let mut psf_x_t = vec![0.0; len_traces.unwrap()];
+        for dir in dirs.iter() {
+            let path = dir.to_str().unwrap();
+            if glob(&format!("{}/x*.csv", path))?.count() > 0 {
+                let file = format!("{}/x={:.2}.csv", path, x);
+                let mut reader = ReaderBuilder::new().has_headers(true).from_path(file)?;
+                let df: Vec<f64> = reader
+                    .records()
+                    .map(|r| r.unwrap().get(1).unwrap().parse::<f64>().unwrap())
+                    .collect();
+                for (i, &val) in df.iter().enumerate() {
+                    psf_x_t[i] += val / nx as f64;
+                }
+            }
+        }
+        psf_t_x.push(psf_x_t);
+    }
+
+    for &y in &yy {
+        let mut psf_y_t = vec![0.0; len_traces.unwrap()];
+        for dir in dirs.iter() {
+            let path = dir.to_str().unwrap();
+            if glob(&format!("{}/y*.csv", path))?.count() > 0 {
+                let file = format!("{}/y={:.2}.csv", path, y);
+                let mut reader = ReaderBuilder::new().has_headers(true).from_path(file)?;
+                let df: Vec<f64> = reader
+                    .records()
+                    .map(|r| r.unwrap().get(1).unwrap().parse::<f64>().unwrap())
+                    .collect();
+                for (i, &val) in df.iter().enumerate() {
+                    psf_y_t[i] += val / ny as f64;
+                }
+            }
+        }
+        psf_t_y.push(psf_y_t);
+    }
+
+    let mut np_psf_t_x = Array2::zeros((psf_t_x.len(), len_traces.unwrap()));
+    let mut np_psf_t_y = Array2::zeros((psf_t_y.len(), len_traces.unwrap()));
+
+    for (i, row) in psf_t_x.iter().enumerate() {
+        np_psf_t_x.row_mut(i).assign(&Array1::from(row.clone()));
+    }
+    for (i, row) in psf_t_y.iter().enumerate() {
+        np_psf_t_y.row_mut(i).assign(&Array1::from(row.clone()));
+    }
+
+    if trim {
+        for i in 0..np_psf_t_x.len_of(Axis(0)) {
+            let (trimmed, _) =
+                get_windowed_signal(&np_psf_t_x.row(i).to_vec(), 0.9, "left", "tukey", 0.1);
+            np_psf_t_x.row_mut(i).assign(&Array1::from(trimmed));
+        }
+        for i in 0..np_psf_t_y.len_of(Axis(0)) {
+            let (trimmed, _) =
+                get_windowed_signal(&np_psf_t_y.row(i).to_vec(), 0.9, "left", "tukey", 0.1);
+            np_psf_t_y.row_mut(i).assign(&Array1::from(trimmed));
+        }
+    }
+
+    Ok((Array1::from_vec(xx), Array1::from_vec(yy), np_psf_t_x, np_psf_t_y, times.unwrap()))
 }

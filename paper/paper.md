@@ -10,6 +10,9 @@ authors:
     orcid: 0000-0002-7916-2592
     corresponding: true
     affiliation: "1"
+  - name: Arnaud Demion
+    orcid: 0009-0002-6920-475X
+    affiliation: "2"
   - name: Nicolas Thomas
     orcid: 0000-0002-0146-0071
     affiliation: "1"
@@ -17,6 +20,9 @@ affiliations:
   - name: University of Bern, Bern, Switzerland
     index: 1
     ror: 02k7v4d05
+  - name: University of Applied Sciences and Arts Western Switzerland Valais, HES-SO Valais-Wallis, Sion, Switzerland
+    index: 2
+    ror: 03r5zec51
 date: 23 January 2025
 bibliography: paper.bib
 

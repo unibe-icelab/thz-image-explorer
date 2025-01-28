@@ -9,6 +9,7 @@ use eframe::egui::ThemePreference;
 use eframe::{egui, Storage};
 use egui_plot::PlotPoint;
 use home::home_dir;
+use ndarray::Array2;
 use preferences::Preferences;
 use self_update::update::Release;
 use serde::{Deserialize, Serialize};
@@ -50,6 +51,7 @@ pub struct GuiSettingsContainer {
     pub theme_preference: ThemePreference,
     pub beam_shape: Vec<[f64; 2]>,
     pub beam_shape_path: PathBuf,
+    pub psf: Array2<f64>,
 }
 
 impl GuiSettingsContainer {
@@ -74,6 +76,7 @@ impl GuiSettingsContainer {
             theme_preference: ThemePreference::System,
             beam_shape: vec![],
             beam_shape_path: home_dir().unwrap_or_else(|| PathBuf::from("/")),
+            psf: Array2::zeros((1,1)),
         }
     }
 }

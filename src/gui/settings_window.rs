@@ -1,10 +1,15 @@
 use crate::gui::application::{FileDialogState, GuiSettingsContainer};
+use crate::gui::matrix_plot::color_from_intensity;
 #[cfg(feature = "self_update")]
 use crate::update::{check_update, update};
 use eframe::egui;
-use eframe::egui::{Align2, InnerResponse, Vec2, Visuals};
+use eframe::egui::{
+    vec2, Align2, Color32, ColorImage, InnerResponse, TextureOptions, Vec2, Visuals,
+};
 use egui_file_dialog::FileDialog;
+use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotPoint, PlotPoints};
 use egui_theme_switch::ThemeSwitch;
+use ndarray::Axis;
 #[cfg(feature = "self_update")]
 use self_update::restart::restart;
 #[cfg(feature = "self_update")]
@@ -50,7 +55,7 @@ pub fn settings_window(
                         .clicked()
                     {
                         *file_dialog_state = FileDialogState::OpenPSF;
-                        file_dialog.pick_file();
+                        file_dialog.pick_directory();
                     }
                     if ui
                         .selectable_label(false, format!("{}", egui_phosphor::regular::INFO))
@@ -61,11 +66,93 @@ pub fn settings_window(
                     if gui_conf.beam_shape.is_empty() {
                         ui.colored_label(egui::Color32::RED, "No PSF loaded.");
                     } else {
-                        ui.label(gui_conf.beam_shape_path.to_str().unwrap_or("invalid path"));
+                        ui.label(
+                            gui_conf
+                                .beam_shape_path
+                                .file_name()
+                                .unwrap_or("invalid name".as_ref())
+                                .to_str()
+                                .unwrap_or("invalid path"),
+                        );
                     }
                     ui.end_row();
                     ui.end_row();
                 });
+
+            let signal_plot = Plot::new("signal")
+                // .height(height)
+                // .width(width)
+                // .y_axis_formatter(s_fmt)
+                // .x_axis_formatter(t_fmt)
+                // .label_formatter(label_fmt)
+                // .coordinates_formatter(Corner::LeftTop, position_fmt)
+                // .include_x(&self.tera_flash_conf.t_begin + &self.tera_flash_conf.range)
+                // .include_x(self.tera_flash_conf.t_begin)
+                // .min_size(vec2(50.0, 100.0))
+              ;
+
+            signal_plot.show(ui, |signal_plot_ui| {
+                signal_plot_ui.line(
+                    Line::new(PlotPoints::from(gui_conf.clone().beam_shape))
+                        .color(egui::Color32::RED)
+                        .style(LineStyle::Solid)
+                        .width(2.0)
+                        .name("signal 1"),
+                );
+            });
+
+            ui.end_row();
+
+            let plot_height = 100.0;
+            let plot_width = 100.0;
+            let data = &gui_conf.psf;
+
+            let width = data.len_of(Axis(0));
+            let height = data.len_of(Axis(1));
+
+            let size = [plot_width / width as f64, plot_height / height as f64]
+                .iter()
+                .fold(f64::INFINITY, |ai, &bi| ai.min(bi));
+
+            let plot = Plot::new("image")
+                .height(0.75 * height as f32 * size as f32)
+                .width(0.75 * width as f32 * size as f32)
+                .show_axes([false, false])
+                .show_x(false)
+                .show_y(false)
+                .set_margin_fraction(Vec2 { x: 0.0, y: 0.0 })
+                .allow_drag(false);
+
+            let max = data
+                .iter()
+                .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi as f64));
+
+            let mut img = ColorImage::new([width, height], Color32::TRANSPARENT);
+            let mut intensity_matrix = vec![vec![0.0; height]; width];
+            let mut id_matrix = vec![vec!["".to_string(); height]; width];
+
+            for y in 0..height {
+                for x in 0..width {
+                    if let Some(i) = data.get((x, y)) {
+                        intensity_matrix[x][height - 1 - y] = *i as f64 / max * 100.0;
+                        id_matrix[x][height - 1 - y] = format!("{:05}-{:05}", x, y);
+                    }
+                }
+            }
+
+            let texture = ui
+                .ctx()
+                .load_texture("image", img.clone(), TextureOptions::NEAREST);
+            let im = PlotImage::new(
+                &texture,
+                PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
+                img.height() as f32 * vec2(texture.aspect_ratio(), 1.0),
+            );
+
+            let plot_response = plot.show(ui, |plot_ui| {
+                plot_ui.image(im);
+            });
+
             ui.label("");
             #[cfg(feature = "self_update")]
             egui::Grid::new("update settings")

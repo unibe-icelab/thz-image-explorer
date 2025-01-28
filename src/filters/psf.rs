@@ -1,5 +1,8 @@
-use ndarray::Array2;
+use ndarray::{s, Array1, Array2, Axis, Ix1, Zip};
+use ndarray_stats::QuantileExt;
+use std::error::Error;
 use std::f64;
+use std::f64::consts::PI;
 
 /// Linear interpolation function for a 1D array.
 fn linear_interp(x: &Vec<f64>, y: &Vec<f64>, xi: f64) -> f64 {
@@ -13,7 +16,8 @@ fn linear_interp(x: &Vec<f64>, y: &Vec<f64>, xi: f64) -> f64 {
     0.0 // Return 0.0 if xi is out of bounds
 }
 
-fn create_psf_2d(
+/// TODO: this does not yet work!
+pub fn create_psf_2d(
     mut psf_x: Vec<f64>,
     mut psf_y: Vec<f64>,
     mut x: Vec<f64>,
@@ -21,6 +25,7 @@ fn create_psf_2d(
     dx: f64,
     dy: f64,
 ) -> (Array2<f64>, Array2<f64>, Array2<f64>) {
+    todo!();
     let x_max = x.iter().cloned().fold(f64::MIN, f64::max).floor() as usize;
     let y_max = y.iter().cloned().fold(f64::MIN, f64::max).floor() as usize;
 
@@ -77,4 +82,159 @@ fn create_psf_2d(
     let yy_grid = Array2::from_shape_fn((yy.len(), 1), |(i, _)| yy[i]);
 
     (xx_grid, yy_grid, psf_2d)
+}
+
+/// Computes the sum of squared residuals
+fn residual_sum_squares(
+    x: &Array1<f64>,
+    y: &Array1<f64>,
+    params: &[f64],
+    model: fn(&Array1<f64>, &[f64]) -> Array1<f64>,
+) -> f64 {
+    let y_model = model(x, params);
+    Zip::from(y)
+        .and(&y_model)
+        .fold(0.0, |acc, &yi, &ymi| acc + (yi - ymi).powi(2))
+}
+
+/// Curve fitting implementation
+fn curve_fit(
+    func: fn(&Array1<f64>, &[f64]) -> Array1<f64>,
+    x_data: &Array1<f64>,
+    y_data: &Array1<f64>,
+    initial_params: &[f64],
+) -> Result<Vec<f64>, Box<dyn Error>> {
+    let mut params = initial_params.to_vec();
+    let learning_rate = 0.01;
+    let max_iters = 1000;
+
+    for _ in 0..max_iters {
+        let gradient = compute_gradient(x_data, y_data, &params, func);
+        for (p, g) in params.iter_mut().zip(gradient) {
+            *p -= learning_rate * g;
+        }
+    }
+
+    Ok(params)
+}
+
+/// Computes the gradient of the cost function
+fn compute_gradient(
+    x: &Array1<f64>,
+    y: &Array1<f64>,
+    params: &[f64],
+    model: fn(&Array1<f64>, &[f64]) -> Array1<f64>,
+) -> Vec<f64> {
+    let delta = 1e-6;
+    let mut gradient = vec![0.0; params.len()];
+    for i in 0..params.len() {
+        let mut params_plus = params.to_vec();
+        let mut params_minus = params.to_vec();
+        params_plus[i] += delta;
+        params_minus[i] -= delta;
+
+        let rss_plus = residual_sum_squares(x, y, &params_plus, model);
+        let rss_minus = residual_sum_squares(x, y, &params_minus, model);
+        gradient[i] = (rss_plus - rss_minus) / (2.0 * delta);
+    }
+    gradient
+}
+
+/// Gaussian function
+fn gaussian(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
+    let x0 = params[0];
+    let w = params[1];
+    x.mapv(|xi| (2.0 * (-2.0 * (xi - x0).powf(2.0) / (w * w)) / (2.0 * PI).sqrt() * w).exp())
+}
+
+/// Error function
+fn error_f(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
+    let x0 = params[0];
+    let w = params[1];
+    x.mapv(|xi| (1.0 + statrs::function::erf::erf(2.0_f64.sqrt() * (xi - x0) / w)) / 2.0)
+}
+
+/// TODO: this does not yet work
+pub fn get_center(
+    x_axis_psf: &Array1<f64>,
+    y_axis_psf: &Array1<f64>,
+    np_psf_t_x: &Array2<f64>,
+    np_psf_t_y: &Array2<f64>,
+    n_min: usize,
+    n_max: usize,
+) -> Result<
+    (
+        f64,
+        f64,
+        ndarray::Array<f64, Ix1>,
+        ndarray::Array<f64, Ix1>,
+        ndarray::Array<f64, Ix1>,
+        ndarray::Array<f64, Ix1>,
+    ),
+    Box<dyn Error>,
+> {
+    println!("Extracting the center of the PSF...");
+    todo!();
+
+    // Cropping the PSF to improve the fit
+    let x_axis_psf_2 = x_axis_psf.slice(s![n_min..n_max]).to_owned();
+    let y_axis_psf_2 = y_axis_psf.slice(s![n_min..n_max]).to_owned();
+    let np_psf_t_x_2 = np_psf_t_x.slice(s![n_min..n_max, ..]).to_owned();
+    let np_psf_t_y_2 = np_psf_t_y.slice(s![n_min..n_max, ..]).to_owned();
+
+    // Calculate intensities
+    let mut intensity_x = np_psf_t_x.map_axis(Axis(1), |row| row.mapv(|v| v.powi(2)).sum());
+    let mut intensity_y = np_psf_t_y.map_axis(Axis(1), |row| row.mapv(|v| v.powi(2)).sum());
+
+    intensity_x -= *intensity_x.min()?;
+    intensity_x /= *intensity_x.max()?;
+    intensity_y -= *intensity_y.min()?;
+    intensity_y /= *intensity_y.max()?;
+
+    let mut intensity_x_2 = np_psf_t_x_2.map_axis(Axis(1), |row| row.mapv(|v| v.powi(2)).sum());
+    let mut intensity_y_2 = np_psf_t_y_2.map_axis(Axis(1), |row| row.mapv(|v| v.powi(2)).sum());
+
+    intensity_x_2 -= *intensity_x_2.min()?;
+    intensity_x_2 /= *intensity_x_2.max()?;
+    intensity_y_2 -= *intensity_y_2.min()?;
+    intensity_y_2 /= *intensity_y_2.max()?;
+
+    // Initial parameters for the curve fit
+    let initial_params = vec![0.0, 10.0];
+
+    // Perform curve fitting
+    let popt_x = curve_fit(error_f, &x_axis_psf_2, &intensity_x_2, &initial_params)?;
+    let popt_y = curve_fit(error_f, &y_axis_psf_2, &intensity_y_2, &initial_params)?;
+
+    dbg!(&popt_x, &popt_y);
+
+    // Find the peak of the Gaussian
+    let gaussian_values_x = gaussian(x_axis_psf, &popt_x);
+    let max_x = gaussian_values_x
+        .iter()
+        .enumerate()
+        .max_by(|(_, v1), (_, v2)| v1.partial_cmp(v2).unwrap())
+        .map(|(index, _)| index)
+        .unwrap();
+
+    let gaussian_values_y = gaussian(y_axis_psf, &popt_y);
+    let max_y = gaussian_values_y
+        .iter()
+        .enumerate()
+        .max_by(|(_, v1), (_, v2)| v1.partial_cmp(v2).unwrap())
+        .map(|(index, _)| index)
+        .unwrap();
+
+    let x0 = x_axis_psf[max_x];
+    let y0 = y_axis_psf[max_y];
+    println!("Center of the PSF: ({}, {})", x0, y0);
+
+    Ok((
+        x0,
+        y0,
+        x_axis_psf_2,
+        intensity_x_2,
+        y_axis_psf_2,
+        intensity_y_2,
+    ))
 }

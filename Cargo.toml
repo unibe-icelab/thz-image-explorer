@@ -22,8 +22,11 @@ realfft = "3.4.0"
 preferences = "2.0.0"
 serde = { version = "1.0", features = ["derive"] }
 csv = "1.1.6"
-ndarray = { version = "0.16.1", features = ["rayon"] }
+ndarray = { version = "0.16.1", features = ["rayon", "serde"] }
 ndarray-npy = { version = "0.9.1", features = ["npz"] }
+ndarray-stats = "0.6.0"
+statrs = "0.18.0"
+argmin = "0.10.0"
 serde_json = "1.0.95"
 itertools = "0.14.0"
 dotthz = { version = "0.2.5", features = ["serde", "hdf5-sys-static"] }
@@ -32,6 +35,7 @@ self_update = { git = "https://github.com/hacknus/self_update", features = ["arc
 tempfile = { version = "3.15", optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls", "http2"], optional = true }
 semver = { version = "1.0.24", optional = true }
+glob = "0.3.2"
 
 [features]
 default = ["self_update"]
