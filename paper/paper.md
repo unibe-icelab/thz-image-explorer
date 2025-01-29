@@ -42,7 +42,7 @@ images pixel by pixel or by selecting a region of interest (ROI) without an inte
 
 ![THz Image Explorer icon.\label{fig:icon}](icon.png){#id .class width=20%}
 
-We developed an interactive graphical user interface (GUI), written in [rust](https://www.rust-lang.org), to aid
+We developed an interactive graphical user interface (GUI), written in [Rust](https://www.rust-lang.org), to aid
 investigating acquired 2D scans. The
 application implements the dotTHz standard [@lee_dotthz_2023] and is platform independent and open source, thus making
 it
@@ -83,13 +83,23 @@ extend the communication for additional data-types, these two structs need to be
 
 # Installation
 
+## Pre-built Bundles
+
 Pre-built bundles are available for each release on [GitHub](https://github.com/hacknus/thz-image-explorer) for
 
 - macOS (`.app` bundle for x86 and Apple Silicon)
 - Linux (executable and `.deb` for x86)
 - Windows (`.exe` and `.msi` for x86)
 
-These bundles should work out of the box.  
+These bundles should work out of the box, but on macOS you might need to remove the quarantine flag after downloading by
+running the following command:
+
+```shell
+xattr -rd com.apple.quarantine THz\ Image\ Explorer.app
+```
+
+## Compile from Source
+
 Alternatively, to compile directly from source, rust needs to be installed and the following
 command needs to be executed:
 
@@ -118,8 +128,13 @@ On Linux, the following dependencies need to be installed first as a requirement
 - `libxkbcommon-dev`
 - `libssl-dev`
 
-On Linux you need to first run:  
-`sudo apt-get install -y libclang-dev libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev`
+On Linux you need to first run:
+
+```shell
+sudo apt-get install -y libclang-dev libgtk-3-dev \
+libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+libxkbcommon-dev libssl-dev
+```
 
 To create bundles `cargo-bundle` needs to be installed (macOS, Linux):
 
@@ -227,11 +242,14 @@ pub enum ParameterKind {
 ```
 
 The user needs to create a custom file in the `src/filters`
-directory with a struct that implements the `Filter` trait.
+directory with a struct that implements the `Filter` trait. Additionally, the `#[register_filter]` procedural macro
+needs to added to the custom filter struct to automatically add it to the application.
 
 ```rust
 use crate::data_container::ScannedImage;
-use crate::filters::filter::{Filter, FilterConfig, FilterDomain, FilterParameter, ParameterKind};
+use crate::filters::filter::{Filter, FilterConfig,
+                             FilterDomain, FilterParameter,
+                             ParameterKind};
 use filter_macros::register_filter;
 
 #[derive(Debug)]
@@ -271,7 +289,6 @@ impl Filter for CustomFilter {
 }
 ```
 
-Minor adaptations in required in the `right_panel.rs` file to implement the input parameters in the GUI.
 To implement more complex methods, further adaptations are required, but the code structure has been set up with
 modularity and simplicity in mind.
 
