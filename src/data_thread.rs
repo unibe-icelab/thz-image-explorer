@@ -152,7 +152,7 @@ fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLo
                                         FftWindowType::Hanning => {
                                             apply_hanning(&mut filtered_data, &scan.time)
                                         }
-                                        FftWindowType::Haming => {
+                                        FftWindowType::Hamming => {
                                             apply_hamming(&mut filtered_data, &scan.time)
                                         }
                                         FftWindowType::FlatTop => {

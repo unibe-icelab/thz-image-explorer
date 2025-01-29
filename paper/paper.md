@@ -114,8 +114,7 @@ cargo build --release
 ```
 
 With default settings `cmake` is required to build HDF5 from source, which is required for the implementation of the
-dotTHz
-standard. If HDF5 is already installed on the
+dotTHz standard. If HDF5 is already installed on the
 system, the user can change remove the `hdf5-sys-static` feature from the `dotthz` dependency in the `Cargo.toml` file.
 
 On Linux, the following dependencies need to be installed first as a requirement for `egui`:
@@ -132,8 +131,8 @@ On Linux you need to first run:
 
 ```shell
 sudo apt-get install -y libclang-dev libgtk-3-dev \
-libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-libxkbcommon-dev libssl-dev
+  libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+  libxkbcommon-dev libssl-dev
 ```
 
 To create bundles `cargo-bundle` needs to be installed (macOS, Linux):
@@ -175,7 +174,14 @@ browse through directories containing multiple scans and is also displayed upon 
 
 To reduce artefacts in the frequency domain, a window is multiplied to the time domain before applying the
 Fast-Fourier-Transform (FFT). By default, the adapted Blackman
-window is applied, but others are available. (TODO)
+window is applied, but the user can also select other windows:
+- Adapted Blackman (default)
+- Blackman
+- Hanning
+- Hamming
+- FlatTop
+
+The windows are defined in `math_tools.rs`.
 
 ### Frequency Band Pass Filter
 
@@ -305,8 +311,8 @@ possible implementation of more thorough analysis features in the future.
 This work was supported through a MARVIS (Multidisciplinary Advanced
 Research Ventures in Space) programme of the Swiss Department for Business, Education,
 and Research (SBFI) called SUBICE. SUBICE is a project of the University of Bern (UniBe),
-the University of Applied Sciences and Arts, Western Switzerland (HES-SO), and Thales-
-Alenia Space Switzerland (TASCH). The project has been partially funded by the European
+the University of Applied Sciences and Arts, Western Switzerland (HES-SO), and Thales-Alenia Space Switzerland (TASCH).
+The project has been partially funded by the European
 Space Agency (ESA) under the ESA Initial Support for Innovation (EISI) program.
 We acknowledge the support of the Open Space Innovation Platform (OSIP) and in
 particular Nicolas Thiry and Leopold Summerer.

@@ -7,7 +7,7 @@ pub enum FftWindowType {
     AdaptedBlackman,
     Blackman,
     Hanning,
-    Haming,
+    Hamming,
     FlatTop,
 }
 
@@ -23,7 +23,7 @@ impl Display for FftWindowType {
             FftWindowType::Hanning => {
                 write!(f, "Hanning")
             }
-            FftWindowType::Haming => {
+            FftWindowType::Hamming => {
                 write!(f, "Haming")
             }
             FftWindowType::FlatTop => {

@@ -170,7 +170,7 @@ pub fn right_panel(
                             FftWindowType::AdaptedBlackman,
                             FftWindowType::Blackman,
                             FftWindowType::Hanning,
-                            FftWindowType::Haming,
+                            FftWindowType::Hamming,
                             FftWindowType::FlatTop,
                         ]
                         .iter()
@@ -203,7 +203,7 @@ pub fn right_panel(
                     }
                     FftWindowType::Blackman => apply_blackman(&mut p.view_mut(), &t),
                     FftWindowType::Hanning => apply_hanning(&mut p.view_mut(), &t),
-                    FftWindowType::Haming => apply_hamming(&mut p.view_mut(), &t),
+                    FftWindowType::Hamming => apply_hamming(&mut p.view_mut(), &t),
                     FftWindowType::FlatTop => apply_flat_top(&mut p.view_mut(), &t),
                 }
 
