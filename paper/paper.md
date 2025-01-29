@@ -156,7 +156,12 @@ The window is structured with the time domain trace and frequency domain spectru
 0,0) at the center.
 The left side-panel contains the intensity plot of the 2D scan along with the meta-data. The right side-panel contains
 the possible filters with configuration settings.
-A pixel can be (de-)selected by clicking inside the intensity plot.
+A pixel can be (de-)selected by clicking inside the intensity plot. By holding the Shift key and selecting pixels, a
+region of interest (ROI) can be selected. This ROI is a convex polygon, which is closed if the last corner is selected
+reasonably close to the first one (< 5 % of width/height of the image). This ROI can then be saved in the meta-data of
+the
+dotTHz file for future analysis. The displayed averaged trace in the central panel also corresponds to the pixels inside
+the ROI.
 
 A sample scan is available in the `sample_data` directory.
 
@@ -174,7 +179,7 @@ browse through directories containing multiple scans and is also displayed upon 
 
 To reduce artefacts in the frequency domain, a window is multiplied to the time domain before applying the
 Fast-Fourier-Transform (FFT). By default, the adapted Blackman
-window is applied, but the user can also select other windows:  
+window is applied, but the user can also select other windows:
 
 - Adapted Blackman (default)
 - Blackman
