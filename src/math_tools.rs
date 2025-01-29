@@ -12,10 +12,15 @@ use std::fmt::{Display, Formatter};
 /// The type determines the nature of the windowing used during FFT computation.
 #[derive(PartialEq, Clone, Copy)]
 pub enum FftWindowType {
+    /// Adapted Blackman window with only the beginning and ending being altered.
     AdaptedBlackman,
+    /// Original Blackman window
     Blackman,
+    /// Hanning window
     Hanning,
+    /// Hamming window
     Hamming,
+    /// FlatTop
     FlatTop,
 }
 
