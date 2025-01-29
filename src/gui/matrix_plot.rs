@@ -3,7 +3,7 @@ use eframe::egui::{
     pos2, vec2, Color32, ColorImage, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
 };
 use egui::TextureOptions;
-use egui_plot::{Line, Plot, PlotImage, PlotPoint, PlotPoints};
+use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotItem, PlotPoint, PlotPoints, Polygon};
 use ndarray::{Array2, Axis};
 
 #[derive(Debug, Clone)]
@@ -13,6 +13,8 @@ pub struct SelectedPixel {
     pub x: usize,
     pub y: usize,
     pub id: String,
+    pub polygon_points: Vec<[f64; 2]>,
+    pub polygon_closed: bool,
 }
 
 impl Default for SelectedPixel {
@@ -23,6 +25,8 @@ impl Default for SelectedPixel {
             x: 0,
             y: 0,
             id: "0000-0000".to_string(),
+            polygon_points: Vec::new(),
+            polygon_closed: false,
         }
     }
 }
@@ -273,7 +277,6 @@ pub fn plot_matrix(
     bw: &mut bool,
 ) -> bool {
     let mut pixel_clicked = false;
-
     let max = data
         .iter()
         .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi as f64));
@@ -324,6 +327,8 @@ pub fn plot_matrix(
 
         let plot_response = plot.show(ui, |plot_ui| {
             plot_ui.image(im);
+
+            // Draw existing single pixel selection
             if pixel_selected.selected {
                 plot_ui.line(
                     Line::new(PlotPoints::from(pixel_selected.rect.clone()))
@@ -331,41 +336,107 @@ pub fn plot_matrix(
                         .color(Color32::GRAY),
                 );
             }
-            match plot_ui.pointer_coordinate() {
-                None => {}
-                Some(v) => {
-                    if 0.0 < v.x
-                        && v.x < img.width() as f64
-                        && 0.0 < v.y
-                        && v.y < img.height() as f64
-                    {
-                        *val = v;
-                    }
+
+            // Draw polygon ROI
+            if !pixel_selected.polygon_points.is_empty() {
+                let points = pixel_selected.polygon_points.clone();
+                let line = Line::new(PlotPoints::from(points))
+                    .color(Color32::WHITE)
+                    .width(2.0);
+                plot_ui.line(line);
+
+                if pixel_selected.polygon_closed {
+                    let screen_points: Vec<[f64; 2]> = pixel_selected
+                        .polygon_points
+                        .iter()
+                        .map(|p| {
+                            let _point = plot_ui
+                                .transform()
+                                .position_from_point(&PlotPoint::new(p[0], p[1]));
+                            [p[0], p[1]]
+                        })
+                        .collect();
+                    plot_ui.polygon(
+                        Polygon::new(PlotPoints::from(screen_points))
+                            .fill_color(Color32::WHITE.gamma_multiply(0.5))
+                            .highlight(false)
+                            .style(LineStyle::Solid)
+                            .width(2.0)
+                            .name("roi"),
+                    );
+                }
+            }
+
+            // Track pointer position
+            if let Some(v) = plot_ui.pointer_coordinate() {
+                if (0.0..img.width() as f64).contains(&v.x)
+                    && (0.0..img.height() as f64).contains(&v.y)
+                {
+                    *val = v;
                 }
             }
         });
 
         if plot_response.response.clicked() {
-            pixel_clicked = true;
-            if pixel_selected.x == val.x.floor() as usize
-                && pixel_selected.y == height - 1 - val.y.floor() as usize
-                && pixel_selected.selected
-            {
-                println!("pixel unselected");
-                pixel_selected.selected = false;
+            let modifiers = ui.input(|i| i.modifiers);
+            if modifiers.shift {
+                // Handle polygon points
+                let plot_x = val.x;
+                let plot_y = val.y;
+                let _pixel_x = plot_x.floor() as usize;
+                let _pixel_y = height - 1 - plot_y.floor() as usize;
+
+                if pixel_selected.polygon_closed {
+                    // Reset if clicking on closed polygon
+                    pixel_selected.polygon_points.clear();
+                    pixel_selected.polygon_closed = false;
+                }
+
+                if pixel_selected.polygon_points.is_empty() {
+                    // First point
+                    pixel_selected.polygon_points.push([plot_x, plot_y]);
+                } else {
+                    // Check distance to first point
+                    let first = pixel_selected.polygon_points.first().unwrap();
+                    let dx = plot_x - first[0];
+                    let dy = plot_y - first[1];
+                    let dist = (dx * dx + dy * dy).sqrt();
+
+                    if dist < width.min(height) as f64 * 0.05
+                        && pixel_selected.polygon_points.len() > 1
+                    {
+                        // Close polygon
+                        pixel_selected.polygon_closed = true;
+                    } else {
+                        // Add new point
+                        pixel_selected.polygon_points.push([plot_x, plot_y]);
+                    }
+                }
+                pixel_clicked = true;
             } else {
-                pixel_selected.selected = true;
-                pixel_selected.rect = vec![
-                    [val.x.floor(), val.y.floor()],
-                    [val.x.floor() + 1.0, val.y.floor()],
-                    [val.x.floor() + 1.0, val.y.floor() + 1.0],
-                    [val.x.floor(), val.y.floor() + 1.0],
-                    [val.x.floor(), val.y.floor()],
-                ];
-                pixel_selected.x = val.x.floor() as usize;
-                pixel_selected.y = height - 1 - val.y.floor() as usize;
-                pixel_selected.id = id_matrix[pixel_selected.x][pixel_selected.y].clone();
-                println!("pixel selected");
+                // Handle single pixel selection
+                pixel_selected.polygon_points.clear();
+                pixel_selected.polygon_closed = false;
+
+                if pixel_selected.x == val.x.floor() as usize
+                    && pixel_selected.y == height - 1 - val.y.floor() as usize
+                    && pixel_selected.selected
+                {
+                    pixel_selected.selected = false;
+                } else {
+                    pixel_selected.selected = true;
+                    pixel_selected.rect = vec![
+                        [val.x.floor(), val.y.floor()],
+                        [val.x.floor() + 1.0, val.y.floor()],
+                        [val.x.floor() + 1.0, val.y.floor() + 1.0],
+                        [val.x.floor(), val.y.floor() + 1.0],
+                        [val.x.floor(), val.y.floor()],
+                    ];
+                    pixel_selected.x = val.x.floor() as usize;
+                    pixel_selected.y = height - 1 - val.y.floor() as usize;
+                    pixel_selected.id = id_matrix[pixel_selected.x][pixel_selected.y].clone();
+                }
+                pixel_clicked = true;
             }
         }
 
