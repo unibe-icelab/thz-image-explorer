@@ -1,9 +1,23 @@
-use std::sync::Arc;
+//! This module defines data structures and functionality for managing meta-information, housekeeping data,
+//! scanned images, and related operations for image and signal processing tasks.
 
 use ndarray::{Array1, Array2, Array3};
 use realfft::{ComplexToReal, RealToComplex};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
+/// Represents the metadata associated with an image or scan.
+///
+/// # Fields
+/// - `timestamp`: The time at which the data was recorded, represented as a floating-point value.
+/// - `width`: Width of the scanned image in pixels.
+/// - `height`: Height of the scanned image in pixels.
+/// - `dx`: The horizontal resolution or spacing between data points.
+/// - `x_min`: The minimum value of the x-axis in the scan.
+/// - `x_max`: The maximum value of the x-axis in the scan.
+/// - `dy`: The vertical resolution or spacing between data points.
+/// - `y_min`: The minimum value of the y-axis in the scan.
+/// - `y_max`: The maximum value of the y-axis in the scan.
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Meta {
     pub timestamp: f64,
@@ -17,6 +31,15 @@ pub struct Meta {
     pub y_max: f32,
 }
 
+/// Represents housekeeping data associated with a scan or experiment.
+///
+/// # Fields
+/// - `dx`, `dy`: Resolutions in the x and y directions.
+/// - `x_range`, `y_range`: The range of values for the x and y axes.
+/// - `t_begin`: The beginning time of the scan or measurement.
+/// - `range`: The total measurement range.
+/// - `ambient_temperature`, `ambient_pressure`, `ambient_humidity`: Environmental parameters.
+/// - `sample_temperature`: The temperature of the sample being scanned or measured.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct HouseKeeping {
     pub dx: f32,
@@ -48,6 +71,18 @@ impl Default for HouseKeeping {
     }
 }
 
+/// Represents a single data point in the scan or experiment.
+///
+/// # Fields
+/// - `hk`: Associated housekeeping metadata.
+/// - `time`: Time axis data.
+/// - `signal_1`: Primary signal data.
+/// - `filtered_signal_1`: Filtered signal data.
+/// - `avg_signal_1`: Averaged signal data.
+/// - `frequencies`: Frequency axis data.
+/// - `signal_1_fft`, `phase_1_fft`: Raw FFT and phase data for `signal_1`.
+/// - `filtered_signal_1_fft`, `filtered_phase_fft`: FFT and phase data for the filtered signal.
+/// - `avg_signal_1_fft`, `avg_phase_fft`: Averaged FFT and phase data.
 #[derive(Clone, Default, Debug)]
 pub struct DataPoint {
     pub hk: HouseKeeping,
@@ -64,6 +99,19 @@ pub struct DataPoint {
     pub avg_phase_fft: Vec<f32>,
 }
 
+/// Represents a scanned image including raw and processed image data,
+/// metadata, and auxiliary processing information.
+///
+/// # Fields
+/// - `x_min`, `dx`: Minimum x value and resolution in the x-direction.
+/// - `y_min`, `dy`: Minimum y value and resolution in the y-direction.
+/// - `height`, `width`: Dimensions of the image in pixels.
+/// - `scaling`: Scaling factor applied to the image.
+/// - `r2c`: Real-to-complex FFT transform (optional).
+/// - `c2r`: Complex-to-real FFT transform (optional).
+/// - `time`, `frequencies`: Time and frequency axis data.
+/// - `raw_img`, `filtered_img`: 2D arrays representing raw and filtered image data.
+/// - `raw_data`, `scaled_data`, `filtered_data`: 3D arrays for scan data in various states.
 #[derive(Clone)]
 pub struct ScannedImage {
     pub x_min: Option<f32>,
@@ -85,6 +133,13 @@ pub struct ScannedImage {
 }
 
 impl Default for ScannedImage {
+    /// Creates a new `ScannedImage` instance with the specified dimensions and parameters.
+    ///
+    /// # Arguments
+    /// - `height`: The height of the image in pixels.
+    /// - `width`: The width of the image in pixels.
+    /// - `x_min`, `dx`: Minimum x value and resolution in the x-direction.
+    /// - `y_min`, `dy`: Minimum y value and resolution in the y-direction.
     fn default() -> Self {
         ScannedImage {
             x_min: None,
@@ -160,6 +215,10 @@ impl ScannedImage {
     //     self.raw_img[x * self.width + y] = val;
     // }
 
+    /// Rescales the image and associated data using the current scaling factor.
+    ///
+    /// - If scaling is `1`, no changes are made to the data.
+    /// - Data is averaged in blocks of size `(scaling x scaling)` to produce scaled-down versions for both 2D and 3D data.
     pub fn rescale(&mut self) {
         let scale = self.scaling;
         if scale <= 1 {

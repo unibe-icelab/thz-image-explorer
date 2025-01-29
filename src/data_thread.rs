@@ -1,3 +1,7 @@
+//! This module deals with processing and visualizing scanned image data.
+//! It includes methods for filtering, updating intensity images, saving images, and managing
+//! FFT operations for signal processing.
+
 use crate::config::{ConfigCommand, ConfigContainer, MainThreadCommunication};
 use crate::data_container::{DataPoint, ScannedImage};
 use crate::gui::matrix_plot::SelectedPixel;
@@ -18,6 +22,14 @@ use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
+/// Saves an image to a given file location.
+///
+/// The image is saved as PNG in the specified directory.
+/// Currently, the function does not support saving large images.
+///
+/// # Arguments
+/// * `img` - The `ColorImage` object to be saved.
+/// * `file_path` - The directory path where the image will be saved.
 fn save_image(img: &ColorImage, file_path: &Path) {
     let height = img.height();
     let width = img.width();
@@ -41,12 +53,27 @@ fn save_image(img: &ColorImage, file_path: &Path) {
     //TODO: implement large image saving
 }
 
+/// Updates the intensity image lock with the filtered image from the scan.
+///
+/// This function writes the filtered image into the shared data structure to reflect the updated intensity.
+///
+/// # Arguments
+/// * `scan` - A mutable reference to the `ScannedImage`.
+/// * `img_lock` - A thread-safe `RwLock` containing the 2D array for the intensity image.
 fn update_intensity_image(scan: &ScannedImage, img_lock: &Arc<RwLock<Array2<f32>>>) {
     if let Ok(mut write_guard) = img_lock.write() {
         *write_guard = scan.filtered_img.clone();
     }
 }
 
+/// Filters the scan data using a time window defined in the configuration container.
+///
+/// This function calculates the filtered data based on the lower and upper time window bounds and updates the intensity image.
+///
+/// # Arguments
+/// * `config` - The configuration container with filter parameters.
+/// * `scan` - A mutable reference to the scanned image data.
+/// * `img_lock` - A thread-safe lock for the intensity image array.
 fn filter_time_window(
     config: &ConfigContainer,
     scan: &mut ScannedImage,
@@ -93,6 +120,15 @@ fn filter_time_window(
     println!("updated time data. This took {:?}", start.elapsed());
 }
 
+/// Performs FFT-based filtering on a scan based on the configuration.
+///
+/// The function applies a specific FFT window and a bandpass filter to scale and filter the data.
+/// It uses the FFT routines defined in the scan object.
+///
+/// # Arguments
+/// * `config` - Configuration settings for the FFT and filtering process.
+/// * `scan` - A mutable reference to the scanned image data.
+/// * `img_lock` - A thread-safe lock for the intensity image array.
 fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLock<Array2<f32>>>) {
     // calculate fft filter and calculate ifft
     let start = Instant::now();
@@ -209,12 +245,23 @@ fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLo
     println!("updated data. This took {:?}", start.elapsed());
 }
 
+/// Enum representing supported file types for reading data.
+///
+/// - `Npy`: Represents `.npy` files.
+/// - `Npz`: Represents `.npz` files.
 #[derive(Clone, PartialEq)]
 enum FileType {
     Npy,
     Npz,
 }
 
+/// Handles communication on the main thread.
+///
+/// This function processes incoming `ConfigCommand` instances and executes actions
+/// like opening files, applying filters, and updating pixel selections.
+///
+/// # Arguments
+/// * `thread_communication` - A channel-based communication structure between threads.
 pub fn main_thread(thread_communication: MainThreadCommunication) {
     // reads data from mutex, samples and saves if needed
     let mut data = DataPoint::default();

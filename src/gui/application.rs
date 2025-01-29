@@ -1,3 +1,8 @@
+//! This module implements the graphical user interface (GUI) for the THz image explorer application.
+//!
+//! It provides structures and methods to manage user interactions, graphical settings,
+//! file operations, and visualization panels for signal and image processing.
+
 use core::f64;
 use dotthz::DotthzFile;
 use egui_file_dialog::information_panel::InformationPanel;
@@ -23,13 +28,44 @@ use crate::gui::right_panel::right_panel;
 use crate::math_tools::FftWindowType;
 use crate::APP_INFO;
 
+/// Represents the state of the file dialog for opening, saving, or working with PSF files.
 #[derive(Clone)]
 pub enum FileDialogState {
+    /// File dialog is set to open a generic file.
     Open,
+    /// File dialog is set to open a PSF file.
     OpenPSF,
+    /// File dialog is set to save a file.
     Save,
+    /// File dialog is not active.
     None,
 }
+
+/// Contains the GUI settings and user preferences for the application.
+///
+/// This structure manages settings such as theme mode, visibility preferences for plots,
+/// file paths, resolution parameters, and debug options.
+///
+/// # Fields
+/// - `selected_path`: The currently selected file path.
+/// - `log_plot`: Whether log scale for plots is enabled.
+/// - `down_scaling`: Downscaling factor for visualizations.
+/// - `normalize_fft`: Whether FFT results are normalized.
+/// - `signal_1_visible`: Visibility of Signal 1.
+/// - `avg_signal_1_visible`: Visibility of averaged Signal 1.
+/// - `filtered_signal_1_visible`: Visibility of the filtered Signal 1.
+/// - `water_lines_visible`: Visibility of water vapor lines.
+/// - `phases_visible`: Visibility of phase information.
+/// - `frequency_resolution_temp`: Temporary frequency resolution parameter.
+/// - `frequency_resolution`: Finalized frequency resolution parameter.
+/// - `advanced_settings_window`: Whether advanced settings are open.
+/// - `debug`: Debugging mode status.
+/// - `dark_mode`: Flag for enabling/disabling dark mode.
+/// - `x`, `y`: GUI dimensions.
+/// - `theme_preference`: User's theme preference (e.g., dark, light, or system).
+/// - `beam_shape`: Coordinates of the beam shape.
+/// - `beam_shape_path`: File path for the beam shape data.
+/// - `psf`: The point spread function represented as a 2D array.
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct GuiSettingsContainer {
     pub selected_path: PathBuf,
@@ -55,6 +91,13 @@ pub struct GuiSettingsContainer {
 }
 
 impl GuiSettingsContainer {
+    /// Creates a new `GuiSettingsContainer` with default values.
+    ///
+    /// Default values include:
+    /// - Dark mode enabled.
+    /// - Log plot enabled.
+    /// - Advanced settings window disabled.
+    /// - Default file paths set to the user's home directory or `/`.
     pub fn new() -> GuiSettingsContainer {
         GuiSettingsContainer {
             selected_path: home_dir().unwrap_or_else(|| PathBuf::from("/")),
@@ -81,6 +124,34 @@ impl GuiSettingsContainer {
     }
 }
 
+/// Main application struct for the THz Image Explorer GUI.
+///
+/// This struct manages application state, handles GUI components, file dialogs,
+/// and communication with other threads. It contains configuration options for
+/// visualizations and includes methods for rendering the main GUI panels.
+///
+/// # Fields
+/// - `fft_bounds`: Bounds for the FFT visualization.
+/// - `fft_window_type`: Selected FFT window type.
+/// - `filter_bounds`: Bounds for filter application.
+/// - `time_window`: Time window for analysis.
+/// - `pixel_selected`: Struct representing the currently selected pixel in the image.
+/// - `val`: Coordinates of the current plot point.
+/// - `mid_point`: Midpoint value for certain calculations.
+/// - `bw`: Boolean for enabling black-and-white mode.
+/// - `water_vapour_lines`: Preloaded water vapor line frequencies for reference plots.
+/// - `wp`: An image object used in the right panel.
+/// - `data`: Contains the experiment or scan data.
+/// - `file_dialog_state`: Current state of the file dialog.
+/// - `file_dialog`: Instance of the file dialog used for file operations.
+/// - `information_panel`: Instance of the file information panel.
+/// - `other_files`: List of other detected files for the file dialog.
+/// - `selected_file_name`: Name of the currently selected file.
+/// - `scroll_to_selection`: Boolean to indicate whether to scroll to the file selection.
+/// - `thread_communication`: Shared thread communication object for GUI interactions.
+/// - `settings_window_open`: Boolean indicating whether the settings window is open.
+/// - `update_text`: Text displayed for updates.
+/// - `new_release`: Optional field for new software updates (only used with "self_update" feature).
 pub struct THzImageExplorer<'a> {
     fft_bounds: [f32; 2],
     fft_window_type: FftWindowType,
@@ -107,6 +178,15 @@ pub struct THzImageExplorer<'a> {
 }
 
 impl THzImageExplorer<'_> {
+    /// Creates a new instance of `THzImageExplorer`.
+    ///
+    /// # Arguments
+    /// - `cc`: The creation context for the application instance.
+    /// - `thread_communication`: An instance of `GuiThreadCommunication` for managing
+    ///   threaded GUI settings.
+    ///
+    /// # Returns
+    /// A new `THzImageExplorer` struct with default settings and preloaded water vapor lines.
     #[allow(clippy::too_many_arguments)]
     pub fn new(cc: &eframe::CreationContext, thread_communication: GuiThreadCommunication) -> Self {
         let mut water_vapour_lines: Vec<f64> = Vec::new();
@@ -226,6 +306,7 @@ impl THzImageExplorer<'_> {
 }
 
 impl eframe::App for THzImageExplorer<'_> {
+    /// Updates the GUI state during each frame.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let left_panel_width = 300.0;
         let right_panel_width = 500.0;
@@ -277,6 +358,7 @@ impl eframe::App for THzImageExplorer<'_> {
         self.thread_communication.gui_settings.y = ctx.used_size().y;
     }
 
+    /// Saves the current GUI settings and file dialog state persistently.
     fn save(&mut self, storage: &mut dyn Storage) {
         let prefs_key = "config/gui";
         match self

@@ -1,7 +1,15 @@
+//! This module provides various windowing functions for signal processing, including Blackman, Hanning, Hamming,
+//! Flat Top windows, and an adapted Blackman window implementation. Additionally, it includes a utility for
+//! unwrapping phase ranges in periodic signals.
+
 use ndarray::{Array1, ArrayViewMut, Ix1, Zip};
 use std::f32::consts::PI;
 use std::fmt::{Display, Formatter};
 
+/// Enum representing the different types of FFT window functions supported.
+///
+/// These window functions can be applied to signals for spectral analysis.
+/// The type determines the nature of the windowing used during FFT computation.
 #[derive(PartialEq, Clone, Copy)]
 pub enum FftWindowType {
     AdaptedBlackman,
@@ -12,6 +20,7 @@ pub enum FftWindowType {
 }
 
 impl Display for FftWindowType {
+    /// Provides a user-friendly string representation of each window type.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             FftWindowType::AdaptedBlackman => {
@@ -33,6 +42,16 @@ impl Display for FftWindowType {
     }
 }
 
+/// Computes the Blackman window value for a given sample.
+///
+/// The implementation follows the mathematical definition as used by Python's numpy library.
+///
+/// # Arguments
+/// - `n`: The current time or sample index.
+/// - `m`: The total length of the signal.
+///
+/// # Returns
+/// The computed value of the Blackman window. It automatically clamps the value in the range [0.0, 1.0].
 fn blackman_window(n: f32, m: f32) -> f32 {
     // blackman window as implemented by numpy (python)
     let res = 0.42 - 0.5 * (2.0 * PI * n / m).cos() + 0.08 * (4.0 * PI * n / m).cos();
@@ -43,6 +62,16 @@ fn blackman_window(n: f32, m: f32) -> f32 {
     }
 }
 
+/// Applies the adapted Blackman window to a signal's time series.
+///
+/// The window is adjusted with specific lower and upper bounds. It attenuates
+/// the starting and ending portions of the signal's amplitude using Blackman window values.
+///
+/// # Arguments
+/// - `signal`: A mutable view of the signal to which the window will be applied.
+/// - `time`: The corresponding time values for the signal.
+/// - `lower_bound`: The lower bound for the Blackman window.
+/// - `upper_bound`: The upper bound for the Blackman window.
 pub fn apply_adapted_blackman_window(
     signal: &mut ArrayViewMut<f32, Ix1>,
     time: &Array1<f32>,
@@ -64,7 +93,14 @@ pub fn apply_adapted_blackman_window(
         }
     }
 }
-/// Normalizes time array to range [0, 1]
+
+/// Normalizes a time array to the range [0, 1].
+///
+/// # Arguments
+/// - `time`: The input time array.
+///
+/// # Returns
+/// The normalized array, where all values are scaled between 0 and 1.
 fn normalize_time(time: &Array1<f32>) -> Array1<f32> {
     let min = time.iter().fold(f32::INFINITY, |a, &b| a.min(b)); // Find the minimum value
     let max = time.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b)); // Find the maximum value
@@ -73,9 +109,12 @@ fn normalize_time(time: &Array1<f32>) -> Array1<f32> {
 
 /// Applies the Hamming window to the given signal.
 ///
+/// Attenuates the signal with the Hamming window formula, which is well-suited
+/// for reducing spectral leakage.
+///
 /// # Arguments
-/// - `signal`: The mutable view of the signal to which the window is applied.
-/// - `time`: The time array (e.g., [1000.0, 1000.25, ..., 1050.0]).
+/// - `signal`: A mutable view of the signal to modify.
+/// - `time`: A time array corresponding to the signal.
 pub fn apply_hamming(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array1<f32>) {
     let normalized_time = normalize_time(time);
     Zip::from(signal).and(&normalized_time).for_each(|s, t| {
@@ -85,9 +124,12 @@ pub fn apply_hamming(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array1
 
 /// Applies the Hanning (Hann) window to the given signal.
 ///
+/// Well-suited for periodic signals, the Hanning window reduces discontinuities
+/// at the boundaries of signal segments.
+///
 /// # Arguments
-/// - `signal`: The mutable view of the signal to which the window is applied.
-/// - `time`: The time array (e.g., [1000.0, 1000.25, ..., 1050.0]).
+/// - `signal`: A mutable view of the signal to modify.
+/// - `time`: A time array corresponding to the signal.
 pub fn apply_hanning(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array1<f32>) {
     let normalized_time = normalize_time(time);
     Zip::from(signal).and(&normalized_time).for_each(|s, t| {
@@ -97,9 +139,11 @@ pub fn apply_hanning(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array1
 
 /// Applies the Blackman window to the given signal.
 ///
+/// Reduces spectral leakage by applying the Blackman formula to the signal amplitudes.
+///
 /// # Arguments
-/// - `signal`: The mutable view of the signal to which the window is applied.
-/// - `time`: The time array (e.g., [1000.0, 1000.25, ..., 1050.0]).
+/// - `signal`: A mutable view of the signal to modify.
+/// - `time`: A time array corresponding to the signal.
 pub fn apply_blackman(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array1<f32>) {
     let normalized_time = normalize_time(time);
     Zip::from(signal).and(&normalized_time).for_each(|s, t| {
@@ -109,9 +153,12 @@ pub fn apply_blackman(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array
 
 /// Applies the Flat Top window to the given signal.
 ///
+/// The Flat Top window is used to provide a very flat passband response
+/// for use in measurement applications.
+///
 /// # Arguments
-/// - `signal`: The mutable view of the signal to which the window is applied.
-/// - `time`: The time array (e.g., [1000.0, 1000.25, ..., 1050.0]).
+/// - `signal`: A mutable view of the signal to modify.
+/// - `time`: A time array corresponding to the signal.
 pub fn apply_flat_top(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array1<f32>) {
     let normalized_time = normalize_time(time);
     Zip::from(signal).and(&normalized_time).for_each(|s, t| {
@@ -120,6 +167,18 @@ pub fn apply_flat_top(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array
             + 0.028 * (8.0 * PI * t).cos();
     });
 }
+
+/// Unwraps a periodic signal's values based on the provided period.
+///
+/// Removes phase discontinuities by adjusting the signal's values to fall within
+/// a continuous range.
+///
+/// # Arguments
+/// - `x`: The input signal as an array of values.
+/// - `period`: Optional period of the signal. If not provided, it is estimated from the signal.
+///
+/// # Returns
+/// A vector containing the unwrapped signal values.
 pub fn numpy_unwrap(x: &[f32], period: Option<f32>) -> Vec<f32> {
     // this was generated by ChatGPT
 

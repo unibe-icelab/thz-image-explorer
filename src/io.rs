@@ -1,3 +1,13 @@
+//! This module provides various file operations and data processing utilities related to
+//! handling `.npy`, `.npz`, `.csv`, and `.thz` (HDF5 files), along with support for signal processing.
+//!
+//! The functionalities include:
+//! - Opening and parsing different file types (`npz`, `json`, `.thz`, and `.csv`).
+//! - Finding files with specific extensions in directories.
+//! - Handling metadata and signal processing for scanned images.
+//!
+//! These utilities are essential for managing spectroscopic data and processing it efficiently.
+
 use crate::data_container::{HouseKeeping, Meta, ScannedImage};
 use csv::ReaderBuilder;
 use dotthz::{DotthzFile, DotthzMetaData};
@@ -9,6 +19,23 @@ use std::error::Error;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+
+/// Finds all files in the same directory as the input file that share the same extension.
+///
+/// If the provided file path does not have a valid directory or extension, it will return an
+/// empty list of results.
+///
+/// # Arguments
+/// * `file_path` - A reference to the path of the file to be checked.
+///
+/// # Returns
+/// * A `Result` containing a vector of file paths that match the extension, or an error.
+///
+/// # Examples
+/// ```
+/// let matches = find_files_with_same_extension(Path::new("example.txt")).unwrap();
+/// assert_eq!(matches.len(), 1); // if "example.txt" shares the directory
+/// ```
 pub fn find_files_with_same_extension(file_path: &Path) -> std::io::Result<Vec<PathBuf>> {
     // Convert the input path to a Path
     let path = Path::new(file_path);
@@ -34,6 +61,20 @@ pub fn find_files_with_same_extension(file_path: &Path) -> std::io::Result<Vec<P
     }
 }
 
+/// Opens a `.json` file and loads housekeeping metadata.
+///
+/// The extracted metadata is stored in a `HouseKeeping` struct, and the function returns
+/// the width and height dimensions of the data.
+///
+/// # Arguments
+/// * `hk` - A mutable reference to the `HouseKeeping` struct where metadata will be stored.
+/// * `file_path` - The file path of the `.json` file to be opened.
+///
+/// # Returns
+/// * A `Result` with the width and height of the dataset or an error if parsing fails.
+///
+/// # Errors
+/// If the file cannot be opened or the JSON parsing fails, the function will return a descriptive error.
 pub fn open_json(
     hk: &mut HouseKeeping,
     file_path: &PathBuf,
@@ -139,6 +180,22 @@ pub fn open_json(
 //     Ok(())
 // }
 
+/// Opens a `.npz` file and loads it into a `ScannedImage` struct.
+///
+/// The function loads the time array and dataset into the given `ScannedImage`, computes the image matrix,
+/// and sets FFT-related information for further signal processing.
+///
+/// # Arguments
+/// * `scan` - A mutable reference to the `ScannedImage` where data will be stored.
+/// * `file_path` - The file path of the `.npz` file to be opened.
+///
+/// # Returns
+/// * A `Result` indicating success or error during the process.
+///
+/// # Errors
+/// The function will return an error if:
+/// * The file cannot be opened.
+/// * The expected datasets (`time.npy`, `dataset.npy`) are missing or misformatted.
 pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(), Box<dyn Error>> {
     let file = File::open(file_path)?;
     let mut npz = NpzReader::new(file)?;
@@ -258,7 +315,24 @@ pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(),
 //     Ok(())
 // }
 
-// Function to open and read an HDF5 file
+/// Opens and reads data from an HDF5 `.thz` file, populating the scan data and metadata.
+///
+/// This function loads time and raw data arrays from HDF5 files containing spectroscopic information.
+/// The function assumes the first dataset contains time points and the second one contains a multi-dimensional
+/// dataset (e.g., an image cube).
+///
+/// # Arguments
+/// * `file_path` - The path to the `.thz` file.
+/// * `scan` - A mutable reference to the `ScannedImage` where the data will be stored.
+/// * `metadata` - A mutable reference to `DotthzMetaData` for storing metadata.
+///
+/// # Returns
+/// * A `Result` indicating either success or an error.
+///
+/// # Errors
+/// Will return an error if:
+/// - The `.thz` file cannot be found or opened.
+/// - The time or data datasets are missing or misformatted.
 pub fn open_from_thz(
     file_path: &PathBuf,
     scan: &mut ScannedImage,

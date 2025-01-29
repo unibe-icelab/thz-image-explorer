@@ -174,7 +174,8 @@ browse through directories containing multiple scans and is also displayed upon 
 
 To reduce artefacts in the frequency domain, a window is multiplied to the time domain before applying the
 Fast-Fourier-Transform (FFT). By default, the adapted Blackman
-window is applied, but the user can also select other windows:
+window is applied, but the user can also select other windows:  
+
 - Adapted Blackman (default)
 - Blackman
 - Hanning
@@ -190,7 +191,8 @@ A simple band-pass filter can be applied in fourier space to only display certai
 ### Time Domain Slice
 
 By selecting a slice in the time domain, it is possible to scan through the $z$-axis of the scan and analysing
-sub-surface layers [@koch-dandolo_reflection_2015].
+sub-surface layers [@koch-dandolo_reflection_2015]. The double-slider can be controlled with zoom and scroll/pan
+gestures on the trackpad/mouse wheel. The user can step through the time domain using the left/right arrow keys.
 
 ### Deconvolution
 
@@ -267,7 +269,8 @@ pub struct CustomFilter {
 }
 
 impl Filter for CustomFilter {
-    fn filter(&self, _t: &mut ScannedImage) {
+    fn filter(&self, _scan: &mut ScannedImage,
+              _gui_settings: &mut GuiSettingsContainer) {
         todo!();
         // Implement your filter algorithm here
     }
