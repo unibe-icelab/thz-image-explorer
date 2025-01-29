@@ -5,7 +5,8 @@
 use crate::data_container::ScannedImage;
 use crate::gui::application::GuiSettingsContainer;
 #[allow(unused_imports)]
-use ctor::ctor; // this dependency is required by the `register_filter` macro
+use ctor::ctor;
+// this dependency is required by the `register_filter` macro
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -200,15 +201,82 @@ impl FilterRegistry {
         self.filters.get(name)
     }
 
+    /// Returns a mutable iterator over all the registered filters in the registry.
+    ///
+    /// This method allows for iterating through filters while also enabling modification of
+    /// each registered filter.
+    ///
+    /// # Returns
+    /// A mutable iterator (`impl Iterator<Item = &mut Box<dyn Filter>>`) over all filters
+    /// in the registry.
+    ///
+    /// # Behavior
+    /// - Provides mutable access to each registered filter, allowing for modifications.
+    /// - Iterates only through the values of the `HashMap`, not the keys.
+    ///
+    /// # Example
+    /// ```rust
+    /// use crate::filters::filter::{FilterRegistry, FILTER_REGISTRY};
+    ///
+    /// {
+    ///     // Acquire a lock on the global registry and iterate mutably.
+    ///     let mut registry = FILTER_REGISTRY.lock().unwrap();
+    ///     for filter in registry.iter_mut() {
+    ///         // Example modification: Clear the parameters for each filter.
+    ///         filter.config().parameters.clear(); // Hypothetical use case
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// # Notes
+    /// - This method is strictly for mutable access to the filters.
+    /// - For immutable access during iteration, use the [`IntoIterator`] implementation for `&FilterRegistry`.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Box<dyn Filter>> {
         self.filters.values_mut()
     }
 }
 
+/// Implements `IntoIterator` for `&FilterRegistry`.
+///
+/// This allows iterating over all the registered filters in the registry by borrowing it (non-mutably).
+///
+/// # Associated Types
+/// - `Item`: A reference (`&Box<dyn Filter>`) to each filter in the registry during iteration.
+/// - `IntoIter`: The iterator type used for traversing the filters.
+///
+/// # Behavior
+/// This implementation provides a view over the filter registry's internal data and returns each
+/// registered filter as a boxed trait object during iteration. This is useful for actions like
+/// reading filter configurations or information without modifying the registry.
+///
+/// # Example
+/// ```rust
+/// use crate::filters::filter::{FilterRegistry, FILTER_REGISTRY};
+///
+/// // Parallel iteration
+/// {
+///     let registry = FILTER_REGISTRY.lock().unwrap();
+///     for filter in &*registry {
+///         println!("Filter name: {}", filter.config().name);
+///     }
+/// }
+/// ```
+///
+/// # Notes
+/// - The method is designed for cases where only references to the filters are required.
+/// - To modify the filters during iteration, use the `iter_mut` method provided by `FilterRegistry`.
 impl<'a> IntoIterator for &'a FilterRegistry {
+    /// The type of items returned during iteration — a reference to the boxed filter.
+
     type Item = &'a Box<dyn Filter>;
+    /// The iterator type used for traversing values of the `HashMap`.
+
     type IntoIter = std::collections::hash_map::Values<'a, String, Box<dyn Filter>>;
 
+    /// Initializes an iterator over the values (i.e., filters) in the registry.
+    ///
+    /// # Returns
+    /// A `HashMap::Values` iterator over the registered filters.
     fn into_iter(self) -> Self::IntoIter {
         self.filters.values()
     }
