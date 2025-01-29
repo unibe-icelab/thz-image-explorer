@@ -199,6 +199,19 @@ impl FilterRegistry {
     pub fn get_filter(&self, name: &str) -> Option<&Box<dyn Filter>> {
         self.filters.get(name)
     }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Box<dyn Filter>> {
+        self.filters.values_mut()
+    }
+}
+
+impl<'a> IntoIterator for &'a FilterRegistry {
+    type Item = &'a Box<dyn Filter>;
+    type IntoIter = std::collections::hash_map::Values<'a, String, Box<dyn Filter>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.filters.values()
+    }
 }
 
 /// A global, thread-safe filter registry.

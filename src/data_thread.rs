@@ -4,6 +4,7 @@
 
 use crate::config::{ConfigCommand, ConfigContainer, MainThreadCommunication};
 use crate::data_container::{DataPoint, ScannedImage};
+use crate::filters::filter::FILTER_REGISTRY;
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::io::{open_from_npz, open_from_thz, open_json};
 use crate::math_tools::{
@@ -129,7 +130,11 @@ fn filter_time_window(
 /// * `config` - Configuration settings for the FFT and filtering process.
 /// * `scan` - A mutable reference to the scanned image data.
 /// * `img_lock` - A thread-safe lock for the intensity image array.
-fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLock<Array2<f32>>>) {
+fn filter(
+    config: &ConfigContainer,
+    thread_communication: &mut MainThreadCommunication,
+    scan: &mut ScannedImage,
+) {
     // calculate fft filter and calculate ifft
     let start = Instant::now();
     let lower = scan
@@ -239,9 +244,14 @@ fn filter(config: &ConfigContainer, scan: &mut ScannedImage, img_lock: &Arc<RwLo
                     },
                 );
         };
+
+        for filter in FILTER_REGISTRY.lock().unwrap().iter_mut() {
+            println!("Filter found: {}", filter.config().name);
+            filter.filter(scan, &mut thread_communication.gui_settings)
+        }
     };
     // update images
-    update_intensity_image(scan, img_lock);
+    update_intensity_image(scan, &thread_communication.img_lock);
     println!("updated data. This took {:?}", start.elapsed());
 }
 
@@ -262,7 +272,7 @@ enum FileType {
 ///
 /// # Arguments
 /// * `thread_communication` - A channel-based communication structure between threads.
-pub fn main_thread(thread_communication: MainThreadCommunication) {
+pub fn main_thread(mut thread_communication: MainThreadCommunication) {
     // reads data from mutex, samples and saves if needed
     let mut data = DataPoint::default();
     let mut scan = ScannedImage::default();
@@ -391,19 +401,19 @@ pub fn main_thread(thread_communication: MainThreadCommunication) {
                 }
                 ConfigCommand::SetFFTWindowLow(low) => {
                     config.fft_window[0] = low;
-                    filter(&config, &mut scan, &thread_communication.img_lock);
+                    filter(&config, &mut thread_communication, &mut scan);
                 }
                 ConfigCommand::SetFFTWindowHigh(high) => {
                     config.fft_window[1] = high;
-                    filter(&config, &mut scan, &thread_communication.img_lock);
+                    filter(&config, &mut thread_communication, &mut scan);
                 }
                 ConfigCommand::SetFFTFilterLow(low) => {
                     config.fft_filter[0] = low;
-                    filter(&config, &mut scan, &thread_communication.img_lock);
+                    filter(&config, &mut thread_communication, &mut scan);
                 }
                 ConfigCommand::SetFFTFilterHigh(high) => {
                     config.fft_filter[1] = high;
-                    filter(&config, &mut scan, &thread_communication.img_lock);
+                    filter(&config, &mut thread_communication, &mut scan);
                 }
                 ConfigCommand::SetTimeWindow(time_window) => {
                     config.time_window = time_window;
@@ -411,26 +421,26 @@ pub fn main_thread(thread_communication: MainThreadCommunication) {
                 }
                 ConfigCommand::SetFFTLogPlot(log_plot) => {
                     config.fft_log_plot = log_plot;
-                    filter(&config, &mut scan, &thread_communication.img_lock);
+                    filter(&config, &mut thread_communication, &mut scan);
                 }
                 ConfigCommand::SetFFTNormalization(normalization) => {
                     config.normalize_fft = normalization;
-                    filter(&config, &mut scan, &thread_communication.img_lock);
+                    filter(&config, &mut thread_communication, &mut scan);
                 }
                 ConfigCommand::SetFFTResolution(df) => {
                     config.fft_df = df;
-                    filter(&config, &mut scan, &thread_communication.img_lock);
+                    filter(&config, &mut thread_communication, &mut scan);
                 }
                 ConfigCommand::SetFftWindowType(wt) => {
                     config.fft_window_type = wt;
-                    filter(&config, &mut scan, &thread_communication.img_lock);
+                    filter(&config, &mut thread_communication, &mut scan);
                 }
                 ConfigCommand::SetDownScaling => {
                     if let Ok(scaling) = thread_communication.scaling_lock.read() {
                         scan.scaling = *scaling as usize;
                         scan.rescale()
                     }
-                    filter(&config, &mut scan, &thread_communication.img_lock);
+                    filter(&config, &mut thread_communication, &mut scan);
                     update_intensity_image(&scan, &thread_communication.img_lock);
                 }
                 ConfigCommand::SetSelectedPixel(pixel) => {

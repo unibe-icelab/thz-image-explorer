@@ -1,4 +1,5 @@
 use crate::config::{ConfigCommand, GuiThreadCommunication};
+use crate::filters::filter::{ParameterKind, FILTER_REGISTRY};
 use crate::gui::application::FileDialogState;
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::gui::settings_window::settings_window;
@@ -553,6 +554,56 @@ pub fn right_panel(
                             .config_tx
                             .send(ConfigCommand::SetTimeWindow(*time_window))
                             .unwrap();
+                    }
+                }
+
+                // TODO: this does not yet work, since the values are lost and not stored.
+                for filter in FILTER_REGISTRY.lock().unwrap().iter_mut() {
+                    ui.separator();
+                    ui.heading(filter.config().name);
+                    for param in filter.config().parameters.iter_mut() {
+                        match param.kind {
+                            ParameterKind::Int(mut i) => {
+                                ui.add(egui::Slider::new(&mut i, -10..=10));
+                            }
+                            ParameterKind::UInt(mut i) => {
+                                ui.add(egui::Slider::new(&mut i, 0..=10));
+                            }
+                            ParameterKind::Float(mut f) => {
+                                ui.add(egui::Slider::new(&mut f, 0.0..=100.0));
+                            }
+                            ParameterKind::Boolean(mut b) => {
+                                ui.add(toggle(&mut b));
+                            }
+                            ParameterKind::Slider {
+                                mut value,
+                                show_in_plot,
+                                min,
+                                max,
+                            } => {
+                                ui.add(egui::Slider::new(&mut value, min..=max));
+                            }
+                            ParameterKind::DoubleSlider {
+                                mut values,
+                                show_in_plot,
+                                minimum_separation,
+                                inverted,
+                                min,
+                                max,
+                            } => {
+                                let mut value_a_f32 = values[0] as f32;
+                                let mut value_b_f32 = values[1] as f32;
+                                ui.add(
+                                    DoubleSlider::new(
+                                        &mut value_a_f32,
+                                        &mut value_b_f32,
+                                        min as f32..=max as f32,
+                                    )
+                                    .separation_distance(minimum_separation as f32),
+                                );
+                                values = [value_a_f32 as f64, value_b_f32 as f64];
+                            }
+                        }
                     }
                 }
 

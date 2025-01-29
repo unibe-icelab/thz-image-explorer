@@ -76,6 +76,7 @@ fn main() {
         pixel_lock,
         scaling_lock,
         img_lock,
+        gui_settings: gui_settings.clone(),
         config_rx,
     };
 

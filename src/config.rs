@@ -163,6 +163,9 @@ pub struct MainThreadCommunication {
     /// Lock for the 2D array representing the intensity image.
     pub img_lock: Arc<RwLock<Array2<f32>>>,
 
+    /// GUI-specific settings stored in the [`GuiSettingsContainer`].
+    pub gui_settings: GuiSettingsContainer,
+
     /// Receiver channel for receiving configuration commands (`ConfigCommand`)
     /// from other threads.
     pub config_rx: Receiver<ConfigCommand>,
