@@ -1,8 +1,64 @@
 use ndarray::{s, Array1, Array2, Axis, Ix1, Zip};
 use ndarray_stats::QuantileExt;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::f64;
-use std::f64::consts::PI;
+
+/// Represents a Point Spread Function (PSF) used in spectroscopy and imaging analysis.
+///
+/// A PSF characterizes the response of an imaging system to a point source signal, providing
+/// critical information about the system resolution and frequency characteristics.
+/// This structure holds both scalar and multidimensional data derived from an `.npz` file
+/// or other data sources.
+///
+/// # Fields
+/// - `low_cut` (*f64*): The low-frequency cutoff value of the PSF filters.
+/// - `high_cut` (*f64*): The high-frequency cutoff value of the PSF filters.
+/// - `start_freq` (*f64*): The starting frequency of the PSF filters.
+/// - `end_freq` (*f64*): The ending frequency of the PSF filters.
+/// - `n_filters` (*i64*): The number of filters included in the PSF.
+/// - `filters` (*Array2<f64>*): A 2D array containing the filter coefficients for the PSF.
+/// - `filt_freqs` (*Array1<f64>*): A 1D array of frequencies associated with the filters.
+/// - `x` (*Array2<f64>*): A 2D array representing the PSF in the X-axis, typically used for spatial resolution analysis.
+/// - `y` (*Array2<f64>*): A 2D array representing the PSF in the Y-axis, typically used for spatial resolution analysis.
+///
+/// # Typical Usage
+///
+/// This struct is often used to:
+/// - Load PSFs from data files (e.g., `.npz`) and process their frequency or spatial characteristics.
+/// - Perform computations like filtering, interpolation, or fitting operations for spectroscopic data analysis.
+///
+/// # Example
+/// ```
+/// use crate::PSF;
+/// use ndarray::{Array1, Array2};
+///
+/// let psf = PSF {
+///     low_cut: 10.0,
+///     high_cut: 200.0,
+///     start_freq: 15.0,
+///     end_freq: 180.0,
+///     n_filters: 5,
+///     filters: Array2::zeros((5, 10)),
+///     filt_freqs: Array1::linspace(10.0, 200.0, 10),
+///     x: Array2::zeros((5, 5)),
+///     y: Array2::zeros((5, 5)),
+/// };
+///
+/// println!("PSF has {} filters and spans the frequency range {:.1} Hz to {:.1} Hz.",
+///     psf.n_filters, psf.start_freq, psf.end_freq);
+/// ```
+#[derive(Serialize, Deserialize, Default, PartialEq, Debug, Clone)]
+pub struct PSF {
+    pub low_cut: f64,
+    pub high_cut: f64,
+    pub start_freq: f64,
+    pub end_freq: f64,
+    pub n_filters: i64,
+    pub filters: Array2<f64>,
+    pub filt_freqs: Array1<f64>,
+    pub x: Array2<f64>,
+    pub y: Array2<f64>,
+}
 
 /// Linear interpolation function for a 1D array.
 fn linear_interp(x: &Vec<f64>, y: &Vec<f64>, xi: f64) -> f64 {
@@ -144,7 +200,10 @@ fn compute_gradient(
 fn gaussian(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
     let x0 = params[0];
     let w = params[1];
-    x.mapv(|xi| (2.0 * (-2.0 * (xi - x0).powf(2.0) / (w * w)) / (2.0 * PI).sqrt() * w).exp())
+    x.mapv(|xi| {
+        (2.0 * (-2.0 * (xi - x0).powf(2.0) / (w * w)) / (2.0 * std::f64::consts::PI).sqrt() * w)
+            .exp()
+    })
 }
 
 /// Error function

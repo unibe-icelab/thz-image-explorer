@@ -1,24 +1,123 @@
-//! This module provides various file operations and data processing utilities related to
-//! handling `.npy`, `.npz`, `.csv`, and `.thz` (HDF5 files), along with support for signal processing.
+//! This module provides utilities for working with spectroscopic data, covering file I/O operations
+//! and data processing tasks for various file formats such as `.npy`, `.npz`, `.csv`, and `.thz` (HDF5).
 //!
-//! The functionalities include:
-//! - Opening and parsing different file types (`npz`, `json`, `.thz`, and `.csv`).
-//! - Finding files with specific extensions in directories.
-//! - Handling metadata and signal processing for scanned images.
+//! # Features
+//! - **File Loading**: Supports `.npz` files for loading filter data, `.json` for metadata, and `.csv` for raw data.
+//! - **Signal Processing**: Includes FFT setup and intensity calculations for spectroscopic data.
+//! - **Pattern Search**: Finds files with specific extensions in directories.
 //!
-//! These utilities are essential for managing spectroscopic data and processing it efficiently.
+//! These functionalities are essential for managing and analyzing large-scale spectroscopic or
+//! imaging datasets efficiently.
 
 use crate::data_container::{HouseKeeping, Meta, ScannedImage};
+use crate::filters::psf::PSF;
 use csv::ReaderBuilder;
 use dotthz::{DotthzFile, DotthzMetaData};
 use glob::glob;
-use ndarray::{Array1, Array2, Array3, Axis};
+use ndarray::{Array0, Array1, Array2, Array3, Axis, Ix0, Ix1, Ix2, OwnedRepr};
 use ndarray_npy::NpzReader;
 use realfft::RealFftPlanner;
 use std::error::Error;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+
+/// Loads a Point Spread Function (PSF) from a `.npz` file.
+///
+/// This function reads scalar and array values from the `.npz` file and constructs a `PSF` object
+/// with the loaded values.
+///
+/// # Input File Format
+/// The `.npz` file must contain the following datasets:
+/// - Scalars:
+///   - `"low_cut"`: Low-frequency cutoff.
+///   - `"high_cut"`: High-frequency cutoff.
+///   - `"start_freq"`: Starting frequency of the filter.
+///   - `"end_freq"`: Ending frequency of the filter.
+///   - `"n_filters"`: Number of filters in the dataset.
+/// - Arrays:
+///   - `"filters"`: A 2D array representing the filters.
+///   - `"filt_freqs"`: A list of frequencies over which the filters are defined.
+///   - `"[x_0, w_x]"`: A 2D array of X-coordinates for the PSF.
+///   - `"[y_0, w_y]"`: A 2D array of Y-coordinates for the PSF.
+///
+/// # Arguments
+/// * `file_path` - A reference to the file path of the `.npz` file to be loaded.
+///
+/// # Returns
+/// * `Ok(PSF)` - A `PSF` object containing the loaded filter and spatial frequency data.
+/// * `Err(Box<dyn Error>)` - An error if loading or parsing the `.npz` file fails.
+///
+/// # Errors
+/// - The function will return an error if the `.npz` file cannot be opened or properly parsed.
+/// - Missing or malformed datasets within the file will also trigger errors.
+///
+/// # Example
+/// ```rust
+/// use crate::filters::psf::PSF;
+/// use std::path::PathBuf;
+///
+/// let file_path = PathBuf::from("example.npz");
+/// match load_psf(&file_path) {
+///     Ok(psf) => println!("Loaded PSF with {} filters.", psf.n_filters),
+///     Err(err) => eprintln!("Error loading PSF: {}", err),
+/// }
+/// ```
+pub fn load_psf(file_path: &PathBuf) -> Result<PSF, Box<dyn Error>> {
+    let mut npz = NpzReader::new(File::open(file_path)?)?;
+
+    // Load scalar values with explicit type annotations
+    let low_cut_arr: Array0<f64> = npz
+        .by_name::<OwnedRepr<f64>, Ix0>("low_cut")?
+        .into_dimensionality()?;
+    let low_cut = low_cut_arr.into_scalar();
+
+    let high_cut_arr: Array0<f64> = npz
+        .by_name::<OwnedRepr<f64>, Ix0>("high_cut")?
+        .into_dimensionality()?;
+    let high_cut = high_cut_arr.into_scalar();
+
+    let start_freq_arr: Array0<f64> = npz
+        .by_name::<OwnedRepr<f64>, Ix0>("start_freq")?
+        .into_dimensionality()?;
+    let start_freq = start_freq_arr.into_scalar();
+
+    let end_freq_arr: Array0<f64> = npz
+        .by_name::<OwnedRepr<f64>, Ix0>("end_freq")?
+        .into_dimensionality()?;
+    let end_freq = end_freq_arr.into_scalar();
+
+    let n_filters_arr: Array0<i64> = npz
+        .by_name::<OwnedRepr<i64>, Ix0>("n_filters")?
+        .into_dimensionality()?;
+    let n_filters = n_filters_arr.into_scalar();
+
+    // Load arrays
+    let filters = npz
+        .by_name::<OwnedRepr<f64>, Ix2>("filters")?
+        .into_dimensionality::<ndarray::Ix2>()?;
+    let filt_freqs = npz
+        .by_name::<OwnedRepr<f64>, Ix1>("filt_freqs")?
+        .into_dimensionality::<ndarray::Ix1>()?;
+    let x = npz
+        .by_name::<OwnedRepr<f64>, Ix2>("[x_0, w_x]")?
+        .into_dimensionality::<ndarray::Ix2>()?;
+    let y = npz
+        .by_name::<OwnedRepr<f64>, Ix2>("[y_0, w_y]")?
+        .into_dimensionality::<ndarray::Ix2>()?;
+
+    Ok(PSF {
+        low_cut,
+        high_cut,
+        start_freq,
+        end_freq,
+        n_filters,
+        filters,
+        filt_freqs,
+        x,
+        y,
+    })
+}
 
 /// Finds all files in the same directory as the input file that share the same extension.
 ///

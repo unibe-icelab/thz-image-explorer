@@ -54,7 +54,7 @@ pub fn settings_window(
                         .clicked()
                     {
                         *file_dialog_state = FileDialogState::OpenPSF;
-                        file_dialog.pick_directory();
+                        file_dialog.pick_file();
                     }
                     if ui
                         .selectable_label(false, format!("{}", egui_phosphor::regular::INFO))
@@ -62,7 +62,9 @@ pub fn settings_window(
                     {
                         // TODO: add description of PSF format
                     }
-                    if gui_conf.beam_shape.is_empty() {
+
+                    // TODO: maybe change this check here...
+                    if gui_conf.psf.x.is_empty() {
                         ui.colored_label(egui::Color32::RED, "No PSF loaded.");
                     } else {
                         ui.label(
@@ -104,7 +106,7 @@ pub fn settings_window(
 
             let plot_height = 100.0;
             let plot_width = 100.0;
-            let data = &gui_conf.psf;
+            let data = &gui_conf.psf.x;
 
             let width = data.len_of(Axis(0));
             let height = data.len_of(Axis(1));

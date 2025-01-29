@@ -3,7 +3,6 @@
 //! unwrapping phase ranges in periodic signals.
 
 use ndarray::{Array1, ArrayViewMut, Ix1, Zip};
-use std::f32::consts::PI;
 use std::fmt::{Display, Formatter};
 
 /// Enum representing the different types of FFT window functions supported.
@@ -59,7 +58,8 @@ impl Display for FftWindowType {
 /// The computed value of the Blackman window. It automatically clamps the value in the range [0.0, 1.0].
 fn blackman_window(n: f32, m: f32) -> f32 {
     // blackman window as implemented by numpy (python)
-    let res = 0.42 - 0.5 * (2.0 * PI * n / m).cos() + 0.08 * (4.0 * PI * n / m).cos();
+    let res = 0.42 - 0.5 * (2.0 * std::f32::consts::PI * n / m).cos()
+        + 0.08 * (4.0 * std::f32::consts::PI * n / m).cos();
     if res.is_nan() {
         1.0
     } else {
@@ -123,7 +123,7 @@ fn normalize_time(time: &Array1<f32>) -> Array1<f32> {
 pub fn apply_hamming(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array1<f32>) {
     let normalized_time = normalize_time(time);
     Zip::from(signal).and(&normalized_time).for_each(|s, t| {
-        *s *= 0.54 - 0.46 * (2.0 * PI * t).cos();
+        *s *= 0.54 - 0.46 * (2.0 * std::f32::consts::PI * t).cos();
     });
 }
 
@@ -138,7 +138,7 @@ pub fn apply_hamming(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array1
 pub fn apply_hanning(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array1<f32>) {
     let normalized_time = normalize_time(time);
     Zip::from(signal).and(&normalized_time).for_each(|s, t| {
-        *s *= 0.5 * (1.0 - (2.0 * PI * t).cos());
+        *s *= 0.5 * (1.0 - (2.0 * std::f32::consts::PI * t).cos());
     });
 }
 
@@ -152,7 +152,8 @@ pub fn apply_hanning(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array1
 pub fn apply_blackman(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array1<f32>) {
     let normalized_time = normalize_time(time);
     Zip::from(signal).and(&normalized_time).for_each(|s, t| {
-        *s *= 0.42 - 0.5 * (2.0 * PI * t).cos() + 0.08 * (4.0 * PI * t).cos();
+        *s *= 0.42 - 0.5 * (2.0 * std::f32::consts::PI * t).cos()
+            + 0.08 * (4.0 * std::f32::consts::PI * t).cos();
     });
 }
 
@@ -167,9 +168,10 @@ pub fn apply_blackman(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array
 pub fn apply_flat_top(signal: &mut ArrayViewMut<f32, ndarray::Ix1>, time: &Array1<f32>) {
     let normalized_time = normalize_time(time);
     Zip::from(signal).and(&normalized_time).for_each(|s, t| {
-        *s *= 1.0 - 1.93 * (2.0 * PI * t).cos() + 1.29 * (4.0 * PI * t).cos()
-            - 0.388 * (6.0 * PI * t).cos()
-            + 0.028 * (8.0 * PI * t).cos();
+        *s *= 1.0 - 1.93 * (2.0 * std::f32::consts::PI * t).cos()
+            + 1.29 * (4.0 * std::f32::consts::PI * t).cos()
+            - 0.388 * (6.0 * std::f32::consts::PI * t).cos()
+            + 0.028 * (8.0 * std::f32::consts::PI * t).cos();
     });
 }
 

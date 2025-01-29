@@ -14,13 +14,13 @@ use eframe::egui::ThemePreference;
 use eframe::{egui, Storage};
 use egui_plot::PlotPoint;
 use home::home_dir;
-use ndarray::Array2;
 use preferences::Preferences;
 use self_update::update::Release;
 use serde::{Deserialize, Serialize};
 
 use crate::config::GuiThreadCommunication;
 use crate::data_container::DataPoint;
+use crate::filters::psf::PSF;
 use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
 use crate::gui::matrix_plot::SelectedPixel;
@@ -87,7 +87,7 @@ pub struct GuiSettingsContainer {
     pub theme_preference: ThemePreference,
     pub beam_shape: Vec<[f64; 2]>,
     pub beam_shape_path: PathBuf,
-    pub psf: Array2<f64>,
+    pub psf: PSF,
 }
 
 impl GuiSettingsContainer {
@@ -119,7 +119,7 @@ impl GuiSettingsContainer {
             theme_preference: ThemePreference::System,
             beam_shape: vec![],
             beam_shape_path: home_dir().unwrap_or_else(|| PathBuf::from("/")),
-            psf: Array2::zeros((1, 1)),
+            psf: PSF::default(),
         }
     }
 }
@@ -231,7 +231,8 @@ impl THzImageExplorer<'_> {
                 Arc::new(|p| p.extension().unwrap_or_default().to_ascii_lowercase() == "csv"),
             )
             .initial_directory(thread_communication.gui_settings.selected_path.clone())
-            .default_file_filter("dotTHz files");
+            //.default_file_filter("dotTHz files")
+        ;
         // Load the persistent data of the file dialog.
         // Alternatively, you can also use the `FileDialog::storage` builder method.
         if let Some(storage) = cc.storage {
