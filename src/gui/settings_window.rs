@@ -92,13 +92,54 @@ pub fn settings_window(
                 // .min_size(vec2(50.0, 100.0))
               ;
 
+            // Assuming `beam_x` is of type `Array2<f64>`
+            let beam_x_array = gui_conf.clone().psf.x;
+
+            // Convert `Array2<f64>` to `Vec<[f64; 2]>`
+            let beam_x_vec: Vec<[f64; 2]> = beam_x_array
+                .axis_iter(Axis(0))
+                .enumerate() // Iterate over rows
+                .filter_map(|(i, row)| {
+                    // Ensure the row has exactly 2 elements, then convert it to an array
+                    if row.len() == 2 {
+                        Some([row[0], i as f64])
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // Assuming `beam_y` is of type `Array2<f64>`
+            let beam_y_array = gui_conf.clone().psf.y;
+
+            // Convert `Array2<f64>` to `Vec<[f64; 2]>`
+            let beam_y_vec: Vec<[f64; 2]> = beam_y_array
+                .axis_iter(Axis(0))
+                .enumerate() // Iterate over rows
+                .filter_map(|(i, row)| {
+                    // Ensure the row has exactly 2 elements, then convert it to an array
+                    if row.len() == 2 {
+                        Some([row[0], i as f64])
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
             signal_plot.show(ui, |signal_plot_ui| {
                 signal_plot_ui.line(
-                    Line::new(PlotPoints::from(gui_conf.clone().beam_shape))
+                    Line::new(PlotPoints::from(beam_x_vec))
                         .color(egui::Color32::RED)
                         .style(LineStyle::Solid)
                         .width(2.0)
-                        .name("signal 1"),
+                        .name("x"),
+                );
+                signal_plot_ui.line(
+                    Line::new(PlotPoints::from(beam_y_vec))
+                        .color(egui::Color32::BLUE)
+                        .style(LineStyle::Solid)
+                        .width(2.0)
+                        .name("y"),
                 );
             });
 
