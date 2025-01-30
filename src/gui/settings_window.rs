@@ -64,7 +64,7 @@ pub fn settings_window(
                     }
 
                     // TODO: maybe change this check here...
-                    if gui_conf.psf.x.is_empty() {
+                    if gui_conf.psf.popt_x.is_empty() {
                         ui.colored_label(egui::Color32::RED, "No PSF loaded.");
                     } else {
                         ui.label(
@@ -93,7 +93,7 @@ pub fn settings_window(
               ;
 
             // Assuming `beam_x` is of type `Array2<f64>`
-            let beam_x_array = gui_conf.clone().psf.x;
+            let beam_x_array = gui_conf.clone().psf.popt_x;
 
             // Convert `Array2<f64>` to `Vec<[f64; 2]>`
             let beam_x_vec: Vec<[f64; 2]> = beam_x_array
@@ -110,7 +110,7 @@ pub fn settings_window(
                 .collect();
 
             // Assuming `beam_y` is of type `Array2<f64>`
-            let beam_y_array = gui_conf.clone().psf.y;
+            let beam_y_array = gui_conf.clone().psf.popt_y;
 
             // Convert `Array2<f64>` to `Vec<[f64; 2]>`
             let beam_y_vec: Vec<[f64; 2]> = beam_y_array
@@ -147,7 +147,7 @@ pub fn settings_window(
 
             let plot_height = 100.0;
             let plot_width = 100.0;
-            let data = &gui_conf.psf.x;
+            let data = &gui_conf.psf.popt_x;
 
             let width = data.len_of(Axis(0));
             let height = data.len_of(Axis(1));

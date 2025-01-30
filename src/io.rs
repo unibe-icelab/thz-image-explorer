@@ -114,8 +114,8 @@ pub fn load_psf(file_path: &PathBuf) -> Result<PSF, Box<dyn Error>> {
         n_filters,
         filters,
         filt_freqs,
-        x,
-        y,
+        popt_x: x,
+        popt_y: y,
     })
 }
 

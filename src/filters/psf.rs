@@ -56,8 +56,8 @@ pub struct PSF {
     pub n_filters: i64,
     pub filters: Array2<f64>,
     pub filt_freqs: Array1<f64>,
-    pub x: Array2<f64>,
-    pub y: Array2<f64>,
+    pub popt_x: Array2<f64>,
+    pub popt_y: Array2<f64>,
 }
 
 /// Linear interpolation function for a 1D array.
