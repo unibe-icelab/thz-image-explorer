@@ -117,10 +117,7 @@ pub fn settings_window(
                 let binding = beam_x_array.row(0);
                 let first_row = binding.as_slice().unwrap();
 
-                let beam_x_vec: Vec<[f64; 2]> = gaussian(
-                    &array,
-                    &first_row,
-                )
+                let beam_x_vec: Vec<[f64; 2]> = gaussian(&array, &first_row)
                     .iter()
                     .zip(array.iter())
                     .map(|(p, x)| [*x, *p])
