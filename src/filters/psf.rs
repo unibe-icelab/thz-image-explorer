@@ -205,6 +205,14 @@ fn gaussian(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
             .exp()
     })
 }
+/// Gaussian function with a different normalization
+fn gaussian2(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
+    let x0 = params[0];
+    let w = params[1];
+    x.mapv(|xi| {
+        (2.0 / std::f64::consts::PI).sqrt() * (-2.0 * (xi - x0).powf(2.0) / (w * w)).exp() / w
+    })
+}
 
 /// Error function
 fn error_f(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {

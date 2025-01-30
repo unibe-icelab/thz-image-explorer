@@ -55,6 +55,14 @@ impl Filter for Deconvolution {
     /// This method currently contains a placeholder for the Richardson-Lucy algorithm.
     fn filter(&self, _scan: &mut ScannedImage, _gui_settings: &mut GuiSettingsContainer) {
         // Implement your Richardson-Lucy algorithm here
+        // Get the psf with _gui_settings.psf
+        // Iterate over the frequencies contained in the psf
+        // Compute range_max_x and range_max_y with (w_x + |x_0|) * 3 and (w_y + |y_0|) * 3
+        // Create two vectors x and y with range_max_x and range_max_y using the dx and dy steps from the scan
+        // Create the 2D PSF for the given frequency
+        // Filter the scan with the FIR filter of the given frequency
+        // Perform the deconvolution with the Richardson-Lucy algorithm
+        // etc.
     }
 
     /// Returns the configuration details of the `Deconvolution` filter.
