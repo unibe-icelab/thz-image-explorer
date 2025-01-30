@@ -8,7 +8,8 @@ use eframe::egui::{
 use egui_file_dialog::FileDialog;
 use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotPoint, PlotPoints};
 use egui_theme_switch::ThemeSwitch;
-use ndarray::Axis;
+use itertools::Itertools;
+use ndarray::{Array1, Axis};
 #[cfg(feature = "self_update")]
 use self_update::restart::restart;
 #[cfg(feature = "self_update")]
@@ -16,6 +17,14 @@ use self_update::update::Release;
 #[cfg(feature = "self_update")]
 use semver::Version;
 
+fn gaussian(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
+    let x0 = params[0];
+    let w = params[1];
+    x.mapv(|xi| {
+        (2.0 * (-2.0 * (xi - x0).powf(2.0) / (w * w)) / (2.0 * std::f64::consts::PI).sqrt() * w)
+            .exp()
+    })
+}
 pub fn settings_window(
     ctx: &egui::Context,
     gui_conf: &mut GuiSettingsContainer,
@@ -95,53 +104,38 @@ pub fn settings_window(
             // Assuming `beam_x` is of type `Array2<f64>`
             let beam_x_array = gui_conf.clone().psf.popt_x;
 
-            // Convert `Array2<f64>` to `Vec<[f64; 2]>`
-            let beam_x_vec: Vec<[f64; 2]> = beam_x_array
-                .axis_iter(Axis(0))
-                .enumerate() // Iterate over rows
-                .filter_map(|(i, row)| {
-                    // Ensure the row has exactly 2 elements, then convert it to an array
-                    if row.len() == 2 {
-                        Some([row[0], i as f64])
-                    } else {
-                        None
-                    }
-                })
+            let start = -5.0;
+            let end = 5.0;
+            let step = 0.5;
+
+            let values: Vec<f64> = (0..)
+                .map(|i| start + i as f64 * step)
+                .take_while(|&x| x <= end)
                 .collect();
+            let array = Array1::from(values);
+            if !beam_x_array.is_empty() {
+                let binding = beam_x_array.row(0);
+                let first_row = binding.as_slice().unwrap();
 
-            // Assuming `beam_y` is of type `Array2<f64>`
-            let beam_y_array = gui_conf.clone().psf.popt_y;
+                let beam_x_vec: Vec<[f64; 2]> = gaussian(
+                    &array,
+                    &first_row,
+                )
+                    .iter()
+                    .zip(array.iter())
+                    .map(|(p, x)| [*x, *p])
+                    .collect();
 
-            // Convert `Array2<f64>` to `Vec<[f64; 2]>`
-            let beam_y_vec: Vec<[f64; 2]> = beam_y_array
-                .axis_iter(Axis(0))
-                .enumerate() // Iterate over rows
-                .filter_map(|(i, row)| {
-                    // Ensure the row has exactly 2 elements, then convert it to an array
-                    if row.len() == 2 {
-                        Some([row[0], i as f64])
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            signal_plot.show(ui, |signal_plot_ui| {
-                signal_plot_ui.line(
-                    Line::new(PlotPoints::from(beam_x_vec))
-                        .color(egui::Color32::RED)
-                        .style(LineStyle::Solid)
-                        .width(2.0)
-                        .name("x"),
-                );
-                signal_plot_ui.line(
-                    Line::new(PlotPoints::from(beam_y_vec))
-                        .color(egui::Color32::BLUE)
-                        .style(LineStyle::Solid)
-                        .width(2.0)
-                        .name("y"),
-                );
-            });
+                signal_plot.show(ui, |signal_plot_ui| {
+                    signal_plot_ui.line(
+                        Line::new(PlotPoints::from(beam_x_vec))
+                            .color(egui::Color32::RED)
+                            .style(LineStyle::Solid)
+                            .width(2.0)
+                            .name("x"),
+                    );
+                });
+            }
 
             ui.end_row();
 
