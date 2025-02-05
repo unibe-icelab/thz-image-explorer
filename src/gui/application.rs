@@ -34,6 +34,8 @@ use crate::APP_INFO;
 pub enum FileDialogState {
     /// File dialog is set to open a generic file.
     Open,
+    /// File dialog is set to open a reference file.
+    OpenRef,
     /// File dialog is set to open a PSF file.
     OpenPSF,
     /// File dialog is set to save a file.

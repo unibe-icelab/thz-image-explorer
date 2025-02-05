@@ -451,6 +451,18 @@ pub fn pulse_tab(
     });
 }
 
+pub fn refractive_index_tab(
+    ui: &mut Ui,
+    height: f32,
+    width: f32,
+    spacing: f32,
+    right_panel_width: f32,
+    thread_communication: &mut GuiThreadCommunication,
+    data: &mut DataPoint,
+    water_vapour_lines: &[f64],
+) {
+}
+
 fn three_dimensional_plot(
     ui: &mut Ui,
     thread_communication: &mut GuiThreadCommunication,
@@ -644,7 +656,16 @@ pub fn center_panel(
                     data,
                     water_vapour_lines,
                 ),
-                Tab::RefractiveIndex => {}
+                Tab::RefractiveIndex => refractive_index_tab(
+                    ui,
+                    height,
+                    width,
+                    spacing,
+                    *right_panel_width,
+                    thread_communication,
+                    data,
+                    water_vapour_lines,
+                ),
                 Tab::ThreeD => {
                     three_dimensional_plot(
                         ui,

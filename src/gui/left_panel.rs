@@ -164,16 +164,28 @@ pub fn left_panel(
             });
             ui.separator();
             ui.heading("Data Source");
-            if ui
-                .button(egui::RichText::new(format!(
-                    "{} Load Scan",
-                    egui_phosphor::regular::FOLDER_OPEN
-                )))
-                .clicked()
-            {
-                *file_dialog_state = FileDialogState::Open;
-                file_dialog.pick_file();
-            };
+            ui.horizontal(|ui| {
+                if ui
+                    .button(egui::RichText::new(format!(
+                        "{} Load Scan",
+                        egui_phosphor::regular::FOLDER_OPEN
+                    )))
+                    .clicked()
+                {
+                    *file_dialog_state = FileDialogState::Open;
+                    file_dialog.pick_file();
+                };
+                if ui
+                    .button(egui::RichText::new(format!(
+                        "{} Load Reference",
+                        egui_phosphor::regular::FOLDER_OPEN
+                    )))
+                    .clicked()
+                {
+                    *file_dialog_state = FileDialogState::OpenRef;
+                    file_dialog.pick_file();
+                };
+            });
 
             if !other_files.is_empty() {
                 ui.add_space(5.0);
@@ -317,6 +329,7 @@ pub fn left_panel(
                         thread_communication.gui_settings.selected_path = path;
                     }
                 }
+                FileDialogState::OpenRef => {}
                 FileDialogState::OpenPSF => {
                     if let Some(path) = file_dialog
                         .update_with_right_panel_ui(ctx, &mut |ui, dia| {
@@ -362,6 +375,8 @@ pub fn left_panel(
             if let Ok(read_guard) = thread_communication.img_lock.read() {
                 img_data = read_guard.clone();
             }
+
+            // TODO: implement selecting reference pixel
             let pixel_clicked = plot_matrix(
                 ui,
                 &img_data,
