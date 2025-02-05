@@ -7,6 +7,7 @@ use core::f64;
 use dotthz::DotthzFile;
 use egui_file_dialog::information_panel::InformationPanel;
 use egui_file_dialog::FileDialog;
+use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -39,6 +40,39 @@ pub enum FileDialogState {
     Save,
     /// File dialog is not active.
     None,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum Tab {
+    Pulse,
+    RefractiveIndex,
+    ThreeD,
+}
+
+impl Display for Tab {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Tab::Pulse => {
+                write!(f, "Pulse")
+            }
+            Tab::RefractiveIndex => {
+                write!(f, "Refractive Index")
+            }
+            Tab::ThreeD => {
+                write!(f, "3D")
+            }
+        }
+    }
+}
+
+impl Tab {
+    pub fn to_arr(&self) -> [bool; 3] {
+        match self {
+            Tab::Pulse => [true, false, false],
+            Tab::RefractiveIndex => [false, true, false],
+            Tab::ThreeD => [false, false, true],
+        }
+    }
 }
 
 /// Contains the GUI settings and user preferences for the application.
@@ -84,6 +118,12 @@ pub struct GuiSettingsContainer {
     pub dark_mode: bool,
     pub x: f32,
     pub y: f32,
+    pub tab: Tab,
+    pub chart_pitch: f32,
+    pub chart_yaw: f32,
+    pub chart_scale: f32,
+    pub chart_pitch_vel: f32,
+    pub chart_yaw_vel: f32,
     pub theme_preference: ThemePreference,
     pub beam_shape: Vec<[f64; 2]>,
     pub beam_shape_path: PathBuf,
@@ -116,10 +156,16 @@ impl GuiSettingsContainer {
             dark_mode: true,
             x: 1600.0,
             y: 900.0,
+            chart_pitch: 0.3,
+            chart_yaw: 0.9,
+            chart_scale: 0.9,
+            chart_pitch_vel: 0.0,
+            chart_yaw_vel: 0.0,
             theme_preference: ThemePreference::System,
             beam_shape: vec![],
             beam_shape_path: home_dir().unwrap_or_else(|| PathBuf::from("/")),
             psf: PSF::default(),
+            tab: Tab::Pulse,
         }
     }
 }
@@ -232,7 +278,7 @@ impl THzImageExplorer<'_> {
             )
             .initial_directory(thread_communication.gui_settings.selected_path.clone())
             //.default_file_filter("dotTHz files")
-        ;
+            ;
         // Load the persistent data of the file dialog.
         // Alternatively, you can also use the `FileDialog::storage` builder method.
         if let Some(storage) = cc.storage {
