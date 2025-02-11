@@ -6,7 +6,10 @@ use crate::config::{ConfigCommand, ConfigContainer, MainThreadCommunication};
 use crate::data_container::{DataPoint, ScannedImage};
 use crate::filters::filter::FILTER_REGISTRY;
 use crate::gui::matrix_plot::SelectedPixel;
-use crate::io::{open_from_npz, open_from_thz, open_json, save_to_thz};
+use crate::io::{
+    load_meta_data_of_thz_file, open_from_npz, open_from_thz, open_json, save_to_thz,
+    update_meta_data_of_thz_file,
+};
 use crate::math_tools::{
     apply_adapted_blackman_window, apply_blackman, apply_flat_top, apply_hamming, apply_hanning,
     numpy_unwrap, FftWindowType,
@@ -283,6 +286,53 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
     loop {
         if let Ok(config_command) = thread_communication.config_rx.recv() {
             match config_command {
+                ConfigCommand::LoadMetaData(path) => {
+                    if path.extension().unwrap() == "thz" {
+                        match load_meta_data_of_thz_file(&path, &mut meta_data) {
+                            Ok(_) => {
+                                if let Ok(mut md) = thread_communication.md_lock.write() {
+                                    *md = meta_data.clone();
+                                }
+                                log::info!("loaded meta-data from {:?}", path);
+                            }
+                            Err(err) => {
+                                log::error!("failed loading meta-data {:?}: {:?}", path, err)
+                            }
+                        }
+                    } else {
+                        log::error!("failed loading meta-data {:?}: not a dotTHz file", path)
+                    }
+                    continue;
+                }
+                ConfigCommand::UpdateMetaData(mut path) => {
+                    // THz Image Explorer always saves thz files
+                    if path.extension().unwrap() != "thz" {
+                        path.set_extension("thz");
+                        // dave full file, not just metadata, since the dotTHz file does not exist yet.
+                        if let Ok(md) = thread_communication.md_lock.read() {
+                            match save_to_thz(&path, &scan, &md) {
+                                Ok(_) => {
+                                    log::info!("saved {:?}", path);
+                                }
+                                Err(err) => {
+                                    log::error!("failed saving {:?}: {:?}", path, err)
+                                }
+                            }
+                        }
+                    } else {
+                        if let Ok(md) = thread_communication.md_lock.read() {
+                            match update_meta_data_of_thz_file(&path, &md) {
+                                Ok(_) => {
+                                    log::info!("updated meta-data from {:?}", path);
+                                }
+                                Err(err) => {
+                                    log::error!("failed updating meta-data {:?}: {:?}", path, err)
+                                }
+                            }
+                        }
+                    }
+                    continue;
+                }
                 ConfigCommand::OpenFile(selected_file_path) => {
                     if let Some(file_ending) = selected_file_path.extension() {
                         match file_ending.to_str().unwrap() {
@@ -409,7 +459,6 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                         match save_to_thz(&path, &scan, &md) {
                             Ok(_) => {
                                 log::info!("saved {:?}", path);
-                                update_intensity_image(&scan, &thread_communication.img_lock);
                             }
                             Err(err) => {
                                 log::error!("failed saving {:?}: {:?}", path, err)

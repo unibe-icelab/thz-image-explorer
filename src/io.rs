@@ -341,7 +341,40 @@ pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(),
     Ok(())
 }
 
-// Function to save the data and metadata to an HDF5 file
+// Function to write the metadata to an HDF5 file / dotTHz file
+pub fn load_meta_data_of_thz_file(
+    file_path: &PathBuf,
+    metadata: &mut DotthzMetaData,
+) -> Result<(), Box<dyn Error>> {
+    // Create a new DotthzFile for reading
+    let mut file = DotthzFile::open(file_path)?;
+
+    // Define a group name
+    let group_name = "Image";
+
+    // Create datasets and write data
+    *metadata = file.get_meta_data(group_name)?;
+    Ok(())
+}
+
+// Function to write the metadata to an HDF5 file / dotTHz file
+pub fn update_meta_data_of_thz_file(
+    file_path: &PathBuf,
+    metadata: &DotthzMetaData,
+) -> Result<(), Box<dyn Error>> {
+    // Create a new DotthzFile for writing
+    let mut file = DotthzFile::open_rw(file_path)?;
+
+    // Define a group name
+    let group_name = "Image";
+
+    // Create datasets and write data
+    let mut group = file.get_group(group_name)?;
+    file.set_meta_data(&mut group, metadata)?;
+    Ok(())
+}
+
+// Function to save the data and metadata to an HDF5 file / dotTHz file
 pub fn save_to_thz(
     file_path: &PathBuf,
     scan: &ScannedImage,
@@ -389,7 +422,7 @@ pub fn open_from_thz(
     metadata: &mut DotthzMetaData,
 ) -> Result<(), Box<dyn Error>> {
     // Open the HDF5 file for reading
-    let file = DotthzFile::load(file_path)?;
+    let file = DotthzFile::open(file_path)?;
 
     if let Some(group_name) = file.get_group_names()?.first() {
         if file.get_groups()?.len() > 1 {

@@ -24,6 +24,12 @@ pub enum ConfigCommand {
     /// The file is identified using a `PathBuf`, and its type is determined based on its extension.
     SaveFile(PathBuf),
 
+    /// The file is identified using a `PathBuf`.
+    LoadMetaData(PathBuf),
+
+    /// The file is identified using a `PathBuf`.
+    UpdateMetaData(PathBuf),
+
     /// Command to set the lower bound of the FFT window.
     SetFFTWindowLow(f32),
 

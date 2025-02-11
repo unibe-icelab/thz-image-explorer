@@ -411,7 +411,7 @@ pub fn left_panel(
 
                     thread_communication
                         .config_tx
-                        .send(ConfigCommand::SaveFile(
+                        .send(ConfigCommand::UpdateMetaData(
                             thread_communication.gui_settings.selected_path.clone(),
                         ))
                         .expect("unable to send save file cmd");
@@ -443,7 +443,7 @@ pub fn left_panel(
                     if thread_communication.gui_settings.meta_data_edit {
                         thread_communication
                             .config_tx
-                            .send(ConfigCommand::SaveFile(
+                            .send(ConfigCommand::UpdateMetaData(
                                 thread_communication.gui_settings.selected_path.clone(),
                             ))
                             .expect("unable to send save file cmd");
@@ -463,7 +463,7 @@ pub fn left_panel(
                         thread_communication.gui_settings.meta_data_edit = false;
                         thread_communication
                             .config_tx
-                            .send(ConfigCommand::OpenFile(
+                            .send(ConfigCommand::LoadMetaData(
                                 thread_communication.gui_settings.selected_path.clone(),
                             ))
                             .expect("unable to send open file cmd");

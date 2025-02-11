@@ -311,7 +311,7 @@ impl THzImageExplorer<'_> {
                     }
                 })
                 .add_metadata_loader("thz", |other_data, path| {
-                    if let Ok(file) = DotthzFile::load(&path.to_path_buf()) {
+                    if let Ok(file) = DotthzFile::open(&path.to_path_buf()) {
                         if let Ok(group_names) = file.get_group_names() {
                             other_data
                                 .insert("Groups: ".to_string(), group_names.join(", ").to_string());
