@@ -6,7 +6,7 @@ use crate::config::{ConfigCommand, ConfigContainer, MainThreadCommunication};
 use crate::data_container::{DataPoint, ScannedImage};
 use crate::filters::filter::FILTER_REGISTRY;
 use crate::gui::matrix_plot::SelectedPixel;
-use crate::io::{open_from_npz, open_from_thz, open_json};
+use crate::io::{open_from_npz, open_from_thz, open_json, save_to_thz};
 use crate::math_tools::{
     apply_adapted_blackman_window, apply_blackman, apply_flat_top, apply_hamming, apply_hanning,
     numpy_unwrap, FftWindowType,
@@ -395,6 +395,24 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                             _ => {
                                 log::warn!("file not supported: {:?} \n Close the file to connect to a spectrometer or open another file.", selected_file_path);
                                 continue;
+                            }
+                        }
+                    }
+                }
+                ConfigCommand::SaveFile(mut path) => {
+                    // THz Image Explorer always saves thz files
+                    if path.extension().unwrap() != "thz" {
+                        path.set_extension("thz");
+                    }
+
+                    if let Ok(md) = thread_communication.md_lock.read() {
+                        match save_to_thz(&path, &scan, &md) {
+                            Ok(_) => {
+                                log::info!("saved {:?}", path);
+                                update_intensity_image(&scan, &thread_communication.img_lock);
+                            }
+                            Err(err) => {
+                                log::error!("failed saving {:?}: {:?}", path, err)
                             }
                         }
                     }

@@ -14,7 +14,7 @@ use crate::filters::psf::PSF;
 use csv::ReaderBuilder;
 use dotthz::{DotthzFile, DotthzMetaData};
 use glob::glob;
-use ndarray::{Array0, Array1, Array2, Array3, Axis, Ix0, Ix1, Ix2, OwnedRepr};
+use ndarray::{arr2, Array0, Array1, Array2, Array3, Axis, Ix0, Ix1, Ix2, OwnedRepr};
 use ndarray_npy::NpzReader;
 use realfft::RealFftPlanner;
 use std::error::Error;
@@ -341,78 +341,29 @@ pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(),
     Ok(())
 }
 
-//
-// // Function to save the data and metadata to an HDF5 file
-// pub fn save_to_thz(
-//     data_container: OutputFile,
-//     metadata: &DotthzMetaData,
-// ) -> Result<(), Box<dyn Error>> {
-//     let data_signal_1 = arr2(
-//         &data_container
-//             .data
-//             .time
-//             .iter()
-//             .zip(data_container.data.signal_1.iter())
-//             .map(|(t, r)| [*t, *r]) // Interleave time and ref data
-//             .collect::<Vec<[f32; 2]>>(),
-//     );
-//
-//     let data_ref_1 = Array2::from_shape_vec(
-//         (data_container.data.time_ref_1.len(), 2), // N rows, 2 columns
-//         data_container
-//             .data
-//             .time_ref_1
-//             .iter()
-//             .zip(data_container.data.ref_1.iter())
-//             .flat_map(|(t, r)| vec![*t, *r]) // Flatten and interleave the two vectors
-//             .collect(), // Collect them into a Vec
-//     )?;
-//
-//     let data_signal_2 = Array2::from_shape_vec(
-//         (data_container.data.time_2.len(), 2), // Shape of the data: (N, 2)
-//         data_container
-//             .data
-//             .time_2
-//             .iter()
-//             .zip(data_container.data.signal_2.iter())
-//             .flat_map(|(t, r)| vec![*t, *r]) // Interleave time and ref data
-//             .collect(),
-//     )?;
-//
-//     let data_ref_2 = Array2::from_shape_vec(
-//         (data_container.data.time_ref_2.len(), 2), // Shape of the data: (N, 2)
-//         data_container
-//             .data
-//             .time_ref_2
-//             .iter()
-//             .zip(data_container.data.ref_2.iter())
-//             .flat_map(|(t, r)| vec![*t, *r]) // Interleave time and ref data
-//             .collect(),
-//     )?;
-//
-//     let mut file = DotthzFile::new();
-//
-//     let mut measurement = DotthzMeasurement::default();
-//     measurement
-//         .datasets
-//         .insert("Sample 1".to_string(), data_signal_1);
-//     measurement
-//         .datasets
-//         .insert("Reference 1".to_string(), data_ref_1);
-//     measurement
-//         .datasets
-//         .insert("Sample 2".to_string(), data_signal_2);
-//     measurement
-//         .datasets
-//         .insert("Reference 2".to_string(), data_ref_2);
-//     measurement.meta_data = metadata.clone();
-//
-//     file.groups.insert("Measurement 1".to_string(), measurement);
-//
-//     file.save(&data_container.filename)?; // open for writing
-//
-//     Ok(())
-// }
+// Function to save the data and metadata to an HDF5 file
+pub fn save_to_thz(
+    file_path: &PathBuf,
+    scan: &ScannedImage,
+    metadata: &DotthzMetaData,
+) -> Result<(), Box<dyn Error>> {
+    // Create a new DotthzFile for writing
+    let mut file = DotthzFile::create(file_path)?;
+
+    // Define a group name
+    let group_name = "Image";
+
+    // Create datasets and write data
+    file.add_group(group_name, metadata)?;
+
+    // Save raw data
+    file.add_dataset(group_name, "dataset", scan.raw_data.view())?;
+
+    // Save time data
+    file.add_dataset(group_name, "time", scan.time.view())?;
+
+    Ok(())
+}
 
 /// Opens and reads data from an HDF5 `.thz` file, populating the scan data and metadata.
 ///
@@ -453,15 +404,18 @@ pub fn open_from_thz(
 
         // Read datasets and populate DataContainer fields, skipping any that are missing
         // we do not care about the names given for the datasets, we assume the first is time, second contains the image cube
-        if let Some(ds) = group.datasets()?.first() {
+        if let Ok(ds) = group.dataset("time") {
             if let Ok(arr) = ds.read_1d() {
                 scan.time = arr;
             }
         }
-        if let Some(ds) = group.datasets()?.get(1) {
+        if let Ok(ds) = group.dataset("dataset") {
             if let Ok(arr) = ds.read_dyn::<f32>() {
                 if let Ok(arr3) = arr.into_dimensionality::<ndarray::Ix3>() {
-                    scan.raw_data = arr3;
+                    // check dimensions to make sure
+                    if arr3.shape().len() == 3 {
+                        scan.raw_data = arr3;
+                    }
                 }
             }
         }

@@ -396,6 +396,26 @@ pub fn left_panel(
                 if let Ok(mut write_guard) = thread_communication.pixel_lock.write() {
                     *write_guard = pixel_selected.clone();
                 }
+                if pixel_selected.polygon_closed {
+                    let formatted = pixel_selected
+                        .polygon_points
+                        .iter()
+                        .map(|&[x, y]| format!("[{:.2},{:.2}]", x, y))
+                        .collect::<Vec<String>>()
+                        .join(",");
+                    meta_data.md.insert("ROI".to_string(), formatted);
+
+                    if let Ok(mut md) = thread_communication.md_lock.write() {
+                        *md = meta_data.clone();
+                    }
+
+                    thread_communication
+                        .config_tx
+                        .send(ConfigCommand::SaveFile(
+                            thread_communication.gui_settings.selected_path.clone(),
+                        ))
+                        .expect("unable to send save file cmd");
+                }
             }
 
             ui.add_space(10.0);
