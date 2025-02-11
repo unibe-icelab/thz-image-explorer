@@ -427,44 +427,165 @@ pub fn left_panel(
 
             ui.separator();
             ui.heading("Meta Data");
-            egui::ScrollArea::both().show(ui, |ui| {
-                egui::Grid::new("meta_data")
-                    .num_columns(2)
-                    .striped(true)
-                    .show(ui, |ui| {
-                        for (name, value) in meta_data.md {
-                            ui.label(name);
-                            ui.label(value);
-                            ui.end_row()
-                        }
-                        ui.label("User:");
-                        ui.label(meta_data.user);
-                        ui.end_row();
-                        ui.label("E-mail:");
-                        ui.label(meta_data.email);
-                        ui.end_row();
-                        ui.label("ORCID:");
-                        ui.label(meta_data.orcid);
-                        ui.end_row();
-                        ui.label("Institution:");
-                        ui.label(meta_data.institution);
-                        ui.end_row();
-                        ui.label("Instrument:");
-                        ui.label(meta_data.instrument);
-                        ui.end_row();
-                        ui.label("Version:");
-                        ui.label(meta_data.version);
-                        ui.end_row();
-                        ui.label("Mode:");
-                        ui.label(meta_data.mode);
-                        ui.end_row();
-                        ui.label("Date:");
-                        ui.label(meta_data.date);
-                        ui.end_row();
-                        ui.label("Time:");
-                        ui.label(meta_data.time);
-                        ui.end_row();
-                    });
+            ui.horizontal(|ui| {
+                let text = if thread_communication.gui_settings.meta_data_edit {
+                    "Save"
+                } else {
+                    "Edit"
+                };
+                if ui
+                    .selectable_label(
+                        thread_communication.gui_settings.meta_data_edit,
+                        egui::RichText::new(format!("{} {}", egui_phosphor::regular::PENCIL, text)),
+                    )
+                    .clicked()
+                {
+                    if thread_communication.gui_settings.meta_data_edit {
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::SaveFile(
+                                thread_communication.gui_settings.selected_path.clone(),
+                            ))
+                            .expect("unable to send save file cmd");
+                    }
+                    thread_communication.gui_settings.meta_data_edit =
+                        !thread_communication.gui_settings.meta_data_edit;
+                }
+
+                if thread_communication.gui_settings.meta_data_edit {
+                    if ui
+                        .button(egui::RichText::new(format!(
+                            "{} Revert",
+                            egui_phosphor::regular::ARROW_COUNTER_CLOCKWISE
+                        )))
+                        .clicked()
+                    {
+                        thread_communication.gui_settings.meta_data_edit = false;
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::OpenFile(
+                                thread_communication.gui_settings.selected_path.clone(),
+                            ))
+                            .expect("unable to send open file cmd");
+                    }
+                }
             });
+            egui::ScrollArea::both().show(ui, |ui| {
+                egui::Grid::new("meta_data").striped(true).show(ui, |ui| {
+                    // this is an aesthetic hack to draw the empty meta-data grid to full width
+                    if meta_data.md.is_empty() {
+                        ui.label("Data");
+                        ui.label(format!("{:50}", " "));
+                        ui.end_row();
+                    }
+                    for (name, value) in meta_data.md.iter_mut() {
+                        ui.label(name);
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(value)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(value.clone());
+                        }
+                        ui.end_row()
+                    }
+                    ui.label("User:");
+                    if thread_communication.gui_settings.meta_data_edit {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut meta_data.user)
+                                .desired_width(ui.available_width()),
+                        );
+                    } else {
+                        ui.label(meta_data.user.clone());
+                    }
+                    ui.end_row();
+                    ui.label("E-mail:");
+                    if thread_communication.gui_settings.meta_data_edit {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut meta_data.email)
+                                .desired_width(ui.available_width()),
+                        );
+                    } else {
+                        ui.label(meta_data.email.clone());
+                    }
+                    ui.end_row();
+                    ui.label("ORCID:");
+                    if thread_communication.gui_settings.meta_data_edit {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut meta_data.orcid)
+                                .desired_width(ui.available_width()),
+                        );
+                    } else {
+                        ui.label(meta_data.orcid.clone());
+                    }
+                    ui.end_row();
+                    ui.label("Institution:");
+                    if thread_communication.gui_settings.meta_data_edit {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut meta_data.institution)
+                                .desired_width(ui.available_width()),
+                        );
+                    } else {
+                        ui.label(meta_data.institution.clone());
+                    }
+                    ui.end_row();
+                    ui.label("Instrument:");
+                    if thread_communication.gui_settings.meta_data_edit {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut meta_data.instrument)
+                                .desired_width(ui.available_width()),
+                        );
+                    } else {
+                        ui.label(meta_data.instrument.clone());
+                    }
+                    ui.end_row();
+                    ui.label("Version:");
+                    if thread_communication.gui_settings.meta_data_edit {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut meta_data.version)
+                                .desired_width(ui.available_width()),
+                        );
+                    } else {
+                        ui.label(meta_data.version.clone());
+                    }
+                    ui.end_row();
+                    ui.label("Mode:");
+                    if thread_communication.gui_settings.meta_data_edit {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut meta_data.mode)
+                                .desired_width(ui.available_width()),
+                        );
+                    } else {
+                        ui.label(meta_data.mode.clone());
+                    }
+                    ui.end_row();
+                    ui.label("Date:");
+                    if thread_communication.gui_settings.meta_data_edit {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut meta_data.date)
+                                .desired_width(ui.available_width()),
+                        );
+                    } else {
+                        ui.label(meta_data.date.clone());
+                    }
+                    ui.end_row();
+                    ui.label("Time:");
+                    if thread_communication.gui_settings.meta_data_edit {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut meta_data.time)
+                                .desired_width(ui.available_width()),
+                        );
+                    } else {
+                        ui.label(meta_data.time.clone());
+                    }
+                    ui.end_row();
+                });
+            });
+            if thread_communication.gui_settings.meta_data_edit {
+                if let Ok(mut md) = thread_communication.md_lock.write() {
+                    *md = meta_data.clone();
+                }
+            }
         });
 }

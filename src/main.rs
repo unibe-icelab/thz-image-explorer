@@ -52,6 +52,8 @@ fn main() {
         }
     }
 
+    gui_settings.meta_data_edit = false;
+
     if gui_settings.chart_scale <= 0.0 {
         gui_settings.chart_scale = 1.0;
     }

@@ -8,7 +8,6 @@ use eframe::egui::{
 use egui_file_dialog::FileDialog;
 use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotPoint, PlotPoints};
 use egui_theme_switch::ThemeSwitch;
-use itertools::Itertools;
 use ndarray::{Array1, Axis};
 #[cfg(feature = "self_update")]
 use self_update::restart::restart;

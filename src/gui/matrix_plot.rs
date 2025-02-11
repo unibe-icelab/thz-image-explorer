@@ -3,7 +3,7 @@ use eframe::egui::{
     pos2, vec2, Color32, ColorImage, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
 };
 use egui::TextureOptions;
-use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotItem, PlotPoint, PlotPoints, Polygon};
+use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotPoint, PlotPoints, Polygon};
 use ndarray::{Array2, Axis};
 
 #[derive(Debug, Clone)]
