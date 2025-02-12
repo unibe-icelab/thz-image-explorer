@@ -436,18 +436,21 @@ pub fn open_from_thz(
         *metadata = file.get_meta_data(group_name)?;
 
         // Read datasets and populate DataContainer fields, skipping any that are missing
-        // we do not care about the names given for the datasets, we assume the first is time, second contains the image cube
-        if let Ok(ds) = group.dataset("time") {
-            if let Ok(arr) = ds.read_1d() {
-                scan.time = arr;
+        if let Some(ds1) = metadata.ds_description.iter().position(|d| d == "time") {
+            if let Some(ds) = group.datasets().unwrap().get(ds1) {
+                if let Ok(arr) = ds.read_1d() {
+                    scan.time = arr;
+                }
             }
         }
-        if let Ok(ds) = group.dataset("dataset") {
-            if let Ok(arr) = ds.read_dyn::<f32>() {
-                if let Ok(arr3) = arr.into_dimensionality::<ndarray::Ix3>() {
-                    // check dimensions to make sure
-                    if arr3.shape().len() == 3 {
-                        scan.raw_data = arr3;
+        if let Some(ds2) = metadata.ds_description.iter().position(|d| d == "dataset") {
+            if let Some(ds) = group.datasets().unwrap().get(ds2) {
+                if let Ok(arr) = ds.read_dyn::<f32>() {
+                    if let Ok(arr3) = arr.into_dimensionality::<ndarray::Ix3>() {
+                        // check dimensions to make sure
+                        if arr3.shape().len() == 3 {
+                            scan.raw_data = arr3;
+                        }
                     }
                 }
             }
