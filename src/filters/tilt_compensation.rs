@@ -1,0 +1,107 @@
+use crate::data_container::ScannedImage;
+use crate::filters::filter::{Filter, FilterConfig, FilterDomain, ParameterKind};
+use crate::gui::application::GuiSettingsContainer;
+use filter_macros::register_filter;
+use ndarray::s;
+use std::collections::HashMap;
+use std::f32::consts::PI;
+
+#[derive(Debug)]
+#[register_filter]
+pub struct TiltCompensation {
+    pub config: FilterConfig,
+}
+
+impl Filter for TiltCompensation {
+    fn new() -> Self
+    where
+        Self: Sized,
+    {
+        let mut parameters = HashMap::new();
+        parameters.insert(
+            "X".to_string(),
+            ParameterKind::Slider {
+                value: 0.0,
+                show_in_plot: false,
+                min: -15.0,
+                max: 15.0,
+            },
+        );
+        parameters.insert(
+            "Y".to_string(),
+            ParameterKind::Slider {
+                value: 0.0,
+                show_in_plot: false,
+                min: -15.0,
+                max: 15.0,
+            },
+        );
+        let config = FilterConfig {
+            name: "Tilt Compensation".to_string(),
+            domain: FilterDomain::Frequency,
+            parameters,
+        };
+        TiltCompensation { config }
+    }
+
+    fn filter(&self, scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer) {
+        // only rotation around the center are implemented, offset rotations are still to be done.
+        let mut time_shift_x = 0.0;
+        let mut time_shift_y = 0.0;
+
+        if let ParameterKind::Float(value) = self.config.parameters.get("X").unwrap() {
+            time_shift_x = *value as f32 / 180.0 * PI;
+        }
+        if let ParameterKind::Float(value) = self.config.parameters.get("Y").unwrap() {
+            time_shift_y = *value as f32 / 180.0 * PI;
+        }
+
+        let (width, height, time_samples) = scan.raw_data.dim();
+        let center_x = (width as f32 - 1.0) / 2.0;
+        let center_y = (height as f32 - 1.0) / 2.0;
+
+        for i in 0..width {
+            for j in 0..height {
+                let x_offset = i as f32 - center_x;
+                let y_offset = j as f32 - center_y;
+                let delta = x_offset * time_shift_x + y_offset * time_shift_y;
+
+                let raw_trace = scan.raw_data.slice(s![i, j, ..]);
+                let mut filtered_trace = ndarray::Array1::zeros(time_samples);
+
+                for t in 0..time_samples {
+                    let pos = t as f32 - delta;
+                    let t0 = pos.floor() as i32;
+                    let t1 = t0 + 1;
+                    let frac = pos - t0 as f32;
+
+                    let value = if t0 >= 0 && t1 < time_samples as i32 {
+                        let a = raw_trace[t0 as usize] as f32;
+                        let b = raw_trace[t1 as usize] as f32;
+                        a * (1.0 - frac) + b * frac
+                    } else if t0 < 0 {
+                        raw_trace[0] as f32
+                    } else if t1 >= time_samples as i32 {
+                        raw_trace[time_samples - 1] as f32
+                    } else {
+                        0.0
+                    };
+
+                    filtered_trace[t] = value;
+                }
+
+                scan.filtered_data
+                    .slice_mut(s![i, j, ..])
+                    .assign(&filtered_trace);
+            }
+        }
+    }
+
+    fn config(&self) -> &FilterConfig {
+        &self.config
+    }
+
+    fn config_mut(&mut self) -> &mut FilterConfig {
+        &mut self.config
+    }
+}

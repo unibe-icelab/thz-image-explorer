@@ -558,36 +558,38 @@ pub fn right_panel(
                 }
 
                 // TODO: this does not yet work, since the values are lost and not stored.
+                ui.style_mut().spacing.slider_width = 320.0;
+
                 for filter in FILTER_REGISTRY.lock().unwrap().iter_mut() {
                     ui.separator();
-                    ui.heading(filter.config().name);
-                    for param in filter.config().parameters.iter_mut() {
-                        match param.kind {
-                            ParameterKind::Int(mut i) => {
-                                ui.add(egui::Slider::new(&mut i, -10..=10));
+                    ui.heading(filter.config().clone().name);
+                    for (name, param) in filter.config_mut().parameters.iter_mut() {
+                        match param {  // Match on a mutable reference
+                            ParameterKind::Int(i) => {
+                                ui.add(egui::Slider::new(i, -10..=10)); // Directly modify the referenced value
                             }
-                            ParameterKind::UInt(mut i) => {
-                                ui.add(egui::Slider::new(&mut i, 0..=10));
+                            ParameterKind::UInt(i) => {
+                                ui.add(egui::Slider::new(i, 0..=10));
                             }
-                            ParameterKind::Float(mut f) => {
-                                ui.add(egui::Slider::new(&mut f, 0.0..=100.0));
+                            ParameterKind::Float(f) => {
+                                ui.add(egui::Slider::new(f, 0.0..=100.0));
                             }
-                            ParameterKind::Boolean(mut b) => {
-                                ui.add(toggle(&mut b));
+                            ParameterKind::Boolean(b) => {
+                                ui.add(toggle(b));
                             }
                             ParameterKind::Slider {
-                                mut value,
-                                show_in_plot,
+                                value,
+                                show_in_plot: _,
                                 min,
                                 max,
                             } => {
-                                ui.add(egui::Slider::new(&mut value, min..=max));
+                                ui.add(egui::Slider::new(value, *min..=*max));
                             }
                             ParameterKind::DoubleSlider {
-                                mut values,
-                                show_in_plot,
+                                values,
+                                show_in_plot: _,
                                 minimum_separation,
-                                inverted,
+                                inverted: _,
                                 min,
                                 max,
                             } => {
@@ -597,11 +599,12 @@ pub fn right_panel(
                                     DoubleSlider::new(
                                         &mut value_a_f32,
                                         &mut value_b_f32,
-                                        min as f32..=max as f32,
+                                        *min as f32..=*max as f32,
                                     )
-                                    .separation_distance(minimum_separation as f32),
+                                        .separation_distance(*minimum_separation as f32),
                                 );
-                                values = [value_a_f32 as f64, value_b_f32 as f64];
+                                values[0] = value_a_f32 as f64;
+                                values[1] = value_b_f32 as f64;
                             }
                         }
                     }

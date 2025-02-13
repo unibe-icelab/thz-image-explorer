@@ -5,9 +5,10 @@
 //! allowing for further customization and parameterization.
 
 use crate::data_container::ScannedImage;
-use crate::filters::filter::{Filter, FilterConfig, FilterDomain, FilterParameter, ParameterKind};
+use crate::filters::filter::{Filter, FilterConfig, FilterDomain, ParameterKind};
 use crate::gui::application::GuiSettingsContainer;
 use filter_macros::register_filter;
+use std::collections::HashMap;
 
 /// Represents a `Deconvolution` filter.
 ///
@@ -25,7 +26,7 @@ pub struct Deconvolution {
     pub filter_number: usize,
     pub start_frequency: f64,
     pub end_frequency: f64,
-    pub n_iterations: usize,
+    pub config: FilterConfig,
 }
 
 impl Filter for Deconvolution {
@@ -37,52 +38,13 @@ impl Filter for Deconvolution {
     /// - `start_frequency`: 0.0
     /// - `end_frequency`: 10.0
     fn new() -> Self {
-        Deconvolution {
-            n_iterations: 10,
-            filter_number: 10,
-            start_frequency: 0.0,
-            end_frequency: 10.0,
-        }
-    }
+        let mut parameters = HashMap::new();
+        parameters.insert("Iterations".to_string(), ParameterKind::UInt(10));
 
-    /// Applies the deconvolution algorithm to a scanned image.
-    ///
-    /// # Arguments:
-    /// - `_scan`: Mutable reference to the scanned image to be processed.
-    /// - `_gui_settings`: Mutable reference to the GUI settings associated with the filter.
-    ///
-    /// # Notes:
-    /// This method currently contains a placeholder for the Richardson-Lucy algorithm.
-    fn filter(&self, _scan: &mut ScannedImage, _gui_settings: &mut GuiSettingsContainer) {
-        // Implement your Richardson-Lucy algorithm here
-        // Get the psf with _gui_settings.psf
-        // Iterate over the frequencies contained in the psf
-        // Compute range_max_x and range_max_y with (w_x + |x_0|) * 3 and (w_y + |y_0|) * 3
-        // Create two vectors x and y with range_max_x and range_max_y using the dx and dy steps from the scan
-        // Create the 2D PSF for the given frequency
-        // Filter the scan with the FIR filter of the given frequency
-        // Perform the deconvolution with the Richardson-Lucy algorithm
-        // etc.
-    }
-
-    /// Returns the configuration details of the `Deconvolution` filter.
-    ///
-    /// The configuration specifies:
-    /// - Name: `"Deconvolution"`
-    /// - Domain: `Frequency`
-    /// - Parameters:
-    ///     - `"Iterations"`: A positive integer representing the number of iterations.
-    ///
-    /// # Returns:
-    /// A `FilterConfig` struct describing the filter's properties and parameters.
-    fn config(&self) -> FilterConfig {
-        FilterConfig {
+        let config = FilterConfig {
             name: "Deconvolution".to_string(),
             domain: FilterDomain::Frequency,
-            parameters: vec![FilterParameter {
-                name: "Iterations".to_string(),
-                kind: ParameterKind::UInt(self.n_iterations),
-            }],
+            parameters,
             // not used for now
             // vec![
             //     FilterParameter {
@@ -101,6 +63,51 @@ impl Filter for Deconvolution {
             //         },
             //     },
             // ],        }
+        };
+
+        Deconvolution {
+            filter_number: 10,
+            start_frequency: 0.0,
+            end_frequency: 10.0,
+            config,
         }
+    }
+
+    /// Applies the deconvolution algorithm to a scanned image.
+    ///
+    /// # Arguments:
+    /// - `_scan`: Mutable reference to the scanned image to be processed.
+    /// - `_gui_settings`: Mutable reference to the GUI settings associated with the filter.
+    ///
+    /// # Notes:
+    /// This method currently contains a placeholder for the Richardson-Lucy algorithm.
+    fn filter(&self, _scan: &mut ScannedImage, _gui_settings: &mut GuiSettingsContainer) {
+        // access the values, that can be updated from the GUI, like this for now.
+        // This is not pretty, but it works with the GUI this way....
+        // the other values (filter_number, start_frequency, end_frequency) are still
+        // just fields of this struct.
+
+        let mut iteration = 0;
+        if let ParameterKind::UInt(value) = self.config.parameters.get("Iterations").unwrap() {
+            iteration = *value;
+        }
+
+        // Implement your Richardson-Lucy algorithm here
+        // Get the psf with _gui_settings.psf
+        // Iterate over the frequencies contained in the psf
+        // Compute range_max_x and range_max_y with (w_x + |x_0|) * 3 and (w_y + |y_0|) * 3
+        // Create two vectors x and y with range_max_x and range_max_y using the dx and dy steps from the scan
+        // Create the 2D PSF for the given frequency
+        // Filter the scan with the FIR filter of the given frequency
+        // Perform the deconvolution with the Richardson-Lucy algorithm
+        // etc.
+    }
+
+    fn config(&self) -> &FilterConfig {
+        &self.config
+    }
+
+    fn config_mut(&mut self) -> &mut FilterConfig {
+        &mut self.config
     }
 }

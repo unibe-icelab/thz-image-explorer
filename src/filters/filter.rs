@@ -55,8 +55,11 @@ pub trait Filter: Send + Sync + Debug {
     /// - `gui_settings`: Mutable reference to GUI settings associated with the filter.
     fn filter(&self, _scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer);
 
-    /// Returns the filter configuration, including name, domain, and parameters.
-    fn config(&self) -> FilterConfig;
+    /// Returns the filter configuration immutable reference, including name, domain, and parameters.
+    fn config(&self) -> &FilterConfig;
+
+    /// Returns the filter configuration mutable reference, including name, domain, and parameters.
+    fn config_mut(&mut self) -> &mut FilterConfig;
 }
 
 /// The `FilterDomain` enum specifies whether a filter operates in the time or frequency domain.
@@ -79,11 +82,12 @@ pub enum FilterDomain {
 /// **Fields**:
 /// - `name`: A human-readable name for the filter.
 /// - `domain`: The working domain, represented as a `FilterDomain`.
-/// - `parameters`: A vector of customizable filter parameters.#[derive(Debug, Clone)]
+/// - `parameters`: A vector of customizable filter parameters.
+#[derive(Debug, Clone)]
 pub struct FilterConfig {
     pub name: String,
     pub domain: FilterDomain,
-    pub parameters: Vec<FilterParameter>,
+    pub parameters: HashMap<String, ParameterKind>,
 }
 
 /// Represents a specific parameter for a filter configuration.
