@@ -564,49 +564,53 @@ pub fn right_panel(
                     ui.separator();
                     ui.heading(filter.config().clone().name);
                     for (name, param) in filter.config_mut().parameters.iter_mut() {
-                        match param {  // Match on a mutable reference
-                            ParameterKind::Int(i) => {
-                                ui.add(egui::Slider::new(i, -10..=10)); // Directly modify the referenced value
-                            }
-                            ParameterKind::UInt(i) => {
-                                ui.add(egui::Slider::new(i, 0..=10));
-                            }
-                            ParameterKind::Float(f) => {
-                                ui.add(egui::Slider::new(f, 0.0..=100.0));
-                            }
-                            ParameterKind::Boolean(b) => {
-                                ui.add(toggle(b));
-                            }
-                            ParameterKind::Slider {
-                                value,
-                                show_in_plot: _,
-                                min,
-                                max,
-                            } => {
-                                ui.add(egui::Slider::new(value, *min..=*max));
-                            }
-                            ParameterKind::DoubleSlider {
-                                values,
-                                show_in_plot: _,
-                                minimum_separation,
-                                inverted: _,
-                                min,
-                                max,
-                            } => {
-                                let mut value_a_f32 = values[0] as f32;
-                                let mut value_b_f32 = values[1] as f32;
-                                ui.add(
-                                    DoubleSlider::new(
-                                        &mut value_a_f32,
-                                        &mut value_b_f32,
-                                        *min as f32..=*max as f32,
-                                    )
+                        ui.horizontal(|ui| {
+                            ui.label(name);
+                            match param {
+                                // Match on a mutable reference
+                                ParameterKind::Int(i) => {
+                                    ui.add(egui::Slider::new(i, -10..=10)); // Directly modify the referenced value
+                                }
+                                ParameterKind::UInt(i) => {
+                                    ui.add(egui::Slider::new(i, 0..=10));
+                                }
+                                ParameterKind::Float(f) => {
+                                    ui.add(egui::Slider::new(f, 0.0..=100.0));
+                                }
+                                ParameterKind::Boolean(b) => {
+                                    ui.add(toggle(b));
+                                }
+                                ParameterKind::Slider {
+                                    value,
+                                    show_in_plot: _,
+                                    min,
+                                    max,
+                                } => {
+                                    ui.add(egui::Slider::new(value, *min..=*max));
+                                }
+                                ParameterKind::DoubleSlider {
+                                    values,
+                                    show_in_plot: _,
+                                    minimum_separation,
+                                    inverted: _,
+                                    min,
+                                    max,
+                                } => {
+                                    let mut value_a_f32 = values[0] as f32;
+                                    let mut value_b_f32 = values[1] as f32;
+                                    ui.add(
+                                        DoubleSlider::new(
+                                            &mut value_a_f32,
+                                            &mut value_b_f32,
+                                            *min as f32..=*max as f32,
+                                        )
                                         .separation_distance(*minimum_separation as f32),
-                                );
-                                values[0] = value_a_f32 as f64;
-                                values[1] = value_b_f32 as f64;
+                                    );
+                                    values[0] = value_a_f32 as f64;
+                                    values[1] = value_b_f32 as f64;
+                                }
                             }
-                        }
+                        });
                     }
                 }
 
