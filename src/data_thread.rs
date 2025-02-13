@@ -306,8 +306,8 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                 }
                 ConfigCommand::UpdateMetaData(mut path) => {
                     // THz Image Explorer always saves thz files
-                    if let Some(path) = path.extension() {
-                        if path != "thz" {
+                    if let Some(os_path) = path.extension() {
+                        if os_path != "thz" {
                             path.set_extension("thz");
                             // dave full file, not just metadata, since the dotTHz file does not exist yet.
                             if let Ok(md) = thread_communication.md_lock.read() {
