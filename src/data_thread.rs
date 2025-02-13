@@ -306,27 +306,33 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                 }
                 ConfigCommand::UpdateMetaData(mut path) => {
                     // THz Image Explorer always saves thz files
-                    if path.extension().unwrap() != "thz" {
-                        path.set_extension("thz");
-                        // dave full file, not just metadata, since the dotTHz file does not exist yet.
-                        if let Ok(md) = thread_communication.md_lock.read() {
-                            match save_to_thz(&path, &scan, &md) {
-                                Ok(_) => {
-                                    log::info!("saved {:?}", path);
-                                }
-                                Err(err) => {
-                                    log::error!("failed saving {:?}: {:?}", path, err)
+                    if let Some(path) = path.extension() {
+                        if path != "thz" {
+                            path.set_extension("thz");
+                            // dave full file, not just metadata, since the dotTHz file does not exist yet.
+                            if let Ok(md) = thread_communication.md_lock.read() {
+                                match save_to_thz(&path, &scan, &md) {
+                                    Ok(_) => {
+                                        log::info!("saved {:?}", path);
+                                    }
+                                    Err(err) => {
+                                        log::error!("failed saving {:?}: {:?}", path, err)
+                                    }
                                 }
                             }
-                        }
-                    } else {
-                        if let Ok(md) = thread_communication.md_lock.read() {
-                            match update_meta_data_of_thz_file(&path, &md) {
-                                Ok(_) => {
-                                    log::info!("updated meta-data from {:?}", path);
-                                }
-                                Err(err) => {
-                                    log::error!("failed updating meta-data {:?}: {:?}", path, err)
+                        } else {
+                            if let Ok(md) = thread_communication.md_lock.read() {
+                                match update_meta_data_of_thz_file(&path, &md) {
+                                    Ok(_) => {
+                                        log::info!("updated meta-data from {:?}", path);
+                                    }
+                                    Err(err) => {
+                                        log::error!(
+                                            "failed updating meta-data {:?}: {:?}",
+                                            path,
+                                            err
+                                        )
+                                    }
                                 }
                             }
                         }
