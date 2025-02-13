@@ -568,6 +568,45 @@ fn three_dimensional_plot(
             let normalized = ((z + 1.0) / 2.0).clamp(0.0, 1.0); // Normalize between 0 and 1
             HSLColor(normalized as f64, 1.0, 0.5).filled() // Color mapping
         });
+
+        // 🔹 Draw cubes at fixed Z-height with heatmap colors
+
+        let height_level = max_dim as f32 / 4.0; // Fixed Z-level for cubes
+
+        chart
+            .draw_series(
+                (0..image.shape()[0])
+                    .flat_map(|x| (0..image.shape()[1]).map(move |y| (x, y)))
+                    .map(|(x, y)| {
+                        let z = image[[x, y]];
+                        let normalized_z = if range > 0.0 {
+                            (z - min_val) / range
+                        } else {
+                            0.5
+                        };
+
+                        let color = heatmap_color(normalized_z);
+
+                        Cubiod::new(
+                            [
+                                (
+                                    x as f32 - width as f32 / 2.0,
+                                    height_level,
+                                    y as f32 - height as f32 / 2.0,
+                                ),
+                                (
+                                    x as f32 - width as f32 / 2.0 + 1.0,
+                                    height_level + 0.5,
+                                    y as f32 - height as f32 / 2.0 + 1.0,
+                                ),
+                            ],
+                            color.filled(),
+                            &TRANSPARENT,
+                        )
+                    }),
+            )
+            .unwrap();
+
         chart.draw_series(surface_series).unwrap();
 
         // chart
