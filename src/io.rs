@@ -495,6 +495,9 @@ pub fn open_from_thz(
     scan.filtered_data = scan.scaled_data.clone();
     scan.filtered_img = scan.raw_img.clone();
 
+    scan.dx = metadata.md.get("dx [mm]").unwrap().parse::<f32>().ok();
+    scan.dy = metadata.md.get("dy [mm]").unwrap().parse::<f32>().ok();
+
     let n = scan.time.len();
     let rng = scan.time[n - 1] - scan.time[0];
     let mut real_planner = RealFftPlanner::<f32>::new();

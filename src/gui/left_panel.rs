@@ -461,6 +461,7 @@ pub fn left_panel(
                         .clicked()
                     {
                         thread_communication.gui_settings.meta_data_edit = false;
+                        thread_communication.gui_settings.meta_data_unlocked = false;
                         thread_communication
                             .config_tx
                             .send(ConfigCommand::LoadMetaData(

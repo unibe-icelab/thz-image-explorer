@@ -49,28 +49,34 @@ impl Filter for TiltCompensation {
         let mut time_shift_x = 0.0;
         let mut time_shift_y = 0.0;
 
-        if let ParameterKind::Float(value) = self.config.parameters.get("X").unwrap() {
+        if let ParameterKind::Slider{ value, show_in_plot,min,max} = self.config.parameters.get("X").unwrap() {
             time_shift_x = *value as f32 / 180.0 * PI;
         }
-        if let ParameterKind::Float(value) = self.config.parameters.get("Y").unwrap() {
+        if let ParameterKind::Slider{ value, show_in_plot,min,max} = self.config.parameters.get("Y").unwrap() {
             time_shift_y = *value as f32 / 180.0 * PI;
         }
 
         let (width, height, time_samples) = scan.raw_data.dim();
         let center_x = (width as f32 - 1.0) / 2.0;
         let center_y = (height as f32 - 1.0) / 2.0;
+        let dt = 0.25;
+        let c = 0.299792458_f64; // mm/ps
+
+        dbg!(&time_shift_x);
 
         for i in 0..width {
             for j in 0..height {
                 let x_offset = i as f32 - center_x;
                 let y_offset = j as f32 - center_y;
-                let delta = x_offset * time_shift_x + y_offset * time_shift_y;
+                let delta = ((x_offset as f64 * scan.dx.unwrap() as f64 * time_shift_x as f64
+                    + y_offset as f64 * scan.dy.unwrap() as f64 * time_shift_y as f64)
+                    / c) as f32;
 
                 let raw_trace = scan.raw_data.slice(s![i, j, ..]);
                 let mut filtered_trace = ndarray::Array1::zeros(time_samples);
 
                 for t in 0..time_samples {
-                    let pos = t as f32 - delta;
+                    let pos = t as f32 - delta / dt;
                     let t0 = pos.floor() as i32;
                     let t1 = t0 + 1;
                     let frac = pos - t0 as f32;
