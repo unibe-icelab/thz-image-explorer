@@ -1,15 +1,17 @@
+use crate::config::GuiThreadCommunication;
 use crate::data_container::ScannedImage;
-use crate::filters::filter::{Filter, FilterConfig, FilterDomain, ParameterKind};
+use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
 use crate::gui::application::GuiSettingsContainer;
+use eframe::egui::{self, Ui};
 use filter_macros::register_filter;
 use ndarray::s;
-use std::collections::HashMap;
 use std::f32::consts::PI;
 
 #[derive(Debug)]
 #[register_filter]
 pub struct TiltCompensation {
-    pub config: FilterConfig,
+    pub tilt_x: f64,
+    pub tilt_y: f64,
 }
 
 impl Filter for TiltCompensation {
@@ -17,44 +19,23 @@ impl Filter for TiltCompensation {
     where
         Self: Sized,
     {
-        let mut parameters = HashMap::new();
-        parameters.insert(
-            "X".to_string(),
-            ParameterKind::Slider {
-                value: 0.0,
-                show_in_plot: false,
-                min: -15.0,
-                max: 15.0,
-            },
-        );
-        parameters.insert(
-            "Y".to_string(),
-            ParameterKind::Slider {
-                value: 0.0,
-                show_in_plot: false,
-                min: -15.0,
-                max: 15.0,
-            },
-        );
-        let config = FilterConfig {
+        TiltCompensation {
+            tilt_x: 0.0,
+            tilt_y: 0.0,
+        }
+    }
+
+    fn config(&self) -> FilterConfig {
+        FilterConfig {
             name: "Tilt Compensation".to_string(),
             domain: FilterDomain::Frequency,
-            parameters,
-        };
-        TiltCompensation { config }
+        }
     }
 
     fn filter(&self, scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer) {
         // only rotation around the center are implemented, offset rotations are still to be done.
-        let mut time_shift_x = 0.0;
-        let mut time_shift_y = 0.0;
-
-        if let ParameterKind::Slider{ value, show_in_plot,min,max} = self.config.parameters.get("X").unwrap() {
-            time_shift_x = *value as f32 / 180.0 * PI;
-        }
-        if let ParameterKind::Slider{ value, show_in_plot,min,max} = self.config.parameters.get("Y").unwrap() {
-            time_shift_y = *value as f32 / 180.0 * PI;
-        }
+        let time_shift_x = self.tilt_x as f32 / 180.0 * PI;
+        let time_shift_y = self.tilt_y as f32 / 180.0 * PI;
 
         let (width, height, time_samples) = scan.raw_data.dim();
         let center_x = (width as f32 - 1.0) / 2.0;
@@ -103,11 +84,14 @@ impl Filter for TiltCompensation {
         }
     }
 
-    fn config(&self) -> &FilterConfig {
-        &self.config
-    }
-
-    fn config_mut(&mut self) -> &mut FilterConfig {
-        &mut self.config
+    fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut GuiThreadCommunication) {
+        ui.horizontal(|ui| {
+            ui.label("Tilt X: ");
+            ui.add(egui::Slider::new(&mut self.tilt_x, -15.0..=15.0).suffix(" deg"));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Tilt Y: ");
+            ui.add(egui::Slider::new(&mut self.tilt_y, -15.0..=15.0).suffix(" deg"));
+        });
     }
 }

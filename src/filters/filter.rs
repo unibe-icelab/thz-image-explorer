@@ -2,11 +2,12 @@
 //! Filters can be applied to processed data (`ScannedImage`) and customized through settings.
 //! It also implements a global, thread-safe registry for managing filters dynamically.
 
+use crate::config::GuiThreadCommunication;
 use crate::data_container::ScannedImage;
 use crate::gui::application::GuiSettingsContainer;
 #[allow(unused_imports)]
-use ctor::ctor;
-// this dependency is required by the `register_filter` macro
+use ctor::ctor; // this dependency is required by the `register_filter` macro
+use eframe::egui;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -46,6 +47,8 @@ pub trait Filter: Send + Sync + Debug {
     fn new() -> Self
     where
         Self: Sized;
+    /// Returns the filter configuration, including name and domain.
+    fn config(&self) -> FilterConfig;
 
     /// Applies the filter to the given `ScannedImage`.
     ///
@@ -55,11 +58,8 @@ pub trait Filter: Send + Sync + Debug {
     /// - `gui_settings`: Mutable reference to GUI settings associated with the filter.
     fn filter(&self, _scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer);
 
-    /// Returns the filter configuration immutable reference, including name, domain, and parameters.
-    fn config(&self) -> &FilterConfig;
-
-    /// Returns the filter configuration mutable reference, including name, domain, and parameters.
-    fn config_mut(&mut self) -> &mut FilterConfig;
+    /// Renders the filter configuration in the GUI.
+    fn ui(&mut self, ui: &mut egui::Ui, thread_communication: &mut GuiThreadCommunication);
 }
 
 /// The `FilterDomain` enum specifies whether a filter operates in the time or frequency domain.
@@ -87,64 +87,6 @@ pub enum FilterDomain {
 pub struct FilterConfig {
     pub name: String,
     pub domain: FilterDomain,
-    pub parameters: HashMap<String, ParameterKind>,
-}
-
-/// Represents a specific parameter for a filter configuration.
-///
-/// It can be of different types:
-/// - `Int`: A signed integer.
-/// - `UInt`: An unsigned integer.
-/// - `Float`: A floating-point number.
-/// - `Boolean`: A simple true/false value.
-/// - `Slider`: A continuous range represented by a slider.
-/// - `DoubleSlider`: Represents two value ranges with additional visual and logical constraints.
-///
-/// **Example**:
-/// ```rust
-/// use crate::filters::filter::{ParameterKind, FilterParameter};
-///
-/// let param = FilterParameter {
-///     name: "Threshold".to_string(),
-///     kind: ParameterKind::Slider {
-///         value: 0.5,
-///         show_in_plot: true,
-///         min: 0.0,
-///         max: 1.0,
-///     }
-/// };
-/// ```
-#[derive(Debug, Clone)]
-pub enum ParameterKind {
-    Int(isize),
-    UInt(usize),
-    Float(f64),
-    Boolean(bool),
-    Slider {
-        value: f64,
-        show_in_plot: bool,
-        min: f64,
-        max: f64,
-    },
-    DoubleSlider {
-        values: [f64; 2],
-        show_in_plot: bool,
-        minimum_separation: f64,
-        inverted: bool,
-        min: f64,
-        max: f64,
-    },
-}
-
-/// Holds metadata and values for an individual filter parameter.
-///
-/// **Fields**:
-/// - `name`: The name of the parameter.
-/// - `kind`: The type and value of the parameter, represented as `ParameterKind`.
-#[derive(Debug, Clone)]
-pub struct FilterParameter {
-    pub name: String,
-    pub kind: ParameterKind,
 }
 
 /// A registry to manage and retrieve registered filters.
