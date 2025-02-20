@@ -45,7 +45,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Update Libs
-        run: cargo install cargo-bundle && cargo update
+        run: cargo install --git https://github.com/hacknus/cargo-bundle.git && cargo update
       - name: Install cmake
         # required for hdf5 compilation from source
         run: |
@@ -71,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Update Libs
-        run: cargo install cargo-bundle && cargo update
+        run: cargo install --git https://github.com/hacknus/cargo-bundle.git && cargo update
       - name: Install cmake
         # required for hdf5 compilation from source
         run: |
