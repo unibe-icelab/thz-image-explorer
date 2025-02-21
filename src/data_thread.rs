@@ -324,7 +324,7 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                             if let Ok(md) = thread_communication.md_lock.read() {
                                 match update_meta_data_of_thz_file(&path, &md) {
                                     Ok(_) => {
-                                        log::info!("updated meta-data from {:?}", path);
+                                        log::info!("updated meta-data in {:?}", path);
                                     }
                                     Err(err) => {
                                         log::error!(

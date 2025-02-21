@@ -29,7 +29,7 @@ ndarray-stats = "0.6.0"
 statrs = "0.18.0"
 serde_json = "1.0.95"
 itertools = "0.14.0"
-dotthz = { version = "0.2.8", features = ["serde", "hdf5-sys-static"] }
+dotthz = { version = "0.2.10", features = ["serde", "hdf5-sys-static"] }
 home = "0.5.11"
 self_update = { git = "https://github.com/hacknus/self_update", features = ["archive-zip", "compression-zip-deflate"], optional = true }
 tempfile = { version = "3.15", optional = true }

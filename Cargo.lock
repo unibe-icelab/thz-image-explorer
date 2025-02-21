@@ -1186,9 +1186,9 @@ dependencies = [
 
 [[package]]
 name = "dotthz"
-version = "0.2.8"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1aa9d84db270d5cdd904a6329a23ae52d086b2c105a57ecc80bdecc860ece477"
+checksum = "11809f7bae741a1a3626951c12aa331c57f31946f52e1204c71a7306b52bceb1"
 dependencies = [
  "hdf5-metno",
  "indexmap",
@@ -2106,9 +2106,9 @@ dependencies = [
 
 [[package]]
 name = "hdf5-metno"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9666af78aeb20b98175e8c7dbafac3393499d2b789e813d5a875aafac8397af2"
+checksum = "72f8592329337a96c802cccdbd11fe5f9476cb940d5a88dcca729a2ecf82e1c9"
 dependencies = [
  "bitflags 2.8.0",
  "cfg-if",
