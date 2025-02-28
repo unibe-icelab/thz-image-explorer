@@ -3021,6 +3021,8 @@ dependencies = [
  "num-integer",
  "num-traits",
  "rawpointer",
+ "rayon",
+ "serde",
 ]
 
 [[package]]
@@ -3036,8 +3038,6 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "rawpointer",
- "rayon",
- "serde",
 ]
 
 [[package]]
@@ -5125,7 +5125,7 @@ dependencies = [
  "itertools 0.14.0",
  "itertools-num",
  "log",
- "ndarray 0.16.1",
+ "ndarray 0.15.6",
  "ndarray-ndimage",
  "ndarray-npy",
  "ndarray-stats 0.6.0",

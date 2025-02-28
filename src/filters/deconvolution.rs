@@ -12,7 +12,7 @@ use crate::filters::psf::gaussian2;
 use crate::gui::application::GuiSettingsContainer;
 use eframe::egui::{self, Ui};
 use filter_macros::register_filter;
-use ndarray::{s, Array1, Array2, Array3, Axis, Zip};
+use ndarray::{arr1, s, Array1, Array2, Array3, Axis, Zip};
 use ndarray_ndimage::{convolve, convolve1d};
 
 /// Represents a `Deconvolution` filter.
@@ -61,6 +61,7 @@ impl Deconvolution {
                     filter,
                     Axis(0),
                     ndarray_ndimage::BorderMode::Reflect,
+                    0
                 ));
             }
         }
@@ -141,26 +142,28 @@ impl Filter for Deconvolution {
             // Compute the minimum range_max_x and range_max_y
             // wmin is set to 2.5 to avoid deconvolution errors
             let wmin: f64 = 2.5;
-            range_max_x = self.range_max_min(range_max_x, &wmin);
-            range_max_y = self.range_max_min(range_max_y, &wmin);
+            range_max_x = self.range_max_min(range_max_x, wmin);
+            range_max_y = self.range_max_min(range_max_y, wmin);
             // Round the range_max_x and range_max_y to the nearest dx and dy steps
-            range_max_x = (range_max_x / scan.dx).floor() * scan.dx + scan.dx;
-            range_max_y = (range_max_y / scan.dy).floor() * scan.dy + scan.dy;
+            range_max_x = (range_max_x / scan.dx.unwrap() as f64).floor() * scan.dx.unwrap() as f64
+                + scan.dx.unwrap() as f64;
+            range_max_y = (range_max_y / scan.dy.unwrap() as f64).floor() * scan.dy.unwrap() as f64
+                + scan.dy.unwrap() as f64;
             // Create two vectors x and y with range_max_x and range_max_y using the dx and dy steps from the scan
-            let x: Vec<f64> = (-((range_max_x / scan.dx).floor() as isize)
-                ..=((range_max_x / scan.dx).floor() as isize))
-                .map(|i| i as f64 * scan.dx)
+            let x: Vec<f64> = (-((range_max_x / scan.dx.unwrap() as f64).floor() as isize)
+                ..=((range_max_x / scan.dx.unwrap() as f64).floor() as isize))
+                .map(|i| i as f64 * scan.dx.unwrap() as f64)
                 .collect();
-            let y: Vec<f64> = (-((range_max_y / scan.dy).floor() as isize)
-                ..=((range_max_y / scan.dy).floor() as isize))
-                .map(|i| i as f64 * scan.dy)
+            let y: Vec<f64> = (-((range_max_y / scan.dy.unwrap() as f64).floor() as isize)
+                ..=((range_max_y / scan.dy.unwrap() as f64).floor() as isize))
+                .map(|i| i as f64 * scan.dy.unwrap() as f64)
                 .collect();
             // Create the x and y psfs
-            let gaussian_x: Vec<f64> = gaussian2(&x, &gui_settings.psf.popt_x);
-            let gaussian_y: Vec<f64> = gaussian2(&y, &gui_settings.psf.popt_y);
+            let gaussian_x: Vec<f64> = gaussian2(&arr1(&x), &gui_settings.psf.popt_x);
+            let gaussian_y: Vec<f64> = gaussian2(&arr1(&y), &gui_settings.psf.popt_y);
             // Create the 2D PSF
             let psf_2d: Array2<f64> =
-                create_psf_2d(&gaussian_x, &gaussian_y, &x, &y, &scan.dx, &scan.dy);
+                create_psf_2d(gaussian_x, gaussian_y, x, y, scan.dx.unwrap() as f64, scan.dy.unwrap() as f64);
             // Filter the scan with the FIR filter of the given frequency
             let filtered_data: Array3<f32> = self.filter_scan(scan, &psf_2d);
             // Computing the filtered image by summing the squared samples for each pixel

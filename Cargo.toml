@@ -24,7 +24,7 @@ realfft = "3.4.0"
 preferences = "2.0.0"
 serde = { version = "1.0", features = ["derive"] }
 csv = "1.1.6"
-ndarray = { version = "0.16.1", features = ["rayon", "serde"] }
+ndarray = { version = "0.15", features = ["rayon", "serde"] }
 ndarray-npy = { version = "0.9.1", features = ["npz"] }
 ndarray-stats = "0.6.0"
 statrs = "0.18.0"
