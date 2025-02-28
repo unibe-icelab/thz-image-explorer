@@ -12,6 +12,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Mutex;
+use ndarray::{Array1, Array2, Array3};
 
 /// The `Filter` trait defines the structure and behavior of an image filter.
 ///
@@ -49,6 +50,12 @@ pub trait Filter: Send + Sync + Debug {
         Self: Sized;
     /// Returns the filter configuration, including name and domain.
     fn config(&self) -> FilterConfig;
+
+    fn range_max_min(&self, range_max: f64, wmin: f64) -> f64;
+
+    fn filter_scan(&self, _scan: &mut ScannedImage, filter: &Array1<f64>) -> Array3<f32>;
+
+    fn richardson_lucy(&self, image: &Array2<f32>, psf: &Array2<f64>, n_iterations: usize) -> Array2<f32>;
 
     /// Applies the filter to the given `ScannedImage`.
     ///

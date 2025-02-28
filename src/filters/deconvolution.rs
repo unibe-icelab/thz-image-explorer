@@ -10,6 +10,10 @@ use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
 use crate::gui::application::GuiSettingsContainer;
 use eframe::egui::{self, Ui};
 use filter_macros::register_filter;
+use crate::psf::gaussian2;
+use crate::psf::create_psf_2d;
+use ndarray_ndimage::{convolve, convolve1d};
+use ndarray::{Array1, Array2, Array3, s};
 
 /// Represents a `Deconvolution` filter.
 ///
@@ -54,6 +58,48 @@ impl Filter for Deconvolution {
         }
     }
 
+    /// Computes the minimum maximum range for the deconvolution algorithm
+    /// as a range_max too small can lead to deconvolution errors.
+    fn range_max_min(&self, range_max: f64, wmin: &f64) -> f64 {
+        if range_max < wmin {
+            wmin
+        } else {
+            range_max
+        }
+    }
+
+    /// Computes the filtered scan with the FIR filter by convolving each time trace with the filter.
+    fn filter_scan(&self, _scan: &mut ScannedImage, filter: &Array1<f64>) -> Array3<f32> {
+        // Iterate through each time trace in the raw data
+        let filtered_data = Array3<f32>::zeros((_scan.raw_data.dim().0, _scan.raw_data.dim().1, _scan.raw_data.dim().2));
+        for i in 0.._scan.raw_data.dim().0 {
+            for j in 0.._scan.raw_data.dim().1 {
+                // Apply the FIR filter to the time trace and store the result directly in the filtered_data array
+                filtered_data.slice_mut(s![i, j, ..]).assign(
+                    &convolve1d(&_scan.raw_data.slice(s![i, j, ..]).to_owned(), filter, ndarray_ndimage::BorderMode::Reflect)
+                );
+            }
+        }
+        filtered_data
+    }
+
+    fn richardson_lucy(&self, image: &Array2<f32>, psf: &Array2<f64>, n_iterations: usize) -> Array2<f32> {
+        // Mirrored PSF
+        let psf_mirror = psf.slice(s![..;-1, ..;-1]).to_owned(); // Flip kernel
+        // Copying d in u as a first guess
+        let mut u = image.clone();
+        // Regularization parameter
+        let eps: f32 = 1e-12;
+        // Iterating
+        for _ in 0..n_iterations {
+            let conv = convolve(&u, &psf, ndarray_ndimage::BoundaryMode::Reflect);
+            let relative_blur = Zip::from(image).and(&conv).map_collect(|&o, &c| o / (c + eps)); // Avoid division by zero
+            let correction = convolve(&relative_blur, &psf_mirror, ndarray_ndimage::BoundaryMode::Reflect);
+            Zip::from(&mut u).and(&correction).for_each(|e, &c| *e *= c); // Element-wise multiplication
+        }
+        u
+    }
+
     /// Applies the deconvolution algorithm to a scanned image.
     ///
     /// # Arguments:
@@ -64,12 +110,43 @@ impl Filter for Deconvolution {
     /// This method currently contains a placeholder for the Richardson-Lucy algorithm.
     fn filter(&self, _scan: &mut ScannedImage, _gui_settings: &mut GuiSettingsContainer) {
         // Implement your Richardson-Lucy algorithm here
-        // Get the psf with _gui_settings.psf
-        // Iterate over the frequencies contained in the psf
-        // Compute range_max_x and range_max_y with (w_x + |x_0|) * 3 and (w_y + |y_0|) * 3
-        // Create two vectors x and y with range_max_x and range_max_y using the dx and dy steps from the scan
-        // Create the 2D PSF for the given frequency
-        // Filter the scan with the FIR filter of the given frequency
+        // Iterate over the frequencies/filters contained in the psf
+        for (i, &filter) in _gui_settings.psf.filters.iter() {
+            // Compute range_max_x and range_max_y with (w_x + |x_0|) * 3 and (w_y + |y_0|) * 3
+            let mut range_max_x: f64 = (_gui_settings.psf.popt_x.1 + _gui_settings.psf.popt_x.0.abs()) * 3.0;
+            let mut range_max_y: f64 = (_gui_settings.psf.popt_y.1 + _gui_settings.psf.popt_y.0.abs()) * 3.0;
+            // Compute the minimum range_max_x and range_max_y
+            // wmin is set to 2.5 to avoid deconvolution errors
+            let wmin: f64 = 2.5;
+            range_max_x = self.range_max_min(&range_max_x, &wmin);
+            range_max_y = self.range_max_min(&range_max_y, &wmin);
+            // Round the range_max_x and range_max_y to the nearest dx and dy steps
+            range_max_x = (range_max_x / _scan.dx).floor() * _scan.dx + _scan.dx;
+            range_max_y = (range_max_y / _scan.dy).floor() * _scan.dy + _scan.dy;
+            // Create two vectors x and y with range_max_x and range_max_y using the dx and dy steps from the scan
+            let x: Vec<f64> = (-((range_max_x / dx).floor() as isize)..=((range_max_x / dx).floor() as isize))
+                                .map(|i| i as f64 * dx)
+                                .collect();
+            let y: Vec<f64> = (-((range_max_y / dy).floor() as isize)..=((range_max_y / dy).floor() as isize))
+                                .map(|i| i as f64 * dy)
+                                .collect();
+            // Create the x and y psfs
+            let gaussian_x: Vec<f64> = gaussian2(&x, _gui_settings.psf.popt_x.0, _gui_settings.psf.popt_x.1);
+            let gaussian_y: Vec<f64> = gaussian2(&y, _gui_settings.psf.popt_y.0, _gui_settings.psf.popt_y.1);
+            // Create the 2D PSF
+            let psf_2d: Array2<f64> =  create_psf_2d(&gaussian_x, &gaussian_y, &x, &y, &dx, &dy);
+            // Filter the scan with the FIR filter of the given frequency
+            let filtered_data: Array3<f32> = self.filter_scan(_scan, &psf_2d);
+            // Computing the filtered image by summing the squared samples for each pixel
+            let mut filtered_image: Array2<f32> = Array2::zeros((_scan.raw_data.dim().0, _scan.raw_data.dim().1));
+            for i in 0.._scan.raw_data.dim().0 {
+                for j in 0.._scan.raw_data.dim().1 {
+                    filtered_image[(i, j)] = filtered_data.slice(s![i, j, ..]).iter().map(|x| x.powi(2)).sum();
+                }
+            }
+
+        }
+        
         // Perform the deconvolution with the Richardson-Lucy algorithm
         // etc.
     }

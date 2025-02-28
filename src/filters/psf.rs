@@ -80,7 +80,7 @@ pub fn create_psf_2d(
     mut y: Vec<f64>,
     dx: f64,
     dy: f64,
-) -> (Array2<f64>, Array2<f64>, Array2<f64>) {
+) -> Array2<f64> {
     todo!();
     let x_max = x.iter().cloned().fold(f64::MIN, f64::max).floor() as usize;
     let y_max = y.iter().cloned().fold(f64::MIN, f64::max).floor() as usize;
@@ -133,11 +133,7 @@ pub fn create_psf_2d(
             psf_2d[(i, j)] = psf_x_interp * psf_y_interp;
         }
     }
-
-    let xx_grid = Array2::from_shape_fn((xx.len(), 1), |(i, _)| xx[i]);
-    let yy_grid = Array2::from_shape_fn((yy.len(), 1), |(i, _)| yy[i]);
-
-    (xx_grid, yy_grid, psf_2d)
+    psf_2d
 }
 
 /// Computes the sum of squared residuals
@@ -206,7 +202,7 @@ fn gaussian(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
     })
 }
 /// Gaussian function with a different normalization
-fn gaussian2(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
+pub fn gaussian2(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
     let x0 = params[0];
     let w = params[1];
     x.mapv(|xi| {
