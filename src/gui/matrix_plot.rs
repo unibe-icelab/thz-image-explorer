@@ -77,7 +77,7 @@ pub fn color_from_intensity(
                 v: hue,
                 a: 1.0,
             }
-            .into()
+                .into()
         } else {
             egui::ecolor::Hsva {
                 h: 0.667 - hue * 0.667, // Map to color hue (0 to 0.667 range)
@@ -85,7 +85,7 @@ pub fn color_from_intensity(
                 v: 1.0,
                 a: 1.0,
             }
-            .into()
+                .into()
         }
     } else {
         egui::ecolor::Hsva {
@@ -94,7 +94,7 @@ pub fn color_from_intensity(
             v: 0.0,
             a: 0.0,
         }
-        .into()
+            .into()
     }
 }
 
@@ -144,7 +144,7 @@ fn colorbar_with_midpoint_slider(
                     v: hue_position,
                     a: 1.0,
                 }
-                .into();
+                    .into();
             } else {
                 img[(0, y)] = egui::ecolor::Hsva {
                     h: 0.667 - hue_position * 0.667, // Map to color hue (0 to 0.667 range)
@@ -152,7 +152,7 @@ fn colorbar_with_midpoint_slider(
                     v: 1.0,
                     a: 1.0,
                 }
-                .into();
+                    .into();
             }
         }
 
@@ -394,18 +394,20 @@ pub fn plot_matrix(
         if plot_response.response.clicked() {
             let modifiers = ui.input(|i| i.modifiers);
             if modifiers.shift {
+                dbg!(&pixel_selected.rois.len());
                 // Handle multiple polygon ROIs
                 let plot_x = val.x;
                 let plot_y = val.y;
                 let _pixel_x = plot_x.floor() as usize;
                 let _pixel_y = height - 1 - plot_y.floor() as usize;
 
-                if !pixel_selected.rois.is_empty() && pixel_selected.rois.last().unwrap().closed {
+                if (!pixel_selected.rois.is_empty() && pixel_selected.rois.last().unwrap().closed) || pixel_selected.rois.is_empty() {
                     // If last ROI is closed, start a new one
                     let mut roi = ROI::default();
                     roi.name = format!("ROI {}", pixel_selected.rois.len() + 1);
                     pixel_selected.rois.push(roi);
                 }
+                dbg!(&pixel_selected.rois.len());
 
                 if let Some(current_roi) = pixel_selected.rois.last_mut() {
                     if current_roi.polygon.is_empty() {

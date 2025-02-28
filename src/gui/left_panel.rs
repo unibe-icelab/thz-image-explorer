@@ -378,6 +378,16 @@ pub fn left_panel(
 
             // read rois from md
 
+            let open_roi = if let Some(a) = pixel_selected.rois.last() {
+                if !a.closed {
+                    Some(a.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             pixel_selected.rois.clear();
 
             if let Some(labels) = meta_data.md.get("ROI Labels") {
@@ -413,6 +423,9 @@ pub fn left_panel(
                 }
             }
 
+            if let Some(roi) = open_roi {
+                pixel_selected.rois.push(roi.clone());
+            }
 
             // TODO: implement selecting reference pixel
             let pixel_clicked = plot_matrix(
@@ -631,7 +644,10 @@ pub fn left_panel(
                         if attr.contains("ROI") {
                             if let Some(labels_string) = meta_data.md.get_mut("ROI Labels") {
                                 let mut labels = labels_string.split(",").collect::<Vec<&str>>();
-                                if let Some(index) = attr.strip_prefix("ROI ").and_then(|num| num.parse::<usize>().ok()) {
+                                if let Some(index) = attr
+                                    .strip_prefix("ROI ")
+                                    .and_then(|num| num.parse::<usize>().ok())
+                                {
                                     dbg!(index);
                                     pixel_selected.rois.remove(index);
                                     if pixel_selected.rois.is_empty() {
