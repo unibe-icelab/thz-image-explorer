@@ -61,7 +61,7 @@ pub struct PSF {
 }
 
 /// Linear interpolation function for a 1D array.
-fn linear_interp(x: &Vec<f64>, y: &Vec<f64>, xi: f64) -> f64 {
+fn linear_interp(x: &Vec<f32>, y: &Vec<f32>, xi: f32) -> f32 {
     let n = x.len();
     for i in 0..n - 1 {
         if xi >= x[i] && xi <= x[i + 1] {
@@ -74,21 +74,21 @@ fn linear_interp(x: &Vec<f64>, y: &Vec<f64>, xi: f64) -> f64 {
 
 /// TODO: this does not yet work!
 pub fn create_psf_2d(
-    mut psf_x: Vec<f64>,
-    mut psf_y: Vec<f64>,
-    mut x: Vec<f64>,
-    mut y: Vec<f64>,
-    dx: f64,
-    dy: f64,
-) -> Array2<f64> {
+    mut psf_x: Vec<f32>,
+    mut psf_y: Vec<f32>,
+    mut x: Vec<f32>,
+    mut y: Vec<f32>,
+    dx: f32,
+    dy: f32,
+) -> Array2<f32> {
     todo!();
-    let x_max = x.iter().cloned().fold(f64::MIN, f64::max).floor() as usize;
-    let y_max = y.iter().cloned().fold(f64::MIN, f64::max).floor() as usize;
+    let x_max = x.iter().cloned().fold(f32::MIN, f32::max).floor() as usize;
+    let y_max = y.iter().cloned().fold(f32::MIN, f32::max).floor() as usize;
 
     // Factor for padding
     let factor = 2.0;
-    let new_x_max = (factor * x_max as f64).ceil();
-    let new_y_max = (factor * y_max as f64).ceil();
+    let new_x_max = (factor * x_max as f32).ceil();
+    let new_y_max = (factor * y_max as f32).ceil();
 
     // Calculate step sizes
     let x_step = x[x.len() - 1] - x[x.len() - 2];
@@ -113,14 +113,14 @@ pub fn create_psf_2d(
     }
 
     // Create the PSF grid
-    let xx: Vec<f64> = (-(x_max as i32)..=x_max as i32)
+    let xx: Vec<f32> = (-(x_max as i32)..=x_max as i32)
         .step_by(dx as usize)
-        .map(|v| v as f64)
+        .map(|v| v as f32)
         .collect();
 
-    let yy: Vec<f64> = (-(y_max as i32)..=y_max as i32)
+    let yy: Vec<f32> = (-(y_max as i32)..=y_max as i32)
         .step_by(dy as usize)
-        .map(|v| v as f64)
+        .map(|v| v as f32)
         .collect();
 
     let mut psf_2d = Array2::zeros((xx.len(), yy.len()));
@@ -202,19 +202,21 @@ fn gaussian(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
     })
 }
 /// Gaussian function with a different normalization
-pub fn gaussian2(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
+pub fn gaussian2(x: &Array1<f32>, params: &[f32]) -> Array1<f32> {
     let x0 = params[0];
     let w = params[1];
     x.mapv(|xi| {
-        (2.0 / std::f64::consts::PI).sqrt() * (-2.0 * (xi - x0).powf(2.0) / (w * w)).exp() / w
+        (2.0 / std::f32::consts::PI).sqrt() * (-2.0 * (xi - x0).powf(2.0) / (w * w)).exp() / w
     })
 }
 
 /// Error function
-fn error_f(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
+fn error_f(x: &Array1<f32>, params: &[f32]) -> Array1<f32> {
     let x0 = params[0];
     let w = params[1];
-    x.mapv(|xi| (1.0 + statrs::function::erf::erf(2.0_f64.sqrt() * (xi - x0) / w)) / 2.0)
+    x.mapv(|xi| {
+        ((1.0 + statrs::function::erf::erf((2.0_f32.sqrt() * (xi - x0) / w) as f64)) / 2.0) as f32
+    })
 }
 
 /// TODO: this does not yet work

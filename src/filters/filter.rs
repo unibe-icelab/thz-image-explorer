@@ -6,13 +6,13 @@ use crate::config::GuiThreadCommunication;
 use crate::data_container::ScannedImage;
 use crate::gui::application::GuiSettingsContainer;
 #[allow(unused_imports)]
-use ctor::ctor; // this dependency is required by the `register_filter` macro
+use ctor::ctor;
+// this dependency is required by the `register_filter` macro
 use eframe::egui;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Mutex;
-use ndarray::{Array1, Array2, Array3};
 
 /// The `Filter` trait defines the structure and behavior of an image filter.
 ///

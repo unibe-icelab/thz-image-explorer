@@ -37,7 +37,7 @@ pub struct Deconvolution {
 impl Deconvolution {
     /// Computes the minimum maximum range for the deconvolution algorithm
     /// as a range_max too small can lead to deconvolution errors.
-    fn range_max_min(&self, range_max: f64, wmin: f64) -> f64 {
+    fn range_max_min(&self, range_max: f32, wmin: f32) -> f32 {
         if range_max < wmin {
             wmin
         } else {
@@ -46,7 +46,7 @@ impl Deconvolution {
     }
 
     /// Computes the filtered scan with the FIR filter by convolving each time trace with the filter.
-    fn filter_scan(&self, _scan: &mut ScannedImage, filter: &Array1<f64>) -> Array3<f32> {
+    fn filter_scan(&self, _scan: &mut ScannedImage, filter: &Array1<f32>) -> Array3<f32> {
         // Iterate through each time trace in the raw data
         let mut filtered_data = Array3::<f32>::zeros((
             _scan.raw_data.dim().0,
@@ -61,7 +61,7 @@ impl Deconvolution {
                     filter,
                     Axis(0),
                     ndarray_ndimage::BorderMode::Reflect,
-                    0
+                    0,
                 ));
             }
         }
@@ -133,14 +133,18 @@ impl Filter for Deconvolution {
     fn filter(&self, scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer) {
         // Implement your Richardson-Lucy algorithm here
         // Initializing _scan.filtered_data to zeros
-        _scan.filtered_data = Array3::zeros((_scan.raw_data.dim().0, _scan.raw_data.dim().1, _scan.raw_data.dim().2));
+        scan.filtered_data = Array3::zeros((
+            scan.raw_data.dim().0,
+            scan.raw_data.dim().1,
+            scan.raw_data.dim().2,
+        ));
         // Iterate over the frequencies/filters contained in the psf
         for (i, &filter) in gui_settings.psf.filters.iter() {
             // Compute range_max_x and range_max_y with (w_x + |x_0|) * 3 and (w_y + |y_0|) * 3
             let mut range_max_x: f32 =
-                (gui_settings.psf.popt_x[1] + gui_settings.psf.popt_x[0].abs()) * 3.0;
+                (gui_settings.psf.popt_x[1] as f32 + gui_settings.psf.popt_x[0].abs() as f32) * 3.0;
             let mut range_max_y: f32 =
-                (gui_settings.psf.popt_y[1] + gui_settings.psf.popt_y[0].abs()) * 3.0;
+                (gui_settings.psf.popt_y[1] as f32 + gui_settings.psf.popt_y[0].abs() as f32) * 3.0;
             // Compute the minimum range_max_x and range_max_y
             // wmin is set to 2.5 to avoid deconvolution errors
             let wmin: f32 = 2.5;
@@ -164,8 +168,14 @@ impl Filter for Deconvolution {
             let gaussian_x: Vec<f32> = gaussian2(&arr1(&x), &gui_settings.psf.popt_x);
             let gaussian_y: Vec<f32> = gaussian2(&arr1(&y), &gui_settings.psf.popt_y);
             // Create the 2D PSF
-            let psf_2d: Array2<f32> =
-                create_psf_2d(gaussian_x, gaussian_y, x, y, scan.dx.unwrap() as f32, scan.dy.unwrap() as f32);
+            let psf_2d: Array2<f32> = create_psf_2d(
+                gaussian_x,
+                gaussian_y,
+                x,
+                y,
+                scan.dx.unwrap() as f32,
+                scan.dy.unwrap() as f32,
+            );
             // Filter the scan with the FIR filter of the given frequency
             let filtered_data: Array3<f32> = self.filter_scan(scan, &psf_2d);
             // Computing the filtered image by summing the squared samples for each pixel
@@ -177,15 +187,31 @@ impl Filter for Deconvolution {
                     *f = data_slice.iter().map(|&x| x.powi(2)).sum();
                 });
             // Number of iterations for the deconvolution
-            let w_min: f32 = _gui_settings.psf.popt_xs_glob.iter().map(|x| x.1).min().unwrap();
-            let w_max: f32 = _gui_settings.psf.popt_xs_glob.iter().map(|x| x.1).max().unwrap();
+            let w_min: f32 = gui_settings
+                .psf
+                .popt_xs_glob
+                .iter()
+                .map(|x| x.1)
+                .min()
+                .unwrap();
+            let w_max: f32 = gui_settings
+                .psf
+                .popt_xs_glob
+                .iter()
+                .map(|x| x.1)
+                .max()
+                .unwrap();
             let n_iter_min: usize = 1;
             // The number of iterations depends on the width of the PSF
-            let n_iter: usize = ((_gui_settings.psf.popt_x.1 - w_min) / (w_max - w_min) * (self.n_iterations as f32 - n_iter_min as f32) + n_iter_min as f32) as usize;
+            let n_iter: usize = ((gui_settings.psf.popt_x[1] - w_min) / (w_max - w_min)
+                * (self.n_iterations as f32 - n_iter_min as f32)
+                + n_iter_min as f32) as usize;
             // Perform the deconvolution with the Richardson-Lucy algorithm
-            let deconvolved_image: Array2<f32> = self.richardson_lucy(&filtered_image, &psf_2d, n_iter);
+            let deconvolved_image: Array2<f32> =
+                self.richardson_lucy(&filtered_image, &psf_2d, n_iter);
             // Computing the gains per pixel for the current frequency
-            let mut deconvolution_gains: Array2<f32> = Array2::zeros((_scan.raw_data.dim().0, _scan.raw_data.dim().1));
+            let mut deconvolution_gains: Array2<f32> =
+                Array2::zeros((scan.raw_data.dim().0, scan.raw_data.dim().1));
             Zip::from(&deconvolved_image)
                 .and(&filtered_image)
                 .and(&mut deconvolution_gains)
@@ -196,12 +222,12 @@ impl Filter for Deconvolution {
                 .for_each(|data_slice, &gain| {
                     data_slice.iter_mut().for_each(|x| *x *= gain);
                 });
-            // Adding filtered data to _scan.filtered_data
-            _scan.filtered_data += &filtered_data;
+            // Adding filtered data to scan.filtered_data
+            scan.filtered_data += &filtered_data;
         }
-        // Computing the filtered image in _scan.filtered_img by summing the squared samples for each pixel
-        Zip::from(&_scan.filtered_img)
-            .and(&_scan.filtered_data)
+        // Computing the filtered image in scan.filtered_img by summing the squared samples for each pixel
+        Zip::from(&scan.filtered_img)
+            .and(&scan.filtered_data)
             .for_each(|f, data_slice| {
                 *f = data_slice.iter().map(|&x| x.powi(2)).sum();
             });
