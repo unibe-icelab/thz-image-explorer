@@ -51,12 +51,6 @@ pub trait Filter: Send + Sync + Debug {
     /// Returns the filter configuration, including name and domain.
     fn config(&self) -> FilterConfig;
 
-    fn range_max_min(&self, range_max: f64, wmin: f64) -> f64;
-
-    fn filter_scan(&self, _scan: &mut ScannedImage, filter: &Array1<f64>) -> Array3<f32>;
-
-    fn richardson_lucy(&self, image: &Array2<f32>, psf: &Array2<f64>, n_iterations: usize) -> Array2<f32>;
-
     /// Applies the filter to the given `ScannedImage`.
     ///
     /// # Arguments
