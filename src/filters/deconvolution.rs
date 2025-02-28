@@ -169,19 +169,40 @@ impl Filter for Deconvolution {
             // Computing the filtered image by summing the squared samples for each pixel
             let mut filtered_image: Array2<f32> =
                 Array2::zeros((scan.raw_data.dim().0, scan.raw_data.dim().1));
-            for i in 0..scan.raw_data.dim().0 {
-                for j in 0..scan.raw_data.dim().1 {
-                    filtered_image[(i, j)] = filtered_data
-                        .slice(s![i, j, ..])
-                        .iter()
-                        .map(|x| x.powi(2))
-                        .sum();
-                }
-            }
+            Zip::from(&mut filtered_image)
+                .and(&filtered_data)
+                .for_each(|f, data_slice| {
+                    *f = data_slice.iter().map(|&x| x.powi(2)).sum();
+                });
+            // Number of iterations for the deconvolution
+            let w_min: f32 = _gui_settings.psf.popt_xs_glob.iter().map(|x| x.1).min().unwrap();
+            let w_max: f32 = _gui_settings.psf.popt_xs_glob.iter().map(|x| x.1).max().unwrap();
+            let n_iter_min: usize = 1;
+            // The number of iterations depends on the width of the PSF
+            let n_iter: usize = ((_gui_settings.psf.popt_x.1 - w_min) / (w_max - w_min) * (self.n_iterations as f32 - n_iter_min as f32) + n_iter_min as f32) as usize;
+            // Perform the deconvolution with the Richardson-Lucy algorithm
+            let deconvolved_image: Array2<f32> = self.richardson_lucy(&filtered_image, &psf_2d, n_iter);
+            // Computing the gains per pixel for the current frequency
+            let mut deconvolution_gains: Array2<f32> = Array2::zeros((_scan.raw_data.dim().0, _scan.raw_data.dim().1));
+            Zip::from(&deconvolved_image)
+                .and(&filtered_image)
+                .and(&mut deconvolution_gains)
+                .for_each(|&d, &f, g| *g = d / f);
+            // Applying the gains to the filtered data
+            Zip::from(&mut filtered_data)
+                .and(&deconvolution_gains)
+                .for_each(|data_slice, &gain| {
+                    data_slice.iter_mut().for_each(|x| *x *= gain);
+                });
+            // Adding filtered data to _scan.filtered_data
+            _scan.filtered_data += &filtered_data;
         }
-
-        // Perform the deconvolution with the Richardson-Lucy algorithm
-        // etc.
+        // Computing the filtered image in _scan.filtered_img by summing the squared samples for each pixel
+        Zip::from(&_scan.filtered_img)
+            .and(&_scan.filtered_data)
+            .for_each(|f, data_slice| {
+                *f = data_slice.iter().map(|&x| x.powi(2)).sum();
+            });
     }
     fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut GuiThreadCommunication) {
         // thread_communication can be used, but is not required. It contains the gui_settings GuiSettingsContainer
