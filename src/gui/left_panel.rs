@@ -246,6 +246,8 @@ pub fn left_panel(
                             if row.response().clicked() {
                                 *selected_file_name =
                                     item.file_name().unwrap().to_str().unwrap().to_string();
+                                thread_communication.gui_settings.selected_path =
+                                    item.to_path_buf();
                                 thread_communication
                                     .config_tx
                                     .send(ConfigCommand::OpenFile(item.to_path_buf()))
@@ -263,6 +265,7 @@ pub fn left_panel(
                         let item = other_files[selected_index + 1].clone();
                         *selected_file_name =
                             item.file_name().unwrap().to_str().unwrap().to_string();
+                        thread_communication.gui_settings.selected_path = item.to_path_buf();
                         thread_communication
                             .config_tx
                             .send(ConfigCommand::OpenFile(item.to_path_buf()))
@@ -273,6 +276,7 @@ pub fn left_panel(
                         let item = other_files[selected_index - 1].clone();
                         *selected_file_name =
                             item.file_name().unwrap().to_str().unwrap().to_string();
+                        thread_communication.gui_settings.selected_path = item.to_path_buf();
                         thread_communication
                             .config_tx
                             .send(ConfigCommand::OpenFile(item.to_path_buf()))
@@ -293,6 +297,7 @@ pub fn left_panel(
                     *selected_file_name = path.file_name().unwrap().to_str().unwrap().to_string();
                     *scroll_to_selection = true;
                     file_dialog.config_mut().initial_directory = path.clone();
+                    thread_communication.gui_settings.selected_path = path.clone();
                     thread_communication
                         .config_tx
                         .send(ConfigCommand::OpenFile(path))
