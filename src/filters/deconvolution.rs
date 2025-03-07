@@ -139,7 +139,7 @@ impl Filter for Deconvolution {
             scan.raw_data.dim().2,
         ));
         // Iterate over the frequencies/filters contained in the psf
-        for (i, &filter) in gui_settings.psf.filters.iter() {
+        for (i, &filter) in gui_settings.psf.filters.iter().enumerate() {
             // Compute range_max_x and range_max_y with (w_x + |x_0|) * 3 and (w_y + |y_0|) * 3
             let mut range_max_x: f32 =
                 (gui_settings.psf.popt_x[1] as f32 + gui_settings.psf.popt_x[0].abs() as f32) * 3.0;
@@ -177,7 +177,7 @@ impl Filter for Deconvolution {
                 scan.dy.unwrap() as f32,
             );
             // Filter the scan with the FIR filter of the given frequency
-            let filtered_data: Array3<f32> = self.filter_scan(scan, &psf_2d);
+            let mut filtered_data: Array3<f32> = self.filter_scan(scan, &psf_2d);
             // Computing the filtered image by summing the squared samples for each pixel
             let mut filtered_image: Array2<f32> =
                 Array2::zeros((scan.raw_data.dim().0, scan.raw_data.dim().1));
