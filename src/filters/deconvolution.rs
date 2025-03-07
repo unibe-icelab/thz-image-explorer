@@ -12,6 +12,8 @@ use crate::filters::psf::gaussian2;
 use crate::gui::application::GuiSettingsContainer;
 use eframe::egui::{self, Ui};
 use filter_macros::register_filter;
+use ndarray::parallel::prelude::IntoParallelIterator;
+use ndarray::parallel::prelude::ParallelIterator;
 use ndarray::{arr1, s, Array1, Array2, Array3, Axis, Zip};
 use ndarray_ndimage::{convolve, convolve1d};
 
@@ -225,11 +227,22 @@ impl Filter for Deconvolution {
             // Adding filtered data to scan.filtered_data
             scan.filtered_data += &filtered_data;
         }
+
         // Computing the filtered image in scan.filtered_img by summing the squared samples for each pixel
-        Zip::from(&scan.filtered_img)
-            .and(&scan.filtered_data)
-            .for_each(|f, data_slice| {
-                *f = data_slice.iter().map(|&x| x.powi(2)).sum();
+        (
+            scan.filtered_data.axis_iter_mut(Axis(0)),
+            scan.filtered_img.axis_iter_mut(Axis(0)),
+        )
+            .into_par_iter()
+            .for_each(|(mut filtered_data_columns, mut filtered_img_columns)| {
+                (
+                    filtered_data_columns.axis_iter_mut(Axis(0)),
+                    filtered_img_columns.axis_iter_mut(Axis(0)),
+                )
+                    .into_par_iter()
+                    .for_each(|(filtered_data, mut filtered_img)| {
+                        *filtered_img.into_scalar() = filtered_data.iter().map(|xi| xi * xi).sum::<f32>();
+                    });
             });
     }
     fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut GuiThreadCommunication) {
