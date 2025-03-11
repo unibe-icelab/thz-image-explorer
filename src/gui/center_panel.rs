@@ -100,7 +100,7 @@ pub fn pulse_tab(
             ]);
         }
 
-        for i in 0..data.time.len().min(data.filtered_signal_1.len()) {
+        for i in 0..data.filtered_time.len().min(data.filtered_signal_1.len()) {
             filtered_signal_1.push([
                 data.filtered_time[i] as f64,
                 data.filtered_signal_1[i] as f64 + axis_display_offset,

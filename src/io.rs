@@ -495,6 +495,7 @@ pub fn open_from_thz(
 
     scan.scaled_data = scan.raw_data.clone();
 
+    scan.filtered_time = scan.time.clone();
     scan.filtered_data = scan.scaled_data.clone();
     scan.filtered_img = scan.raw_img.clone();
 
