@@ -40,11 +40,18 @@ impl Filter for TiltCompensation {
         let (width, height, time_samples) = scan.raw_data.dim();
         let center_x = (width as f32 - 1.0) / 2.0;
         let center_y = (height as f32 - 1.0) / 2.0;
-        let dt = 0.25;
+        let dt = 0.05;
         let c = 0.299792458_f64; // mm/ps
 
         dbg!(&time_shift_x);
         dbg!(&time_shift_y);
+
+        let max_offset_x = center_x as f64 * time_shift_x as f64 / c; // in ps
+        let max_offset_y = center_y as f64 * time_shift_y as f64 / c; // in ps
+
+        scan.filtered_time = scan.time.clone();
+        dbg!(&max_offset_x);
+        dbg!(&max_offset_y);
 
         if let (Some(dx), Some(dy)) = (scan.dx, scan.dy) {
             for i in 0..width {

@@ -546,6 +546,7 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
             if let Some(r2c) = &scan.r2c {
                 if let Ok(mut data) = thread_communication.data_lock.write() {
                     data.time = scan.time.to_vec();
+                    data.filtered_time = scan.filtered_time.to_vec();
                     data.frequencies = scan.frequencies.to_vec();
                     data.signal_1 = scan
                         .scaled_data
