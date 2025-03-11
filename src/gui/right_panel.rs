@@ -561,10 +561,17 @@ pub fn right_panel(
                 ui.style_mut().spacing.slider_width = 320.0;
 
                 if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+                    let mut update_requested = false;
                     for filter in filters.iter_mut() {
                         ui.separator();
                         ui.heading(filter.config().clone().name);
-                        filter.ui(ui, thread_communication);
+                        update_requested |= filter.ui(ui, thread_communication).changed();
+                    }
+                    if update_requested {
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::UpdateFilters)
+                            .unwrap();
                     }
                 }
 

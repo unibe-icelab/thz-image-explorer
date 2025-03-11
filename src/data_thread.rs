@@ -525,6 +525,16 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                     println!("new pixel: {:} {:}", selected_pixel.x, selected_pixel.y);
                     // send HK?
                 }
+                ConfigCommand::UpdateFilters => {
+                    if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+                        for filter in filters.iter_mut() {
+                            // call the filter functions
+                            filter.filter(&mut scan, &mut thread_communication.gui_settings)
+                        }
+                    }
+                    // update the intensity image
+                    update_intensity_image(&scan, &thread_communication.img_lock);
+                }
             }
 
             if let Ok(pixel) = thread_communication.pixel_lock.read() {

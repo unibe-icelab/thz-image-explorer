@@ -84,14 +84,28 @@ impl Filter for TiltCompensation {
         }
     }
 
-    fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut GuiThreadCommunication) {
-        ui.horizontal(|ui| {
+    fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut GuiThreadCommunication) -> egui::Response {
+        let mut final_response = ui.allocate_response(egui::Vec2::ZERO, egui::Sense::hover());
+
+        let response_x = ui.horizontal(|ui| {
             ui.label("Tilt X: ");
-            ui.add(egui::Slider::new(&mut self.tilt_x, -15.0..=15.0).suffix(" deg"));
-        });
-        ui.horizontal(|ui| {
+            ui.add(egui::Slider::new(&mut self.tilt_x, -15.0..=15.0).suffix(" deg"))
+        }).response; // Get the slider's response
+
+        let response_y = ui.horizontal(|ui| {
             ui.label("Tilt Y: ");
-            ui.add(egui::Slider::new(&mut self.tilt_y, -15.0..=15.0).suffix(" deg"));
-        });
+            ui.add(egui::Slider::new(&mut self.tilt_y, -15.0..=15.0).suffix(" deg"))
+        }).response; // Get the slider's response
+
+        // Merge responses to track interactivity
+        final_response |= response_x.clone();
+        final_response |= response_y.clone();
+
+        // Only mark changed if any slider was changed (not just hovered)
+        if response_x.changed() || response_y.changed() {
+            final_response.mark_changed();
+        }
+
+        final_response
     }
 }

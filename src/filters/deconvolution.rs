@@ -73,12 +73,12 @@ impl Filter for Deconvolution {
         // Perform the deconvolution with the Richardson-Lucy algorithm
         // etc.
     }
-    fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut GuiThreadCommunication) {
+    fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut GuiThreadCommunication) -> egui::Response{
         // thread_communication can be used, but is not required. It contains the gui_settings GuiSettingsContainer
         // implement your GUI parameter handling here, for example like this:
         ui.horizontal(|ui| {
             ui.label("Iterations: ");
-            ui.add(egui::Slider::new(&mut self.n_iterations, 0..=10));
-        });
+            ui.add(egui::Slider::new(&mut self.n_iterations, 0..=10))
+        }).inner
     }
 }

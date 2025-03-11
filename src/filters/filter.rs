@@ -6,7 +6,8 @@ use crate::config::GuiThreadCommunication;
 use crate::data_container::ScannedImage;
 use crate::gui::application::GuiSettingsContainer;
 #[allow(unused_imports)]
-use ctor::ctor; // this dependency is required by the `register_filter` macro
+use ctor::ctor;
+// this dependency is required by the `register_filter` macro
 use eframe::egui;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
@@ -59,7 +60,43 @@ pub trait Filter: Send + Sync + Debug {
     fn filter(&self, _scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer);
 
     /// Renders the filter configuration in the GUI.
-    fn ui(&mut self, ui: &mut egui::Ui, thread_communication: &mut GuiThreadCommunication);
+    /// make sure to return the `egui::Reponse` of the GUI elements. This way, the application
+    /// can detect if any GUI element has been changed and will request a calculation update.
+    ///
+    /// # Example:
+    ///
+    /// ```rust
+    /// fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut GuiThreadCommunication) -> egui::Response {
+    ///     let mut final_response = ui.allocate_response(egui::Vec2::ZERO, egui::Sense::hover());
+    ///
+    ///     let response_x = ui.horizontal(|ui| {
+    ///         ui.label("Tilt X: ");
+    ///         ui.add(egui::Slider::new(&mut self.tilt_x, -15.0..=15.0).suffix(" deg"))
+    ///     }).response; // Get the slider's response
+    ///
+    ///     let response_y = ui.horizontal(|ui| {
+    ///         ui.label("Tilt Y: ");
+    ///         ui.add(egui::Slider::new(&mut self.tilt_y, -15.0..=15.0).suffix(" deg"))
+    ///     }).response; // Get the slider's response
+    ///
+    ///     // Merge responses to track interactivity
+    ///     final_response |= response_x.clone();
+    ///     final_response |= response_y.clone();
+    ///
+    ///     // Only mark changed if any slider was changed (not just hovered)
+    ///     if response_x.changed() || response_y.changed() {
+    ///         final_response.mark_changed();
+    ///     }
+    ///
+    ///     final_response
+    /// }
+    /// ```
+    ///
+    fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        thread_communication: &mut GuiThreadCommunication,
+    ) -> egui::Response;
 }
 
 /// The `FilterDomain` enum specifies whether a filter operates in the time or frequency domain.
