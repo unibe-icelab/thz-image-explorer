@@ -44,58 +44,69 @@ impl Filter for TiltCompensation {
         let c = 0.299792458_f64; // mm/ps
 
         dbg!(&time_shift_x);
+        dbg!(&time_shift_y);
 
-        for i in 0..width {
-            for j in 0..height {
-                let x_offset = i as f32 - center_x;
-                let y_offset = j as f32 - center_y;
-                let delta = ((x_offset as f64 * scan.dx.unwrap() as f64 * time_shift_x as f64
-                    + y_offset as f64 * scan.dy.unwrap() as f64 * time_shift_y as f64)
-                    / c) as f32;
+        if let (Some(dx), Some(dy)) = (scan.dx, scan.dy) {
+            for i in 0..width {
+                for j in 0..height {
+                    let x_offset = i as f32 - center_x;
+                    let y_offset = j as f32 - center_y;
+                    let delta = ((x_offset as f64 * dx as f64 * time_shift_x as f64
+                        + y_offset as f64 * dy as f64 * time_shift_y as f64)
+                        / c) as f32;
 
-                let raw_trace = scan.raw_data.slice(s![i, j, ..]);
-                let mut filtered_trace = ndarray::Array1::zeros(time_samples);
+                    let raw_trace = scan.raw_data.slice(s![i, j, ..]);
+                    let mut filtered_trace = ndarray::Array1::zeros(time_samples);
 
-                for t in 0..time_samples {
-                    let pos = t as f32 - delta / dt;
-                    let t0 = pos.floor() as i32;
-                    let t1 = t0 + 1;
-                    let frac = pos - t0 as f32;
+                    for t in 0..time_samples {
+                        let pos = t as f32 - delta / dt;
+                        let t0 = pos.floor() as i32;
+                        let t1 = t0 + 1;
+                        let frac = pos - t0 as f32;
 
-                    let value = if t0 >= 0 && t1 < time_samples as i32 {
-                        let a = raw_trace[t0 as usize] as f32;
-                        let b = raw_trace[t1 as usize] as f32;
-                        a * (1.0 - frac) + b * frac
-                    } else if t0 < 0 {
-                        raw_trace[0] as f32
-                    } else if t1 >= time_samples as i32 {
-                        raw_trace[time_samples - 1] as f32
-                    } else {
-                        0.0
-                    };
+                        let value = if t0 >= 0 && t1 < time_samples as i32 {
+                            let a = raw_trace[t0 as usize] as f32;
+                            let b = raw_trace[t1 as usize] as f32;
+                            a * (1.0 - frac) + b * frac
+                        } else if t0 < 0 {
+                            raw_trace[0] as f32
+                        } else if t1 >= time_samples as i32 {
+                            raw_trace[time_samples - 1] as f32
+                        } else {
+                            0.0
+                        };
 
-                    filtered_trace[t] = value;
+                        filtered_trace[t] = value;
+                    }
+
+                    scan.filtered_data
+                        .slice_mut(s![i, j, ..])
+                        .assign(&filtered_trace);
                 }
-
-                scan.filtered_data
-                    .slice_mut(s![i, j, ..])
-                    .assign(&filtered_trace);
             }
         }
     }
 
-    fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut GuiThreadCommunication) -> egui::Response {
+    fn ui(
+        &mut self,
+        ui: &mut Ui,
+        _thread_communication: &mut GuiThreadCommunication,
+    ) -> egui::Response {
         let mut final_response = ui.allocate_response(egui::Vec2::ZERO, egui::Sense::hover());
 
-        let response_x = ui.horizontal(|ui| {
-            ui.label("Tilt X: ");
-            ui.add(egui::Slider::new(&mut self.tilt_x, -15.0..=15.0).suffix(" deg"))
-        }).response; // Get the slider's response
+        let response_x = ui
+            .horizontal(|ui| {
+                ui.label("Tilt X: ");
+                ui.add(egui::Slider::new(&mut self.tilt_x, -15.0..=15.0).suffix(" deg"))
+            })
+            .inner; // Get the slider's response
 
-        let response_y = ui.horizontal(|ui| {
-            ui.label("Tilt Y: ");
-            ui.add(egui::Slider::new(&mut self.tilt_y, -15.0..=15.0).suffix(" deg"))
-        }).response; // Get the slider's response
+        let response_y = ui
+            .horizontal(|ui| {
+                ui.label("Tilt Y: ");
+                ui.add(egui::Slider::new(&mut self.tilt_y, -15.0..=15.0).suffix(" deg"))
+            })
+            .inner; // Get the slider's response
 
         // Merge responses to track interactivity
         final_response |= response_x.clone();

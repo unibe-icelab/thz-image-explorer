@@ -526,9 +526,11 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                     // send HK?
                 }
                 ConfigCommand::UpdateFilters => {
+                    println!("update filters");
                     if let Ok(mut filters) = FILTER_REGISTRY.lock() {
                         for filter in filters.iter_mut() {
                             // call the filter functions
+                            println!("update filter: {}", filter.config().name);
                             filter.filter(&mut scan, &mut thread_communication.gui_settings)
                         }
                     }

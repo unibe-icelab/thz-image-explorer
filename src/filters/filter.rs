@@ -72,12 +72,12 @@ pub trait Filter: Send + Sync + Debug {
     ///     let response_x = ui.horizontal(|ui| {
     ///         ui.label("Tilt X: ");
     ///         ui.add(egui::Slider::new(&mut self.tilt_x, -15.0..=15.0).suffix(" deg"))
-    ///     }).response; // Get the slider's response
+    ///     }).inner; // Get the slider's response
     ///
     ///     let response_y = ui.horizontal(|ui| {
     ///         ui.label("Tilt Y: ");
     ///         ui.add(egui::Slider::new(&mut self.tilt_y, -15.0..=15.0).suffix(" deg"))
-    ///     }).response; // Get the slider's response
+    ///     }).inner; // Get the slider's response
     ///
     ///     // Merge responses to track interactivity
     ///     final_response |= response_x.clone();
