@@ -11,15 +11,22 @@ use std::error::Error;
 /// or other data sources.
 ///
 /// # Fields
-/// - `low_cut` (*f64*): The low-frequency cutoff value of the PSF filters.
-/// - `high_cut` (*f64*): The high-frequency cutoff value of the PSF filters.
-/// - `start_freq` (*f64*): The starting frequency of the PSF filters.
-/// - `end_freq` (*f64*): The ending frequency of the PSF filters.
-/// - `n_filters` (*i64*): The number of filters included in the PSF.
-/// - `filters` (*Array2<f64>*): A 2D array containing the filter coefficients for the PSF.
-/// - `filt_freqs` (*Array1<f64>*): A 1D array of frequencies associated with the filters.
-/// - `x` (*Array2<f64>*): A 2D array representing the PSF in the X-axis, typically used for spatial resolution analysis.
-/// - `y` (*Array2<f64>*): A 2D array representing the PSF in the Y-axis, typically used for spatial resolution analysis.
+/// - `low_cut` (*f32*): The low-frequency cutoff value of the PSF filters.
+/// - `high_cut` (*f32*): The high-frequency cutoff value of the PSF filters.
+/// - `start_freq` (*f32*): The starting frequency of the PSF filters.
+/// - `end_freq` (*f32*): The ending frequency of the PSF filters.
+/// - `n_filters` (*i32*): The number of filters included in the PSF.
+/// - `filters` (*Array2<f32>*): A 2D array containing the filter coefficients for the PSF
+///    the first dimension represents the filter coefficients, and the second dimension represents the frequency index.
+/// - `filt_freqs` (*Array2<f32>*): A 1D array of frequencies associated with the filters.
+/// - `[x_0, w_x]` (*Array2<f32>*): A 2D array representing the PSF in the X-axis, typically used for spatial resolution analysis.
+///    the first dimension represents the fit parameters, and the second dimension represents the frequency index.
+///    The fit parameters are the center and width of the PSF (in this order).
+/// - `[y_0, w_y]` (*Array2<f32>*): A 2D array representing the PSF in the Y-axis, typically used for spatial resolution analysis.
+///    the first dimension represents the fit parameters, and the second dimension represents the frequency index.
+///    The fit parameters are the center and width of the PSF (in this order).
+/// 
+/// TODO: improve the names of the fields for the fit parameters.
 ///
 /// # Typical Usage
 ///
@@ -33,15 +40,15 @@ use std::error::Error;
 /// use ndarray::{Array1, Array2};
 ///
 /// let psf = PSF {
-///     low_cut: 10.0,
-///     high_cut: 200.0,
-///     start_freq: 15.0,
-///     end_freq: 180.0,
-///     n_filters: 5,
-///     filters: Array2::zeros((5, 10)),
-///     filt_freqs: Array1::linspace(10.0, 200.0, 10),
-///     x: Array2::zeros((5, 5)),
-///     y: Array2::zeros((5, 5)),
+///     low_cut: 0.15,
+///     high_cut: 6.0,
+///     start_freq: 0.2,
+///     end_freq: 4.0,
+///     n_filters: 100,
+///     filters: Array2::zeros((100, 100)),
+///     filt_freqs: Array2::linspace(0.2, 4.0, 100),
+///     popt_x: Array2::zeros((2, 100)),
+///     popt_y: Array2::zeros((2, 100)),
 /// };
 ///
 /// println!("PSF has {} filters and spans the frequency range {:.1} Hz to {:.1} Hz.",
@@ -49,15 +56,15 @@ use std::error::Error;
 /// ```
 #[derive(Serialize, Deserialize, Default, PartialEq, Debug, Clone)]
 pub struct PSF {
-    pub low_cut: f64,
-    pub high_cut: f64,
-    pub start_freq: f64,
-    pub end_freq: f64,
-    pub n_filters: i64,
-    pub filters: Array2<f64>,
-    pub filt_freqs: Array1<f64>,
-    pub popt_x: Array2<f64>,
-    pub popt_y: Array2<f64>,
+    pub low_cut: f32,
+    pub high_cut: f32,
+    pub start_freq: f32,
+    pub end_freq: f32,
+    pub n_filters: i32,
+    pub filters: Array2<f32>,
+    pub filt_freqs: Array2<f32>,
+    pub popt_x: Array2<f32>,
+    pub popt_y: Array2<f32>,
 }
 
 /// Linear interpolation function for a 1D array.

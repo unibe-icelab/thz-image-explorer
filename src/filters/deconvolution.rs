@@ -141,12 +141,12 @@ impl Filter for Deconvolution {
             scan.raw_data.dim().2,
         ));
         // Iterate over the frequencies/filters contained in the psf
-        for (i, &filter) in gui_settings.psf.filters.iter().enumerate() {
+        for (i, &filter) in gui_settings.psf.filters.outer_iter().enumerate() {
             // Compute range_max_x and range_max_y with (w_x + |x_0|) * 3 and (w_y + |y_0|) * 3
             let mut range_max_x: f32 =
-                (gui_settings.psf.popt_x[1] as f32 + gui_settings.psf.popt_x[0].abs() as f32) * 3.0;
+                (gui_settings.psf.popt_x.row(i)[1] as f32 + gui_settings.psf.popt_x.row(i)[0].abs() as f32) * 3.0;
             let mut range_max_y: f32 =
-                (gui_settings.psf.popt_y[1] as f32 + gui_settings.psf.popt_y[0].abs() as f32) * 3.0;
+                (gui_settings.psf.popt_y.row(i)[1] as f32 + gui_settings.psf.popt_y.row(i)[0].abs() as f32) * 3.0;
             // Compute the minimum range_max_x and range_max_y
             // wmin is set to 2.5 to avoid deconvolution errors
             let wmin: f32 = 2.5;
@@ -167,8 +167,8 @@ impl Filter for Deconvolution {
                 .map(|i| i as f32 * scan.dy.unwrap() as f32)
                 .collect();
             // Create the x and y psfs
-            let gaussian_x: Vec<f32> = gaussian2(&arr1(&x), &gui_settings.psf.popt_x);
-            let gaussian_y: Vec<f32> = gaussian2(&arr1(&y), &gui_settings.psf.popt_y);
+            let gaussian_x: Vec<f32> = gaussian2(&arr1(&x), &gui_settings.psf.popt_x.row(i));
+            let gaussian_y: Vec<f32> = gaussian2(&arr1(&y), &gui_settings.psf.popt_y.row(i));
             // Create the 2D PSF
             let psf_2d: Array2<f32> = create_psf_2d(
                 gaussian_x,
@@ -189,25 +189,33 @@ impl Filter for Deconvolution {
                     *f = data_slice.iter().map(|&x| x.powi(2)).sum();
                 });
             // Number of iterations for the deconvolution
-            let w_min: f32 = gui_settings
-                .psf
-                .popt_xs_glob
-                .iter()
-                .map(|x| x.1)
+            let wx_min: f32 = gui_settings.psf.popt_x.rows()
+                .into_iter()
+                .map(|row| row[1])
                 .min()
-                .unwrap();
-            let w_max: f32 = gui_settings
-                .psf
-                .popt_xs_glob
-                .iter()
-                .map(|x| x.1)
+                .unwrap(); // Unwrap since we know there's at least one row
+            let wx_max: f32 = gui_settings.psf.popt_x.rows()
+            .into_iter()
+            .map(|row| row[1])
                 .max()
                 .unwrap();
+            let wy_min: f32 = gui_settings.psf.popt_y.rows()
+                .into_iter()
+                .map(|row| row[1])
+                .min()
+                .unwrap();
+            let wy_max: f32 = gui_settings.psf.popt_y.rows()
+                .into_iter()
+                .map(|row| row[1])
+                .max()
+                .unwrap();
+            let w_min: f32 = wx_min.min(wy_min);
+            let w_max: f32 = wx_max.max(wy_max);
             let n_iter_min: usize = 1;
             // The number of iterations depends on the width of the PSF
-            let n_iter: usize = ((gui_settings.psf.popt_x[1] - w_min) / (w_max - w_min)
+            let n_iter: usize = (((gui_settings.psf.popt_x.row(i)[1] - w_min) / (w_max - w_min)
                 * (self.n_iterations as f32 - n_iter_min as f32)
-                + n_iter_min as f32) as usize;
+                + n_iter_min as f32).floor()) as usize;
             // Perform the deconvolution with the Richardson-Lucy algorithm
             let deconvolved_image: Array2<f32> =
                 self.richardson_lucy(&filtered_image, &psf_2d, n_iter);
