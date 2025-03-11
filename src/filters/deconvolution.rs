@@ -241,16 +241,22 @@ impl Filter for Deconvolution {
                 )
                     .into_par_iter()
                     .for_each(|(filtered_data, mut filtered_img)| {
-                        *filtered_img.into_scalar() = filtered_data.iter().map(|xi| xi * xi).sum::<f32>();
+                        *filtered_img.into_scalar() =
+                            filtered_data.iter().map(|xi| xi * xi).sum::<f32>();
                     });
             });
     }
-    fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut GuiThreadCommunication) -> egui::Response{
+    fn ui(
+        &mut self,
+        ui: &mut Ui,
+        _thread_communication: &mut GuiThreadCommunication,
+    ) -> egui::Response {
         // thread_communication can be used, but is not required. It contains the gui_settings GuiSettingsContainer
         // implement your GUI parameter handling here, for example like this:
         ui.horizontal(|ui| {
             ui.label("Iterations: ");
             ui.add(egui::Slider::new(&mut self.n_iterations, 0..=10))
-        }).inner
+        })
+        .inner
     }
 }
