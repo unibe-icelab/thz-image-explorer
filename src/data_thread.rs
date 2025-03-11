@@ -250,7 +250,7 @@ fn filter(
 
         for filter in FILTER_REGISTRY.lock().unwrap().iter_mut() {
             println!("Filter found: {}", filter.config().name);
-            filter.filter(scan, &mut thread_communication.gui_settings)
+            // filter.filter(scan, &mut thread_communication.gui_settings)
         }
     };
     // update images
@@ -324,7 +324,7 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                             if let Ok(md) = thread_communication.md_lock.read() {
                                 match update_meta_data_of_thz_file(&path, &md) {
                                     Ok(_) => {
-                                        log::info!("updated meta-data from {:?}", path);
+                                        log::info!("updated meta-data in {:?}", path);
                                     }
                                     Err(err) => {
                                         log::error!(
@@ -525,6 +525,16 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                     println!("new pixel: {:} {:}", selected_pixel.x, selected_pixel.y);
                     // send HK?
                 }
+                ConfigCommand::UpdateFilters => {
+                    if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+                        for filter in filters.iter_mut() {
+                            // call the filter functions
+                            filter.filter(&mut scan, &mut thread_communication.gui_settings)
+                        }
+                    }
+                    // update the intensity image
+                    update_intensity_image(&scan, &thread_communication.img_lock);
+                }
             }
 
             if let Ok(pixel) = thread_communication.pixel_lock.read() {
@@ -609,32 +619,32 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                     data.avg_signal_1_fft = vec![0.0; data.signal_1_fft.len()];
                     data.avg_phase_fft = vec![0.0; data.phase_1_fft.len()];
 
-                    for x in 0..scan.filtered_data.shape()[0] {
-                        for y in 0..scan.filtered_data.shape()[1] {
-                            let mut in_data: Vec<f32> = scan
-                                .filtered_data
-                                .index_axis(Axis(0), x)
-                                .index_axis(Axis(0), y)
-                                .to_vec();
-                            let mut spectrum = r2c.make_output_vec();
-                            // Forward transform the input data
-                            r2c.process(&mut in_data, &mut spectrum).unwrap();
-                            let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
-                            let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
-                            data.avg_signal_1_fft = data
-                                .avg_signal_1_fft
-                                .iter()
-                                .zip(amp.iter()) // Combine the two iterators
-                                .map(|(a, b)| a + b) // Add the elements together
-                                .collect();
-                            data.filtered_phase_fft = data
-                                .filtered_phase_fft
-                                .iter()
-                                .zip(numpy_unwrap(&phase, Some(2.0 * PI)).iter()) // Combine the two iterators
-                                .map(|(a, b)| a + b) // Add the elements together
-                                .collect();
-                        }
-                    }
+                    // for x in 0..scan.filtered_data.shape()[0] {
+                    //     for y in 0..scan.filtered_data.shape()[1] {
+                    //         let mut in_data: Vec<f32> = scan
+                    //             .filtered_data
+                    //             .index_axis(Axis(0), x)
+                    //             .index_axis(Axis(0), y)
+                    //             .to_vec();
+                    //         let mut spectrum = r2c.make_output_vec();
+                    //         // Forward transform the input data
+                    //         r2c.process(&mut in_data, &mut spectrum).unwrap();
+                    //         let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
+                    //         let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
+                    //         data.avg_signal_1_fft = data
+                    //             .avg_signal_1_fft
+                    //             .iter()
+                    //             .zip(amp.iter()) // Combine the two iterators
+                    //             .map(|(a, b)| a + b) // Add the elements together
+                    //             .collect();
+                    //         data.filtered_phase_fft = data
+                    //             .filtered_phase_fft
+                    //             .iter()
+                    //             .zip(numpy_unwrap(&phase, Some(2.0 * PI)).iter()) // Combine the two iterators
+                    //             .map(|(a, b)| a + b) // Add the elements together
+                    //             .collect();
+                    //     }
+                    // }
                     data.avg_signal_1_fft = data
                         .avg_signal_1_fft
                         .iter()

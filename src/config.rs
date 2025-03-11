@@ -69,6 +69,9 @@ pub enum ConfigCommand {
     /// Command to update the currently selected pixel in the image.
     /// The selected pixel is represented by the [`SelectedPixel`] structure.
     SetSelectedPixel(SelectedPixel),
+
+    /// Update Custom Filters
+    UpdateFilters
 }
 
 /// A container for storing configuration settings related to FFT and filtering processes.

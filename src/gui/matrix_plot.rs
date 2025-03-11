@@ -7,14 +7,30 @@ use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotPoint, PlotPoints, Polygon
 use ndarray::{Array2, Axis};
 
 #[derive(Debug, Clone)]
+pub struct ROI {
+    pub polygon: Vec<[f64; 2]>,
+    pub closed: bool,
+    pub name: String,
+}
+
+impl Default for ROI {
+    fn default() -> Self {
+        Self {
+            polygon: vec![],
+            closed: false,
+            name: "ROI 0".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SelectedPixel {
     pub selected: bool,
     pub rect: Vec<[f64; 2]>,
     pub x: usize,
     pub y: usize,
     pub id: String,
-    pub polygon_points: Vec<[f64; 2]>,
-    pub polygon_closed: bool,
+    pub rois: Vec<ROI>, // Store multiple ROIs
 }
 
 impl Default for SelectedPixel {
@@ -25,8 +41,7 @@ impl Default for SelectedPixel {
             x: 0,
             y: 0,
             id: "0000-0000".to_string(),
-            polygon_points: Vec::new(),
-            polygon_closed: false,
+            rois: vec![ROI::default()],
         }
     }
 }
@@ -62,7 +77,7 @@ pub fn color_from_intensity(
                 v: hue,
                 a: 1.0,
             }
-            .into()
+                .into()
         } else {
             egui::ecolor::Hsva {
                 h: 0.667 - hue * 0.667, // Map to color hue (0 to 0.667 range)
@@ -70,7 +85,7 @@ pub fn color_from_intensity(
                 v: 1.0,
                 a: 1.0,
             }
-            .into()
+                .into()
         }
     } else {
         egui::ecolor::Hsva {
@@ -79,7 +94,7 @@ pub fn color_from_intensity(
             v: 0.0,
             a: 0.0,
         }
-        .into()
+            .into()
     }
 }
 
@@ -129,7 +144,7 @@ fn colorbar_with_midpoint_slider(
                     v: hue_position,
                     a: 1.0,
                 }
-                .into();
+                    .into();
             } else {
                 img[(0, y)] = egui::ecolor::Hsva {
                     h: 0.667 - hue_position * 0.667, // Map to color hue (0 to 0.667 range)
@@ -137,7 +152,7 @@ fn colorbar_with_midpoint_slider(
                     v: 1.0,
                     a: 1.0,
                 }
-                .into();
+                    .into();
             }
         }
 
@@ -328,7 +343,7 @@ pub fn plot_matrix(
         let plot_response = plot.show(ui, |plot_ui| {
             plot_ui.image(im);
 
-            // Draw existing single pixel selection
+            // Draw selected single pixel
             if pixel_selected.selected {
                 plot_ui.line(
                     Line::new(PlotPoints::from(pixel_selected.rect.clone()))
@@ -337,17 +352,16 @@ pub fn plot_matrix(
                 );
             }
 
-            // Draw polygon ROI
-            if !pixel_selected.polygon_points.is_empty() {
-                let points = pixel_selected.polygon_points.clone();
-                let line = Line::new(PlotPoints::from(points))
+            // Draw all ROIs
+            for (i, roi) in pixel_selected.rois.iter().enumerate() {
+                let line = Line::new(PlotPoints::from(roi.polygon.clone()))
                     .color(Color32::WHITE)
                     .width(2.0);
                 plot_ui.line(line);
 
-                if pixel_selected.polygon_closed {
-                    let screen_points: Vec<[f64; 2]> = pixel_selected
-                        .polygon_points
+                if roi.closed {
+                    let screen_points: Vec<[f64; 2]> = roi
+                        .polygon
                         .iter()
                         .map(|p| {
                             let _point = plot_ui
@@ -380,43 +394,43 @@ pub fn plot_matrix(
         if plot_response.response.clicked() {
             let modifiers = ui.input(|i| i.modifiers);
             if modifiers.shift {
-                // Handle polygon points
+                dbg!(&pixel_selected.rois.len());
+                // Handle multiple polygon ROIs
                 let plot_x = val.x;
                 let plot_y = val.y;
                 let _pixel_x = plot_x.floor() as usize;
                 let _pixel_y = height - 1 - plot_y.floor() as usize;
 
-                if pixel_selected.polygon_closed {
-                    // Reset if clicking on closed polygon
-                    pixel_selected.polygon_points.clear();
-                    pixel_selected.polygon_closed = false;
+                if (!pixel_selected.rois.is_empty() && pixel_selected.rois.last().unwrap().closed) || pixel_selected.rois.is_empty() {
+                    // If last ROI is closed, start a new one
+                    let mut roi = ROI::default();
+                    roi.name = format!("ROI {}", pixel_selected.rois.len() + 1);
+                    pixel_selected.rois.push(roi);
                 }
+                dbg!(&pixel_selected.rois.len());
 
-                if pixel_selected.polygon_points.is_empty() {
-                    // First point
-                    pixel_selected.polygon_points.push([plot_x, plot_y]);
-                } else {
-                    // Check distance to first point
-                    let first = pixel_selected.polygon_points.first().unwrap();
-                    let dx = plot_x - first[0];
-                    let dy = plot_y - first[1];
-                    let dist = (dx * dx + dy * dy).sqrt();
-
-                    if dist < width.min(height) as f64 * 0.05
-                        && pixel_selected.polygon_points.len() > 1
-                    {
-                        // Close polygon
-                        pixel_selected.polygon_closed = true;
+                if let Some(current_roi) = pixel_selected.rois.last_mut() {
+                    if current_roi.polygon.is_empty() {
+                        current_roi.polygon.push([plot_x, plot_y]);
                     } else {
-                        // Add new point
-                        pixel_selected.polygon_points.push([plot_x, plot_y]);
+                        // Check distance to first point
+                        let first = current_roi.polygon.first().unwrap();
+                        let dx = plot_x - first[0];
+                        let dy = plot_y - first[1];
+                        let dist = (dx * dx + dy * dy).sqrt();
+
+                        if dist < width.min(height) as f64 * 0.05 && current_roi.polygon.len() > 1 {
+                            // Close polygon
+                            current_roi.closed = true;
+                        } else {
+                            // Add new point
+                            current_roi.polygon.push([plot_x, plot_y]);
+                        }
                     }
                 }
                 pixel_clicked = true;
             } else {
                 // Handle single pixel selection
-                pixel_selected.polygon_points.clear();
-                pixel_selected.polygon_closed = false;
 
                 if pixel_selected.x == val.x.floor() as usize
                     && pixel_selected.y == height - 1 - val.y.floor() as usize

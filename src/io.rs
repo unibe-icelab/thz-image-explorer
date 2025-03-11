@@ -368,6 +368,9 @@ pub fn update_meta_data_of_thz_file(
     // Define a group name
     let group_name = "Image";
 
+    // clear the existing meta-data
+    file.clear_meta_data(group_name)?;
+
     // Create datasets and write data
     let mut group = file.get_group(group_name)?;
     file.set_meta_data(&mut group, metadata)?;

@@ -30,7 +30,7 @@ ndarray-stats = "0.6.0"
 statrs = "0.18.0"
 serde_json = "1.0.95"
 itertools = "0.14.0"
-dotthz = { version = "0.2.8", features = ["serde", "hdf5-sys-static"] }
+dotthz = { version = "0.2.10", features = ["serde", "hdf5-sys-static"] }
 home = "0.5.11"
 self_update = { git = "https://github.com/hacknus/self_update", features = ["archive-zip", "compression-zip-deflate"], optional = true }
 tempfile = { version = "3.15", optional = true }
@@ -48,7 +48,7 @@ self_update = ["dep:self_update", "tempfile", "reqwest", "semver"]
 
 [package.metadata.bundle]
 name = "THz Image Explorer"
-identifier = "com.unibe.thzimageexplorer"
+identifier = "ch.unibe.thzimageexplorer"
 icon = ["./icons/install.png"]
 copyright = "Copyright (c) 2025, University of Bern, Space Research & Planetary Sciences, Linus Leo Stöckli."
 category = "Developer Tool"
@@ -56,6 +56,7 @@ short_description = "Explorer Software for THz time domain images."
 long_description = "THz Image Explorer is an application for THz time-domain images, developed by the Planetary Imaging Group of the Space Science and Planetology Division at the University of Bern, Switzerland."
 license = "GPL-3.0"
 osx_minimum_system_version = "10.12"
+osx_url_schemes = ["ch.unibe.thzimageexplorer"]
 deb_depends = ["libclang-dev", "libgtk-3-dev", "libxcb-render0-dev", "libxcb-shape0-dev", "libxcb-xfixes0-dev", "libxkbcommon-dev", "libssl-dev"]
 
 [package.metadata.wix]

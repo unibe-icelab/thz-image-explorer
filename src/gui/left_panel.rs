@@ -1,7 +1,7 @@
 use crate::config::{ConfigCommand, GuiThreadCommunication};
 use crate::gui::application::FileDialogState;
 use crate::gui::gauge_widget::gauge;
-use crate::gui::matrix_plot::{make_dummy, plot_matrix, SelectedPixel};
+use crate::gui::matrix_plot::{make_dummy, plot_matrix, SelectedPixel, ROI};
 use crate::gui::toggle_widget::toggle_ui;
 use crate::io::{find_files_with_same_extension, load_psf};
 use crate::DataPoint;
@@ -246,6 +246,8 @@ pub fn left_panel(
                             if row.response().clicked() {
                                 *selected_file_name =
                                     item.file_name().unwrap().to_str().unwrap().to_string();
+                                thread_communication.gui_settings.selected_path =
+                                    item.to_path_buf();
                                 thread_communication
                                     .config_tx
                                     .send(ConfigCommand::OpenFile(item.to_path_buf()))
@@ -263,6 +265,7 @@ pub fn left_panel(
                         let item = other_files[selected_index + 1].clone();
                         *selected_file_name =
                             item.file_name().unwrap().to_str().unwrap().to_string();
+                        thread_communication.gui_settings.selected_path = item.to_path_buf();
                         thread_communication
                             .config_tx
                             .send(ConfigCommand::OpenFile(item.to_path_buf()))
@@ -273,6 +276,7 @@ pub fn left_panel(
                         let item = other_files[selected_index - 1].clone();
                         *selected_file_name =
                             item.file_name().unwrap().to_str().unwrap().to_string();
+                        thread_communication.gui_settings.selected_path = item.to_path_buf();
                         thread_communication
                             .config_tx
                             .send(ConfigCommand::OpenFile(item.to_path_buf()))
@@ -293,6 +297,7 @@ pub fn left_panel(
                     *selected_file_name = path.file_name().unwrap().to_str().unwrap().to_string();
                     *scroll_to_selection = true;
                     file_dialog.config_mut().initial_directory = path.clone();
+                    thread_communication.gui_settings.selected_path = path.clone();
                     thread_communication
                         .config_tx
                         .send(ConfigCommand::OpenFile(path))
@@ -376,6 +381,57 @@ pub fn left_panel(
                 img_data = read_guard.clone();
             }
 
+            // read rois from md
+
+            let open_roi = if let Some(a) = pixel_selected.rois.last() {
+                if !a.closed {
+                    Some(a.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            pixel_selected.rois.clear();
+
+            if let Some(labels) = meta_data.md.get("ROI Labels") {
+                let roi_labels: Vec<&str> = labels.split(',').collect();
+                for (i, label) in roi_labels.iter().enumerate() {
+                    if let Some(roi_data) = meta_data.md.get(&format!("ROI {}", i)) {
+                        // Ensure we are correctly extracting coordinates
+                        let polygon = roi_data
+                            .split("],") // Split by "]," to separate coordinate pairs
+                            .filter_map(|point| {
+                                let cleaned = point.trim_matches(|c| c == '[' || c == ']');
+                                let values: Vec<f64> = cleaned
+                                    .split(',')
+                                    .filter_map(|v| v.trim().parse::<f64>().ok())
+                                    .collect();
+
+                                if values.len() == 2 {
+                                    Some([values[0], values[1]])
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect::<Vec<[f64; 2]>>();
+
+                        if !polygon.is_empty() {
+                            pixel_selected.rois.push(ROI {
+                                polygon,
+                                closed: true,
+                                name: label.to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+
+            if let Some(roi) = open_roi {
+                pixel_selected.rois.push(roi.clone());
+            }
+
             // TODO: implement selecting reference pixel
             let pixel_clicked = plot_matrix(
                 ui,
@@ -396,14 +452,33 @@ pub fn left_panel(
                 if let Ok(mut write_guard) = thread_communication.pixel_lock.write() {
                     *write_guard = pixel_selected.clone();
                 }
-                if pixel_selected.polygon_closed {
-                    let formatted = pixel_selected
-                        .polygon_points
+                let mut md_update_requested = false;
+                for (roi_i, roi) in pixel_selected.rois.iter_mut().enumerate() {
+                    if roi.closed {
+                        let formatted = roi
+                            .polygon
+                            .iter()
+                            .map(|&[x, y]| format!("[{:.2},{:.2}]", x, y))
+                            .collect::<Vec<String>>()
+                            .join(",");
+                        meta_data.md.insert(format!("ROI {}", roi_i), formatted);
+                        md_update_requested = true;
+
+                        if let Some(labels) = meta_data.md.get_mut("ROI Labels") {
+                            // Append new ROI label
+                            labels.push_str(&roi.name.clone());
+                        }
+                    }
+                }
+
+                if md_update_requested {
+                    let labels = pixel_selected
+                        .rois
                         .iter()
-                        .map(|&[x, y]| format!("[{:.2},{:.2}]", x, y))
+                        .map(|l| l.name.clone())
                         .collect::<Vec<String>>()
                         .join(",");
-                    meta_data.md.insert("ROI".to_string(), formatted);
+                    meta_data.md.insert("ROI Labels".to_string(), labels);
 
                     if let Ok(mut md) = thread_communication.md_lock.write() {
                         *md = meta_data.clone();
@@ -424,6 +499,47 @@ pub fn left_panel(
             ui.label(format!("Pixel: {}", pixel_selected.id));
             ui.label(format!("x: {}", pixel_selected.x));
             ui.label(format!("y: {}", pixel_selected.y));
+
+            ui.separator();
+            ui.heading("Regions of Interest (ROI)");
+            egui::ScrollArea::both().id_salt("rois").show(ui, |ui| {
+                egui::Grid::new("rois polygons")
+                    .striped(true)
+                    .show(ui, |ui| {
+                        let mut changed = false;
+                        for mut roi in pixel_selected.rois.iter_mut() {
+                            changed |= ui.add(egui::TextEdit::singleline(&mut roi.name)).changed();
+                            let points = roi
+                                .polygon
+                                .iter()
+                                .map(|&[x, y]| format!("[{:.2},{:.2}]", x, y))
+                                .collect::<Vec<String>>()
+                                .join(",");
+                            ui.label(points);
+                            ui.end_row();
+                        }
+                        if changed {
+                            let labels = pixel_selected
+                                .rois
+                                .iter()
+                                .map(|l| l.name.clone())
+                                .collect::<Vec<String>>()
+                                .join(",");
+                            meta_data.md.insert("ROI Labels".to_string(), labels);
+
+                            dbg!(&meta_data.md.get("ROI Labels"));
+                            if let Ok(mut md) = thread_communication.md_lock.write() {
+                                *md = meta_data.clone();
+                            }
+                            thread_communication
+                                .config_tx
+                                .send(ConfigCommand::UpdateMetaData(
+                                    thread_communication.gui_settings.selected_path.clone(),
+                                ))
+                                .expect("unable to send save file cmd");
+                        }
+                    });
+            });
 
             ui.separator();
             ui.heading("Meta Data");
@@ -479,10 +595,23 @@ pub fn left_panel(
                         ui.label(format!("{:50}", " "));
                         ui.end_row();
                     }
+                    let mut attributes_to_delete = vec![];
                     for (name, value) in meta_data.md.iter_mut() {
                         ui.label(name);
                         ui.horizontal(|ui| {
                             if thread_communication.gui_settings.meta_data_edit {
+                                if ui
+                                    .selectable_label(
+                                        false,
+                                        egui::RichText::new(format!(
+                                            "{}",
+                                            egui_phosphor::regular::TRASH
+                                        )),
+                                    )
+                                    .clicked()
+                                {
+                                    attributes_to_delete.push(name.clone());
+                                }
                                 let lock = if thread_communication.gui_settings.meta_data_unlocked {
                                     egui::RichText::new(format!(
                                         "{}",
@@ -515,6 +644,40 @@ pub fn left_panel(
                         });
                         ui.end_row()
                     }
+
+                    for attr in attributes_to_delete {
+                        if attr.contains("ROI") {
+                            if let Some(labels_string) = meta_data.md.get_mut("ROI Labels") {
+                                let mut labels = labels_string.split(",").collect::<Vec<&str>>();
+                                if let Some(index) = attr
+                                    .strip_prefix("ROI ")
+                                    .and_then(|num| num.parse::<usize>().ok())
+                                {
+                                    dbg!(index);
+                                    pixel_selected.rois.remove(index);
+                                    if pixel_selected.rois.is_empty() {
+                                        let mut roi = ROI::default();
+                                        roi.name = format!("ROI {}", pixel_selected.rois.len() + 1);
+                                        pixel_selected.rois.push(roi);
+                                    }
+                                    labels.remove(index);
+                                    *labels_string = labels.join(",");
+                                } else {
+                                    if attr == "ROI Labels" {
+                                        for roi_i in 0..pixel_selected.rois.len() {
+                                            meta_data.md.swap_remove(&format!("ROI {roi_i}"));
+                                        }
+                                        pixel_selected.rois.clear();
+                                        let mut roi = ROI::default();
+                                        roi.name = "ROI 0".to_string();
+                                        pixel_selected.rois.push(roi);
+                                    }
+                                }
+                            }
+                        }
+                        meta_data.md.swap_remove(&attr);
+                    }
+
                     ui.label("User:");
                     if thread_communication.gui_settings.meta_data_edit {
                         ui.add(
