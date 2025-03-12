@@ -2,6 +2,7 @@ use crate::config::GuiThreadCommunication;
 use crate::data_container::ScannedImage;
 use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
 use crate::gui::application::GuiSettingsContainer;
+use crate::math_tools::apply_adapted_blackman_window;
 use eframe::egui::{self, Ui};
 use filter_macros::register_filter;
 use ndarray::{concatenate, s, Array1, Array3, Axis};
@@ -69,16 +70,6 @@ impl Filter for TiltCompensation {
             let back_array = Array1::linspace(last_value + dt, last_value + extension, num_steps);
             scan.filtered_time = concatenate![Axis(0), front_array, original_time, back_array];
 
-            dbg!(&time_shift_x);
-            dbg!(&time_shift_y);
-
-            dbg!(&scan.filtered_time.first());
-            dbg!(&scan.filtered_time.last());
-
-            // Extend `filtered_data` in time axis
-            dbg!(&scan.raw_data.shape());
-            dbg!(&time_samples, &extended_samples);
-
             // Create new filtered_data with extra time samples
             let mut new_filtered_data = Array3::zeros((width, height, extended_samples));
             for i in 0..width {
@@ -93,7 +84,7 @@ impl Filter for TiltCompensation {
 
                     let delta_steps = (delta / dt).floor() as isize;
 
-                    let raw_trace = scan.raw_data.slice(s![i, j, ..]);
+                    let raw_trace = scan.raw_data.slice_mut(s![i, j, ..]);
                     let mut extended_trace = Array1::zeros(extended_samples);
 
                     let insert_index = (num_steps as isize + delta_steps).max(0) as usize; // Ensure non-negative index
@@ -105,14 +96,22 @@ impl Filter for TiltCompensation {
 
                     // Insert original trace
                     let end_index = (insert_index + time_samples).min(extended_samples);
+
+                    let mut raw_trace_copy = raw_trace.to_owned(); // Create a mutable copy
+                    let mut data_view = raw_trace_copy.view_mut(); // Obtain a mutable view
+
+                    apply_adapted_blackman_window(
+                        &mut data_view,
+                        &original_time,
+                        &0.0,
+                        &7.0,
+                    );
                     extended_trace
                         .slice_mut(s![insert_index..end_index])
-                        .assign(&raw_trace.slice(s![..(end_index - insert_index)]));
+                        .assign(&data_view.slice(s![..(end_index - insert_index)]));
 
                     // Fill after the trace with last value
-                    extended_trace
-                        .slice_mut(s![end_index..])
-                        .fill(*raw_trace.last().unwrap());
+                    extended_trace.slice_mut(s![end_index..]).fill(0.0);
 
                     // Assign extended trace to the new data
                     new_filtered_data
