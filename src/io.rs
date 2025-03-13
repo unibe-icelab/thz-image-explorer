@@ -327,6 +327,7 @@ pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(),
 
     scan.scaled_data = scan.raw_data.clone();
 
+    scan.filtered_time = scan.time.clone();
     scan.filtered_data = scan.scaled_data.clone();
     scan.filtered_img = scan.raw_img.clone();
 
@@ -338,6 +339,11 @@ pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(),
     scan.frequencies = freq;
     scan.r2c = Some(r2c);
     scan.c2r = Some(c2r);
+
+    scan.filtered_frequencies = scan.frequencies.clone();
+
+    scan.filtered_c2r = scan.c2r.clone();
+    scan.filtered_r2c = scan.r2c.clone();
     Ok(())
 }
 
@@ -495,6 +501,7 @@ pub fn open_from_thz(
 
     scan.scaled_data = scan.raw_data.clone();
 
+    scan.filtered_time = scan.time.clone();
     scan.filtered_data = scan.scaled_data.clone();
     scan.filtered_img = scan.raw_img.clone();
 
@@ -509,8 +516,13 @@ pub fn open_from_thz(
     let spectrum = r2c.make_output_vec();
     let freq = (0..spectrum.len()).map(|i| i as f32 / rng).collect();
     scan.frequencies = freq;
+    scan.filtered_frequencies = scan.frequencies.clone();
+
     scan.r2c = Some(r2c);
     scan.c2r = Some(c2r);
+
+    scan.filtered_c2r = scan.c2r.clone();
+    scan.filtered_r2c = scan.r2c.clone();
 
     Ok(())
 }

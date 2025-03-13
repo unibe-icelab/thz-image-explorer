@@ -100,9 +100,9 @@ pub fn pulse_tab(
             ]);
         }
 
-        for i in 0..data.time.len().min(data.filtered_signal_1.len()) {
+        for i in 0..data.filtered_time.len().min(data.filtered_signal_1.len()) {
             filtered_signal_1.push([
-                data.time[i] as f64,
+                data.filtered_time[i] as f64,
                 data.filtered_signal_1[i] as f64 + axis_display_offset,
             ]);
         }
@@ -189,7 +189,7 @@ pub fn pulse_tab(
             })
             .collect();
         let filtered_signal_1_fft: Vec<[f64; 2]> = data
-            .frequencies
+            .filtered_frequencies
             .iter()
             .zip(data.filtered_signal_1_fft.iter())
             .map(|(x, y)| {
@@ -229,7 +229,7 @@ pub fn pulse_tab(
             .map(|(x, y)| [*x as f64, *y as f64])
             .collect();
         let filtered_phase_1_fft: Vec<[f64; 2]> = data
-            .frequencies
+            .filtered_frequencies
             .iter()
             .zip(data.filtered_phase_fft.iter())
             .map(|(x, y)| [*x as f64, *y as f64])

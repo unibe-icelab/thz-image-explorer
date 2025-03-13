@@ -526,12 +526,15 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                     // send HK?
                 }
                 ConfigCommand::UpdateFilters => {
+                    println!("update filters");
                     if let Ok(mut filters) = FILTER_REGISTRY.lock() {
                         for filter in filters.iter_mut() {
                             // call the filter functions
+                            println!("update filter: {}", filter.config().name);
                             filter.filter(&mut scan, &mut thread_communication.gui_settings)
                         }
                     }
+                    filter_time_window(&config, &mut scan, &thread_communication.img_lock);
                     // update the intensity image
                     update_intensity_image(&scan, &thread_communication.img_lock);
                 }
@@ -544,7 +547,6 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
             if let Some(r2c) = &scan.r2c {
                 if let Ok(mut data) = thread_communication.data_lock.write() {
                     data.time = scan.time.to_vec();
-                    data.frequencies = scan.frequencies.to_vec();
                     data.signal_1 = scan
                         .scaled_data
                         .index_axis(Axis(0), selected_pixel.x / scan.scaling)
@@ -591,7 +593,13 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                     let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
                     data.signal_1_fft = amp;
                     data.phase_1_fft = numpy_unwrap(&phase, Some(2.0 * PI));
-
+                }
+            }
+            if let Some(r2c) = &scan.filtered_r2c {
+                if let Ok(mut data) = thread_communication.data_lock.write() {
+                    data.filtered_time = scan.filtered_time.to_vec();
+                    data.frequencies = scan.frequencies.to_vec();
+                    data.filtered_frequencies = scan.filtered_frequencies.to_vec();
                     // get avg and filtered data
                     data.filtered_signal_1 = scan
                         .filtered_data
