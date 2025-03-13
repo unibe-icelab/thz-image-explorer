@@ -534,6 +534,7 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                             filter.filter(&mut scan, &mut thread_communication.gui_settings)
                         }
                     }
+                    filter_time_window(&config, &mut scan, &thread_communication.img_lock);
                     // update the intensity image
                     update_intensity_image(&scan, &thread_communication.img_lock);
                 }
