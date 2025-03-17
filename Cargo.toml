@@ -7,7 +7,6 @@ description = "Explorer Software for THz TDS images."
 license = "GPL-3.0"
 
 [dependencies]
-ndarray-ndimage = "0.4.0"
 eframe = { version = "0.31", features = ["persistence", "wayland", "x11"] }
 egui_extras = { version = "0.31", features = ["all_loaders"] }
 egui-phosphor = "0.9.0"
@@ -24,9 +23,10 @@ realfft = "3.4.0"
 preferences = "2.0.0"
 serde = { version = "1.0", features = ["derive"] }
 csv = "1.1.6"
-ndarray = { version = "0.15", features = ["rayon", "serde"] }
+ndarray = { version = "0.16", features = ["rayon", "serde"] }
 ndarray-npy = { version = "0.9.1", features = ["npz"] }
 ndarray-stats = "0.6.0"
+ndarray-ndimage = { git = "https://github.com/hacknus/ndarray-ndimage" }
 statrs = "0.18.0"
 serde_json = "1.0.95"
 itertools = "0.14.0"

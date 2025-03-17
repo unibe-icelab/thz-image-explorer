@@ -14,7 +14,7 @@ use crate::filters::psf::PSF;
 use csv::ReaderBuilder;
 use dotthz::{DotthzFile, DotthzMetaData};
 use glob::glob;
-use ndarray::{arr2, Array0, Array1, Array2, Array3, Axis, Ix0, Ix1, Ix2, OwnedRepr};
+use ndarray::{Array0, Array1, Array2, Array3, Axis, Ix0, Ix1, Ix2, OwnedRepr};
 use ndarray_npy::NpzReader;
 use realfft::RealFftPlanner;
 use std::error::Error;
@@ -96,6 +96,8 @@ pub fn load_psf(file_path: &PathBuf) -> Result<PSF, Box<dyn Error>> {
     let filters = npz
         .by_name::<OwnedRepr<f64>, Ix2>("filters")?
         .into_dimensionality::<ndarray::Ix2>()?;
+
+    // I read that in as Array2, hope this works
     let filt_freqs = npz
         .by_name::<OwnedRepr<f64>, Ix1>("filt_freqs")?
         .into_dimensionality::<ndarray::Ix1>()?;
@@ -107,15 +109,15 @@ pub fn load_psf(file_path: &PathBuf) -> Result<PSF, Box<dyn Error>> {
         .into_dimensionality::<ndarray::Ix2>()?;
 
     Ok(PSF {
-        low_cut,
-        high_cut,
-        start_freq,
-        end_freq,
-        n_filters,
-        filters,
-        filt_freqs,
-        popt_x: x,
-        popt_y: y,
+        low_cut: low_cut as f32,
+        high_cut: high_cut as f32,
+        start_freq: start_freq as f32,
+        end_freq: end_freq as f32,
+        n_filters: n_filters as i32,
+        filters: filters.map(|&x| x as f32),
+        filt_freqs: filt_freqs.map(|&x| x as f32),
+        popt_x: x.map(|&x| x as f32),
+        popt_y: y.map(|&x| x as f32),
     })
 }
 
@@ -537,10 +539,10 @@ fn extract_substring(text: &str, start: &str, end: &str) -> Option<String> {
 /// Helper function for trimming signals (placeholder; implement your logic here).
 pub fn get_windowed_signal(
     signal: &Vec<f64>,
-    ratio: f64,
-    lr: &str,
-    window: &str,
-    alpha: f64,
+    _ratio: f64,
+    _lr: &str,
+    _window: &str,
+    _alpha: f64,
 ) -> (Vec<f64>, Vec<f64>) {
     // Implement signal processing logic here
     (signal.clone(), vec![1.0; signal.len()]) // Placeholder

@@ -49,7 +49,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f47983a1084940ba9a39c077a8c63e55c619388be5476ac04c804cfbd1e63459"
 dependencies = [
  "accesskit",
- "hashbrown 0.15.2",
+ "hashbrown",
  "immutable-chunkmap",
 ]
 
@@ -61,7 +61,7 @@ checksum = "7329821f3bd1101e03a7d2e03bd339e3ac0dc64c70b4c9f9ae1949e3ba8dece1"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
- "hashbrown 0.15.2",
+ "hashbrown",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
@@ -93,7 +93,7 @@ checksum = "24fcd5d23d70670992b823e735e859374d694a3d12bfd8dd32bd3bd8bedb5d81"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
- "hashbrown 0.15.2",
+ "hashbrown",
  "paste",
  "static_assertions",
  "windows 0.58.0",
@@ -1191,8 +1191,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11809f7bae741a1a3626951c12aa331c57f31946f52e1204c71a7306b52bceb1"
 dependencies = [
  "hdf5-metno",
- "indexmap 2.7.1",
- "ndarray 0.16.1",
+ "indexmap",
+ "ndarray",
  "serde",
 ]
 
@@ -1330,7 +1330,7 @@ dependencies = [
  "egui",
  "egui_extras",
  "image-meta",
- "indexmap 2.7.1",
+ "indexmap",
  "serde",
  "sysinfo",
 ]
@@ -1455,7 +1455,7 @@ source = "git+https://github.com/hacknus/egui_logger#7e07124a43aa9a17c596fded134
 dependencies = [
  "chrono",
  "egui",
- "hashbrown 0.15.2",
+ "hashbrown",
  "log",
  "regex",
 ]
@@ -2062,7 +2062,7 @@ checksum = "dcf29e94d6d243368b7a56caa16bc213e4f9f8ed38c4d9557069527b5d5281ca"
 dependencies = [
  "bitflags 2.8.0",
  "gpu-descriptor-types",
- "hashbrown 0.15.2",
+ "hashbrown",
 ]
 
 [[package]]
@@ -2086,18 +2086,12 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "http",
- "indexmap 2.7.1",
+ "indexmap",
  "slab",
  "tokio",
  "tokio-util",
  "tracing",
 ]
-
-[[package]]
-name = "hashbrown"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 
 [[package]]
 name = "hashbrown"
@@ -2123,7 +2117,7 @@ dependencies = [
  "hdf5-metno-types",
  "lazy_static",
  "libc",
- "ndarray 0.16.1",
+ "ndarray",
  "paste",
 ]
 
@@ -2571,22 +2565,12 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
-dependencies = [
- "autocfg",
- "hashbrown 0.12.3",
-]
-
-[[package]]
-name = "indexmap"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c9c992b02b5b4c94ea26e32fe5bccb7aa7d9f390ab5c1221ff895bc7ea8b652"
 dependencies = [
  "equivalent",
- "hashbrown 0.15.2",
+ "hashbrown",
  "serde",
 ]
 
@@ -2619,15 +2603,6 @@ name = "ipnet"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "469fb0b9cefa57e3ef31275ee7cacb78f2fdca44e4765491884a2b119d4eb130"
-
-[[package]]
-name = "itertools"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
-dependencies = [
- "either",
-]
 
 [[package]]
 name = "itertools"
@@ -2965,7 +2940,7 @@ dependencies = [
  "cfg_aliases",
  "codespan-reporting",
  "hexf-parse",
- "indexmap 2.7.1",
+ "indexmap",
  "log",
  "rustc-hash 1.1.0",
  "spirv",
@@ -3011,26 +2986,11 @@ dependencies = [
 
 [[package]]
 name = "ndarray"
-version = "0.15.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adb12d4e967ec485a5f71c6311fe28158e9d6f4bc4a447b474184d0f91a8fa32"
-dependencies = [
- "approx",
- "matrixmultiply",
- "num-complex",
- "num-integer",
- "num-traits",
- "rawpointer",
- "rayon",
- "serde",
-]
-
-[[package]]
-name = "ndarray"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "882ed72dce9365842bf196bdeedf5055305f11fc8c03dee7bb0194a6cad34841"
 dependencies = [
+ "approx",
  "matrixmultiply",
  "num-complex",
  "num-integer",
@@ -3038,16 +2998,17 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "rawpointer",
+ "rayon",
+ "serde",
 ]
 
 [[package]]
 name = "ndarray-ndimage"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e25f143f76f451ed1c8171c9fb87f0edf4942984d5782b0fb2657bff9fd2fe8"
+source = "git+https://github.com/hacknus/ndarray-ndimage#0670c792f039570658c48452df6fbbc9a34bf60d"
 dependencies = [
- "ndarray 0.15.6",
- "ndarray-stats 0.5.1",
+ "ndarray",
+ "ndarray-stats",
  "num-traits",
 ]
 
@@ -3058,7 +3019,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b313788c468c49141a9d9b6131fc15f403e6ef4e8446a0b2e18f664ddb278a9"
 dependencies = [
  "byteorder",
- "ndarray 0.16.1",
+ "ndarray",
  "num-complex",
  "num-traits",
  "py_literal",
@@ -3067,28 +3028,13 @@ dependencies = [
 
 [[package]]
 name = "ndarray-stats"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af5a8477ac96877b5bd1fd67e0c28736c12943aba24eda92b127e036b0c8f400"
-dependencies = [
- "indexmap 1.9.3",
- "itertools 0.10.5",
- "ndarray 0.15.6",
- "noisy_float",
- "num-integer",
- "num-traits",
- "rand",
-]
-
-[[package]]
-name = "ndarray-stats"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17ebbe97acce52d06aebed4cd4a87c0941f4b2519b59b82b4feb5bd0ce003dfd"
 dependencies = [
- "indexmap 2.7.1",
+ "indexmap",
  "itertools 0.13.0",
- "ndarray 0.16.1",
+ "ndarray",
  "noisy_float",
  "num-integer",
  "num-traits",
@@ -5125,10 +5071,10 @@ dependencies = [
  "itertools 0.14.0",
  "itertools-num",
  "log",
- "ndarray 0.15.6",
+ "ndarray",
  "ndarray-ndimage",
  "ndarray-npy",
- "ndarray-stats 0.6.0",
+ "ndarray-stats",
  "once_cell",
  "plotters",
  "preferences",
@@ -5298,7 +5244,7 @@ version = "0.22.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17b4795ff5edd201c7cd6dca065ae59972ce77d1b80fa0a84d94950ece7d1474"
 dependencies = [
- "indexmap 2.7.1",
+ "indexmap",
  "serde",
  "serde_spanned",
  "toml_datetime",
@@ -5886,7 +5832,7 @@ dependencies = [
  "bitflags 2.8.0",
  "cfg_aliases",
  "document-features",
- "indexmap 2.7.1",
+ "indexmap",
  "log",
  "naga",
  "once_cell",
@@ -6747,7 +6693,7 @@ dependencies = [
  "crossbeam-utils",
  "displaydoc",
  "flate2",
- "indexmap 2.7.1",
+ "indexmap",
  "memchr",
  "thiserror 2.0.11",
  "time",

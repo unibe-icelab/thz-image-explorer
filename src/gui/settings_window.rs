@@ -101,7 +101,7 @@ pub fn settings_window(
               ;
 
             // Assuming `beam_x` is of type `Array2<f64>`
-            let beam_x_array = gui_conf.clone().psf.popt_x;
+            let beam_x_array = gui_conf.clone().psf.popt_x.map(|x| *x as f64);
 
             let start = -5.0;
             let end = 5.0;

@@ -62,7 +62,7 @@ pub struct PSF {
     pub end_freq: f32,
     pub n_filters: i32,
     pub filters: Array2<f32>,
-    pub filt_freqs: Array2<f32>,
+    pub filt_freqs: Array1<f32>,
     pub popt_x: Array2<f32>,
     pub popt_y: Array2<f32>,
 }
@@ -218,11 +218,11 @@ pub fn gaussian2(x: &Array1<f32>, params: &[f32]) -> Array1<f32> {
 }
 
 /// Error function
-fn error_f(x: &Array1<f32>, params: &[f32]) -> Array1<f32> {
+fn error_f(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
     let x0 = params[0];
     let w = params[1];
     x.mapv(|xi| {
-        ((1.0 + statrs::function::erf::erf((2.0_f32.sqrt() * (xi - x0) / w) as f64)) / 2.0) as f32
+        (1.0 + statrs::function::erf::erf(2.0_f64.sqrt() * (xi - x0) / w)) / 2.0
     })
 }
 

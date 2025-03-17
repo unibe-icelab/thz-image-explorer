@@ -141,12 +141,14 @@ impl Filter for Deconvolution {
             scan.raw_data.dim().2,
         ));
         // Iterate over the frequencies/filters contained in the psf
-        for (i, &filter) in gui_settings.psf.filters.outer_iter().enumerate() {
+        for (i, filter) in gui_settings.psf.filters.outer_iter().enumerate() {
             // Compute range_max_x and range_max_y with (w_x + |x_0|) * 3 and (w_y + |y_0|) * 3
-            let mut range_max_x: f32 =
-                (gui_settings.psf.popt_x.row(i)[1] as f32 + gui_settings.psf.popt_x.row(i)[0].abs() as f32) * 3.0;
-            let mut range_max_y: f32 =
-                (gui_settings.psf.popt_y.row(i)[1] as f32 + gui_settings.psf.popt_y.row(i)[0].abs() as f32) * 3.0;
+            let mut range_max_x: f32 = (gui_settings.psf.popt_x.row(i)[1] as f32
+                + gui_settings.psf.popt_x.row(i)[0].abs() as f32)
+                * 3.0;
+            let mut range_max_y: f32 = (gui_settings.psf.popt_y.row(i)[1] as f32
+                + gui_settings.psf.popt_y.row(i)[0].abs() as f32)
+                * 3.0;
             // Compute the minimum range_max_x and range_max_y
             // wmin is set to 2.5 to avoid deconvolution errors
             let wmin: f32 = 2.5;
@@ -167,6 +169,8 @@ impl Filter for Deconvolution {
                 .map(|i| i as f32 * scan.dy.unwrap() as f32)
                 .collect();
             // Create the x and y psfs
+
+            // TODO @Arnaud, as I understand popt_x is a (2,100) dimensional array, but the gaussian2 functions takes two single parameters, w and x0
             let gaussian_x: Vec<f32> = gaussian2(&arr1(&x), &gui_settings.psf.popt_x.row(i));
             let gaussian_y: Vec<f32> = gaussian2(&arr1(&y), &gui_settings.psf.popt_y.row(i));
             // Create the 2D PSF
@@ -179,49 +183,83 @@ impl Filter for Deconvolution {
                 scan.dy.unwrap() as f32,
             );
             // Filter the scan with the FIR filter of the given frequency
+            // TODO: filter_scan() takes an Array1 but psf2d is an Array2
             let mut filtered_data: Array3<f32> = self.filter_scan(scan, &psf_2d);
+
             // Computing the filtered image by summing the squared samples for each pixel
-            let mut filtered_image: Array2<f32> =
-                Array2::zeros((scan.raw_data.dim().0, scan.raw_data.dim().1));
-            Zip::from(&mut filtered_image)
-                .and(&filtered_data)
-                .for_each(|f, data_slice| {
-                    *f = data_slice.iter().map(|&x| x.powi(2)).sum();
+            let mut filtered_image =
+                Array2::default((filtered_data.shape()[0], filtered_data.shape()[1]));
+            (
+                filtered_data.axis_iter_mut(Axis(0)),
+                filtered_image.axis_iter_mut(Axis(0)),
+            )
+                .into_par_iter()
+                .for_each(|(mut filtered_data_columns, mut filtered_img_columns)| {
+                    (
+                        filtered_data_columns.axis_iter_mut(Axis(0)),
+                        filtered_img_columns.axis_iter_mut(Axis(0)),
+                    )
+                        .into_par_iter()
+                        .for_each(|(filtered_data, mut filtered_img)| {
+                            *filtered_img.into_scalar() =
+                                filtered_data.iter().map(|xi| xi * xi).sum::<f32>();
+                        });
                 });
             // Number of iterations for the deconvolution
-            let wx_min: f32 = gui_settings.psf.popt_x.rows()
+            let wx_min: f32 = gui_settings
+                .psf
+                .popt_x
+                .rows()
                 .into_iter()
                 .map(|row| row[1])
-                .min()
-                .unwrap(); // Unwrap since we know there's at least one row
-            let wx_max: f32 = gui_settings.psf.popt_x.rows()
-            .into_iter()
-            .map(|row| row[1])
-                .max()
-                .unwrap();
-            let wy_min: f32 = gui_settings.psf.popt_y.rows()
+                .filter(|&x| x.is_finite()) // Filter out NaN and Infinity values
+                .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Greater)) // Use partial_cmp to handle f32 comparison
+                .unwrap(); // Unwrap since we know there's at least one finite value
+            let wx_max: f32 = gui_settings
+                .psf
+                .popt_x
+                .rows()
                 .into_iter()
                 .map(|row| row[1])
-                .min()
+                .filter(|&x| x.is_finite()) // Filter out NaN and Infinity values
+                .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Less)) // Use partial_cmp to handle f32 comparison
                 .unwrap();
-            let wy_max: f32 = gui_settings.psf.popt_y.rows()
+            let wy_min: f32 = gui_settings
+                .psf
+                .popt_y
+                .rows()
                 .into_iter()
                 .map(|row| row[1])
-                .max()
+                .filter(|&x| x.is_finite()) // Filter out NaN and Infinity values
+                .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Greater)) // Use partial_cmp to handle f32 comparison
                 .unwrap();
+            let wy_max: f32 = gui_settings
+                .psf
+                .popt_y
+                .rows()
+                .into_iter()
+                .map(|row| row[1])
+                .filter(|&x| x.is_finite()) // Filter out NaN and Infinity values
+                .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Less)) // Use partial_cmp to handle f32 comparison
+                .unwrap(); // Unwrap since we know there's at least one finite value
             let w_min: f32 = wx_min.min(wy_min);
             let w_max: f32 = wx_max.max(wy_max);
             let n_iter_min: usize = 1;
             // The number of iterations depends on the width of the PSF
             let n_iter: usize = (((gui_settings.psf.popt_x.row(i)[1] - w_min) / (w_max - w_min)
                 * (self.n_iterations as f32 - n_iter_min as f32)
-                + n_iter_min as f32).floor()) as usize;
+                + n_iter_min as f32)
+                .floor()) as usize;
+
             // Perform the deconvolution with the Richardson-Lucy algorithm
             let deconvolved_image: Array2<f32> =
                 self.richardson_lucy(&filtered_image, &psf_2d, n_iter);
             // Computing the gains per pixel for the current frequency
             let mut deconvolution_gains: Array2<f32> =
                 Array2::zeros((scan.raw_data.dim().0, scan.raw_data.dim().1));
+
+            // TODO: this does not work yet
+
             Zip::from(&deconvolved_image)
                 .and(&filtered_image)
                 .and(&mut deconvolution_gains)
