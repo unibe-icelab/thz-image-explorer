@@ -205,6 +205,7 @@ impl GuiSettingsContainer {
 /// - `update_text`: Text displayed for updates.
 /// - `new_release`: Optional field for new software updates (only used with "self_update" feature).
 pub struct THzImageExplorer<'a> {
+    cut_off: [f32; 2],
     fft_bounds: [f32; 2],
     fft_window_type: FftWindowType,
     filter_bounds: [f32; 2],
@@ -341,6 +342,7 @@ impl THzImageExplorer<'_> {
             other_files: vec![],
             selected_file_name: "".to_string(),
             scroll_to_selection: false,
+            cut_off: [0.0, 100.0],
             fft_bounds: [1.0, 7.0],
             fft_window_type: FftWindowType::AdaptedBlackman,
             filter_bounds: [0.0, 10.0],
@@ -381,6 +383,7 @@ impl eframe::App for THzImageExplorer<'_> {
             &mut self.val,
             &mut self.mid_point,
             &mut self.bw,
+            &mut self.cut_off,
             &mut self.file_dialog_state,
             &mut self.file_dialog,
             &mut self.information_panel,
