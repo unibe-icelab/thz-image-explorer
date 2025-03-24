@@ -1430,9 +1430,9 @@ dependencies = [
 
 [[package]]
 name = "egui_double_slider"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85d55496bb7400371d3680e88c7dbce8e3b2f611c51cc91b01daa8e7dfcad451"
+checksum = "26dbf8618ae357a62ec9b5c2cf2550c5c8c21899e194470640c92a507bd13b91"
 dependencies = [
  "egui",
 ]

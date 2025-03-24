@@ -252,7 +252,7 @@ pub fn right_panel(
                     let mut fft_lower_bound = fft_bounds[0];
                     let mut fft_upper_bound = range - fft_bounds[1];
 
-                    let slider_changed = ui
+                    let slider = ui
                         .add(
                             DoubleSlider::new(
                                 &mut fft_lower_bound,
@@ -266,10 +266,14 @@ pub fn right_panel(
                             .width(right_panel_width - left_offset - right_offset),
                         )
                         .on_hover_text(egui::RichText::new(format!(
-                            "{} Scroll and Zoom to adjust the sliders.",
+                            "{} Scroll and Zoom to adjust the sliders. Double Click to reset.",
                             egui_phosphor::regular::INFO
-                        )))
-                        .changed();
+                        )));
+                    let slider_changed = slider.changed();
+                    if slider.double_clicked() {
+                        fft_lower_bound = 1.0;
+                        fft_upper_bound = range - 7.0;
+                    }
                     *fft_bounds = [fft_lower_bound, range - fft_upper_bound];
                     slider_changed
                 });
@@ -377,7 +381,7 @@ pub fn right_panel(
                     let mut filter_lower_bound = filter_bounds[0];
                     let mut filter_upper_bound = filter_bounds[1];
 
-                    let slider_changed = ui
+                    let slider = ui
                         .add(
                             DoubleSlider::new(
                                 &mut filter_lower_bound,
@@ -390,10 +394,14 @@ pub fn right_panel(
                             .width(right_panel_width - left_offset - right_offset),
                         )
                         .on_hover_text(egui::RichText::new(format!(
-                            "{} Scroll and Zoom to adjust the sliders.",
+                            "{} Scroll and Zoom to adjust the sliders. Double Click to reset.",
                             egui_phosphor::regular::INFO
-                        )))
-                        .changed();
+                        )));
+                    let slider_changed = slider.changed();
+                    if slider.double_clicked() {
+                        filter_lower_bound = 0.0;
+                        filter_upper_bound = 10.0;
+                    }
                     *filter_bounds = [filter_lower_bound, filter_upper_bound];
                     slider_changed
                 });
@@ -475,7 +483,7 @@ pub fn right_panel(
                     let mut time_window_upper_bound = time_window[1];
                     let lower = data.time.first().unwrap_or(&1000.0);
                     let upper = data.time.last().unwrap_or(&1050.0);
-                    let slider_changed = ui
+                    let slider = ui
                         .add(
                             DoubleSlider::new(
                                 &mut time_window_lower_bound,
@@ -487,10 +495,14 @@ pub fn right_panel(
                             .width(right_panel_width - left_offset - right_offset),
                         )
                         .on_hover_text(egui::RichText::new(format!(
-                            "{} Scroll and Zoom to adjust the sliders.",
+                            "{} Scroll and Zoom to adjust the sliders. Double Click to reset.",
                             egui_phosphor::regular::INFO
-                        )))
-                        .changed();
+                        )));
+                    let slider_changed = slider.changed();
+                    if slider.double_clicked() {
+                        time_window_lower_bound = *lower;
+                        time_window_upper_bound = *upper;
+                    }
                     *time_window = [time_window_lower_bound, time_window_upper_bound];
                     slider_changed
                 });

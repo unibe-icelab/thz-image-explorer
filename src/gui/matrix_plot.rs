@@ -1,6 +1,6 @@
 use eframe::egui;
 use eframe::egui::{
-    pos2, vec2, Color32, ColorImage, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
+    pos2, vec2, Color32, ColorImage, DragValue, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
 };
 use egui::TextureOptions;
 use egui_double_slider::DoubleSlider;
@@ -294,17 +294,34 @@ pub fn plot_matrix(
         .iter()
         .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi as f64));
 
+    ui.label("Clipping:");
+    let mut cut_off_low = cut_off[0];
+    let mut cut_off_high = cut_off[1];
     ui.horizontal(|ui| {
-        ui.label("Clipping:");
-        let mut cut_off_low = cut_off[0];
-        let mut cut_off_high = cut_off[1];
-        ui.add(
-            DoubleSlider::new(&mut cut_off_low, &mut cut_off_high, 0.0..=100.0)
-                .separation_distance(5.0)
-                .width((*plot_width as f32) * 0.7),
-        );
-        *cut_off = [cut_off_low, cut_off_high];
+        if ui
+            .add(
+                DoubleSlider::new(&mut cut_off_low, &mut cut_off_high, 0.0..=100.0)
+                    .separation_distance(5.0)
+                    .width((*plot_width as f32) * 0.95),
+            )
+            .on_hover_text(egui::RichText::new(format!(
+                "{} Adjust the clipping of the image. Double-click to reset.",
+                egui_phosphor::regular::INFO
+            )))
+            .double_clicked()
+        {
+            cut_off_low = 0.0;
+            cut_off_high = 100.0;
+        };
     });
+    ui.horizontal(|ui| {
+        ui.add(DragValue::new(&mut cut_off_low));
+
+        ui.add_space((0.65 * *plot_width) as f32);
+
+        ui.add(DragValue::new(&mut cut_off_high));
+    });
+    *cut_off = [cut_off_low, cut_off_high];
 
     let width = data.len_of(Axis(0));
     let height = data.len_of(Axis(1));
