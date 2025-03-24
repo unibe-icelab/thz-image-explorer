@@ -375,7 +375,7 @@ pub fn plot_matrix(
             }
 
             // Draw all ROIs
-            for (i, roi) in pixel_selected.rois.iter().enumerate() {
+            for roi in pixel_selected.rois.iter() {
                 let line = Line::new(PlotPoints::from(roi.polygon.clone()))
                     .color(Color32::WHITE)
                     .width(2.0);
@@ -398,7 +398,7 @@ pub fn plot_matrix(
                             .highlight(false)
                             .style(LineStyle::Solid)
                             .width(2.0)
-                            .name("roi"),
+                            .name(roi.name.clone()),
                     );
                 }
             }
