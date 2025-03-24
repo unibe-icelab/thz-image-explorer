@@ -1,8 +1,9 @@
 use eframe::egui;
 use eframe::egui::{
-    pos2, vec2, Color32, ColorImage, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
+    pos2, vec2, Color32, ColorImage, DragValue, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
 };
 use egui::TextureOptions;
+use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotPoint, PlotPoints, Polygon};
 use ndarray::{Array2, Axis};
 
@@ -55,46 +56,43 @@ pub fn make_dummy() -> Array2<f32> {
 pub fn color_from_intensity(
     i: &f32,
     max_intensity: &f64,
-    cut_off: &f64,
+    cut_off: &[f32; 2],
     midpoint_position: &f32,
     bw: &bool,
 ) -> Color32 {
-    // Normalize the intensity based on the midpoint and cut-off
-    let normalized_y = *i / *max_intensity as f32;
+    let normalized_y = (*i / *max_intensity as f32).clamp(0.0, 1.0);
     let hue = if normalized_y <= (*midpoint_position / 100.0) {
-        // Lower section stretched
-        (normalized_y / (*midpoint_position / 100.0)) * 0.5
+        (normalized_y / (*midpoint_position / 100.0)) * 0.667 // Blue to midpoint
     } else {
-        // Upper section stretched
-        0.5 + ((normalized_y - (*midpoint_position / 100.0)) / (1.0 - (*midpoint_position / 100.0)))
-            * 0.5
+        0.667
+            - ((normalized_y - (*midpoint_position / 100.0)) / (1.0 - (*midpoint_position / 100.0)))
+                * 0.667 // Midpoint to red
     };
-    if hue * 100.0 >= *cut_off as f32 {
-        if *bw {
-            egui::ecolor::Hsva {
-                h: 0.0,
-                s: 0.0,
-                v: hue,
-                a: 1.0,
-            }
-                .into()
-        } else {
-            egui::ecolor::Hsva {
-                h: 0.667 - hue * 0.667, // Map to color hue (0 to 0.667 range)
-                s: 1.0,
-                v: 1.0,
-                a: 1.0,
-            }
-                .into()
+
+    let clamped_hue = if normalized_y * 100.0 <= cut_off[0] {
+        0.667 // Force blue at min cutoff
+    } else if normalized_y * 100.0 >= cut_off[1] {
+        0.0 // Force red at max cutoff
+    } else {
+        hue // Interpolated hue
+    };
+
+    if *bw {
+        egui::ecolor::Hsva {
+            h: 0.0,
+            s: 0.0,
+            v: normalized_y,
+            a: 1.0,
         }
+        .into()
     } else {
         egui::ecolor::Hsva {
-            h: 0.667 - hue * 0.667, // Map to color hue (0 to 0.667 range)
+            h: clamped_hue,
             s: 1.0,
-            v: 0.0,
-            a: 0.0,
+            v: 1.0,
+            a: 1.0,
         }
-            .into()
+        .into()
     }
 }
 
@@ -144,7 +142,7 @@ fn colorbar_with_midpoint_slider(
                     v: hue_position,
                     a: 1.0,
                 }
-                    .into();
+                .into();
             } else {
                 img[(0, y)] = egui::ecolor::Hsva {
                     h: 0.667 - hue_position * 0.667, // Map to color hue (0 to 0.667 range)
@@ -152,7 +150,7 @@ fn colorbar_with_midpoint_slider(
                     v: 1.0,
                     a: 1.0,
                 }
-                    .into();
+                .into();
             }
         }
 
@@ -285,7 +283,7 @@ pub fn plot_matrix(
     data: &Array2<f32>,
     plot_width: &f64,
     plot_height: &f64,
-    cut_off: &mut f64,
+    cut_off: &mut [f32; 2],
     val: &mut PlotPoint,
     pixel_selected: &mut SelectedPixel,
     midpoint_position: &mut f32,
@@ -296,10 +294,34 @@ pub fn plot_matrix(
         .iter()
         .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi as f64));
 
+    ui.label("Clipping:");
+    let mut cut_off_low = cut_off[0];
+    let mut cut_off_high = cut_off[1];
     ui.horizontal(|ui| {
-        ui.label("Noise gate:");
-        ui.add(egui::Slider::new(cut_off, 0.0..=100.0));
+        if ui
+            .add(
+                DoubleSlider::new(&mut cut_off_low, &mut cut_off_high, 0.0..=100.0)
+                    .separation_distance(5.0)
+                    .width((*plot_width as f32) * 0.95),
+            )
+            .on_hover_text(egui::RichText::new(format!(
+                "{} Adjust the clipping of the image. Double-click to reset.",
+                egui_phosphor::regular::INFO
+            )))
+            .double_clicked()
+        {
+            cut_off_low = 0.0;
+            cut_off_high = 100.0;
+        };
     });
+    ui.horizontal(|ui| {
+        ui.add(DragValue::new(&mut cut_off_low));
+
+        ui.add_space((0.65 * *plot_width) as f32);
+
+        ui.add(DragValue::new(&mut cut_off_high));
+    });
+    *cut_off = [cut_off_low, cut_off_high];
 
     let width = data.len_of(Axis(0));
     let height = data.len_of(Axis(1));
@@ -401,7 +423,9 @@ pub fn plot_matrix(
                 let _pixel_x = plot_x.floor() as usize;
                 let _pixel_y = height - 1 - plot_y.floor() as usize;
 
-                if (!pixel_selected.rois.is_empty() && pixel_selected.rois.last().unwrap().closed) || pixel_selected.rois.is_empty() {
+                if (!pixel_selected.rois.is_empty() && pixel_selected.rois.last().unwrap().closed)
+                    || pixel_selected.rois.is_empty()
+                {
                     // If last ROI is closed, start a new one
                     let mut roi = ROI::default();
                     roi.name = format!("ROI {}", pixel_selected.rois.len() + 1);
