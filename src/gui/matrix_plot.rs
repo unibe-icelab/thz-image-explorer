@@ -315,11 +315,11 @@ pub fn plot_matrix(
         };
     });
     ui.horizontal(|ui| {
-        ui.add(DragValue::new(&mut cut_off_low));
+        ui.add(DragValue::new(&mut cut_off_low).suffix("%"));
 
-        ui.add_space((0.65 * *plot_width) as f32);
+        ui.add_space((0.6 * *plot_width) as f32);
 
-        ui.add(DragValue::new(&mut cut_off_high));
+        ui.add(DragValue::new(&mut cut_off_high).suffix("%"));
     });
     *cut_off = [cut_off_low, cut_off_high];
 
