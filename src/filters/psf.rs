@@ -81,14 +81,18 @@ fn linear_interp(x: &Vec<f32>, y: &Vec<f32>, xi: f32) -> f32 {
 
 /// TODO: this does not yet work!
 pub fn create_psf_2d(
-    mut psf_x: Vec<f32>,
-    mut psf_y: Vec<f32>,
-    mut x: Vec<f32>,
-    mut y: Vec<f32>,
+    psf_x: Vec<f32>,
+    psf_y: Vec<f32>,
+    x: Vec<f32>,
+    y: Vec<f32>,
     dx: f32,
     dy: f32,
 ) -> Array2<f32> {
-    todo!();
+    let mut psf_x = psf_x;
+    let mut psf_y = psf_y;
+    let mut x = x;
+    let mut y = y;
+
     let x_max = x.iter().cloned().fold(f32::MIN, f32::max).floor() as usize;
     let y_max = y.iter().cloned().fold(f32::MIN, f32::max).floor() as usize;
 

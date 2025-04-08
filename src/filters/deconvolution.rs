@@ -171,8 +171,8 @@ impl Filter for Deconvolution {
             // Create the x and y psfs
 
             // TODO @Arnaud, as I understand popt_x is a (2,100) dimensional array, but the gaussian2 functions takes two single parameters, w and x0
-            let gaussian_x: Vec<f32> = gaussian2(&arr1(&x), &gui_settings.psf.popt_x.row(i));
-            let gaussian_y: Vec<f32> = gaussian2(&arr1(&y), &gui_settings.psf.popt_y.row(i));
+            let gaussian_x: Vec<f32> = gaussian2(&arr1(&x), &gui_settings.psf.popt_x.row(i).as_slice().unwrap()).to_vec();
+            let gaussian_y: Vec<f32> = gaussian2(&arr1(&y), &gui_settings.psf.popt_y.row(i).as_slice().unwrap()).to_vec();
             // Create the 2D PSF
             let psf_2d: Array2<f32> = create_psf_2d(
                 gaussian_x,
@@ -184,7 +184,7 @@ impl Filter for Deconvolution {
             );
             // Filter the scan with the FIR filter of the given frequency
             // TODO: filter_scan() takes an Array1 but psf2d is an Array2
-            let mut filtered_data: Array3<f32> = self.filter_scan(scan, &psf_2d);
+            let mut filtered_data: Array3<f32> = self.filter_scan(scan, &gui_settings.psf.filters.row(i).to_owned());
 
             // Computing the filtered image by summing the squared samples for each pixel
             let mut filtered_image =
@@ -263,13 +263,11 @@ impl Filter for Deconvolution {
             Zip::from(&deconvolved_image)
                 .and(&filtered_image)
                 .and(&mut deconvolution_gains)
-                .for_each(|&d, &f, g| *g = d / f);
+                .for_each(|&d, &f, g| *g = (d / f).sqrt());
             // Applying the gains to the filtered data
-            Zip::from(&mut filtered_data)
-                .and(&deconvolution_gains)
-                .for_each(|data_slice, &gain| {
-                    data_slice.iter_mut().for_each(|x| *x *= gain);
-                });
+            for (data, gain) in filtered_data.iter_mut().zip(deconvolution_gains.iter()) {
+                *data *= gain;
+               }
             // Adding filtered data to scan.filtered_data
             scan.filtered_data += &filtered_data;
         }
