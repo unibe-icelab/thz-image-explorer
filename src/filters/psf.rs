@@ -124,14 +124,12 @@ pub fn create_psf_2d(
     }
 
     // Create the PSF grid
-    let xx: Vec<f32> = (-(x_max as i32)..=x_max as i32)
-        .step_by(dx as usize)
-        .map(|v| v as f32)
+    let xx: Vec<f32> = (-(x_max as f32) as i32..=x_max as f32 as i32)
+        .map(|v| v as f32 * dx)
         .collect();
 
-    let yy: Vec<f32> = (-(y_max as i32)..=y_max as i32)
-        .step_by(dy as usize)
-        .map(|v| v as f32)
+    let yy: Vec<f32> = (-(y_max as f32) as i32..=y_max as f32 as i32)
+        .map(|v| v as f32 * dy)
         .collect();
 
     let mut psf_2d = Array2::zeros((xx.len(), yy.len()));
