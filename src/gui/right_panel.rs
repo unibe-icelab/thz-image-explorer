@@ -491,7 +491,7 @@ pub fn right_panel(
                                 *lower..=*upper,
                             )
                             .zoom_factor(zoom_factor)
-                            .separation_distance(2.0)
+                            .separation_distance(1.0)
                             .width(right_panel_width - left_offset - right_offset),
                         )
                         .on_hover_text(egui::RichText::new(format!(

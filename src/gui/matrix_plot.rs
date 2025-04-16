@@ -60,42 +60,44 @@ pub fn color_from_intensity(
     midpoint_position: &f32,
     bw: &bool,
 ) -> Color32 {
-    let normalized_y = (*i / *max_intensity as f32).clamp(0.0, 1.0);
-    let hue = if normalized_y <= (*midpoint_position / 100.0) {
-        (normalized_y / (*midpoint_position / 100.0)) * 0.667 // Blue to midpoint
+    // Normalize the input to 0..1
+    let normalized_y = (*i / *max_intensity as f32).clamp(0.0, 1.0) * 100.0;
+
+    // Remap using cutoffs to define the effective 0–1 range
+    let remapped_y = if normalized_y <= cut_off[0] {
+        0.0
+    } else if normalized_y >= cut_off[1] {
+        1.0
     } else {
-        0.667
-            - ((normalized_y - (*midpoint_position / 100.0)) / (1.0 - (*midpoint_position / 100.0)))
-                * 0.667 // Midpoint to red
+        (normalized_y - cut_off[0]) / (cut_off[1] - cut_off[0])
     };
 
-    let clamped_hue = if normalized_y * 100.0 <= cut_off[0] {
-        0.667 // Force blue at min cutoff
-    } else if normalized_y * 100.0 >= cut_off[1] {
-        0.0 // Force red at max cutoff
+    // Compute hue based on remapped_y and midpoint
+    let midpoint = *midpoint_position / 100.0;
+    let hue = if remapped_y <= midpoint {
+        (remapped_y / midpoint) * 0.667 // Blue to green
     } else {
-        hue // Interpolated hue
+        0.667 - ((remapped_y - midpoint) / (1.0 - midpoint)) * 0.667 // Green to red
     };
 
     if *bw {
         egui::ecolor::Hsva {
             h: 0.0,
             s: 0.0,
-            v: normalized_y,
+            v: remapped_y,
             a: 1.0,
         }
-        .into()
+            .into()
     } else {
         egui::ecolor::Hsva {
-            h: clamped_hue,
+            h: hue,
             s: 1.0,
             v: 1.0,
             a: 1.0,
         }
-        .into()
+            .into()
     }
 }
-
 fn colorbar_with_midpoint_slider(
     ui: &mut egui::Ui,
     width: &f64,
@@ -301,7 +303,7 @@ pub fn plot_matrix(
         if ui
             .add(
                 DoubleSlider::new(&mut cut_off_low, &mut cut_off_high, 0.0..=100.0)
-                    .separation_distance(5.0)
+                    .separation_distance(1.0)
                     .width((*plot_width as f32) * 0.95),
             )
             .on_hover_text(egui::RichText::new(format!(
