@@ -17,6 +17,8 @@ use ndarray::parallel::prelude::ParallelIterator;
 use ndarray::{arr1, s, Array1, Array2, Array3, Axis, Zip};
 use rustfft::{num_complex::Complex, FftPlanner};
 
+use std::sync::Arc;
+
 /// Represents a `Deconvolution` filter.
 ///
 /// This filter is designed to perform deconvolution using a configurable number of iterations
@@ -80,54 +82,109 @@ pub fn convolve1d(a: &Array1<f32>, b: &Array1<f32>) -> Array1<f32>{
     )
 }
 
-/// Perform fast 2D convolution using FFT for matrices of different sizes
+/// Pad size to the next power of two
+fn next_power_of_two(n: usize) -> usize {
+    n.next_power_of_two()
+}
+
+fn pad_array(a: &Array2<f32>, shape: (usize, usize)) -> Array2<Complex<f32>> {
+    let mut padded = Array2::<Complex<f32>>::zeros(shape);
+    let (rows, cols) = a.dim();
+    for y in 0..rows {
+        for x in 0..cols {
+            padded[[y, x]] = Complex::from(a[[y, x]]);
+        }
+    }
+    padded
+}
+
+/// Perform element-wise multiplication of two complex matrices
+fn multiply_freq_domain(
+    a: &Array2<Complex<f32>>,
+    b: &Array2<Complex<f32>>,
+) -> Array2<Complex<f32>> {
+    let mut result = a.clone();
+    Zip::from(&mut result)
+        .and(b)
+        .for_each(|r, &bval| *r *= bval);
+    result
+}
+
+/// Perform 2D FFT (in-place) on a matrix
+fn fft2d(matrix: &mut Array2<Complex<f32>>, planner: &mut FftPlanner<f32>, inverse: bool) {
+    let (rows, cols) = matrix.dim();
+    let fft_cols: Arc<dyn rustfft::Fft<f32>> = if inverse {
+        planner.plan_fft_inverse(cols)
+    } else {
+        planner.plan_fft_forward(cols)
+    };
+    let fft_rows: Arc<dyn rustfft::Fft<f32>> = if inverse {
+        planner.plan_fft_inverse(rows)
+    } else {
+        planner.plan_fft_forward(rows)
+    };
+
+    // FFT on rows
+    for mut row in matrix.outer_iter_mut() {
+        fft_cols.process(row.as_slice_mut().unwrap());
+    }
+
+    // FFT on columns
+    for x in 0..cols {
+        let mut column: Vec<_> = (0..rows).map(|y| matrix[[y, x]]).collect();
+        fft_rows.process(&mut column);
+        for (y, val) in column.iter().enumerate() {
+            matrix[[y, x]] = *val;
+        }
+    }
+
+    // Normalize if inverse
+    if inverse {
+        let scale = (rows * cols) as f32;
+        matrix.mapv_inplace(|v| v / scale);
+    }
+}
+
+/// FFT-based convolution (output same size as `a`)
 pub fn convolve2d(a: &Array2<f32>, b: &Array2<f32>) -> Array2<f32> {
-    let shape_a = a.shape();
-    let shape_b = b.shape();
-    let conv_shape = (shape_a[0] + shape_b[0] - 1, shape_a[1] + shape_b[1] - 1);
-    let fft_shape = (
-        conv_shape.0.next_power_of_two(),
-        conv_shape.1.next_power_of_two(),
-    );
+    let (a_rows, a_cols) = a.dim();
+    let (b_rows, b_cols) = b.dim();
+
+    // Flip kernel
+    let mut b_flipped = Array2::<f32>::zeros((b_rows, b_cols));
+    for y in 0..b_rows {
+        for x in 0..b_cols {
+            b_flipped[[y, x]] = b[[b_rows - 1 - y, b_cols - 1 - x]];
+        }
+    }
+
+    // Padding size (next power of 2 to avoid wrap-around and for speed)
+    let padded_rows = next_power_of_two(a_rows + b_rows - 1);
+    let padded_cols = next_power_of_two(a_cols + b_cols - 1);
 
     let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(fft_shape.0 * fft_shape.1);
-    let ifft = planner.plan_fft_inverse(fft_shape.0 * fft_shape.1);
 
-    // Pad input arrays to the FFT size
-    let mut a_padded: Vec<Complex<f64>> = vec![Complex { re: 0.0, im: 0.0 }; fft_shape.0 * fft_shape.1];
-    let mut b_padded: Vec<Complex<f64>> = vec![Complex { re: 0.0, im: 0.0 }; fft_shape.0 * fft_shape.1];
+    // Pad input and kernel
+    let mut a_padded = pad_array(a, (padded_rows, padded_cols));
+    let mut b_padded = pad_array(&b_flipped, (padded_rows, padded_cols));
 
-    for i in 0..shape_a[0] {
-        for j in 0..shape_a[1] {
-            a_padded[i * fft_shape.1 + j] = Complex { re: a[[i, j]] as f64, im: 0.0 };
-        }
-    }
-    for i in 0..shape_b[0] {
-        for j in 0..shape_b[1] {
-            b_padded[i * fft_shape.1 + j] = Complex { re: b[[i, j]] as f64, im: 0.0 };
-        }
-    }
+    // FFT both arrays
+    fft2d(&mut a_padded, &mut planner, false);
+    fft2d(&mut b_padded, &mut planner, false);
 
-    // Perform FFT on both arrays
-    fft.process(&mut a_padded);
-    fft.process(&mut b_padded);
+    // Multiply in frequency domain
+    let mut result_freq = multiply_freq_domain(&a_padded, &b_padded);
 
-    // Pointwise multiplication in the frequency domain
-    let mut result_freq: Vec<Complex<f64>> = a_padded
-        .iter()
-        .zip(b_padded.iter())
-        .map(|(x, y)| x * y)
-        .collect();
+    // Inverse FFT
+    fft2d(&mut result_freq, &mut planner, true);
 
-    // Perform inverse FFT to get back to the spatial domain
-    ifft.process(&mut result_freq);
-
-    // Normalize and extract the result
-    let mut result = Array2::<f32>::zeros(conv_shape);
-    for i in 0..conv_shape.0 {
-        for j in 0..conv_shape.1 {
-            result[[i, j]] = (result_freq[i * fft_shape.1 + j].re / (fft_shape.0 * fft_shape.1) as f64) as f32;
+    // Crop the center to original size
+    let start_row = (b_rows - 1) / 2;
+    let start_col = (b_cols - 1) / 2;
+    let mut result = Array2::<f32>::zeros((a_rows, a_cols));
+    for y in 0..a_rows {
+        for x in 0..a_cols {
+            result[[y, x]] = result_freq[[y + start_row, x + start_col]].re;
         }
     }
 
@@ -155,7 +212,6 @@ impl Deconvolution {
         ));
         for i in 0.._scan.raw_data.dim().0 {
             for j in 0.._scan.raw_data.dim().1 {
-                println!("Filtering time trace at position ({}, {})", i, j);
                 filtered_data.slice_mut(s![i, j, ..]).assign(&convolve1d(
                     &_scan.raw_data.slice(s![i, j, ..]).to_owned(),
                     filter
@@ -172,15 +228,13 @@ impl Deconvolution {
         psf: &Array2<f32>,
         n_iterations: usize,
     ) -> Array2<f32> {
-        println!("Starting Richardson-Lucy deconvolution with {} iterations...", n_iterations);
         let psf_mirror = psf.slice(s![..;-1, ..;-1]).to_owned(); // Flip kernel
                                                                  // Copying d in u as a first guess
         let mut u = image.clone();
         // Regularization parameter
         let eps: f32 = 1e-12;
         // Iterating
-        for iter in 0..n_iterations {
-            println!("Iteration {}/{}", iter + 1, n_iterations);
+        for _ in 0..n_iterations {
             let conv = convolve2d(&u, &psf);
             let relative_blur = Zip::from(image)
                 .and(&conv)
@@ -191,7 +245,6 @@ impl Deconvolution {
             );
             Zip::from(&mut u).and(&correction).for_each(|e, &c| *e *= c); // Element-wise multiplication
         }
-        println!("Richardson-Lucy deconvolution completed.");
         u
     }
 }
@@ -298,7 +351,7 @@ impl Filter for Deconvolution {
                         filtered_img_columns.axis_iter_mut(Axis(0)),
                     )
                         .into_par_iter()
-                        .for_each(|(filtered_data, mut filtered_img)| {
+                        .for_each(|(filtered_data, filtered_img)| {
                             *filtered_img.into_scalar() =
                                 filtered_data.iter().map(|xi| xi * xi).sum::<f32>();
                         });
