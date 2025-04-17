@@ -2,6 +2,7 @@ use ndarray::{s, Array1, Array2, Axis, Ix1, Zip};
 use ndarray_stats::QuantileExt;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use interp1d::Interp1d;
 
 /// Represents a Point Spread Function (PSF) used in spectroscopy and imaging analysis.
 ///
@@ -67,18 +68,6 @@ pub struct PSF {
     pub popt_y: Array2<f32>,
 }
 
-/// Linear interpolation function for a 1D array.
-fn linear_interp(x: &Vec<f32>, y: &Vec<f32>, xi: f32) -> f32 {
-    let n = x.len();
-    for i in 0..n - 1 {
-        if xi >= x[i] && xi <= x[i + 1] {
-            let slope = (y[i + 1] - y[i]) / (x[i + 1] - x[i]);
-            return y[i] + slope * (xi - x[i]);
-        }
-    }
-    0.0 // Return 0.0 if xi is out of bounds
-}
-
 /// TODO: this does not yet work!
 pub fn create_psf_2d(
     psf_x: Vec<f32>,
@@ -92,6 +81,12 @@ pub fn create_psf_2d(
     let mut psf_y = psf_y;
     let mut x = x;
     let mut y = y;
+
+    // Normalize psf_x and psf_y
+    let psf_x_max = psf_x.iter().cloned().fold(f32::MIN, f32::max);
+    let psf_y_max = psf_y.iter().cloned().fold(f32::MIN, f32::max);
+    psf_x.iter_mut().for_each(|v| *v /= psf_x_max);
+    psf_y.iter_mut().for_each(|v| *v /= psf_y_max);
 
     let x_max = x.iter().cloned().fold(f32::MIN, f32::max).floor() as usize;
     let y_max = y.iter().cloned().fold(f32::MIN, f32::max).floor() as usize;
@@ -135,10 +130,14 @@ pub fn create_psf_2d(
     let mut psf_2d = Array2::zeros((xx.len(), yy.len()));
 
     // Fill in the PSF 2D array using linear interpolation
+    let interp_x = Interp1d::new_unsorted(x.to_vec(), psf_x.to_vec())
+        .expect("Failed to create interpolator");
+    let interp_y = Interp1d::new_unsorted(y.to_vec(), psf_y.to_vec())
+        .expect("Failed to create interpolator");
     for (i, &x_val) in xx.iter().enumerate() {
         for (j, &y_val) in yy.iter().enumerate() {
-            let psf_x_interp = linear_interp(&x, &psf_x, x_val);
-            let psf_y_interp = linear_interp(&y, &psf_y, y_val);
+            let psf_x_interp = interp_x.interpolate(x_val);
+            let psf_y_interp = interp_y.interpolate(y_val);
             psf_2d[(i, j)] = psf_x_interp * psf_y_interp;
         }
     }

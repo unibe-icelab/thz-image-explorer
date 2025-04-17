@@ -12,9 +12,9 @@ use crate::filters::psf::gaussian2;
 use crate::gui::application::GuiSettingsContainer;
 use eframe::egui::{self, Ui};
 use filter_macros::register_filter;
-use ndarray::parallel::prelude::IntoParallelIterator;
-use ndarray::parallel::prelude::ParallelIterator;
 use ndarray::{arr1, s, Array1, Array2, Array3, Axis, Zip};
+use num_complex::Complex32;
+use rayon::prelude::*;
 use rustfft::{num_complex::Complex, FftPlanner};
 
 use std::sync::Arc;
@@ -39,7 +39,7 @@ pub struct Deconvolution {
 }
 
 /// Perform fast convolution using FFT for signals of different lengths
-pub fn convolve1d(a: &Array1<f32>, b: &Array1<f32>) -> Array1<f32>{
+pub fn convolve1d(a: &Array1<f32>, b: &Array1<f32>) -> Array1<f32> {
     let conv_size = a.len(); // Adjusted convolution size
     let fft_size = conv_size.next_power_of_two(); // Use next power of two for efficiency
 
@@ -52,10 +52,16 @@ pub fn convolve1d(a: &Array1<f32>, b: &Array1<f32>) -> Array1<f32>{
     let mut b_padded: Vec<Complex<f64>> = vec![Complex { re: 0.0, im: 0.0 }; fft_size];
 
     for i in 0..a.len() {
-        a_padded[i] = Complex { re: a[i] as f64, im: 0.0 };
+        a_padded[i] = Complex {
+            re: a[i] as f64,
+            im: 0.0,
+        };
     }
     for i in 0..b.len() {
-        b_padded[i] = Complex { re: b[i] as f64, im: 0.0 };
+        b_padded[i] = Complex {
+            re: b[i] as f64,
+            im: 0.0,
+        };
     }
 
     // Perform FFT on both signals
@@ -87,17 +93,6 @@ fn next_power_of_two(n: usize) -> usize {
     n.next_power_of_two()
 }
 
-fn pad_array(a: &Array2<f32>, shape: (usize, usize)) -> Array2<Complex<f32>> {
-    let mut padded = Array2::<Complex<f32>>::zeros(shape);
-    let (rows, cols) = a.dim();
-    for y in 0..rows {
-        for x in 0..cols {
-            padded[[y, x]] = Complex::from(a[[y, x]]);
-        }
-    }
-    padded
-}
-
 /// Perform element-wise multiplication of two complex matrices
 fn multiply_freq_domain(
     a: &Array2<Complex<f32>>,
@@ -108,6 +103,24 @@ fn multiply_freq_domain(
         .and(b)
         .for_each(|r, &bval| *r *= bval);
     result
+}
+
+pub fn pad_array(input: &Array2<f32>, padded_shape: (usize, usize)) -> Array2<Complex32> {
+    let (input_rows, input_cols) = input.dim();
+    let (padded_rows, padded_cols) = padded_shape;
+
+    assert!(padded_rows >= input_rows && padded_cols >= input_cols);
+
+    let mut output = Array2::<Complex32>::zeros((padded_rows, padded_cols));
+
+    // Copy input into top-left corner of output, converting to Complex32
+    for y in 0..input_rows {
+        for x in 0..input_cols {
+            output[[y, x]] = Complex32::new(input[[y, x]], 0.0);
+        }
+    }
+
+    output
 }
 
 /// Perform 2D FFT (in-place) on a matrix
@@ -150,43 +163,40 @@ pub fn convolve2d(a: &Array2<f32>, b: &Array2<f32>) -> Array2<f32> {
     let (a_rows, a_cols) = a.dim();
     let (b_rows, b_cols) = b.dim();
 
-    // Flip kernel
-    let mut b_flipped = Array2::<f32>::zeros((b_rows, b_cols));
-    for y in 0..b_rows {
-        for x in 0..b_cols {
-            b_flipped[[y, x]] = b[[b_rows - 1 - y, b_cols - 1 - x]];
-        }
-    }
-
-    // Padding size (next power of 2 to avoid wrap-around and for speed)
     let padded_rows = next_power_of_two(a_rows + b_rows - 1);
     let padded_cols = next_power_of_two(a_cols + b_cols - 1);
 
     let mut planner = FftPlanner::new();
 
-    // Pad input and kernel
+    // Pad both inputs to complex arrays
     let mut a_padded = pad_array(a, (padded_rows, padded_cols));
-    let mut b_padded = pad_array(&b_flipped, (padded_rows, padded_cols));
+    let mut b_padded = pad_array(b, (padded_rows, padded_cols));
 
-    // FFT both arrays
+    // FFT
     fft2d(&mut a_padded, &mut planner, false);
     fft2d(&mut b_padded, &mut planner, false);
 
-    // Multiply in frequency domain
+    // Frequency domain multiplication
     let mut result_freq = multiply_freq_domain(&a_padded, &b_padded);
 
     // Inverse FFT
     fft2d(&mut result_freq, &mut planner, true);
 
-    // Crop the center to original size
+    // Crop the central part
     let start_row = (b_rows - 1) / 2;
     let start_col = (b_cols - 1) / 2;
+
+    // Instead of manual loop, slice
+    let result_view = result_freq.slice(s![
+        start_row..start_row + a_rows,
+        start_col..start_col + a_cols
+    ]);
+
+    // Extract real part
     let mut result = Array2::<f32>::zeros((a_rows, a_cols));
-    for y in 0..a_rows {
-        for x in 0..a_cols {
-            result[[y, x]] = result_freq[[y + start_row, x + start_col]].re;
-        }
-    }
+    Zip::from(&mut result)
+        .and(result_view)
+        .for_each(|r, &c| *r = c.re);
 
     result
 }
@@ -203,8 +213,7 @@ impl Deconvolution {
     }
 
     /// Computes the filtered scan with the FIR filter by convolving each time trace with the filter.
-    fn filter_scan(&self, _scan: &mut ScannedImage, filter: &Array1<f32>) -> Array3<f32> {
-        println!("Starting FIR filter scan...");
+    fn filter_scan(&self, _scan: &ScannedImage, filter: &Array1<f32>) -> Array3<f32> {
         let mut filtered_data = Array3::<f32>::zeros((
             _scan.raw_data.dim().0,
             _scan.raw_data.dim().1,
@@ -214,11 +223,10 @@ impl Deconvolution {
             for j in 0.._scan.raw_data.dim().1 {
                 filtered_data.slice_mut(s![i, j, ..]).assign(&convolve1d(
                     &_scan.raw_data.slice(s![i, j, ..]).to_owned(),
-                    filter
+                    filter,
                 ));
             }
         }
-        println!("FIR filter scan completed.");
         filtered_data
     }
 
@@ -229,23 +237,60 @@ impl Deconvolution {
         n_iterations: usize,
     ) -> Array2<f32> {
         let psf_mirror = psf.slice(s![..;-1, ..;-1]).to_owned(); // Flip kernel
-                                                                 // Copying d in u as a first guess
-        let mut u = image.clone();
-        // Regularization parameter
-        let eps: f32 = 1e-12;
-        // Iterating
-        for _ in 0..n_iterations {
-            let conv = convolve2d(&u, &psf);
-            let relative_blur = Zip::from(image)
-                .and(&conv)
-                .map_collect(|&o, &c| o / (c + eps)); // Avoid division by zero
-            let correction = convolve2d(
-                &relative_blur,
-                &psf_mirror,
-            );
-            Zip::from(&mut u).and(&correction).for_each(|e, &c| *e *= c); // Element-wise multiplication
+
+        let pad_y = psf.nrows() / 2;
+        let pad_x = psf.ncols() / 2;
+
+        let (h, w) = (image.nrows(), image.ncols());
+        let padded_h = h + 2 * pad_y;
+        let padded_w = w + 2 * pad_x;
+
+        let mut padded_image = Array2::<f32>::zeros((padded_h, padded_w));
+
+        // Center
+        padded_image
+            .slice_mut(s![pad_y..pad_y + h, pad_x..pad_x + w])
+            .assign(image);
+
+        // Top and Bottom reflection
+        for i in 0..pad_y {
+            let src_top = image.slice(s![pad_y - i, ..]);
+            let src_bottom = image.slice(s![h - 2 - i, ..]);
+
+            padded_image
+                .slice_mut(s![i, pad_x..pad_x + w])
+                .assign(&src_top);
+            padded_image
+                .slice_mut(s![pad_y + h + i, pad_x..pad_x + w])
+                .assign(&src_bottom);
         }
-        u
+
+        // Left and Right reflection
+        for j in 0..pad_x {
+            let src_left = padded_image.slice(s![.., pad_x + (pad_x - j)]).to_owned();
+            let src_right = padded_image.slice(s![.., pad_x + w - 2 - j]).to_owned();
+
+            padded_image.slice_mut(s![.., j]).assign(&src_left);
+            padded_image
+                .slice_mut(s![.., pad_x + w + j])
+                .assign(&src_right);
+        }
+
+        let mut u = padded_image.clone(); // Initial guess
+
+        let eps: f32 = 1e-12;
+
+        for _ in 0..n_iterations {
+            let ustarp = convolve2d(&u, &psf);
+            let relative_blur = Zip::from(&padded_image)
+                .and(&ustarp)
+                .map_collect(|&d, &c| d / (c + eps));
+            let correction = convolve2d(&relative_blur, &psf_mirror);
+            Zip::from(&mut u).and(&correction).for_each(|e, &c| *e *= c);
+        }
+
+        // Crop result to original image size
+        u.slice(s![pad_y..pad_y + h, pad_x..pad_x + w]).to_owned()
     }
 }
 
@@ -283,168 +328,131 @@ impl Filter for Deconvolution {
     /// This method currently contains a placeholder for the Richardson-Lucy algorithm.
     fn filter(&self, scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer) {
         println!("Starting deconvolution filter...");
-        // Initializing _scan.filtered_data to zeros
         scan.filtered_data = Array3::zeros((
             scan.raw_data.dim().0,
             scan.raw_data.dim().1,
             scan.raw_data.dim().2,
         ));
-        // Iterate over the frequencies/filters contained in the psf
-        for (i, filter) in gui_settings.psf.filters.outer_iter().enumerate() {
-            println!("Processing filter {}...", i);
-            // Compute range_max_x and range_max_y with (w_x + |x_0|) * 3 and (w_y + |y_0|) * 3
-            let mut range_max_x: f32 = (gui_settings.psf.popt_x.row(i)[1] as f32
-                + gui_settings.psf.popt_x.row(i)[0].abs() as f32)
-                * 3.0;
-            let mut range_max_y: f32 = (gui_settings.psf.popt_y.row(i)[1] as f32
-                + gui_settings.psf.popt_y.row(i)[0].abs() as f32)
-                * 3.0;
-            // Compute the minimum range_max_x and range_max_y
-            // wmin is set to 2.5 to avoid deconvolution errors
-            let wmin: f32 = 2.5;
-            range_max_x = self.range_max_min(range_max_x, wmin);
-            range_max_y = self.range_max_min(range_max_y, wmin);
-            // Round the range_max_x and range_max_y to the nearest dx and dy steps
-            range_max_x = (range_max_x / scan.dx.unwrap() as f32).floor() * scan.dx.unwrap() as f32
-                + scan.dx.unwrap() as f32;
-            range_max_y = (range_max_y / scan.dy.unwrap() as f32).floor() * scan.dy.unwrap() as f32
-                + scan.dy.unwrap() as f32;
-            // Create two vectors x and y with range_max_x and range_max_y using the dx and dy steps from the scan
-            let x: Vec<f32> = (-((range_max_x / scan.dx.unwrap() as f32).floor() as isize)
-                ..=((range_max_x / scan.dx.unwrap() as f32).floor() as isize))
-                .map(|i| i as f32 * scan.dx.unwrap() as f32)
-                .collect();
-            let y: Vec<f32> = (-((range_max_y / scan.dy.unwrap() as f32).floor() as isize)
-                ..=((range_max_y / scan.dy.unwrap() as f32).floor() as isize))
-                .map(|i| i as f32 * scan.dy.unwrap() as f32)
-                .collect();
-            // Create the x and y psfs
 
-            // TODO @Arnaud, as I understand popt_x is a (2,100) dimensional array, but the gaussian2 functions takes two single parameters, w and x0
-            let gaussian_x: Vec<f32> = gaussian2(&arr1(&x), &gui_settings.psf.popt_x.row(i).as_slice().unwrap()).to_vec();
-            let gaussian_y: Vec<f32> = gaussian2(&arr1(&y), &gui_settings.psf.popt_y.row(i).as_slice().unwrap()).to_vec();
-            // Create the 2D PSF
-            println!("Creating 2D PSF...");
-            let psf_2d: Array2<f32> = create_psf_2d(
-                gaussian_x,
-                gaussian_y,
-                x,
-                y,
-                scan.dx.unwrap() as f32,
-                scan.dy.unwrap() as f32,
-            );
-            // Filter the scan with the FIR filter of the given frequency
-            println!("Filtering scan with FIR filter...");
-            let mut filtered_data: Array3<f32> = self.filter_scan(scan, &gui_settings.psf.filters.row(i).to_owned());
+        // Pré-calcul des valeurs minimales et maximales pour éviter de les recalculer à chaque itération
+        let (wx_min, wx_max) = gui_settings
+            .psf
+            .popt_x
+            .rows()
+            .into_iter()
+            .filter_map(|row| row[1].is_finite().then_some(row[1]))
+            .fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), val| {
+                (min.min(val), max.max(val))
+            });
 
-            // Computing the filtered image by summing the squared samples for each pixel
-            let mut filtered_image =
-                Array2::default((filtered_data.shape()[0], filtered_data.shape()[1]));
-            (
-                filtered_data.axis_iter_mut(Axis(0)),
-                filtered_image.axis_iter_mut(Axis(0)),
-            )
-                .into_par_iter()
-                .for_each(|(mut filtered_data_columns, mut filtered_img_columns)| {
-                    (
-                        filtered_data_columns.axis_iter_mut(Axis(0)),
-                        filtered_img_columns.axis_iter_mut(Axis(0)),
-                    )
-                        .into_par_iter()
-                        .for_each(|(filtered_data, filtered_img)| {
-                            *filtered_img.into_scalar() =
-                                filtered_data.iter().map(|xi| xi * xi).sum::<f32>();
-                        });
-                });
-            // Number of iterations for the deconvolution
-            let wx_min: f32 = gui_settings
-                .psf
-                .popt_x
-                .rows()
-                .into_iter()
-                .map(|row| row[1])
-                .filter(|&x| x.is_finite()) // Filter out NaN and Infinity values
-                .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Greater)) // Use partial_cmp to handle f32 comparison
-                .unwrap(); // Unwrap since we know there's at least one finite value
-            let wx_max: f32 = gui_settings
-                .psf
-                .popt_x
-                .rows()
-                .into_iter()
-                .map(|row| row[1])
-                .filter(|&x| x.is_finite()) // Filter out NaN and Infinity values
-                .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Less)) // Use partial_cmp to handle f32 comparison
-                .unwrap();
-            let wy_min: f32 = gui_settings
-                .psf
-                .popt_y
-                .rows()
-                .into_iter()
-                .map(|row| row[1])
-                .filter(|&x| x.is_finite()) // Filter out NaN and Infinity values
-                .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Greater)) // Use partial_cmp to handle f32 comparison
-                .unwrap();
-            let wy_max: f32 = gui_settings
-                .psf
-                .popt_y
-                .rows()
-                .into_iter()
-                .map(|row| row[1])
-                .filter(|&x| x.is_finite()) // Filter out NaN and Infinity values
-                .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Less)) // Use partial_cmp to handle f32 comparison
-                .unwrap(); // Unwrap since we know there's at least one finite value
-            let w_min: f32 = wx_min.min(wy_min);
-            let w_max: f32 = wx_max.max(wy_max);
-            let n_iter_min: usize = 1;
-            // The number of iterations depends on the width of the PSF
-            let n_iter: usize = (((gui_settings.psf.popt_x.row(i)[1] - w_min) / (w_max - w_min)
-                * (self.n_iterations as f32 - n_iter_min as f32)
-                + n_iter_min as f32)
-                .floor()) as usize;
+        let (wy_min, wy_max) = gui_settings
+            .psf
+            .popt_y
+            .rows()
+            .into_iter()
+            .filter_map(|row| row[1].is_finite().then_some(row[1]))
+            .fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), val| {
+                (min.min(val), max.max(val))
+            });
 
-            // Perform the deconvolution with the Richardson-Lucy algorithm
-            println!("Performing Richardson-Lucy deconvolution...");
-            let deconvolved_image: Array2<f32> =
-                self.richardson_lucy(&filtered_image, &psf_2d, n_iter);
-            // Computing the gains per pixel for the current frequency
-            let mut deconvolution_gains: Array2<f32> =
-                Array2::zeros((scan.raw_data.dim().0, scan.raw_data.dim().1));
+        let w_min = wx_min.min(wy_min);
+        let w_max = wx_max.max(wy_max);
 
-            // TODO: this does not work yet
+        // Parallélisation avec Rayon
+        let processed_data: Vec<Array3<f32>> = gui_settings
+            .psf
+            .filters
+            .outer_iter()
+            .enumerate()
+            .par_bridge()
+            .map(|(i, _)| {
+                println!("Processing filter {}...", i);
 
-            println!("Applying deconvolution gains...");
-            Zip::from(&deconvolved_image)
-                .and(&filtered_image)
-                .and(&mut deconvolution_gains)
-                .for_each(|&d, &f, g| *g = (d / f).sqrt());
-            // Applying the gains to the filtered data
-            for (data, gain) in filtered_data.iter_mut().zip(deconvolution_gains.iter()) {
-                *data *= gain;
-               }
-            // Adding filtered data to scan.filtered_data
-            println!("Adding filtered data to scan.filtered_data...");
-            scan.filtered_data += &filtered_data;
+                // Calcul des paramètres PSF
+                let range_max_x = self.range_max_min(
+                    (gui_settings.psf.popt_x.row(i)[1] as f32
+                        + gui_settings.psf.popt_x.row(i)[0].abs() as f32)
+                        * 3.0,
+                    2.5,
+                );
+                let range_max_y = self.range_max_min(
+                    (gui_settings.psf.popt_y.row(i)[1] as f32
+                        + gui_settings.psf.popt_y.row(i)[0].abs() as f32)
+                        * 3.0,
+                    2.5,
+                );
+
+                let dx = scan.dx.unwrap() as f32;
+                let dy = scan.dy.unwrap() as f32;
+
+                let range_max_x = (range_max_x / dx).floor() * dx + dx;
+                let range_max_y = (range_max_y / dy).floor() * dy + dy;
+
+                let x: Vec<f32> = (-((range_max_x / dx).floor() as isize)
+                    ..=((range_max_x / dx).floor() as isize))
+                    .map(|i| i as f32 * dx)
+                    .collect();
+                let y: Vec<f32> = (-((range_max_y / dy).floor() as isize)
+                    ..=((range_max_y / dy).floor() as isize))
+                    .map(|i| i as f32 * dy)
+                    .collect();
+
+                let gaussian_x = gaussian2(
+                    &arr1(&x),
+                    &gui_settings.psf.popt_x.row(i).as_slice().unwrap(),
+                )
+                .to_vec();
+                let gaussian_y = gaussian2(
+                    &arr1(&y),
+                    &gui_settings.psf.popt_y.row(i).as_slice().unwrap(),
+                )
+                .to_vec();
+
+                let psf_2d = create_psf_2d(gaussian_x, gaussian_y, x, y, dx, dy);
+
+                // Filtrage des données
+                let mut filtered_data =
+                    self.filter_scan(&scan.clone(), &gui_settings.psf.filters.row(i).to_owned());
+
+                // Calcul de l'image filtrée
+                let filtered_image = filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
+
+                let n_iter = (((gui_settings.psf.popt_x.row(i)[1] - w_min) / (w_max - w_min)
+                    * (self.n_iterations as f32 - 1.0)
+                    + 1.0)
+                    .floor()) as usize;
+
+                let deconvolved_image = self
+                    .richardson_lucy(&filtered_image, &psf_2d, n_iter)
+                    .mapv(|x| x.max(0.0)); // Forcer les valeurs négatives à zéro
+
+                let mut deconvolution_gains =
+                    Array2::zeros((scan.raw_data.dim().0, scan.raw_data.dim().1));
+                Zip::from(&deconvolved_image)
+                    .and(&filtered_image)
+                    .and(&mut deconvolution_gains)
+                    .for_each(|&u, &d, g| *g = (u / d).sqrt());
+
+                // Application des gains
+                filtered_data
+                    .iter_mut()
+                    .zip(deconvolution_gains.iter())
+                    .for_each(|(data, &gain)| *data *= gain);
+
+                filtered_data
+            })
+            .collect();
+
+        // Réduction des données filtrées
+        for data in processed_data {
+            scan.filtered_data += &data;
         }
 
-        // Computing the filtered image in scan.filtered_img by summing the squared samples for each pixel
-        (
-            scan.filtered_data.axis_iter_mut(Axis(0)),
-            scan.filtered_img.axis_iter_mut(Axis(0)),
-        )
-            .into_par_iter()
-            .for_each(|(mut filtered_data_columns, mut filtered_img_columns)| {
-                (
-                    filtered_data_columns.axis_iter_mut(Axis(0)),
-                    filtered_img_columns.axis_iter_mut(Axis(0)),
-                )
-                    .into_par_iter()
-                    .for_each(|(filtered_data, mut filtered_img)| {
-                        *filtered_img.into_scalar() =
-                            filtered_data.iter().map(|xi| xi * xi).sum::<f32>();
-                    });
-            });
+        scan.filtered_img = scan.filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
+
         println!("Deconvolution filter completed.");
     }
+
     fn ui(
         &mut self,
         ui: &mut Ui,
@@ -454,7 +462,7 @@ impl Filter for Deconvolution {
         // implement your GUI parameter handling here, for example like this:
         ui.horizontal(|ui| {
             ui.label("Iterations: ");
-            ui.add(egui::Slider::new(&mut self.n_iterations, 0..=10))
+            ui.add(egui::Slider::new(&mut self.n_iterations, 0..=200))
         })
         .inner
     }
