@@ -10,10 +10,7 @@ use crate::io::{
     load_meta_data_of_thz_file, open_from_npz, open_from_thz, open_json, save_to_thz,
     update_meta_data_of_thz_file,
 };
-use crate::math_tools::{
-    apply_adapted_blackman_window, apply_blackman, apply_flat_top, apply_hamming, apply_hanning,
-    numpy_unwrap, FftWindowType,
-};
+use crate::math_tools::{apply_adapted_blackman_window, apply_blackman, apply_flat_top, apply_hamming, apply_hanning, apply_soft_bandpass, numpy_unwrap, FftWindowType};
 use csv::ReaderBuilder;
 use dotthz::DotthzMetaData;
 use eframe::egui::ColorImage;
@@ -87,12 +84,12 @@ fn filter_time_window(
     println!("updating data");
     let start = Instant::now();
     let lower = scan
-        .time
+        .filtered_time
         .iter()
         .position(|t| *t == config.time_window[0].round())
         .unwrap_or(0);
     let upper = scan
-        .time
+        .filtered_time
         .iter()
         .position(|t| *t == config.time_window[1].round())
         .unwrap_or(0);
@@ -141,24 +138,24 @@ fn filter(
     // calculate fft filter and calculate ifft
     let start = Instant::now();
     let lower = scan
-        .time
+        .filtered_time
         .iter()
         .position(|t| *t == config.time_window[0].round())
         .unwrap_or(0);
     let upper = scan
-        .time
+        .filtered_time
         .iter()
         .position(|t| *t == config.time_window[1].round())
-        .unwrap_or(scan.time.len());
-    if let Some(r2c) = &scan.r2c {
-        scan.filtered_img =
-            Array2::zeros((scan.scaled_data.shape()[0], scan.scaled_data.shape()[1]));
-        scan.filtered_data = Array3::zeros((
-            scan.scaled_data.shape()[0],
-            scan.scaled_data.shape()[1],
-            scan.scaled_data.shape()[2],
-        ));
-        if let Some(c2r) = &scan.c2r {
+        .unwrap_or(scan.filtered_time.len());
+    if let Some(r2c) = &scan.filtered_r2c {
+        // scan.filtered_img =
+        //     Array2::zeros((scan.filtered_data.shape()[0], scan.filtered_data.shape()[1]));
+        // scan.filtered_data = Array3::zeros((
+        //     scan.filtered_data.shape()[0],
+        //     scan.filtered_data.shape()[1],
+        //     scan.filtered_data.shape()[2],
+        // ));
+        if let Some(c2r) = &scan.filtered_c2r {
             (
                 scan.scaled_data.axis_iter_mut(Axis(0)),
                 scan.filtered_data.axis_iter_mut(Axis(0)),
@@ -179,28 +176,28 @@ fn filter(
                             .into_par_iter()
                             .for_each(
                                 |(scaled_data, mut filtered_data, filtered_img)| {
-                                    filtered_data.assign(&scaled_data);
+                                    // filtered_data.assign(&filtered_data);
 
                                     match config.fft_window_type {
                                         FftWindowType::AdaptedBlackman => {
                                             apply_adapted_blackman_window(
                                                 &mut filtered_data,
-                                                &scan.time,
+                                                &scan.filtered_time,
                                                 &config.fft_window[0],
                                                 &config.fft_window[1],
                                             );
                                         }
                                         FftWindowType::Blackman => {
-                                            apply_blackman(&mut filtered_data, &scan.time)
+                                            apply_blackman(&mut filtered_data, &scan.filtered_time)
                                         }
                                         FftWindowType::Hanning => {
-                                            apply_hanning(&mut filtered_data, &scan.time)
+                                            apply_hanning(&mut filtered_data, &scan.filtered_time)
                                         }
                                         FftWindowType::Hamming => {
-                                            apply_hamming(&mut filtered_data, &scan.time)
+                                            apply_hamming(&mut filtered_data, &scan.filtered_time)
                                         }
                                         FftWindowType::FlatTop => {
-                                            apply_flat_top(&mut filtered_data, &scan.time)
+                                            apply_flat_top(&mut filtered_data, &scan.filtered_time)
                                         }
                                     }
 
@@ -210,16 +207,12 @@ fn filter(
                                     r2c.process(&mut filtered_data.to_vec(), &mut spectrum)
                                         .unwrap();
 
-                                    // apply bandpass filter
-                                    for (f, spectrum) in
-                                        scan.frequencies.iter().zip(spectrum.iter_mut())
-                                    {
-                                        if (*f < config.fft_filter[0])
-                                            || (*f > config.fft_filter[1])
-                                        {
-                                            *spectrum = Complex32::new(0.0, 0.0);
-                                        }
-                                    }
+                                    apply_soft_bandpass(
+                                        &scan.frequencies,
+                                        &mut spectrum,
+                                        (config.fft_filter[0], config.fft_filter[1]),
+                                        0.1, // smooth transition over 100 Hz
+                                    );
 
                                     let mut output = c2r.make_output_vec();
 

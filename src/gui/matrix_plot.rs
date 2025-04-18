@@ -60,10 +60,10 @@ pub fn color_from_intensity(
     midpoint_position: &f32,
     bw: &bool,
 ) -> Color32 {
-    // Normalize the input to 0..1
+    // Normalize input to 0..100
     let normalized_y = (*i / *max_intensity as f32).clamp(0.0, 1.0) * 100.0;
 
-    // Remap using cutoffs to define the effective 0–1 range
+    // Remap using cutoffs to define 0–1 range
     let remapped_y = if normalized_y <= cut_off[0] {
         0.0
     } else if normalized_y >= cut_off[1] {
@@ -72,12 +72,12 @@ pub fn color_from_intensity(
         (normalized_y - cut_off[0]) / (cut_off[1] - cut_off[0])
     };
 
-    // Compute hue based on remapped_y and midpoint
+    // Reverse hue mapping: red → green → blue
     let midpoint = *midpoint_position / 100.0;
     let hue = if remapped_y <= midpoint {
-        (remapped_y / midpoint) * 0.667 // Blue to green
+        (1.0 - (remapped_y / midpoint)) * 0.667 // Red to green
     } else {
-        0.667 - ((remapped_y - midpoint) / (1.0 - midpoint)) * 0.667 // Green to red
+        ((remapped_y - midpoint) / (1.0 - midpoint)) * 0.667 // Green to blue
     };
 
     if *bw {

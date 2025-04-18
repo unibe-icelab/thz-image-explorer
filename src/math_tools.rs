@@ -4,6 +4,7 @@
 
 use ndarray::{Array1, ArrayViewMut, Ix1, Zip};
 use std::fmt::{Display, Formatter};
+use realfft::num_complex::Complex32;
 
 /// Enum representing the different types of FFT window functions supported.
 ///
@@ -96,6 +97,38 @@ pub fn apply_adapted_blackman_window(
             );
             *s *= bw;
         }
+    }
+}
+
+
+
+/// Applies a smooth bandpass filter with soft Blackman-style transitions to the spectrum.
+pub fn apply_soft_bandpass(
+    frequencies: &Array1<f32>,
+    spectrum: &mut Vec<Complex32>,
+    passband: (f32, f32),
+    transition_width: f32,
+) {
+    let (low, high) = passband;
+
+    for (i, f) in frequencies.iter().enumerate() {
+        let gain = if *f < low - transition_width || *f > high + transition_width {
+            0.0
+        } else if *f >= low && *f <= high {
+            1.0
+        } else if *f >= low - transition_width && *f < low {
+            // Fade in
+            let x = (low - *f) / transition_width;
+            blackman_window((1.0 - x) * transition_width, 2.0 * transition_width)
+        } else if *f > high && *f <= high + transition_width {
+            // Fade out
+            let x = (*f - high) / transition_width;
+            blackman_window((1.0 - x) * transition_width, 2.0 * transition_width)
+        } else {
+            0.0
+        };
+
+        spectrum[i] *= gain;
     }
 }
 

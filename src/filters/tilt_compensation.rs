@@ -84,7 +84,7 @@ impl Filter for TiltCompensation {
 
                     let delta_steps = (delta / dt).floor() as isize;
 
-                    let raw_trace = scan.raw_data.slice_mut(s![i, j, ..]);
+                    let raw_trace = scan.filtered_data.slice_mut(s![i, j, ..]);
                     let mut extended_trace = Array1::zeros(extended_samples);
 
                     let insert_index = (num_steps as isize + delta_steps).max(0) as usize; // Ensure non-negative index
