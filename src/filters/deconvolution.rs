@@ -40,9 +40,8 @@ pub struct Deconvolution {
     pub end_frequency: f64,
 }
 
-/// Perform fast convolution using FFT for signals of different lengths
 pub fn convolve1d(a: &Array1<f32>, b: &Array1<f32>) -> Array1<f32> {
-    let conv_size = a.len(); // Adjusted convolution size
+    let conv_size = a.len() + b.len() - 1; // Adjusted convolution size
     let fft_size = conv_size.next_power_of_two(); // Use next power of two for efficiency
 
     let mut planner = FftPlanner::new();
@@ -53,18 +52,20 @@ pub fn convolve1d(a: &Array1<f32>, b: &Array1<f32>) -> Array1<f32> {
     let mut a_padded: Vec<Complex<f64>> = vec![Complex { re: 0.0, im: 0.0 }; fft_size];
     let mut b_padded: Vec<Complex<f64>> = vec![Complex { re: 0.0, im: 0.0 }; fft_size];
 
-    for i in 0..a.len() {
+    // Copy input data into padded arrays
+    a.iter().enumerate().for_each(|(i, &val)| {
         a_padded[i] = Complex {
-            re: a[i] as f64,
+            re: val as f64,
             im: 0.0,
         };
-    }
-    for i in 0..b.len() {
+    });
+
+    b.iter().enumerate().for_each(|(i, &val)| {
         b_padded[i] = Complex {
-            re: b[i] as f64,
+            re: val as f64,
             im: 0.0,
         };
-    }
+    });
 
     // Perform FFT on both signals
     fft.process(&mut a_padded);
@@ -82,13 +83,13 @@ pub fn convolve1d(a: &Array1<f32>, b: &Array1<f32>) -> Array1<f32> {
 
     // Normalize and extract the result
     Array1::from(
-        result_freq[..conv_size]
+        result_freq[..a.len()]
             .iter()
-            .take(a.len())
             .map(|c| (c.re / fft_size as f64) as f32) // Normalize by FFT size and cast to f32
             .collect::<Vec<f32>>(),
     )
 }
+
 
 /// Pad size to the next power of two
 fn next_power_of_two(n: usize) -> usize {
@@ -160,10 +161,42 @@ fn fft2d(matrix: &mut Array2<Complex<f32>>, planner: &mut FftPlanner<f32>, inver
     }
 }
 
+/// Direct 2D Convolution for small kernels
+fn direct_convolve2d(a: &Array2<f32>, b: &Array2<f32>) -> Array2<f32> {
+    let (a_rows, a_cols) = a.dim();
+    let (b_rows, b_cols) = b.dim();
+
+    let mut result = Array2::<f32>::zeros((a_rows, a_cols));
+
+    for i in 0..a_rows {
+        for j in 0..a_cols {
+            let mut sum = 0.0;
+            for m in 0..b_rows {
+                for n in 0..b_cols {
+                    let x = i + m - (b_rows / 2);
+                    let y = j + n - (b_cols / 2);
+                    if x < a_rows && y < a_cols {
+                        sum += a[[x, y]] * b[[m, n]];
+                    }
+                }
+            }
+            result[[i, j]] = sum;
+        }
+    }
+    result
+}
+
 /// FFT-based convolution (output same size as `a`)
 pub fn convolve2d(a: &Array2<f32>, b: &Array2<f32>) -> Array2<f32> {
     let (a_rows, a_cols) = a.dim();
     let (b_rows, b_cols) = b.dim();
+
+    // Set a threshold for when to use direct convolution (e.g., kernel smaller than 32x32)
+    const THRESHOLD: usize = 16; // Example threshold for kernel size
+    if b_rows <= THRESHOLD && b_cols <= THRESHOLD {
+        // If kernel is small, use direct convolution
+        return direct_convolve2d(a, b);
+    }
 
     let padded_rows = next_power_of_two(a_rows + b_rows - 1);
     let padded_cols = next_power_of_two(a_cols + b_cols - 1);
@@ -216,19 +249,21 @@ impl Deconvolution {
 
     /// Computes the filtered scan with the FIR filter by convolving each time trace with the filter.
     fn filter_scan(&self, _scan: &ScannedImage, filter: &Array1<f32>) -> Array3<f32> {
-        let mut filtered_data = Array3::<f32>::zeros((
-            _scan.raw_data.dim().0,
-            _scan.raw_data.dim().1,
-            _scan.raw_data.dim().2,
-        ));
-        for i in 0.._scan.raw_data.dim().0 {
-            for j in 0.._scan.raw_data.dim().1 {
-                filtered_data.slice_mut(s![i, j, ..]).assign(&convolve1d(
-                    &_scan.raw_data.slice(s![i, j, ..]).to_owned(),
-                    filter,
-                ));
+        let (rows, cols, depth) = _scan.raw_data.dim();
+        let mut filtered_data = Array3::<f32>::zeros((rows, cols, depth));
+    
+        // Iterate over the 2D space (rows, cols)
+        for i in 0..rows {
+            for j in 0..cols {
+                // Get the slice along the last axis (depth)
+                let slice = _scan.raw_data.slice(s![i, j, ..]).to_owned();
+                
+                // Apply convolution and assign the result directly to filtered_data
+                filtered_data.slice_mut(s![i, j, ..])
+                    .assign(&convolve1d(&slice, &filter));
             }
         }
+    
         filtered_data
     }
 
@@ -360,9 +395,8 @@ impl Filter for Deconvolution {
         let w_min = wx_min.min(wy_min);
         let w_max = wx_max.max(wy_max);
 
-        
         let start = Instant::now();
-
+        
         let processed_data: Vec<Array3<f32>> = gui_settings
             .psf
             .filters
@@ -372,7 +406,7 @@ impl Filter for Deconvolution {
             .map(|(i, _)| {
                 println!("Processing filter {}...", i);
 
-                // Calcul des paramètres PSF
+                // Calculating the range for the PSF
                 let range_max_x = self.range_max_min(
                     (gui_settings.psf.popt_x.row(i)[1] as f32
                         + gui_settings.psf.popt_x.row(i)[0].abs() as f32)
@@ -414,17 +448,23 @@ impl Filter for Deconvolution {
 
                 let psf_2d = create_psf_2d(gaussian_x, gaussian_y, x, y, dx, dy);
 
-                // Filtrage des données
+                // Filtering the scan data
                 let mut filtered_data =
                     self.filter_scan(&scan.clone(), &gui_settings.psf.filters.row(i).to_owned());
 
-                // Calcul de l'image filtrée
+                // Computing the filtered image
                 let filtered_image = filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
 
+                /*
                 let n_iter = (((gui_settings.psf.popt_x.row(i)[1] - w_min) / (w_max - w_min)
                     * (self.n_iterations as f32 - 1.0)
                     + 1.0)
                     .floor()) as usize;
+                */
+                let n_iter = (((gui_settings.psf.popt_x.row(i)[1] - w_min) / (w_max - w_min)
+                * (500 as f32 - 1.0)
+                + 1.0)
+                .floor()) as usize;
 
                 let deconvolved_image = self
                     .richardson_lucy(&filtered_image, &psf_2d, n_iter)
@@ -437,7 +477,7 @@ impl Filter for Deconvolution {
                     .and(&mut deconvolution_gains)
                     .for_each(|&u, &d, g| *g = (u / d).sqrt());
 
-                // Application des gains
+                // Apply the deconvolution gains to the filtered data
                 filtered_data
                     .iter_mut()
                     .zip(deconvolution_gains.iter())
@@ -447,9 +487,9 @@ impl Filter for Deconvolution {
             })
             .collect();
 
-
         let duration = start.elapsed();
         println!("Time elapsed in expensive_function() is: {:?}", duration);
+
 
         println!("Combining processed data...");
 
