@@ -10,12 +10,14 @@ use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
 use crate::filters::psf::create_psf_2d;
 use crate::filters::psf::gaussian2;
 use crate::gui::application::GuiSettingsContainer;
+use eframe::egui::debug_text::print;
 use eframe::egui::{self, Ui};
 use filter_macros::register_filter;
 use ndarray::{arr1, s, Array1, Array2, Array3, Axis, Zip};
 use num_complex::Complex32;
 use rayon::prelude::*;
 use rustfft::{num_complex::Complex, FftPlanner};
+use std::time::Instant;
 
 use std::sync::Arc;
 
@@ -358,7 +360,9 @@ impl Filter for Deconvolution {
         let w_min = wx_min.min(wy_min);
         let w_max = wx_max.max(wy_max);
 
-        // Parallélisation avec Rayon
+        
+        let start = Instant::now();
+
         let processed_data: Vec<Array3<f32>> = gui_settings
             .psf
             .filters
@@ -443,12 +447,26 @@ impl Filter for Deconvolution {
             })
             .collect();
 
-        // Réduction des données filtrées
+
+        let duration = start.elapsed();
+        println!("Time elapsed in expensive_function() is: {:?}", duration);
+
+        println!("Combining processed data...");
+
+        // Combine the processed data
         for data in processed_data {
             scan.filtered_data += &data;
         }
 
+        println!("Calculating filtered image...");
+
         scan.filtered_img = scan.filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
+
+        // Print min and max values
+        let min_val = scan.filtered_img.fold(f32::INFINITY, |a, &b| a.min(b));
+        let max_val = scan.filtered_img.fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+        println!("Min value: {}", min_val);
+        println!("Max value: {}", max_val);
 
         println!("Deconvolution filter completed.");
     }
@@ -462,7 +480,7 @@ impl Filter for Deconvolution {
         // implement your GUI parameter handling here, for example like this:
         ui.horizontal(|ui| {
             ui.label("Iterations: ");
-            ui.add(egui::Slider::new(&mut self.n_iterations, 0..=200))
+            ui.add(egui::Slider::new(&mut self.n_iterations, 0..=500))
         })
         .inner
     }
