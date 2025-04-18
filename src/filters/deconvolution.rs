@@ -191,10 +191,9 @@ pub fn convolve2d(a: &Array2<f32>, b: &Array2<f32>) -> Array2<f32> {
     let (a_rows, a_cols) = a.dim();
     let (b_rows, b_cols) = b.dim();
 
-    // Set a threshold for when to use direct convolution (e.g., kernel smaller than 32x32)
-    const THRESHOLD: usize = 16; // Example threshold for kernel size
-    if b_rows <= THRESHOLD && b_cols <= THRESHOLD {
-        // If kernel is small, use direct convolution
+    // If the kernel is small, we use direct convolution
+    const THRESHOLD: usize = 256;
+    if b_rows * b_cols <= THRESHOLD {
         return direct_convolve2d(a, b);
     }
 
@@ -253,8 +252,8 @@ impl Deconvolution {
         let mut filtered_data = Array3::<f32>::zeros((rows, cols, depth));
     
         // Iterate over the 2D space (rows, cols)
-        for i in 0..rows {
-            for j in 0..cols {
+        for j in 0..cols {
+            for i in 0..rows {
                 // Get the slice along the last axis (depth)
                 let slice = _scan.raw_data.slice(s![i, j, ..]).to_owned();
                 
@@ -468,7 +467,7 @@ impl Filter for Deconvolution {
 
                 let deconvolved_image = self
                     .richardson_lucy(&filtered_image, &psf_2d, n_iter)
-                    .mapv(|x| x.max(0.0)); // Forcer les valeurs négatives à zéro
+                    .mapv(|x| x.max(0.0)); // Force negative values to zero
 
                 let mut deconvolution_gains =
                     Array2::zeros((scan.raw_data.dim().0, scan.raw_data.dim().1));
@@ -487,8 +486,8 @@ impl Filter for Deconvolution {
             })
             .collect();
 
-        let duration = start.elapsed();
-        println!("Time elapsed in expensive_function() is: {:?}", duration);
+            let duration = start.elapsed();
+            println!("Time elapsed for filtering: {:?}", duration);
 
 
         println!("Combining processed data...");
@@ -501,12 +500,6 @@ impl Filter for Deconvolution {
         println!("Calculating filtered image...");
 
         scan.filtered_img = scan.filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
-
-        // Print min and max values
-        let min_val = scan.filtered_img.fold(f32::INFINITY, |a, &b| a.min(b));
-        let max_val = scan.filtered_img.fold(f32::NEG_INFINITY, |a, &b| a.max(b));
-        println!("Min value: {}", min_val);
-        println!("Max value: {}", max_val);
 
         println!("Deconvolution filter completed.");
     }
