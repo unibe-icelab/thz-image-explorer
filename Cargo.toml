@@ -72,3 +72,4 @@ output = "target/wix/THzImageExplorerInstaller.msi"
 
 [profile.release]
 debug = 1
+opt-level = 3
