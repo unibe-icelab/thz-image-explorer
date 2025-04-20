@@ -10,7 +10,10 @@ use crate::io::{
     load_meta_data_of_thz_file, open_from_npz, open_from_thz, open_json, save_to_thz,
     update_meta_data_of_thz_file,
 };
-use crate::math_tools::{apply_adapted_blackman_window, apply_blackman, apply_flat_top, apply_hamming, apply_hanning, apply_soft_bandpass, numpy_unwrap, FftWindowType};
+use crate::math_tools::{
+    apply_adapted_blackman_window, apply_blackman, apply_flat_top, apply_hamming, apply_hanning,
+    apply_soft_bandpass, numpy_unwrap, FftWindowType,
+};
 use csv::ReaderBuilder;
 use dotthz::DotthzMetaData;
 use eframe::egui::ColorImage;
@@ -61,9 +64,12 @@ fn save_image(img: &ColorImage, file_path: &Path) {
 /// # Arguments
 /// * `scan` - A mutable reference to the `ScannedImage`.
 /// * `img_lock` - A thread-safe `RwLock` containing the 2D array for the intensity image.
-fn update_intensity_image(scan: &ScannedImage, img_lock: &Arc<RwLock<Array2<f32>>>) {
-    if let Ok(mut write_guard) = img_lock.write() {
+fn update_intensity_image(scan: &ScannedImage, thread_communication: &MainThreadCommunication) {
+    if let Ok(mut write_guard) = thread_communication.img_lock.write() {
         *write_guard = scan.filtered_img.clone();
+    }
+    if let Ok(mut write_guard) = thread_communication.filtered_data_lock.write() {
+        *write_guard = scan.filtered_data.clone();
     }
 }
 
@@ -78,7 +84,7 @@ fn update_intensity_image(scan: &ScannedImage, img_lock: &Arc<RwLock<Array2<f32>
 fn filter_time_window(
     config: &ConfigContainer,
     scan: &mut ScannedImage,
-    img_lock: &Arc<RwLock<Array2<f32>>>,
+    thread_communication: &MainThreadCommunication,
 ) {
     // calculate fft filter and calculate ifft
     println!("updating data");
@@ -117,7 +123,7 @@ fn filter_time_window(
                     });
             },
         );
-    update_intensity_image(scan, img_lock);
+    update_intensity_image(scan, thread_communication);
     println!("updated time data. This took {:?}", start.elapsed());
 }
 
@@ -247,7 +253,7 @@ fn filter(
         }
     };
     // update images
-    update_intensity_image(scan, &thread_communication.img_lock);
+    update_intensity_image(scan, &thread_communication);
     println!("updated data. This took {:?}", start.elapsed());
 }
 
@@ -387,7 +393,7 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                                     Ok(_) => {
                                         update_intensity_image(
                                             &scan,
-                                            &thread_communication.img_lock,
+                                            &thread_communication,
                                         );
                                     }
                                     Err(err) => {
@@ -426,7 +432,7 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                                         log::info!("opened {:?}", selected_file_path);
                                         update_intensity_image(
                                             &scan,
-                                            &thread_communication.img_lock,
+                                            &thread_communication,
                                         );
                                     }
                                     Err(err) => {
@@ -483,7 +489,7 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                 }
                 ConfigCommand::SetTimeWindow(time_window) => {
                     config.time_window = time_window;
-                    filter_time_window(&config, &mut scan, &thread_communication.img_lock);
+                    filter_time_window(&config, &mut scan, &thread_communication);
                 }
                 ConfigCommand::SetFFTLogPlot(log_plot) => {
                     config.fft_log_plot = log_plot;
@@ -507,7 +513,7 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                         scan.rescale()
                     }
                     filter(&config, &mut thread_communication, &mut scan);
-                    update_intensity_image(&scan, &thread_communication.img_lock);
+                    update_intensity_image(&scan, &thread_communication);
                 }
                 ConfigCommand::SetSelectedPixel(pixel) => {
                     selected_pixel = pixel.clone();
@@ -527,9 +533,9 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                             filter.filter(&mut scan, &mut thread_communication.gui_settings)
                         }
                     }
-                    filter_time_window(&config, &mut scan, &thread_communication.img_lock);
+                    filter_time_window(&config, &mut scan, &thread_communication);
                     // update the intensity image
-                    update_intensity_image(&scan, &thread_communication.img_lock);
+                    update_intensity_image(&scan, &thread_communication);
                 }
             }
 

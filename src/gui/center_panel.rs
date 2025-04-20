@@ -7,7 +7,7 @@ use eframe::egui;
 use eframe::egui::{Checkbox, DragValue, Stroke, Ui, Vec2};
 use egui_plot::{GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 use egui_plotter::EguiBackend;
-use ndarray::Array2;
+use ndarray::{Array2, Array3};
 use plotters::prelude::*;
 use std::ops::RangeInclusive;
 const MOVE_SCALE: f32 = 0.01;
@@ -505,12 +505,22 @@ fn three_dimensional_plot(
 
         let mut width = 10;
         let mut height = 10;
+        let mut depth = 10;
         let mut image = Array2::zeros((width, height));
+        let mut filtered_data = Array3::zeros((width, height, depth));
         if let Ok(img) = thread_communication.img_lock.read() {
             let shape = img.shape();
             width = shape[0];
             height = shape[1];
             image = img.clone().into();
+        }
+
+        if let Ok(fd) = thread_communication.filtered_data_lock.read() {
+            let shape = fd.shape();
+            width = shape[0];
+            height = shape[1];
+            depth = shape[2];
+            filtered_data = fd.clone().into();
         }
 
         // Ensure equal axis scaling
@@ -548,66 +558,130 @@ fn three_dimensional_plot(
             });
         let range = max_val - min_val;
 
-        let surface_series = SurfaceSeries::xoy(
-            (-((image.shape()[0] as isize) / 2)..(image.shape()[0] as isize / 2)).map(|x| x as f32),
-            (-((image.shape()[1] as isize) / 2)..(image.shape()[1] as isize / 2)).map(|y| y as f32),
-            |x, y| {
-                let xi = ((x + width as f32 / 2.0).round() as usize).clamp(0, image.shape()[0] - 1);
-                let yi =
-                    ((y + height as f32 / 2.0).round() as usize).clamp(0, image.shape()[1] - 1);
-                let z = image[[xi, yi]];
-                // Normalize z to [0, 1] range
-                if range > 0.0 {
-                    (z - min_val) / range
-                } else {
-                    0.5 // Avoid division by zero, default mid-gray color
-                }
-            },
-        )
-        .style_func(&|z| {
-            let normalized = ((z + 1.0) / 2.0).clamp(0.0, 1.0); // Normalize between 0 and 1
-            HSLColor(normalized as f64, 1.0, 0.5).filled() // Color mapping
-        });
+        // let surface_series = SurfaceSeries::xoy(
+        //     (-((image.shape()[0] as isize) / 2)..(image.shape()[0] as isize / 2)).map(|x| x as f32),
+        //     (-((image.shape()[1] as isize) / 2)..(image.shape()[1] as isize / 2)).map(|y| y as f32),
+        //     |x, y| {
+        //         let xi = ((x + width as f32 / 2.0).round() as usize).clamp(0, image.shape()[0] - 1);
+        //         let yi =
+        //             ((y + height as f32 / 2.0).round() as usize).clamp(0, image.shape()[1] - 1);
+        //         let z = image[[xi, yi]];
+        //         // Normalize z to [0, 1] range
+        //         if range > 0.0 {
+        //             (z - min_val) / range
+        //         } else {
+        //             0.5 // Avoid division by zero, default mid-gray color
+        //         }
+        //     },
+        // )
+        // .style_func(&|z| {
+        //     let normalized = ((z + 1.0) / 2.0).clamp(0.0, 1.0); // Normalize between 0 and 1
+        //     HSLColor(normalized as f64, 1.0, 0.5).filled() // Color mapping
+        // });
 
         // 🔹 Draw cubes at fixed Z-height with heatmap colors
 
-        let height_level = max_dim as f32 / 4.0; // Fixed Z-level for cubes
+        // let height_level = max_dim as f32 / 4.0; // Fixed Z-level for cubes
+        //
+        // chart
+        //     .draw_series(
+        //         (0..image.shape()[0])
+        //             .flat_map(|x| (0..image.shape()[1]).map(move |y| (x, y)))
+        //             .map(|(x, y)| {
+        //                 let z = image[[x, y]];
+        //                 let normalized_z = if range > 0.0 {
+        //                     (z - min_val) / range
+        //                 } else {
+        //                     0.5
+        //                 };
+        //
+        //                 let color = heatmap_color(normalized_z);
+        //
+        //                 Cubiod::new(
+        //                     [
+        //                         (
+        //                             x as f32 - width as f32 / 2.0,
+        //                             height_level,
+        //                             y as f32 - height as f32 / 2.0,
+        //                         ),
+        //                         (
+        //                             x as f32 - width as f32 / 2.0 + 1.0,
+        //                             height_level + 0.5,
+        //                             y as f32 - height as f32 / 2.0 + 1.0,
+        //                         ),
+        //                     ],
+        //                     color.filled(),
+        //                     &TRANSPARENT,
+        //                 )
+        //             }),
+        //     )
+        //     .unwrap();
 
-        chart
-            .draw_series(
-                (0..image.shape()[0])
-                    .flat_map(|x| (0..image.shape()[1]).map(move |y| (x, y)))
-                    .map(|(x, y)| {
-                        let z = image[[x, y]];
-                        let normalized_z = if range > 0.0 {
-                            (z - min_val) / range
-                        } else {
-                            0.5
-                        };
+        // chart
+        //     .draw_series(
+        //         (0..filtered_data.shape()[0])
+        //             .flat_map(|x| {
+        //                 (0..filtered_data.shape()[1]).flat_map({
+        //                     let value = filtered_data.clone();
+        //                     move |y| {
+        //                         let z_range = 0..value.shape()[2];
+        //
+        //                         // Collect z-values for (x, y)
+        //                         let z_vals: Vec<f32> = z_range
+        //                             .clone()
+        //                             .map(|z| value[[x, y, z]])
+        //                             .collect();
+        //
+        //                         let local_min = z_vals.iter().cloned().fold(f32::INFINITY, f32::min);
+        //                         let local_max = z_vals.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        //                         let local_range = local_max - local_min;
+        //
+        //                         z_range.map(move |z| {
+        //                             let val = z_vals[z];
+        //                             let normalized_val = if local_range > 0.0 {
+        //                                 (val - local_min) / local_range
+        //                             } else {
+        //                                 0.5
+        //                             };
+        //                             (x, y, z, normalized_val)
+        //                         })
+        //                     }
+        //                 })
+        //             })
+        //             .filter_map(|(x, y, z, normalized_value)| {
+        //                 if normalized_value < 0.9 {
+        //                     return None;
+        //                 }
+        //                 println!("{}, {}, {}, {}", x, y, z, normalized_value);
+        //                 let normalized_val = if range > 0.0 {
+        //                     (normalized_value - min_val) / range
+        //                 } else {
+        //                     0.5
+        //                 };
+        //
+        //                 let color = heatmap_color(normalized_val);
+        //
+        //                 Some(Cubiod::new(
+        //                     [
+        //                         (
+        //                             x as f32 - width as f32 / 2.0,
+        //                             y as f32 - height as f32 / 2.0,
+        //                             z as f32 - depth as f32 / 2.0,
+        //                         ),
+        //                         (
+        //                             x as f32 - width as f32 / 2.0 + 1.0,
+        //                             y as f32 - height as f32 / 2.0 + 1.0,
+        //                             z as f32 - depth as f32 / 2.0 + 1.0,
+        //                         ),
+        //                     ],
+        //                     color.filled(),
+        //                     &TRANSPARENT,
+        //                 ))
+        //             }),
+        //     )
+        //     .unwrap();
 
-                        let color = heatmap_color(normalized_z);
-
-                        Cubiod::new(
-                            [
-                                (
-                                    x as f32 - width as f32 / 2.0,
-                                    height_level,
-                                    y as f32 - height as f32 / 2.0,
-                                ),
-                                (
-                                    x as f32 - width as f32 / 2.0 + 1.0,
-                                    height_level + 0.5,
-                                    y as f32 - height as f32 / 2.0 + 1.0,
-                                ),
-                            ],
-                            color.filled(),
-                            &TRANSPARENT,
-                        )
-                    }),
-            )
-            .unwrap();
-
-        chart.draw_series(surface_series).unwrap();
+        // chart.draw_series(surface_series).unwrap();
 
         // chart
         //     .draw_series(

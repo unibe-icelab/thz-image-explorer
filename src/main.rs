@@ -14,7 +14,7 @@ use crate::gui::matrix_plot::SelectedPixel;
 use dotthz::DotthzMetaData;
 use eframe::egui::{vec2, ViewportBuilder, Visuals};
 use eframe::{egui, icon_data};
-use ndarray::Array2;
+use ndarray::{Array2, Array3};
 use preferences::{AppInfo, Preferences};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, RwLock};
@@ -61,6 +61,7 @@ fn main() {
 
     let data_lock = Arc::new(RwLock::new(DataPoint::default()));
     let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
+    let filtered_data_lock = Arc::new(RwLock::new(Array3::from_shape_fn((1, 1, 1), |(_, _, _)| 0.0)));
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
     let scaling_lock = Arc::new(RwLock::new(1));
     let md_lock = Arc::new(RwLock::new(DotthzMetaData::default()));
@@ -70,6 +71,7 @@ fn main() {
     let gui_communication = GuiThreadCommunication {
         md_lock: md_lock.clone(),
         data_lock: data_lock.clone(),
+        filtered_data_lock: filtered_data_lock.clone(),
         pixel_lock: pixel_lock.clone(),
         scaling_lock: scaling_lock.clone(),
         img_lock: img_lock.clone(),
@@ -83,6 +85,7 @@ fn main() {
         pixel_lock,
         scaling_lock,
         img_lock,
+        filtered_data_lock,
         gui_settings: gui_settings.clone(),
         config_rx,
     };

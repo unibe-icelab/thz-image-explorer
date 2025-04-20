@@ -1371,8 +1371,9 @@ dependencies = [
 
 [[package]]
 name = "egui-plotter"
-version = "0.3.0"
-source = "git+https://github.com/Gip-Gip/egui-plotter.git?rev=refs%2Fpull%2F25%2Fhead#0cd4625ffd7d00bba8d25be7f0ffb09aa09734d8"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f775c45455293e12ac485d84efdca959a1dd7fd9ba9356513637c23af2eddb65"
 dependencies = [
  "egui",
  "plotters",

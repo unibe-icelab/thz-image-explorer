@@ -7,7 +7,7 @@ use crate::gui::application::GuiSettingsContainer;
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::math_tools::FftWindowType;
 use dotthz::DotthzMetaData;
-use ndarray::Array2;
+use ndarray::{Array2, Array3};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
@@ -71,7 +71,7 @@ pub enum ConfigCommand {
     SetSelectedPixel(SelectedPixel),
 
     /// Update Custom Filters
-    UpdateFilters
+    UpdateFilters,
 }
 
 /// A container for storing configuration settings related to FFT and filtering processes.
@@ -139,6 +139,9 @@ pub struct GuiThreadCommunication {
     /// Lock for the [`DataPoint`] containing signal data.
     pub data_lock: Arc<RwLock<DataPoint>>,
 
+    /// Lock for the [`Scan`] containing all data.
+    pub filtered_data_lock: Arc<RwLock<Array3<f32>>>,
+
     /// Lock for the currently selected pixel in the image.
     pub pixel_lock: Arc<RwLock<SelectedPixel>>,
 
@@ -165,6 +168,9 @@ pub struct MainThreadCommunication {
 
     /// Lock for the [`DataPoint`] containing signal data.
     pub data_lock: Arc<RwLock<DataPoint>>,
+
+    /// Lock for the [`Scan`] containing all data.
+    pub filtered_data_lock: Arc<RwLock<Array3<f32>>>,
 
     /// Lock for the currently selected pixel in the image.
     pub pixel_lock: Arc<RwLock<SelectedPixel>>,
