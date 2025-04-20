@@ -4,7 +4,7 @@
 //! The implementation includes a Richardson-Lucy deconvolution algorithm placeholder,
 //! allowing for further customization and parameterization.
 
-use crate::config::GuiThreadCommunication;
+use crate::config::ThreadCommunication;
 use crate::data_container::ScannedImage;
 use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
 use crate::gui::application::GuiSettingsContainer;
@@ -73,7 +73,7 @@ impl Filter for Deconvolution {
         // Perform the deconvolution with the Richardson-Lucy algorithm
         // etc.
     }
-    fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut GuiThreadCommunication) -> egui::Response{
+    fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut ThreadCommunication) -> egui::Response{
         // thread_communication can be used, but is not required. It contains the gui_settings GuiSettingsContainer
         // implement your GUI parameter handling here, for example like this:
         ui.horizontal(|ui| {

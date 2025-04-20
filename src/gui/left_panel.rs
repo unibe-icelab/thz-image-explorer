@@ -1,7 +1,7 @@
-use crate::config::{ConfigCommand, GuiThreadCommunication};
-use crate::gui::application::FileDialogState;
+use crate::config::{ConfigCommand, ThreadCommunication};
+use crate::gui::application::{FileDialogState, THzImageExplorer};
 use crate::gui::gauge_widget::gauge;
-use crate::gui::matrix_plot::{make_dummy, plot_matrix, SelectedPixel, ROI};
+use crate::gui::matrix_plot::{make_dummy, plot_matrix, ImageState, SelectedPixel, ROI};
 use crate::gui::toggle_widget::toggle_ui;
 use crate::io::{find_files_with_same_extension, load_psf};
 use crate::DataPoint;
@@ -101,27 +101,17 @@ pub fn truncate_filename(ui: &egui::Ui, item: &Path, max_length: f32) -> String 
 #[allow(clippy::too_many_arguments)]
 pub fn left_panel(
     ctx: &egui::Context,
-    thread_communication: &mut GuiThreadCommunication,
+    explorer: &mut THzImageExplorer,
     left_panel_width: &f32,
-    pixel_selected: &mut SelectedPixel,
-    val: &mut PlotPoint,
-    mid_point: &mut f32,
-    bw: &mut bool,
-    cut_off: &mut [f32; 2],
-    file_dialog_state: &mut FileDialogState,
-    file_dialog: &mut FileDialog,
-    information_panel: &mut InformationPanel,
-    other_files: &mut Vec<PathBuf>,
-    selected_file_name: &mut String,
-    scroll_to_selection: &mut bool,
+    image_state: &mut ImageState,
 ) {
     let gauge_size = left_panel_width / 3.0;
     let mut data = DataPoint::default();
-    if let Ok(read_guard) = thread_communication.data_lock.read() {
+    if let Ok(read_guard) = explorer.thread_communication.data_lock.read() {
         data = read_guard.clone();
     }
     let mut meta_data = DotthzMetaData::default();
-    if let Ok(md) = thread_communication.md_lock.read() {
+    if let Ok(md) = explorer.thread_communication.md_lock.read() {
         meta_data = md.clone();
     }
     if let Some(t_s) = meta_data.md.get("T_S [K]") {
@@ -173,8 +163,8 @@ pub fn left_panel(
                     )))
                     .clicked()
                 {
-                    *file_dialog_state = FileDialogState::Open;
-                    file_dialog.pick_file();
+                    explorer.file_dialog_state = FileDialogState::Open;
+                    explorer.file_dialog.pick_file();
                 };
                 if ui
                     .button(egui::RichText::new(format!(
@@ -183,12 +173,12 @@ pub fn left_panel(
                     )))
                     .clicked()
                 {
-                    *file_dialog_state = FileDialogState::OpenRef;
-                    file_dialog.pick_file();
+                    explorer.file_dialog_state = FileDialogState::OpenRef;
+                    explorer.file_dialog.pick_file();
                 };
             });
 
-            if !other_files.is_empty() {
+            if !explorer.other_files.is_empty() {
                 ui.add_space(5.0);
                 ui.label("Files in same directory:");
                 let row_height = ui
@@ -203,23 +193,23 @@ pub fn left_panel(
                     .resizable(false)
                     .max_scroll_height(row_height * 5.0)
                     .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
-                if *scroll_to_selection {
-                    if let Some(selected_index) = other_files.iter().position(|path| {
-                        path.file_name().unwrap().to_str().unwrap() == selected_file_name
+                if explorer.scroll_to_selection {
+                    if let Some(selected_index) = explorer.other_files.iter().position(|path| {
+                        path.file_name().unwrap().to_str().unwrap() == explorer.selected_file_name
                     }) {
                         table_builder =
                             table_builder.scroll_to_row(selected_index, Some(egui::Align::Center));
                     }
-                    *scroll_to_selection = false;
+                    explorer.scroll_to_selection = false;
                 }
                 let table = table_builder
                     .column(Column::remainder().at_least(120.0)) // "Date Modified"
                     .header(row_height, |_header| {});
                 table.body(|body| {
-                    body.rows(row_height, other_files.len(), |mut row| {
-                        if let Some(item) = &mut other_files.get(row.index()) {
+                    body.rows(row_height, explorer.other_files.len(), |mut row| {
+                        if let Some(item) = &mut explorer.other_files.get(row.index()) {
                             let selected =
-                                item.file_name().unwrap().to_str().unwrap() == selected_file_name;
+                                item.file_name().unwrap().to_str().unwrap() == explorer.selected_file_name;
                             row.set_selected(selected);
 
                             row.col(|ui| {
@@ -245,11 +235,11 @@ pub fn left_panel(
                                 }
                             });
                             if row.response().clicked() {
-                                *selected_file_name =
+                                explorer.selected_file_name =
                                     item.file_name().unwrap().to_str().unwrap().to_string();
-                                thread_communication.gui_settings.selected_path =
+                                explorer.thread_communication.gui_settings.selected_path =
                                     item.to_path_buf();
-                                thread_communication
+                                explorer.thread_communication
                                     .config_tx
                                     .send(ConfigCommand::OpenFile(item.to_path_buf()))
                                     .expect("unable to send open file cmd");
@@ -257,49 +247,49 @@ pub fn left_panel(
                         }
                     });
                 });
-                if let Some(selected_index) = other_files.iter().position(|path| {
-                    path.file_name().unwrap().to_str().unwrap() == selected_file_name
+                if let Some(selected_index) = explorer.other_files.iter().position(|path| {
+                    path.file_name().unwrap().to_str().unwrap() == explorer.selected_file_name
                 }) {
                     if ui.input(|i| i.key_pressed(egui::Key::ArrowDown))
-                        && selected_index < other_files.len() - 1
+                        && selected_index < explorer.other_files.len() - 1
                     {
-                        let item = other_files[selected_index + 1].clone();
-                        *selected_file_name =
+                        let item = explorer.other_files[selected_index + 1].clone();
+                        explorer.selected_file_name =
                             item.file_name().unwrap().to_str().unwrap().to_string();
-                        thread_communication.gui_settings.selected_path = item.to_path_buf();
-                        thread_communication
+                        explorer.thread_communication.gui_settings.selected_path = item.to_path_buf();
+                        explorer.thread_communication
                             .config_tx
                             .send(ConfigCommand::OpenFile(item.to_path_buf()))
                             .expect("unable to send open file cmd");
-                        *scroll_to_selection = true;
+                        explorer.scroll_to_selection = true;
                     }
                     if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) && selected_index > 0 {
-                        let item = other_files[selected_index - 1].clone();
-                        *selected_file_name =
+                        let item = explorer.other_files[selected_index - 1].clone();
+                        explorer.selected_file_name =
                             item.file_name().unwrap().to_str().unwrap().to_string();
-                        thread_communication.gui_settings.selected_path = item.to_path_buf();
-                        thread_communication
+                        explorer.thread_communication.gui_settings.selected_path = item.to_path_buf();
+                        explorer.thread_communication
                             .config_tx
                             .send(ConfigCommand::OpenFile(item.to_path_buf()))
                             .expect("unable to send open file cmd");
-                        *scroll_to_selection = true;
+                        explorer.scroll_to_selection = true;
                     }
                 }
             }
 
-            file_dialog.set_right_panel_width(300.0);
+            explorer.file_dialog.set_right_panel_width(300.0);
 
             let mut repaint = false;
             ctx.input(|i| {
                 // Check if files were dropped
                 if let Some(dropped_file) = i.raw.dropped_files.last() {
                     let path = dropped_file.clone().path.unwrap();
-                    *other_files = find_files_with_same_extension(&path).unwrap();
-                    *selected_file_name = path.file_name().unwrap().to_str().unwrap().to_string();
-                    *scroll_to_selection = true;
-                    file_dialog.config_mut().initial_directory = path.clone();
-                    thread_communication.gui_settings.selected_path = path.clone();
-                    thread_communication
+                    explorer.other_files = find_files_with_same_extension(&path).unwrap();
+                    explorer.selected_file_name = path.file_name().unwrap().to_str().unwrap().to_string();
+                    explorer.scroll_to_selection = true;
+                    explorer.file_dialog.config_mut().initial_directory = path.clone();
+                    explorer.thread_communication.gui_settings.selected_path = path.clone();
+                    explorer.thread_communication
                         .config_tx
                         .send(ConfigCommand::OpenFile(path))
                         .expect("unable to send open file cmd");
@@ -312,47 +302,47 @@ pub fn left_panel(
                 ctx.request_repaint();
             }
 
-            match file_dialog_state {
+            match explorer.file_dialog_state {
                 FileDialogState::Open => {
-                    if let Some(path) = file_dialog
+                    if let Some(path) = explorer.file_dialog
                         .update_with_right_panel_ui(ctx, &mut |ui, dia| {
-                            information_panel.ui(ui, dia);
+                            explorer.information_panel.ui(ui, dia);
                         })
                         .picked()
                     {
-                        *file_dialog_state = FileDialogState::None;
-                        thread_communication
+                        explorer.file_dialog_state = FileDialogState::None;
+                        explorer.thread_communication
                             .config_tx
                             .send(ConfigCommand::OpenFile(path.to_path_buf()))
                             .expect("unable to send open file cmd");
                     }
-                    if let Some(path) = file_dialog.take_picked() {
-                        *other_files = find_files_with_same_extension(&path).unwrap();
-                        *selected_file_name =
+                    if let Some(path) = explorer.file_dialog.take_picked() {
+                        explorer.other_files = find_files_with_same_extension(&path).unwrap();
+                        explorer.selected_file_name =
                             path.file_name().unwrap().to_str().unwrap().to_string();
-                        *scroll_to_selection = true;
-                        file_dialog.config_mut().initial_directory = path.clone();
-                        thread_communication.gui_settings.selected_path = path;
+                        explorer.scroll_to_selection = true;
+                        explorer.file_dialog.config_mut().initial_directory = path.clone();
+                        explorer.thread_communication.gui_settings.selected_path = path;
                     }
                 }
                 FileDialogState::OpenRef => {}
                 FileDialogState::OpenPSF => {
-                    if let Some(path) = file_dialog
+                    if let Some(path) = explorer.file_dialog
                         .update_with_right_panel_ui(ctx, &mut |ui, dia| {
-                            information_panel.ui(ui, dia);
+                            explorer.information_panel.ui(ui, dia);
                         })
                         .picked()
                     {
-                        *file_dialog_state = FileDialogState::None;
+                        explorer.file_dialog_state = FileDialogState::None;
                         if let Ok(psf) = load_psf(&path.to_path_buf()) {
-                            thread_communication.gui_settings.psf = psf;
-                            thread_communication.gui_settings.beam_shape_path = path.to_path_buf();
+                            explorer.thread_communication.gui_settings.psf = psf;
+                            explorer.thread_communication.gui_settings.beam_shape_path = path.to_path_buf();
                         }
                     }
                 }
                 FileDialogState::Save => {
-                    if let Some(_path) = file_dialog.update(ctx).picked() {
-                        *file_dialog_state = FileDialogState::None;
+                    if let Some(_path) = explorer.file_dialog.update(ctx).picked() {
+                        explorer.file_dialog_state = FileDialogState::None;
                         // match tera_flash_conf.filetype {
                         //     FileType::Csv => {
                         //         picked_path.set_extension("csv");
@@ -378,13 +368,13 @@ pub fn left_panel(
             ui.separator();
             ui.heading("Scan");
             let mut img_data = make_dummy();
-            if let Ok(read_guard) = thread_communication.img_lock.read() {
+            if let Ok(read_guard) = explorer.thread_communication.img_lock.read() {
                 img_data = read_guard.clone();
             }
 
             // read rois from md
 
-            let open_roi = if let Some(a) = pixel_selected.rois.last() {
+            let open_roi = if let Some(a) = explorer.pixel_selected.rois.last() {
                 if !a.closed {
                     Some(a.clone())
                 } else {
@@ -394,7 +384,7 @@ pub fn left_panel(
                 None
             };
 
-            pixel_selected.rois.clear();
+            explorer.pixel_selected.rois.clear();
 
             if let Some(labels) = meta_data.md.get("ROI Labels") {
                 let roi_labels: Vec<&str> = labels.split(',').collect();
@@ -419,7 +409,7 @@ pub fn left_panel(
                             .collect::<Vec<[f64; 2]>>();
 
                         if !polygon.is_empty() {
-                            pixel_selected.rois.push(ROI {
+                            explorer.pixel_selected.rois.push(ROI {
                                 polygon,
                                 closed: true,
                                 name: label.to_string(),
@@ -430,7 +420,7 @@ pub fn left_panel(
             }
 
             if let Some(roi) = open_roi {
-                pixel_selected.rois.push(roi.clone());
+                explorer.pixel_selected.rois.push(roi.clone());
             }
 
             // TODO: implement selecting reference pixel
@@ -439,22 +429,19 @@ pub fn left_panel(
                 &img_data,
                 &(*left_panel_width as f64),
                 &(height as f64),
-                cut_off,
-                val,
-                pixel_selected,
-                mid_point,
-                bw,
+                explorer,
+                image_state,
             );
             if pixel_clicked {
-                thread_communication
+                explorer.thread_communication
                     .config_tx
-                    .send(ConfigCommand::SetSelectedPixel(pixel_selected.clone()))
+                    .send(ConfigCommand::SetSelectedPixel(explorer.pixel_selected.clone()))
                     .unwrap();
-                if let Ok(mut write_guard) = thread_communication.pixel_lock.write() {
-                    *write_guard = pixel_selected.clone();
+                if let Ok(mut write_guard) = explorer.thread_communication.pixel_lock.write() {
+                    *write_guard = explorer.pixel_selected.clone();
                 }
                 let mut md_update_requested = false;
-                for (roi_i, roi) in pixel_selected.rois.iter_mut().enumerate() {
+                for (roi_i, roi) in explorer.pixel_selected.rois.iter_mut().enumerate() {
                     if roi.closed {
                         let formatted = roi
                             .polygon
@@ -473,7 +460,7 @@ pub fn left_panel(
                 }
 
                 if md_update_requested {
-                    let labels = pixel_selected
+                    let labels = explorer.pixel_selected
                         .rois
                         .iter()
                         .map(|l| l.name.clone())
@@ -481,14 +468,14 @@ pub fn left_panel(
                         .join(",");
                     meta_data.md.insert("ROI Labels".to_string(), labels);
 
-                    if let Ok(mut md) = thread_communication.md_lock.write() {
+                    if let Ok(mut md) = explorer.thread_communication.md_lock.write() {
                         *md = meta_data.clone();
                     }
 
-                    thread_communication
+                    explorer.thread_communication
                         .config_tx
                         .send(ConfigCommand::UpdateMetaData(
-                            thread_communication.gui_settings.selected_path.clone(),
+                            explorer.thread_communication.gui_settings.selected_path.clone(),
                         ))
                         .expect("unable to send save file cmd");
                 }
@@ -496,10 +483,10 @@ pub fn left_panel(
 
             ui.add_space(10.0);
             ui.label("Black/White");
-            toggle_ui(ui, bw);
-            ui.label(format!("Pixel: {}", pixel_selected.id));
-            ui.label(format!("x: {}", pixel_selected.x));
-            ui.label(format!("y: {}", pixel_selected.y));
+            toggle_ui(ui, &mut explorer.bw);
+            ui.label(format!("Pixel: {}", explorer.pixel_selected.id));
+            ui.label(format!("x: {}", explorer.pixel_selected.x));
+            ui.label(format!("y: {}", explorer.pixel_selected.y));
 
             ui.separator();
             ui.heading("Regions of Interest (ROI)");
@@ -508,7 +495,7 @@ pub fn left_panel(
                     .striped(true)
                     .show(ui, |ui| {
                         let mut changed = false;
-                        for mut roi in pixel_selected.rois.iter_mut() {
+                        for mut roi in explorer.pixel_selected.rois.iter_mut() {
                             changed |= ui.add(egui::TextEdit::singleline(&mut roi.name)).changed();
                             let points = roi
                                 .polygon
@@ -520,7 +507,7 @@ pub fn left_panel(
                             ui.end_row();
                         }
                         if changed {
-                            let labels = pixel_selected
+                            let labels = explorer.pixel_selected
                                 .rois
                                 .iter()
                                 .map(|l| l.name.clone())
@@ -529,13 +516,13 @@ pub fn left_panel(
                             meta_data.md.insert("ROI Labels".to_string(), labels);
 
                             dbg!(&meta_data.md.get("ROI Labels"));
-                            if let Ok(mut md) = thread_communication.md_lock.write() {
+                            if let Ok(mut md) = explorer.thread_communication.md_lock.write() {
                                 *md = meta_data.clone();
                             }
-                            thread_communication
+                            explorer.thread_communication
                                 .config_tx
                                 .send(ConfigCommand::UpdateMetaData(
-                                    thread_communication.gui_settings.selected_path.clone(),
+                                    explorer.thread_communication.gui_settings.selected_path.clone(),
                                 ))
                                 .expect("unable to send save file cmd");
                         }
@@ -545,31 +532,31 @@ pub fn left_panel(
             ui.separator();
             ui.heading("Meta Data");
             ui.horizontal(|ui| {
-                let text = if thread_communication.gui_settings.meta_data_edit {
+                let text = if explorer.thread_communication.gui_settings.meta_data_edit {
                     "Save"
                 } else {
                     "Edit"
                 };
                 if ui
                     .selectable_label(
-                        thread_communication.gui_settings.meta_data_edit,
+                        explorer.thread_communication.gui_settings.meta_data_edit,
                         egui::RichText::new(format!("{} {}", egui_phosphor::regular::PENCIL, text)),
                     )
                     .clicked()
                 {
-                    if thread_communication.gui_settings.meta_data_edit {
-                        thread_communication
+                    if explorer.thread_communication.gui_settings.meta_data_edit {
+                        explorer. thread_communication
                             .config_tx
                             .send(ConfigCommand::UpdateMetaData(
-                                thread_communication.gui_settings.selected_path.clone(),
+                                explorer.thread_communication.gui_settings.selected_path.clone(),
                             ))
                             .expect("unable to send save file cmd");
                     }
-                    thread_communication.gui_settings.meta_data_edit =
-                        !thread_communication.gui_settings.meta_data_edit;
+                    explorer.thread_communication.gui_settings.meta_data_edit =
+                        !explorer.thread_communication.gui_settings.meta_data_edit;
                 }
 
-                if thread_communication.gui_settings.meta_data_edit {
+                if explorer.thread_communication.gui_settings.meta_data_edit {
                     if ui
                         .button(egui::RichText::new(format!(
                             "{} Revert",
@@ -577,12 +564,12 @@ pub fn left_panel(
                         )))
                         .clicked()
                     {
-                        thread_communication.gui_settings.meta_data_edit = false;
-                        thread_communication.gui_settings.meta_data_unlocked = false;
-                        thread_communication
+                        explorer.thread_communication.gui_settings.meta_data_edit = false;
+                        explorer.thread_communication.gui_settings.meta_data_unlocked = false;
+                        explorer.thread_communication
                             .config_tx
                             .send(ConfigCommand::LoadMetaData(
-                                thread_communication.gui_settings.selected_path.clone(),
+                                explorer.thread_communication.gui_settings.selected_path.clone(),
                             ))
                             .expect("unable to send open file cmd");
                     }
@@ -600,7 +587,7 @@ pub fn left_panel(
                     for (name, value) in meta_data.md.iter_mut() {
                         ui.label(name);
                         ui.horizontal(|ui| {
-                            if thread_communication.gui_settings.meta_data_edit {
+                            if explorer.thread_communication.gui_settings.meta_data_edit {
                                 if ui
                                     .selectable_label(
                                         false,
@@ -613,7 +600,7 @@ pub fn left_panel(
                                 {
                                     attributes_to_delete.push(name.clone());
                                 }
-                                let lock = if thread_communication.gui_settings.meta_data_unlocked {
+                                let lock = if explorer.thread_communication.gui_settings.meta_data_unlocked {
                                     egui::RichText::new(format!(
                                         "{}",
                                         egui_phosphor::regular::LOCK_OPEN
@@ -623,15 +610,15 @@ pub fn left_panel(
                                 };
                                 if ui
                                     .selectable_label(
-                                        thread_communication.gui_settings.meta_data_unlocked,
+                                        explorer.thread_communication.gui_settings.meta_data_unlocked,
                                         lock,
                                     )
                                     .clicked()
                                 {
-                                    thread_communication.gui_settings.meta_data_unlocked =
-                                        !thread_communication.gui_settings.meta_data_unlocked;
+                                    explorer.thread_communication.gui_settings.meta_data_unlocked =
+                                        !explorer.thread_communication.gui_settings.meta_data_unlocked;
                                 }
-                                if thread_communication.gui_settings.meta_data_unlocked {
+                                if explorer.thread_communication.gui_settings.meta_data_unlocked {
                                     ui.add(
                                         egui::TextEdit::singleline(value)
                                             .desired_width(ui.available_width()),
@@ -655,23 +642,23 @@ pub fn left_panel(
                                     .and_then(|num| num.parse::<usize>().ok())
                                 {
                                     dbg!(index);
-                                    pixel_selected.rois.remove(index);
-                                    if pixel_selected.rois.is_empty() {
+                                    explorer.pixel_selected.rois.remove(index);
+                                    if explorer.pixel_selected.rois.is_empty() {
                                         let mut roi = ROI::default();
-                                        roi.name = format!("ROI {}", pixel_selected.rois.len() + 1);
-                                        pixel_selected.rois.push(roi);
+                                        roi.name = format!("ROI {}", explorer.pixel_selected.rois.len() + 1);
+                                        explorer.pixel_selected.rois.push(roi);
                                     }
                                     labels.remove(index);
                                     *labels_string = labels.join(",");
                                 } else {
                                     if attr == "ROI Labels" {
-                                        for roi_i in 0..pixel_selected.rois.len() {
+                                        for roi_i in 0..explorer.pixel_selected.rois.len() {
                                             meta_data.md.swap_remove(&format!("ROI {roi_i}"));
                                         }
-                                        pixel_selected.rois.clear();
+                                        explorer.pixel_selected.rois.clear();
                                         let mut roi = ROI::default();
                                         roi.name = "ROI 0".to_string();
-                                        pixel_selected.rois.push(roi);
+                                        explorer.pixel_selected.rois.push(roi);
                                     }
                                 }
                             }
@@ -680,7 +667,7 @@ pub fn left_panel(
                     }
 
                     ui.label("User:");
-                    if thread_communication.gui_settings.meta_data_edit {
+                    if explorer.thread_communication.gui_settings.meta_data_edit {
                         ui.add(
                             egui::TextEdit::singleline(&mut meta_data.user)
                                 .desired_width(ui.available_width()),
@@ -690,7 +677,7 @@ pub fn left_panel(
                     }
                     ui.end_row();
                     ui.label("E-mail:");
-                    if thread_communication.gui_settings.meta_data_edit {
+                    if explorer.thread_communication.gui_settings.meta_data_edit {
                         ui.add(
                             egui::TextEdit::singleline(&mut meta_data.email)
                                 .desired_width(ui.available_width()),
@@ -700,7 +687,7 @@ pub fn left_panel(
                     }
                     ui.end_row();
                     ui.label("ORCID:");
-                    if thread_communication.gui_settings.meta_data_edit {
+                    if explorer.thread_communication.gui_settings.meta_data_edit {
                         ui.add(
                             egui::TextEdit::singleline(&mut meta_data.orcid)
                                 .desired_width(ui.available_width()),
@@ -710,7 +697,7 @@ pub fn left_panel(
                     }
                     ui.end_row();
                     ui.label("Institution:");
-                    if thread_communication.gui_settings.meta_data_edit {
+                    if explorer.thread_communication.gui_settings.meta_data_edit {
                         ui.add(
                             egui::TextEdit::singleline(&mut meta_data.institution)
                                 .desired_width(ui.available_width()),
@@ -720,7 +707,7 @@ pub fn left_panel(
                     }
                     ui.end_row();
                     ui.label("Instrument:");
-                    if thread_communication.gui_settings.meta_data_edit {
+                    if explorer.thread_communication.gui_settings.meta_data_edit {
                         ui.add(
                             egui::TextEdit::singleline(&mut meta_data.instrument)
                                 .desired_width(ui.available_width()),
@@ -730,7 +717,7 @@ pub fn left_panel(
                     }
                     ui.end_row();
                     ui.label("Version:");
-                    if thread_communication.gui_settings.meta_data_edit {
+                    if explorer.thread_communication.gui_settings.meta_data_edit {
                         ui.add(
                             egui::TextEdit::singleline(&mut meta_data.version)
                                 .desired_width(ui.available_width()),
@@ -740,7 +727,7 @@ pub fn left_panel(
                     }
                     ui.end_row();
                     ui.label("Mode:");
-                    if thread_communication.gui_settings.meta_data_edit {
+                    if explorer.thread_communication.gui_settings.meta_data_edit {
                         ui.add(
                             egui::TextEdit::singleline(&mut meta_data.mode)
                                 .desired_width(ui.available_width()),
@@ -750,7 +737,7 @@ pub fn left_panel(
                     }
                     ui.end_row();
                     ui.label("Date:");
-                    if thread_communication.gui_settings.meta_data_edit {
+                    if explorer.thread_communication.gui_settings.meta_data_edit {
                         ui.add(
                             egui::TextEdit::singleline(&mut meta_data.date)
                                 .desired_width(ui.available_width()),
@@ -760,7 +747,7 @@ pub fn left_panel(
                     }
                     ui.end_row();
                     ui.label("Time:");
-                    if thread_communication.gui_settings.meta_data_edit {
+                    if explorer.thread_communication.gui_settings.meta_data_edit {
                         ui.add(
                             egui::TextEdit::singleline(&mut meta_data.time)
                                 .desired_width(ui.available_width()),
@@ -771,8 +758,8 @@ pub fn left_panel(
                     ui.end_row();
                 });
             });
-            if thread_communication.gui_settings.meta_data_edit {
-                if let Ok(mut md) = thread_communication.md_lock.write() {
+            if explorer.thread_communication.gui_settings.meta_data_edit {
+                if let Ok(mut md) = explorer.thread_communication.md_lock.write() {
                     *md = meta_data.clone();
                 }
             }

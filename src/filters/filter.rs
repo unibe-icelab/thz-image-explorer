@@ -2,7 +2,7 @@
 //! Filters can be applied to processed data (`ScannedImage`) and customized through settings.
 //! It also implements a global, thread-safe registry for managing filters dynamically.
 
-use crate::config::GuiThreadCommunication;
+use crate::config::ThreadCommunication;
 use crate::data_container::ScannedImage;
 use crate::gui::application::GuiSettingsContainer;
 #[allow(unused_imports)]
@@ -66,7 +66,7 @@ pub trait Filter: Send + Sync + Debug {
     /// # Example:
     ///
     /// ```rust
-    /// fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut GuiThreadCommunication) -> egui::Response {
+    /// fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut ThreadCommunication) -> egui::Response {
     ///     let mut final_response = ui.allocate_response(egui::Vec2::ZERO, egui::Sense::hover());
     ///
     ///     let response_x = ui.horizontal(|ui| {
@@ -95,7 +95,7 @@ pub trait Filter: Send + Sync + Debug {
     fn ui(
         &mut self,
         ui: &mut egui::Ui,
-        thread_communication: &mut GuiThreadCommunication,
+        thread_communication: &mut ThreadCommunication,
     ) -> egui::Response;
 }
 

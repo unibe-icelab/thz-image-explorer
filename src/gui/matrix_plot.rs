@@ -1,3 +1,4 @@
+use bevy_egui::egui::TextureHandle;
 use eframe::egui;
 use eframe::egui::{
     pos2, vec2, Color32, ColorImage, DragValue, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
@@ -6,6 +7,12 @@ use egui::TextureOptions;
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotPoint, PlotPoints, Polygon};
 use ndarray::{Array2, Axis};
+use crate::gui::application::THzImageExplorer;
+
+#[derive(Default)]
+pub struct ImageState {
+    texture: Option<TextureHandle>,
+}
 
 #[derive(Debug, Clone)]
 pub struct ROI {
@@ -102,8 +109,7 @@ fn colorbar_with_midpoint_slider(
     ui: &mut egui::Ui,
     width: &f64,
     height: &f64,
-    midpoint_position: &mut f32,
-    bw: &bool,
+    explorer: &mut THzImageExplorer,
 ) {
     let triangle_radius = 10.0; // Radius for triangle sides
 
@@ -128,16 +134,16 @@ fn colorbar_with_midpoint_slider(
 
         for y in 0..100 {
             let normalized_y = y as f32 / 100.0;
-            let hue_position = if normalized_y <= (*midpoint_position / 100.0) {
+            let hue_position = if normalized_y <= (explorer.mid_point / 100.0) {
                 // Lower section stretched
-                (normalized_y / (*midpoint_position / 100.0)) * 0.5
+                (normalized_y / (explorer.mid_point / 100.0)) * 0.5
             } else {
                 // Upper section stretched
-                0.5 + ((normalized_y - (*midpoint_position / 100.0))
-                    / (1.0 - (*midpoint_position / 100.0)))
+                0.5 + ((normalized_y - (explorer.mid_point / 100.0))
+                    / (1.0 - (explorer.mid_point / 100.0)))
                     * 0.5
             };
-            if *bw {
+            if explorer.bw {
                 img[(0, y)] = egui::ecolor::Hsva {
                     h: 0.0,
                     s: 0.0,
@@ -183,9 +189,9 @@ fn colorbar_with_midpoint_slider(
         });
 
         if plot_response.response.double_clicked() {
-            *midpoint_position = 50.0;
+            explorer.mid_point = 50.0;
         } else if plot_response.response.clicked() {
-            *midpoint_position = val_y;
+            explorer.mid_point = val_y;
         }
 
         // Get colorbar rectangle bounds
@@ -198,7 +204,7 @@ fn colorbar_with_midpoint_slider(
 
         // Map the midpoint_position (0.0 to 1.0) to the colorbar's vertical bounds
         let triangle_y =
-            colorbar_y_start + (colorbar_y_end - colorbar_y_start) * (*midpoint_position / 100.0);
+            colorbar_y_start + (colorbar_y_end - colorbar_y_start) * (explorer.mid_point / 100.0);
 
         // Draw the draggable triangle slider
         let triangle_shape = vec![
@@ -230,10 +236,10 @@ fn colorbar_with_midpoint_slider(
         // If dragged, adjust the midpoint position accordingly
         if response.dragged() {
             let delta_y = response.drag_delta().y;
-            let new_midpoint_position = (*midpoint_position
+            let new_midpoint_position = (explorer.mid_point
                 + delta_y / (colorbar_y_end - colorbar_y_start) * 100.0)
                 .clamp(0.0, 100.0);
-            *midpoint_position = new_midpoint_position;
+            explorer.mid_point = new_midpoint_position;
         }
     });
     // Create a vertical container for the labels next to the colorbar
@@ -285,11 +291,8 @@ pub fn plot_matrix(
     data: &Array2<f32>,
     plot_width: &f64,
     plot_height: &f64,
-    cut_off: &mut [f32; 2],
-    val: &mut PlotPoint,
-    pixel_selected: &mut SelectedPixel,
-    midpoint_position: &mut f32,
-    bw: &mut bool,
+    explorer: &mut THzImageExplorer,
+    state: &mut ImageState,
 ) -> bool {
     let mut pixel_clicked = false;
     let max = data
@@ -297,8 +300,8 @@ pub fn plot_matrix(
         .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi as f64));
 
     ui.label("Clipping:");
-    let mut cut_off_low = cut_off[0];
-    let mut cut_off_high = cut_off[1];
+    let mut cut_off_low = explorer.cut_off[0];
+    let mut cut_off_high = explorer.cut_off[1];
     ui.horizontal(|ui| {
         if ui
             .add(
@@ -323,7 +326,7 @@ pub fn plot_matrix(
 
         ui.add(DragValue::new(&mut cut_off_high).suffix("%"));
     });
-    *cut_off = [cut_off_low, cut_off_high];
+    explorer.cut_off = [cut_off_low, cut_off_high];
 
     let width = data.len_of(Axis(0));
     let height = data.len_of(Axis(1));
@@ -338,18 +341,25 @@ pub fn plot_matrix(
     for y in 0..height {
         for x in 0..width {
             if let Some(i) = data.get((x, y)) {
-                img[(x, y)] = color_from_intensity(i, &max, cut_off, midpoint_position, bw);
+                img[(x, y)] = color_from_intensity(i, &max, &explorer.cut_off, &explorer.mid_point, &explorer.bw);
                 intensity_matrix[x][height - 1 - y] = *i as f64 / max * 100.0;
                 id_matrix[x][height - 1 - y] = format!("{:05}-{:05}", x, y);
             }
         }
     }
 
-    let texture = ui
-        .ctx()
-        .load_texture("image", img.clone(), TextureOptions::NEAREST);
+    // Only load once
+    if let Some(texture) = &mut state.texture {
+        texture.set(img.clone(), TextureOptions::NEAREST ); // This *updates* the GPU texture in-place
+    } else {
+        let texture = ui.ctx().load_texture("image", img.clone(), TextureOptions::NEAREST);
+        state.texture = Some(texture);
+    }
+
+    let Some(texture) = &state.texture else { return pixel_clicked };
+
     let im = PlotImage::new(
-        &texture,
+        texture,
         PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
         img.height() as f32 * vec2(texture.aspect_ratio(), 1.0),
     );
@@ -365,19 +375,20 @@ pub fn plot_matrix(
             .allow_drag(false);
 
         let plot_response = plot.show(ui, |plot_ui| {
+
             plot_ui.image(im);
 
             // Draw selected single pixel
-            if pixel_selected.selected {
+            if explorer.pixel_selected.selected {
                 plot_ui.line(
-                    Line::new(PlotPoints::from(pixel_selected.rect.clone()))
+                    Line::new(PlotPoints::from(explorer.pixel_selected.rect.clone()))
                         .highlight(true)
                         .color(Color32::GRAY),
                 );
             }
 
             // Draw all ROIs
-            for roi in pixel_selected.rois.iter() {
+            for roi in explorer.pixel_selected.rois.iter() {
                 let line = Line::new(PlotPoints::from(roi.polygon.clone()))
                     .color(Color32::WHITE)
                     .width(2.0);
@@ -410,7 +421,7 @@ pub fn plot_matrix(
                 if (0.0..img.width() as f64).contains(&v.x)
                     && (0.0..img.height() as f64).contains(&v.y)
                 {
-                    *val = v;
+                    explorer.val = v;
                 }
             }
         });
@@ -418,24 +429,24 @@ pub fn plot_matrix(
         if plot_response.response.clicked() {
             let modifiers = ui.input(|i| i.modifiers);
             if modifiers.shift {
-                dbg!(&pixel_selected.rois.len());
+                dbg!(&explorer.pixel_selected.rois.len());
                 // Handle multiple polygon ROIs
-                let plot_x = val.x;
-                let plot_y = val.y;
+                let plot_x = explorer.val.x;
+                let plot_y = explorer.val.y;
                 let _pixel_x = plot_x.floor() as usize;
                 let _pixel_y = height - 1 - plot_y.floor() as usize;
 
-                if (!pixel_selected.rois.is_empty() && pixel_selected.rois.last().unwrap().closed)
-                    || pixel_selected.rois.is_empty()
+                if (!explorer.pixel_selected.rois.is_empty() && explorer.pixel_selected.rois.last().unwrap().closed)
+                    || explorer.pixel_selected.rois.is_empty()
                 {
                     // If last ROI is closed, start a new one
                     let mut roi = ROI::default();
-                    roi.name = format!("ROI {}", pixel_selected.rois.len() + 1);
-                    pixel_selected.rois.push(roi);
+                    roi.name = format!("ROI {}", explorer.pixel_selected.rois.len() + 1);
+                    explorer.pixel_selected.rois.push(roi);
                 }
-                dbg!(&pixel_selected.rois.len());
+                dbg!(&explorer.pixel_selected.rois.len());
 
-                if let Some(current_roi) = pixel_selected.rois.last_mut() {
+                if let Some(current_roi) = explorer.pixel_selected.rois.last_mut() {
                     if current_roi.polygon.is_empty() {
                         current_roi.polygon.push([plot_x, plot_y]);
                     } else {
@@ -458,23 +469,23 @@ pub fn plot_matrix(
             } else {
                 // Handle single pixel selection
 
-                if pixel_selected.x == val.x.floor() as usize
-                    && pixel_selected.y == height - 1 - val.y.floor() as usize
-                    && pixel_selected.selected
+                if explorer.pixel_selected.x == explorer.val.x.floor() as usize
+                    && explorer.pixel_selected.y == height - 1 - explorer.val.y.floor() as usize
+                    && explorer.pixel_selected.selected
                 {
-                    pixel_selected.selected = false;
+                    explorer.pixel_selected.selected = false;
                 } else {
-                    pixel_selected.selected = true;
-                    pixel_selected.rect = vec![
-                        [val.x.floor(), val.y.floor()],
-                        [val.x.floor() + 1.0, val.y.floor()],
-                        [val.x.floor() + 1.0, val.y.floor() + 1.0],
-                        [val.x.floor(), val.y.floor() + 1.0],
-                        [val.x.floor(), val.y.floor()],
+                    explorer.pixel_selected.selected = true;
+                    explorer.pixel_selected.rect = vec![
+                        [explorer.val.x.floor(), explorer.val.y.floor()],
+                        [explorer.val.x.floor() + 1.0, explorer.val.y.floor()],
+                        [explorer.val.x.floor() + 1.0, explorer.val.y.floor() + 1.0],
+                        [explorer.val.x.floor(), explorer.val.y.floor() + 1.0],
+                        [explorer.val.x.floor(), explorer.val.y.floor()],
                     ];
-                    pixel_selected.x = val.x.floor() as usize;
-                    pixel_selected.y = height - 1 - val.y.floor() as usize;
-                    pixel_selected.id = id_matrix[pixel_selected.x][pixel_selected.y].clone();
+                    explorer.pixel_selected.x = explorer.val.x.floor() as usize;
+                    explorer.pixel_selected.y = height - 1 - explorer.val.y.floor() as usize;
+                    explorer.pixel_selected.id = id_matrix[explorer.pixel_selected.x][explorer.pixel_selected.y].clone();
                 }
                 pixel_clicked = true;
             }
@@ -485,8 +496,7 @@ pub fn plot_matrix(
             ui,
             &(0.1 * width as f64 * size),
             &(0.75 * height as f64 * size),
-            midpoint_position,
-            bw,
+            explorer,
         );
     });
 

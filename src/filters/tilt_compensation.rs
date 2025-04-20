@@ -1,4 +1,4 @@
-use crate::config::GuiThreadCommunication;
+use crate::config::ThreadCommunication;
 use crate::data_container::ScannedImage;
 use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
 use crate::gui::application::GuiSettingsContainer;
@@ -141,7 +141,7 @@ impl Filter for TiltCompensation {
     fn ui(
         &mut self,
         ui: &mut Ui,
-        _thread_communication: &mut GuiThreadCommunication,
+        _thread_communication: &mut ThreadCommunication,
     ) -> egui::Response {
         let mut final_response = ui.allocate_response(egui::Vec2::ZERO, egui::Sense::hover());
 

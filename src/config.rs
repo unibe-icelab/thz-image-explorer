@@ -6,10 +6,11 @@ use crate::data_container::DataPoint;
 use crate::gui::application::GuiSettingsContainer;
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::math_tools::FftWindowType;
+use bevy::prelude::Resource;
 use dotthz::DotthzMetaData;
 use ndarray::{Array2, Array3};
 use std::path::PathBuf;
-use std::sync::mpsc::{Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 
 /// Enum representing the various commands sent to the configuration thread.
@@ -127,42 +128,12 @@ impl Default for ConfigContainer {
     }
 }
 
-/// Structure for handling communication related to the GUI thread.
-///
-/// This struct is used to facilitate data sharing and command transmission
-/// between the main application logic and the GUI thread. It includes locks
-/// for accessing shared data and settings.
-pub struct GuiThreadCommunication {
-    /// Lock for the metadata (`DotthzMetaData`) shared across threads.
-    pub md_lock: Arc<RwLock<DotthzMetaData>>,
-
-    /// Lock for the [`DataPoint`] containing signal data.
-    pub data_lock: Arc<RwLock<DataPoint>>,
-
-    /// Lock for the [`Scan`] containing all data.
-    pub filtered_data_lock: Arc<RwLock<Array3<f32>>>,
-
-    /// Lock for the currently selected pixel in the image.
-    pub pixel_lock: Arc<RwLock<SelectedPixel>>,
-
-    /// Lock for the image scaling factor (used for downscaling).
-    pub scaling_lock: Arc<RwLock<u8>>,
-
-    /// Lock for the 2D array representing the intensity image.
-    pub img_lock: Arc<RwLock<Array2<f32>>>,
-
-    /// GUI-specific settings stored in the [`GuiSettingsContainer`].
-    pub gui_settings: GuiSettingsContainer,
-
-    /// Sender channel for sending configuration commands (`ConfigCommand`) from the GUI.
-    pub config_tx: Sender<ConfigCommand>,
-}
-
 /// Structure for handling communication related to the main thread.
 ///
 /// This struct is used for managing the reception of configuration commands (`ConfigCommand`)
 /// and sharing data locks between the GUI and the main processing thread.
-pub struct MainThreadCommunication {
+#[derive(Resource, Clone)]
+pub struct ThreadCommunication {
     /// Lock for the metadata (`DotthzMetaData`) shared across threads.
     pub md_lock: Arc<RwLock<DotthzMetaData>>,
 
@@ -184,7 +155,6 @@ pub struct MainThreadCommunication {
     /// GUI-specific settings stored in the [`GuiSettingsContainer`].
     pub gui_settings: GuiSettingsContainer,
 
-    /// Receiver channel for receiving configuration commands (`ConfigCommand`)
-    /// from other threads.
+    pub config_tx: Sender<ConfigCommand>,
     pub config_rx: Receiver<ConfigCommand>,
 }

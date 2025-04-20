@@ -2,7 +2,7 @@
 //! It includes methods for filtering, updating intensity images, saving images, and managing
 //! FFT operations for signal processing.
 
-use crate::config::{ConfigCommand, ConfigContainer, MainThreadCommunication};
+use crate::config::{ConfigCommand, ConfigContainer, ThreadCommunication};
 use crate::data_container::{DataPoint, ScannedImage};
 use crate::filters::filter::FILTER_REGISTRY;
 use crate::gui::matrix_plot::SelectedPixel;
@@ -64,7 +64,7 @@ fn save_image(img: &ColorImage, file_path: &Path) {
 /// # Arguments
 /// * `scan` - A mutable reference to the `ScannedImage`.
 /// * `img_lock` - A thread-safe `RwLock` containing the 2D array for the intensity image.
-fn update_intensity_image(scan: &ScannedImage, thread_communication: &MainThreadCommunication) {
+fn update_intensity_image(scan: &ScannedImage, thread_communication: &ThreadCommunication) {
     if let Ok(mut write_guard) = thread_communication.img_lock.write() {
         *write_guard = scan.filtered_img.clone();
     }
@@ -84,7 +84,7 @@ fn update_intensity_image(scan: &ScannedImage, thread_communication: &MainThread
 fn filter_time_window(
     config: &ConfigContainer,
     scan: &mut ScannedImage,
-    thread_communication: &MainThreadCommunication,
+    thread_communication: &ThreadCommunication,
 ) {
     // calculate fft filter and calculate ifft
     println!("updating data");
@@ -138,7 +138,7 @@ fn filter_time_window(
 /// * `img_lock` - A thread-safe lock for the intensity image array.
 fn filter(
     config: &ConfigContainer,
-    thread_communication: &mut MainThreadCommunication,
+    thread_communication: &mut ThreadCommunication,
     scan: &mut ScannedImage,
 ) {
     // calculate fft filter and calculate ifft
@@ -274,7 +274,7 @@ enum FileType {
 ///
 /// # Arguments
 /// * `thread_communication` - A channel-based communication structure between threads.
-pub fn main_thread(mut thread_communication: MainThreadCommunication) {
+pub fn main_thread(mut thread_communication: ThreadCommunication) {
     // reads data from mutex, samples and saves if needed
     let mut data = DataPoint::default();
     let mut scan = ScannedImage::default();

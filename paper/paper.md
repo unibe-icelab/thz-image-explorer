@@ -77,7 +77,7 @@ set in the GUI are sent to the Data thread
 via multiple-producer-single-consumer (MPSC) channels.
 The Data thread then handles the computation of the applied filters.
 The output of the computation is then shared via mutexes with the GUI thread.
-The entire thread communication is handled with the `GuiThreadCommunication` and `MainThreadCommunication` structs. To
+The entire thread communication is handled with the `ThreadCommunication` and `ThreadCommunication` structs. To
 extend the communication for additional data-types, these two structs need to be extended with `Arc<RwLock<T>>` or
 `mpsc::Sender<T>`/`mpsc::Receiver<T>`.
 

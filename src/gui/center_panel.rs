@@ -1,6 +1,6 @@
-use crate::config::{ConfigCommand, GuiThreadCommunication};
+use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::data_container::DataPoint;
-use crate::gui::application::Tab;
+use crate::gui::application::{THzImageExplorer, Tab};
 use crate::gui::toggle_widget::toggle;
 use crate::vec2;
 use eframe::egui;
@@ -19,37 +19,35 @@ pub fn pulse_tab(
     width: f32,
     spacing: f32,
     right_panel_width: f32,
-    thread_communication: &mut GuiThreadCommunication,
-    data: &mut DataPoint,
-    water_vapour_lines: &[f64],
+    explorer: &mut THzImageExplorer,
 ) {
     ui.vertical(|ui| {
         ui.horizontal(|ui| {
             ui.add_space(50.0);
             ui.add(Checkbox::new(
-                &mut thread_communication.gui_settings.signal_1_visible,
+                &mut explorer.thread_communication.gui_settings.signal_1_visible,
                 "",
             ));
             ui.colored_label(egui::Color32::RED, "— ");
             ui.label("Signal 1");
             ui.add_space(50.0);
             ui.add(Checkbox::new(
-                &mut thread_communication.gui_settings.filtered_signal_1_visible,
+                &mut explorer.thread_communication.gui_settings.filtered_signal_1_visible,
                 "",
             ));
             ui.colored_label(egui::Color32::BLUE, "— ");
             ui.label("Filtered Signal 1");
             ui.add_space(50.0);
             ui.add(Checkbox::new(
-                &mut thread_communication.gui_settings.avg_signal_1_visible,
+                &mut explorer.thread_communication.gui_settings.avg_signal_1_visible,
                 "",
             ));
             ui.colored_label(egui::Color32::YELLOW, "--- ");
             ui.label("Averaged Signal 1");
         });
 
-        if let Ok(read_guard) = thread_communication.data_lock.read() {
-            *data = read_guard.clone();
+        if let Ok(read_guard) = explorer.thread_communication.data_lock.read() {
+            explorer.data = read_guard.clone();
             // self.data.time = linspace::<f64>(self.tera_flash_conf.t_begin as f64,
             //                                  (self.tera_flash_conf.t_begin + self.tera_flash_conf.range) as f64, NUM_PULSE_LINES).collect();
         }
@@ -62,22 +60,22 @@ pub fn pulse_tab(
         let mut axis_display_offset_filtered_signal_1 = f64::NEG_INFINITY;
         let mut axis_display_offset_avg_signal_1 = f64::NEG_INFINITY;
 
-        if thread_communication.gui_settings.signal_1_visible {
-            axis_display_offset_signal_1 = data
+        if explorer.thread_communication.gui_settings.signal_1_visible {
+            axis_display_offset_signal_1 = explorer.data
                 .signal_1
                 .iter()
                 .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
                 .abs();
         }
-        if thread_communication.gui_settings.filtered_signal_1_visible {
-            axis_display_offset_filtered_signal_1 = data
+        if explorer.thread_communication.gui_settings.filtered_signal_1_visible {
+            axis_display_offset_filtered_signal_1 = explorer.data
                 .filtered_signal_1
                 .iter()
                 .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
                 .abs();
         }
-        if thread_communication.gui_settings.avg_signal_1_visible {
-            axis_display_offset_avg_signal_1 = data
+        if explorer.thread_communication.gui_settings.avg_signal_1_visible {
+            axis_display_offset_avg_signal_1 = explorer.data
                 .avg_signal_1
                 .iter()
                 .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
@@ -93,24 +91,24 @@ pub fn pulse_tab(
         .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi))
             * 1.05;
 
-        for i in 0..data.time.len() {
+        for i in 0..explorer.data.time.len() {
             signal_1.push([
-                data.time[i] as f64,
-                data.signal_1[i] as f64 + axis_display_offset,
+                explorer.data.time[i] as f64,
+                explorer.data.signal_1[i] as f64 + axis_display_offset,
             ]);
         }
 
-        for i in 0..data.filtered_time.len().min(data.filtered_signal_1.len()) {
+        for i in 0..explorer.data.filtered_time.len().min(explorer.data.filtered_signal_1.len()) {
             filtered_signal_1.push([
-                data.filtered_time[i] as f64,
-                data.filtered_signal_1[i] as f64 + axis_display_offset,
+                explorer.data.filtered_time[i] as f64,
+                explorer.data.filtered_signal_1[i] as f64 + axis_display_offset,
             ]);
         }
 
-        for i in 0..data.time.len().min(data.avg_signal_1.len()) {
+        for i in 0..explorer.data.time.len().min(explorer.data.avg_signal_1.len()) {
             avg_signal_1.push([
-                data.time[i] as f64,
-                data.avg_signal_1[i] as f64 + axis_display_offset,
+                explorer.data.time[i] as f64,
+                explorer.data.avg_signal_1[i] as f64 + axis_display_offset,
             ]);
         }
 
@@ -140,7 +138,7 @@ pub fn pulse_tab(
             .min_size(vec2(50.0, 100.0));
 
         signal_plot.show(ui, |signal_plot_ui| {
-            if thread_communication.gui_settings.signal_1_visible {
+            if explorer.thread_communication.gui_settings.signal_1_visible {
                 signal_plot_ui.line(
                     Line::new(PlotPoints::from(signal_1))
                         .color(egui::Color32::RED)
@@ -149,7 +147,7 @@ pub fn pulse_tab(
                         .name("signal 1"),
                 );
             }
-            if thread_communication.gui_settings.filtered_signal_1_visible {
+            if explorer.thread_communication.gui_settings.filtered_signal_1_visible {
                 signal_plot_ui.line(
                     Line::new(PlotPoints::from(filtered_signal_1))
                         .color(egui::Color32::BLUE)
@@ -158,7 +156,7 @@ pub fn pulse_tab(
                         .name("filtered signal 1"),
                 );
             }
-            if thread_communication.gui_settings.avg_signal_1_visible {
+            if explorer.thread_communication.gui_settings.avg_signal_1_visible {
                 signal_plot_ui.line(
                     Line::new(PlotPoints::from(avg_signal_1))
                         .color(egui::Color32::YELLOW)
@@ -171,12 +169,12 @@ pub fn pulse_tab(
 
         ui.add_space(spacing);
 
-        let signal_1_fft: Vec<[f64; 2]> = data
+        let signal_1_fft: Vec<[f64; 2]> = explorer.data
             .frequencies
             .iter()
-            .zip(data.signal_1_fft.iter())
+            .zip(explorer.data.signal_1_fft.iter())
             .map(|(x, y)| {
-                let fft = if thread_communication.gui_settings.log_plot {
+                let fft = if explorer.thread_communication.gui_settings.log_plot {
                     20.0 * (*y + 1e-10).log(10.0)
                 } else {
                     *y
@@ -188,12 +186,12 @@ pub fn pulse_tab(
                 [*x as f64, fft as f64]
             })
             .collect();
-        let filtered_signal_1_fft: Vec<[f64; 2]> = data
+        let filtered_signal_1_fft: Vec<[f64; 2]> = explorer.data
             .filtered_frequencies
             .iter()
-            .zip(data.filtered_signal_1_fft.iter())
+            .zip(explorer.data.filtered_signal_1_fft.iter())
             .map(|(x, y)| {
-                let fft = if thread_communication.gui_settings.log_plot {
+                let fft = if explorer. thread_communication.gui_settings.log_plot {
                     20.0 * (*y + 1e-10).log(10.0)
                 } else {
                     *y
@@ -205,12 +203,12 @@ pub fn pulse_tab(
                 [*x as f64, fft as f64]
             })
             .collect();
-        let avg_signal_1_fft: Vec<[f64; 2]> = data
+        let avg_signal_1_fft: Vec<[f64; 2]> = explorer.data
             .frequencies
             .iter()
-            .zip(data.avg_signal_1_fft.iter())
+            .zip(explorer.data.avg_signal_1_fft.iter())
             .map(|(x, y)| {
-                let fft = if thread_communication.gui_settings.log_plot {
+                let fft = if explorer.thread_communication.gui_settings.log_plot {
                     20.0 * (*y + 1e-10).log(10.0)
                 } else {
                     *y
@@ -222,22 +220,22 @@ pub fn pulse_tab(
                 [*x as f64, fft as f64]
             })
             .collect();
-        let phase_1_fft: Vec<[f64; 2]> = data
+        let phase_1_fft: Vec<[f64; 2]> = explorer.data
             .frequencies
             .iter()
-            .zip(data.phase_1_fft.iter())
+            .zip(explorer.data.phase_1_fft.iter())
             .map(|(x, y)| [*x as f64, *y as f64])
             .collect();
-        let filtered_phase_1_fft: Vec<[f64; 2]> = data
+        let filtered_phase_1_fft: Vec<[f64; 2]> = explorer.data
             .filtered_frequencies
             .iter()
-            .zip(data.filtered_phase_fft.iter())
+            .zip(explorer.data.filtered_phase_fft.iter())
             .map(|(x, y)| [*x as f64, *y as f64])
             .collect();
-        let avg_phase_1_fft: Vec<[f64; 2]> = data
+        let avg_phase_1_fft: Vec<[f64; 2]> = explorer.data
             .frequencies
             .iter()
-            .zip(data.avg_phase_fft.iter())
+            .zip(explorer.data.avg_phase_fft.iter())
             .map(|(x, y)| [*x as f64, *y as f64])
             .collect();
 
@@ -253,8 +251,8 @@ pub fn pulse_tab(
             max_fft_signals = -200.0;
         }
 
-        let log_plot = thread_communication.gui_settings.log_plot;
-        let phases_visible = thread_communication.gui_settings.phases_visible;
+        let log_plot =explorer. thread_communication.gui_settings.log_plot;
+        let phases_visible = explorer.thread_communication.gui_settings.phases_visible;
 
         let a_fmt = move |y: GridMark, _range: &RangeInclusive<f64>| {
             if log_plot {
@@ -296,14 +294,14 @@ pub fn pulse_tab(
             .include_x(0.0)
             .include_x(10.0);
 
-        if !thread_communication.gui_settings.phases_visible {
+        if !explorer.thread_communication.gui_settings.phases_visible {
             // fft_plot = fft_plot.include_y(-100.0);
             fft_plot = fft_plot.include_y(0.0)
         };
 
         fft_plot.show(ui, |fft_plot_ui| {
-            if thread_communication.gui_settings.signal_1_visible {
-                if !thread_communication.gui_settings.phases_visible {
+            if explorer.thread_communication.gui_settings.signal_1_visible {
+                if !explorer.thread_communication.gui_settings.phases_visible {
                     fft_plot_ui.line(
                         Line::new(PlotPoints::from(signal_1_fft))
                             .color(egui::Color32::RED)
@@ -321,8 +319,8 @@ pub fn pulse_tab(
                     );
                 }
             }
-            if thread_communication.gui_settings.filtered_signal_1_visible {
-                if !thread_communication.gui_settings.phases_visible {
+            if explorer.thread_communication.gui_settings.filtered_signal_1_visible {
+                if !explorer.thread_communication.gui_settings.phases_visible {
                     fft_plot_ui.line(
                         Line::new(PlotPoints::from(filtered_signal_1_fft))
                             .color(egui::Color32::BLUE)
@@ -340,8 +338,8 @@ pub fn pulse_tab(
                     );
                 }
             }
-            if thread_communication.gui_settings.avg_signal_1_visible {
-                if !thread_communication.gui_settings.phases_visible {
+            if explorer.thread_communication.gui_settings.avg_signal_1_visible {
+                if !explorer.thread_communication.gui_settings.phases_visible {
                     fft_plot_ui.line(
                         Line::new(PlotPoints::from(avg_signal_1_fft))
                             .color(egui::Color32::YELLOW)
@@ -360,8 +358,8 @@ pub fn pulse_tab(
                 }
             }
 
-            if thread_communication.gui_settings.water_lines_visible {
-                for line in water_vapour_lines.iter() {
+            if explorer.thread_communication.gui_settings.water_lines_visible {
+                for line in explorer.water_vapour_lines.iter() {
                     fft_plot_ui.vline(
                         VLine::new(*line)
                             .stroke(Stroke::new(1.0, egui::Color32::BLUE))
@@ -377,7 +375,7 @@ pub fn pulse_tab(
             if ui
                 .add(
                     DragValue::new(
-                        &mut thread_communication.gui_settings.frequency_resolution_temp,
+                        &mut explorer.thread_communication.gui_settings.frequency_resolution_temp,
                     )
                     .min_decimals(4)
                     .max_decimals(4)
@@ -385,19 +383,19 @@ pub fn pulse_tab(
                 )
                 .lost_focus()
             {
-                if thread_communication.gui_settings.frequency_resolution_temp > 1.0 / data.hk.range
+                if explorer.thread_communication.gui_settings.frequency_resolution_temp > 1.0 / explorer.data.hk.range
                 {
-                    thread_communication.gui_settings.frequency_resolution_temp =
-                        1.0 / data.hk.range;
-                } else if thread_communication.gui_settings.frequency_resolution_temp < 0.0001 {
-                    thread_communication.gui_settings.frequency_resolution_temp = 0.0001;
+                    explorer.thread_communication.gui_settings.frequency_resolution_temp =
+                        1.0 / explorer.data.hk.range;
+                } else if explorer.thread_communication.gui_settings.frequency_resolution_temp < 0.0001 {
+                    explorer.thread_communication.gui_settings.frequency_resolution_temp = 0.0001;
                 }
-                thread_communication.gui_settings.frequency_resolution =
-                    thread_communication.gui_settings.frequency_resolution_temp;
-                thread_communication
+                explorer.thread_communication.gui_settings.frequency_resolution =
+                    explorer.thread_communication.gui_settings.frequency_resolution_temp;
+                explorer. thread_communication
                     .config_tx
                     .send(ConfigCommand::SetFFTResolution(
-                        thread_communication.gui_settings.frequency_resolution,
+                        explorer.thread_communication.gui_settings.frequency_resolution,
                     ))
                     .expect("unable to send config");
             }
@@ -405,17 +403,17 @@ pub fn pulse_tab(
             ui.label("FFT");
             if ui
                 .add(toggle(
-                    &mut thread_communication.gui_settings.phases_visible,
+                    &mut explorer.thread_communication.gui_settings.phases_visible,
                 ))
                 .changed()
             {
-                thread_communication.gui_settings.log_plot =
-                    !thread_communication.gui_settings.phases_visible;
+                explorer.thread_communication.gui_settings.log_plot =
+                    !explorer.thread_communication.gui_settings.phases_visible;
             };
             ui.label("Phases");
             ui.add_space(50.0);
             ui.add(Checkbox::new(
-                &mut thread_communication.gui_settings.water_lines_visible,
+                &mut explorer.thread_communication.gui_settings.water_lines_visible,
                 "",
             ));
             ui.colored_label(egui::Color32::BLUE, "— ");
@@ -424,9 +422,9 @@ pub fn pulse_tab(
             ui.add_space(ui.available_size().x - 400.0 - right_panel_width);
 
             // dynamic range:
-            let length = data.signal_1_fft.len();
-            let dr1 = if !data.signal_1_fft.is_empty() {
-                data.signal_1_fft[length - 100..length].iter().sum::<f32>() / 100.0
+            let length = explorer.data.signal_1_fft.len();
+            let dr1 = if !explorer.data.signal_1_fft.is_empty() {
+                explorer.data.signal_1_fft[length - 100..length].iter().sum::<f32>() / 100.0
             } else {
                 0.0
             };
@@ -439,8 +437,8 @@ pub fn pulse_tab(
 
             // peak to peak
             let ptp1 = if let (Some(min), Some(max)) = (
-                data.signal_1.iter().cloned().reduce(f32::min),
-                data.signal_1.iter().cloned().reduce(f32::max),
+                explorer.data.signal_1.iter().cloned().reduce(f32::min),
+                explorer.data.signal_1.iter().cloned().reduce(f32::max),
             ) {
                 max - min
             } else {
@@ -457,17 +455,15 @@ pub fn refractive_index_tab(
     width: f32,
     spacing: f32,
     right_panel_width: f32,
-    thread_communication: &mut GuiThreadCommunication,
-    data: &mut DataPoint,
-    water_vapour_lines: &[f64],
+    explorer: &mut THzImageExplorer,
 ) {
 }
 
 fn three_dimensional_plot(
     ui: &mut Ui,
-    thread_communication: &mut GuiThreadCommunication,
     right_panel_width: f32,
     height: f32,
+    explorer: &mut THzImageExplorer
 ) {
     let size = Vec2::new(ui.available_width() - right_panel_width, height);
     ui.allocate_ui(size, |ui| {
@@ -479,8 +475,8 @@ fn three_dimensional_plot(
             let (pitch_delta, yaw_delta) = match pointer.primary_down() {
                 true => (delta.y * MOVE_SCALE, -delta.x * MOVE_SCALE),
                 false => (
-                    thread_communication.gui_settings.chart_pitch_vel,
-                    thread_communication.gui_settings.chart_yaw_vel,
+                    explorer.thread_communication.gui_settings.chart_pitch_vel,
+                    explorer.thread_communication.gui_settings.chart_yaw_vel,
                 ),
             };
 
@@ -489,14 +485,14 @@ fn three_dimensional_plot(
             (pitch_delta, yaw_delta, scale_delta)
         });
 
-        thread_communication.gui_settings.chart_pitch_vel = pitch_delta;
-        thread_communication.gui_settings.chart_yaw_vel = yaw_delta;
+        explorer.thread_communication.gui_settings.chart_pitch_vel = pitch_delta;
+        explorer.thread_communication.gui_settings.chart_yaw_vel = yaw_delta;
 
-        thread_communication.gui_settings.chart_pitch +=
-            thread_communication.gui_settings.chart_pitch_vel;
-        thread_communication.gui_settings.chart_yaw +=
-            thread_communication.gui_settings.chart_yaw_vel;
-        thread_communication.gui_settings.chart_scale += scale_delta;
+        explorer.thread_communication.gui_settings.chart_pitch +=
+            explorer.thread_communication.gui_settings.chart_pitch_vel;
+        explorer.thread_communication.gui_settings.chart_yaw +=
+            explorer.thread_communication.gui_settings.chart_yaw_vel;
+        explorer.thread_communication.gui_settings.chart_scale += scale_delta;
 
         // Next plot everything
         let root = EguiBackend::new(ui).into_drawing_area();
@@ -508,14 +504,14 @@ fn three_dimensional_plot(
         let mut depth = 10;
         let mut image = Array2::zeros((width, height));
         let mut filtered_data = Array3::zeros((width, height, depth));
-        if let Ok(img) = thread_communication.img_lock.read() {
+        if let Ok(img) = explorer.thread_communication.img_lock.read() {
             let shape = img.shape();
             width = shape[0];
             height = shape[1];
             image = img.clone().into();
         }
 
-        if let Ok(fd) = thread_communication.filtered_data_lock.read() {
+        if let Ok(fd) = explorer.thread_communication.filtered_data_lock.read() {
             let shape = fd.shape();
             width = shape[0];
             height = shape[1];
@@ -536,9 +532,9 @@ fn three_dimensional_plot(
             .unwrap();
 
         chart.with_projection(|mut pb| {
-            pb.yaw = thread_communication.gui_settings.chart_yaw as f64;
-            pb.pitch = thread_communication.gui_settings.chart_pitch as f64;
-            pb.scale = thread_communication.gui_settings.chart_scale as f64;
+            pb.yaw = explorer.thread_communication.gui_settings.chart_yaw as f64;
+            pb.pitch = explorer.thread_communication.gui_settings.chart_pitch as f64;
+            pb.scale = explorer.thread_communication.gui_settings.chart_scale as f64;
             pb.into_matrix()
         });
 
@@ -722,9 +718,7 @@ pub fn center_panel(
     ctx: &egui::Context,
     right_panel_width: &f32,
     left_panel_width: &f32,
-    thread_communication: &mut GuiThreadCommunication,
-    data: &mut DataPoint,
-    water_vapour_lines: &[f64],
+    explorer: &mut THzImageExplorer,
 ) {
     egui::CentralPanel::default().show(ctx, |ui| {
         let window_height = ui.available_height();
@@ -733,24 +727,24 @@ pub fn center_panel(
         let width = ui.available_size().x - 40.0 - *left_panel_width - *right_panel_width;
         ui.horizontal(|ui| {
             ui.add_space(*left_panel_width + 20.0);
-            let tabs = thread_communication.gui_settings.tab.to_arr();
+            let tabs = explorer.thread_communication.gui_settings.tab.to_arr();
             if ui
                 .selectable_label(tabs[0], Tab::Pulse.to_string())
                 .clicked()
             {
-                thread_communication.gui_settings.tab = Tab::Pulse;
+                explorer.thread_communication.gui_settings.tab = Tab::Pulse;
             }
             if ui
                 .selectable_label(tabs[1], Tab::RefractiveIndex.to_string())
                 .clicked()
             {
-                thread_communication.gui_settings.tab = Tab::RefractiveIndex;
+                explorer.thread_communication.gui_settings.tab = Tab::RefractiveIndex;
             }
             if ui
                 .selectable_label(tabs[2], Tab::ThreeD.to_string())
                 .clicked()
             {
-                thread_communication.gui_settings.tab = Tab::ThreeD;
+                explorer.thread_communication.gui_settings.tab = Tab::ThreeD;
             }
         });
 
@@ -758,16 +752,14 @@ pub fn center_panel(
 
         ui.horizontal(|ui| {
             ui.add_space(*left_panel_width + 20.0);
-            match thread_communication.gui_settings.tab {
+            match explorer.thread_communication.gui_settings.tab {
                 Tab::Pulse => pulse_tab(
                     ui,
                     height,
                     width,
                     spacing,
                     *right_panel_width,
-                    thread_communication,
-                    data,
-                    water_vapour_lines,
+                    explorer,
                 ),
                 Tab::RefractiveIndex => refractive_index_tab(
                     ui,
@@ -775,16 +767,14 @@ pub fn center_panel(
                     width,
                     spacing,
                     *right_panel_width,
-                    thread_communication,
-                    data,
-                    water_vapour_lines,
+                    explorer,
                 ),
                 Tab::ThreeD => {
                     three_dimensional_plot(
                         ui,
-                        thread_communication,
                         *right_panel_width,
                         window_height,
+                        explorer,
                     );
                 }
             }

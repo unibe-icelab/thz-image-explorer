@@ -1,23 +1,17 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-// hide console window on Windows in release
-
-extern crate core;
-extern crate csv;
-extern crate preferences;
-extern crate serde;
-
-use crate::config::{ConfigCommand, GuiThreadCommunication, MainThreadCommunication};
+use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::data_container::DataPoint;
 use crate::data_thread::main_thread;
-use crate::gui::application::{GuiSettingsContainer, THzImageExplorer};
+use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::SelectedPixel;
+use bevy::prelude::*;
+use bevy_egui::{EguiContextPass, EguiContexts, EguiPlugin};
+use crossbeam_channel::{Receiver, Sender};
 use dotthz::DotthzMetaData;
 use eframe::egui::{vec2, ViewportBuilder, Visuals};
 use eframe::{egui, icon_data};
 use ndarray::{Array2, Array3};
 use preferences::{AppInfo, Preferences};
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{mpsc, Arc, RwLock};
+use std::sync::{Arc, RwLock};
 use std::thread;
 
 mod config;
@@ -34,9 +28,27 @@ const APP_INFO: AppInfo = AppInfo {
     author: "Linus Leo Stöckli",
 };
 
-fn main() {
-    egui_logger::builder().init().unwrap();
+fn spawn_camera(mut commands: Commands) {
+    commands.spawn(Camera3d::default());
+}
 
+fn spawn_data_thread(mut state: ResMut<ThreadCommunication>) {
+    let state = state.clone(); // If ThreadCommunication is Arc/Mutex or cloneable
+    thread::spawn(move || {
+        main_thread(state);
+    });
+}
+
+fn setup_fonts(mut contexts: EguiContexts) {
+    let mut fonts = egui::FontDefinitions::default();
+    egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
+    contexts.ctx_mut().set_fonts(fonts);
+    egui_extras::install_image_loaders(&contexts.ctx_mut());
+    contexts.ctx_mut().set_visuals(Visuals::dark());
+}
+
+// --- Main ---
+fn main() {
     let mut gui_settings = GuiSettingsContainer::new();
     let prefs_key = "config/gui";
     let load_result = GuiSettingsContainer::load(&APP_INFO, prefs_key);
@@ -61,14 +73,17 @@ fn main() {
 
     let data_lock = Arc::new(RwLock::new(DataPoint::default()));
     let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
-    let filtered_data_lock = Arc::new(RwLock::new(Array3::from_shape_fn((1, 1, 1), |(_, _, _)| 0.0)));
+    let filtered_data_lock = Arc::new(RwLock::new(Array3::from_shape_fn(
+        (1, 1, 1),
+        |(_, _, _)| 0.0,
+    )));
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
     let scaling_lock = Arc::new(RwLock::new(1));
     let md_lock = Arc::new(RwLock::new(DotthzMetaData::default()));
 
-    let (config_tx, config_rx): (Sender<ConfigCommand>, Receiver<ConfigCommand>) = mpsc::channel();
-
-    let gui_communication = GuiThreadCommunication {
+    let (config_tx, config_rx): (Sender<ConfigCommand>, Receiver<ConfigCommand>) =
+        crossbeam_channel::unbounded();
+    let thread_communication = ThreadCommunication {
         md_lock: md_lock.clone(),
         data_lock: data_lock.clone(),
         filtered_data_lock: filtered_data_lock.clone(),
@@ -77,44 +92,26 @@ fn main() {
         img_lock: img_lock.clone(),
         gui_settings: gui_settings.clone(),
         config_tx,
-    };
-
-    let main_communication = MainThreadCommunication {
-        md_lock,
-        data_lock,
-        pixel_lock,
-        scaling_lock,
-        img_lock,
-        filtered_data_lock,
-        gui_settings: gui_settings.clone(),
         config_rx,
     };
-
-    let _main_thread_handler = thread::spawn(|| {
-        main_thread(main_communication);
-    });
-
-    let options = eframe::NativeOptions {
-        viewport: ViewportBuilder::default()
-            .with_drag_and_drop(true)
-            .with_inner_size(vec2(gui_settings.x, gui_settings.y))
-            .with_icon(
-                icon_data::from_png_bytes(&include_bytes!("../icons/icon.png")[..]).unwrap(),
-            ),
-        ..Default::default()
-    };
-
-    eframe::run_native(
-        "THz Image Explorer",
-        options,
-        Box::new(|ctx| {
-            let mut fonts = egui::FontDefinitions::default();
-            egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
-            ctx.egui_ctx.set_fonts(fonts);
-            egui_extras::install_image_loaders(&ctx.egui_ctx);
-            ctx.egui_ctx.set_visuals(Visuals::dark());
-            Ok(Box::new(THzImageExplorer::new(ctx, gui_communication)))
-        }),
-    )
-    .expect("Failed to launch GUI");
+    // Start Bevy app
+    App::new()
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "THz Image Explorer".into(),
+                resolution: (gui_settings.x, gui_settings.y).into(),
+                ..default()
+            }),
+            ..default()
+        }))
+        .add_plugins(EguiPlugin {
+            enable_multipass_for_primary_context: true,
+        })
+        .insert_resource(thread_communication.clone())
+        .insert_non_send_resource(THzImageExplorer::new(thread_communication))
+        .add_systems(Startup, setup_fonts)
+        .add_systems(Startup, spawn_camera)
+        .add_systems(Startup, spawn_data_thread)
+        .add_systems(EguiContextPass, update_gui)
+        .run();
 }

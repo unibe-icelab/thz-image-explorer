@@ -10,21 +10,22 @@ use egui_file_dialog::FileDialog;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use std::sync::Arc;
-
+use bevy::prelude::*;
+use bevy_egui::{EguiContexts, egui};
 use eframe::egui::ThemePreference;
-use eframe::{egui, Storage};
+use eframe::{Storage};
 use egui_plot::PlotPoint;
 use home::home_dir;
 use preferences::Preferences;
 use self_update::update::Release;
 use serde::{Deserialize, Serialize};
 
-use crate::config::GuiThreadCommunication;
+use crate::config::ThreadCommunication;
 use crate::data_container::DataPoint;
 use crate::filters::psf::PSF;
 use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
-use crate::gui::matrix_plot::SelectedPixel;
+use crate::gui::matrix_plot::{ImageState, SelectedPixel};
 use crate::gui::right_panel::right_panel;
 use crate::math_tools::FftWindowType;
 use crate::APP_INFO;
@@ -102,7 +103,7 @@ impl Tab {
 /// - `beam_shape`: Coordinates of the beam shape.
 /// - `beam_shape_path`: File path for the beam shape data.
 /// - `psf`: The point spread function represented as a 2D array.
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Resource)]
 pub struct GuiSettingsContainer {
     pub selected_path: PathBuf,
     pub log_plot: bool,
@@ -176,6 +177,41 @@ impl GuiSettingsContainer {
     }
 }
 
+pub fn update_gui(
+    mut contexts: EguiContexts,
+    mut explorer: NonSendMut<THzImageExplorer>,
+    mut image_state: Local<ImageState>
+) {
+
+    let ctx = contexts.ctx_mut();
+
+    let left_panel_width = 300.0;
+    let right_panel_width = 500.0;
+
+    center_panel(
+        ctx,
+        &right_panel_width,
+        &left_panel_width,
+        &mut explorer,
+    );
+
+    left_panel(
+        ctx,
+        &mut explorer,
+        &left_panel_width,
+        &mut image_state
+    );
+
+    right_panel(
+        ctx,
+        &mut explorer,
+        &right_panel_width,
+    );
+
+    explorer.thread_communication.gui_settings.x = ctx.used_size().x;
+    explorer.thread_communication.gui_settings.y = ctx.used_size().y;
+}
+
 /// Main application struct for the THz Image Explorer GUI.
 ///
 /// This struct manages application state, handles GUI components, file dialogs,
@@ -204,44 +240,44 @@ impl GuiSettingsContainer {
 /// - `settings_window_open`: Boolean indicating whether the settings window is open.
 /// - `update_text`: Text displayed for updates.
 /// - `new_release`: Optional field for new software updates (only used with "self_update" feature).
-pub struct THzImageExplorer<'a> {
-    cut_off: [f32; 2],
-    fft_bounds: [f32; 2],
-    fft_window_type: FftWindowType,
-    filter_bounds: [f32; 2],
-    time_window: [f32; 2],
-    pixel_selected: SelectedPixel,
-    val: PlotPoint,
-    mid_point: f32,
-    bw: bool,
-    water_vapour_lines: Vec<f64>,
-    wp: egui::Image<'a>,
-    data: DataPoint,
-    file_dialog_state: FileDialogState,
-    file_dialog: FileDialog,
-    information_panel: InformationPanel,
-    other_files: Vec<PathBuf>,
-    selected_file_name: String,
-    scroll_to_selection: bool,
-    thread_communication: GuiThreadCommunication,
-    settings_window_open: bool,
-    update_text: String,
+pub struct THzImageExplorer {
+    pub(crate) cut_off: [f32; 2],
+    pub(crate) fft_bounds: [f32; 2],
+    pub(crate) fft_window_type: FftWindowType,
+    pub(crate) filter_bounds: [f32; 2],
+    pub(crate) time_window: [f32; 2],
+    pub(crate) pixel_selected: SelectedPixel,
+    pub(crate) val: PlotPoint,
+    pub(crate) mid_point: f32,
+    pub(crate) bw: bool,
+    pub(crate) water_vapour_lines: Vec<f64>,
+    pub(crate) wp: &'static [u8],
+    pub(crate) data: DataPoint,
+    pub(crate) file_dialog_state: FileDialogState,
+    pub(crate) file_dialog: FileDialog,
+    pub(crate) information_panel: InformationPanel,
+    pub(crate) other_files: Vec<PathBuf>,
+    pub(crate) selected_file_name: String,
+    pub(crate) scroll_to_selection: bool,
+    pub(crate) thread_communication: ThreadCommunication,
+    pub(crate) settings_window_open: bool,
+    pub(crate) update_text: String,
     #[cfg(feature = "self_update")]
-    new_release: Option<Release>,
+    pub(crate) new_release: Option<Release>,
 }
 
-impl THzImageExplorer<'_> {
+impl THzImageExplorer {
     /// Creates a new instance of `THzImageExplorer`.
     ///
     /// # Arguments
     /// - `cc`: The creation context for the application instance.
-    /// - `thread_communication`: An instance of `GuiThreadCommunication` for managing
+    /// - `thread_communication`: An instance of `ThreadCommunication` for managing
     ///   threaded GUI settings.
     ///
     /// # Returns
     /// A new `THzImageExplorer` struct with default settings and preloaded water vapor lines.
     #[allow(clippy::too_many_arguments)]
-    pub fn new(cc: &eframe::CreationContext, thread_communication: GuiThreadCommunication) -> Self {
+    pub fn new(thread_communication: ThreadCommunication) -> Self {
         let mut water_vapour_lines: Vec<f64> = Vec::new();
         let buffered = include_str!("../../resources/water_lines.csv");
         for line in buffered.lines() {
@@ -286,16 +322,16 @@ impl THzImageExplorer<'_> {
             .initial_directory(thread_communication.gui_settings.selected_path.clone())
             //.default_file_filter("dotTHz files")
             ;
-        // Load the persistent data of the file dialog.
-        // Alternatively, you can also use the `FileDialog::storage` builder method.
-        if let Some(storage) = cc.storage {
-            *file_dialog.storage_mut() =
-                eframe::get_value(storage, "file_dialog_storage").unwrap_or_default()
-        }
+        // // Load the persistent data of the file dialog.
+        // // Alternatively, you can also use the `FileDialog::storage` builder method.
+        // if let Some(storage) = cc.storage {
+        //     *file_dialog.storage_mut() =
+        //         eframe::get_value(storage, "file_dialog_storage").unwrap_or_default()
+        // }
 
         Self {
             water_vapour_lines,
-            wp: egui::Image::from_bytes("WP", include_bytes!("../../images/WP-Logo.png")),
+            wp: include_bytes!("../../images/WP-Logo.png"),
             data: DataPoint::default(),
             file_dialog_state: FileDialogState::None,
             file_dialog,
@@ -360,55 +396,55 @@ impl THzImageExplorer<'_> {
     }
 }
 
-impl eframe::App for THzImageExplorer<'_> {
+impl eframe::App for THzImageExplorer {
     /// Updates the GUI state during each frame.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let left_panel_width = 300.0;
         let right_panel_width = 500.0;
 
-        center_panel(
-            ctx,
-            &right_panel_width,
-            &left_panel_width,
-            &mut self.thread_communication,
-            &mut self.data,
-            &self.water_vapour_lines,
-        );
-
-        left_panel(
-            ctx,
-            &mut self.thread_communication,
-            &left_panel_width,
-            &mut self.pixel_selected,
-            &mut self.val,
-            &mut self.mid_point,
-            &mut self.bw,
-            &mut self.cut_off,
-            &mut self.file_dialog_state,
-            &mut self.file_dialog,
-            &mut self.information_panel,
-            &mut self.other_files,
-            &mut self.selected_file_name,
-            &mut self.scroll_to_selection,
-        );
-
-        right_panel(
-            ctx,
-            &mut self.settings_window_open,
-            &mut self.update_text,
-            &right_panel_width,
-            &mut self.thread_communication,
-            &mut self.filter_bounds,
-            &mut self.fft_bounds,
-            &mut self.fft_window_type,
-            &mut self.time_window,
-            &mut self.pixel_selected,
-            self.wp.clone(),
-            &mut self.file_dialog_state,
-            &mut self.file_dialog,
-            #[cfg(feature = "self_update")]
-            &mut self.new_release,
-        );
+        // center_panel(
+        //     ctx,
+        //     &right_panel_width,
+        //     &left_panel_width,
+        //     &mut self.thread_communication,
+        //     &mut self.data,
+        //     &self.water_vapour_lines,
+        // );
+        //
+        // left_panel(
+        //     ctx,
+        //     &mut self.thread_communication,
+        //     &left_panel_width,
+        //     &mut self.pixel_selected,
+        //     &mut self.val,
+        //     &mut self.mid_point,
+        //     &mut self.bw,
+        //     &mut self.cut_off,
+        //     &mut self.file_dialog_state,
+        //     &mut self.file_dialog,
+        //     &mut self.information_panel,
+        //     &mut self.other_files,
+        //     &mut self.selected_file_name,
+        //     &mut self.scroll_to_selection,
+        // );
+        //
+        // right_panel(
+        //     ctx,
+        //     &mut self.settings_window_open,
+        //     &mut self.update_text,
+        //     &right_panel_width,
+        //     &mut self.thread_communication,
+        //     &mut self.filter_bounds,
+        //     &mut self.fft_bounds,
+        //     &mut self.fft_window_type,
+        //     &mut self.time_window,
+        //     &mut self.pixel_selected,
+        //     self.wp.clone(),
+        //     &mut self.file_dialog_state,
+        //     &mut self.file_dialog,
+        //     #[cfg(feature = "self_update")]
+        //     &mut self.new_release,
+        // );
 
         self.thread_communication.gui_settings.x = ctx.used_size().x;
         self.thread_communication.gui_settings.y = ctx.used_size().y;
