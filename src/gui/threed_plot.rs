@@ -13,6 +13,28 @@ use bevy::{
 use bevy_egui::egui::{epaint, Ui};
 use bevy_egui::{egui, EguiUserTextures};
 
+fn color_picker_widget(ui: &mut egui::Ui, color: &mut Color) -> egui::Response {
+    let [r, g, b, a] = Srgba::from(*color).to_f32_array();
+    let mut egui_color: egui::Rgba = egui::Rgba::from_srgba_unmultiplied(
+        (r * 255.0) as u8,
+        (g * 255.0) as u8,
+        (b * 255.0) as u8,
+        (a * 255.0) as u8,
+    );
+    let res = egui::widgets::color_picker::color_edit_button_rgba(
+        ui,
+        &mut egui_color,
+        egui::color_picker::Alpha::Opaque,
+    );
+    let [r, g, b, a] = egui_color.to_srgba_unmultiplied();
+    *color = Color::srgba(
+        r as f32 / 255.0,
+        g as f32 / 255.0,
+        b as f32 / 255.0,
+        a as f32 / 255.0,
+    );
+    res
+}
 #[derive(Component)]
 pub struct Plot3DCameraController {
     pub radius: f32,
@@ -80,25 +102,23 @@ pub fn setup_plot_3d_render(
 
     let cube_handle = meshes.add(Cuboid::new(4.0, 4.0, 4.0));
     let default_material = StandardMaterial {
-        base_color: Color::srgb(0.8, 0.7, 0.6),
+        base_color: Color::srgba(0.8, 0.7, 0.6, 1.0), // Default opacity 1.0 (fully opaque)
         reflectance: 0.02,
+        alpha_mode: AlphaMode::Blend,
         unlit: false,
         ..default()
     };
     let preview_material_handle = materials.add(default_material.clone());
 
-    // This specifies the layer used for the preview pass, which will be attached to the preview pass camera and cube.
-    let preview_pass_layer = RenderLayers::layer(1);
-
     // The cube that will be rendered to the texture.
     commands
         .spawn((
             Mesh3d(cube_handle),
-            MeshMaterial3d(preview_material_handle),
+            MeshMaterial3d(preview_material_handle.clone()),
             Transform::from_translation(Vec3::new(0.0, 0.0, 1.0)),
         ))
         .insert(Plot3DObject)
-        .insert(preview_pass_layer.clone());
+        .insert(RenderLayers::layer(1));
 
     // The same light is reused for both passes,
     // you can specify different lights for preview and main pass by setting appropriate RenderLayers.
@@ -184,28 +204,51 @@ pub fn three_dimensional_plot_ui(
     hovered: &mut ResMut<Plot3DHovered>,
     cube_preview_texture_id: &epaint::TextureId,
     width: f32,
-    heigth: f32,
+    height: f32,
     ui: &mut Ui,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    preview_cube_query: Query<&MeshMaterial3d<StandardMaterial>, With<Plot3DObject>>,
 ) {
     ui.label("3D plot:");
 
-    let available_size = egui::vec2(width.min(heigth), heigth.min(width));
+    let available_size = egui::vec2(width.min(height), width.min(height));
+    ui.label(format!("{} x {}", available_size.x, available_size.y));
 
-    ui.allocate_ui(available_size, |ui| {
-        // Show the texture in UI
-        ui.image(egui::load::SizedTexture::new(
-            *cube_preview_texture_id,
-            available_size,
-        ));
+    ui.vertical(|ui| {
+        ui.allocate_ui(available_size, |ui| {
+            // Show the texture in UI
+            ui.image(egui::load::SizedTexture::new(
+                *cube_preview_texture_id,
+                available_size,
+            ));
 
-        let rect = ui.max_rect();
+            let rect = ui.max_rect();
 
-        if ui
-            .interact(rect, ui.id(), egui::Sense::drag() | egui::Sense::hover())
-            .dragged()
-        {
-            hovered.0 = true;
+            let response = ui.interact(
+                rect,
+                egui::Id::from("sense"),
+                egui::Sense::drag() | egui::Sense::hover(),
+            );
+            // Interaction for dragging
+            if response.dragged() || response.hovered() {
+                hovered.0 = true;
+            } else {
+                hovered.0 = false;
+            }
+        })
+        .response;
+
+        // Add a slider for opacity control
+        ui.label("Opacity:");
+        if let Ok(material_handle) = preview_cube_query.single() {
+            let preview_material = materials.get_mut(material_handle).unwrap();
+
+            let mut opacity = preview_material.base_color.alpha();
+            // Create the slider
+            ui.add(egui::Slider::new(&mut opacity, 0.0..=1.0)); // Get the value from the slider
+            preview_material.base_color.set_alpha(opacity);
         }
-    })
-    .response;
+
+
+    });
 }

@@ -184,6 +184,8 @@ pub fn update_gui(
     mut contexts: EguiContexts,
     mut explorer: NonSendMut<THzImageExplorer>,
     mut image_state: Local<ImageState>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    preview_cube_query: Query<&MeshMaterial3d<StandardMaterial>, With<Plot3DObject>>,
 ) {
     let cube_preview_texture_id = contexts.image_id(&cube_preview_image).unwrap();
 
@@ -199,6 +201,8 @@ pub fn update_gui(
         &right_panel_width,
         &left_panel_width,
         &mut explorer,
+        &mut materials,
+        preview_cube_query
     );
 
     left_panel(ctx, &mut explorer, &left_panel_width, &mut image_state);

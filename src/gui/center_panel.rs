@@ -556,7 +556,10 @@ pub fn center_panel(
     right_panel_width: &f32,
     left_panel_width: &f32,
     explorer: &mut THzImageExplorer,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    preview_cube_query: Query<&MeshMaterial3d<StandardMaterial>, With<Plot3DObject>>,
 ) {
+
     egui::CentralPanel::default().show(ctx, |ui| {
         let window_height = ui.available_height();
         let height = ui.available_size().y * 0.45;
@@ -601,6 +604,8 @@ pub fn center_panel(
                         width,
                         window_height,
                         ui,
+                        materials,
+                        preview_cube_query,
                     );
                 }
             }
