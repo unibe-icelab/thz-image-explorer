@@ -1,8 +1,6 @@
 use crate::config::ConfigCommand;
 use crate::gui::application::{THzImageExplorer, Tab};
-use crate::gui::threed_plot::{
-    three_dimensional_plot_ui, Plot3DObject,
-};
+use crate::gui::threed_plot::{three_dimensional_plot_ui, Plot3DHovered, Plot3DObject};
 use crate::gui::toggle_widget::toggle;
 use crate::vec2;
 use bevy::prelude::*;
@@ -552,6 +550,7 @@ pub fn refractive_index_tab(
 
 #[allow(clippy::too_many_arguments)]
 pub fn center_panel(
+    hovered: &mut ResMut<Plot3DHovered>,
     cube_preview_texture_id: &epaint::TextureId,
     ctx: &egui::Context,
     right_panel_width: &f32,
@@ -597,6 +596,7 @@ pub fn center_panel(
                 }
                 Tab::ThreeD => {
                     three_dimensional_plot_ui(
+                        hovered,
                         cube_preview_texture_id,
                         ui,
                     );

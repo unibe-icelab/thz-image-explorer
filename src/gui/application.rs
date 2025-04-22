@@ -27,7 +27,7 @@ use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
 use crate::gui::matrix_plot::{ImageState, SelectedPixel};
 use crate::gui::right_panel::right_panel;
-use crate::gui::threed_plot::{CubePreviewImage, Plot3DObject, Plot3DRender};
+use crate::gui::threed_plot::{CubePreviewImage, Plot3DHovered, Plot3DObject, Plot3DRender};
 use crate::math_tools::FftWindowType;
 use crate::APP_INFO;
 
@@ -180,6 +180,7 @@ impl GuiSettingsContainer {
 
 pub fn update_gui(
     cube_preview_image: Res<CubePreviewImage>,
+    mut hovered: ResMut<Plot3DHovered>,
     mut contexts: EguiContexts,
     mut explorer: NonSendMut<THzImageExplorer>,
     mut image_state: Local<ImageState>,
@@ -192,6 +193,7 @@ pub fn update_gui(
     let right_panel_width = 500.0;
 
     center_panel(
+        &mut hovered,
         &cube_preview_texture_id,
         &ctx,
         &right_panel_width,

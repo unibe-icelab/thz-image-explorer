@@ -1,3 +1,4 @@
+use bevy::input::mouse::MouseButton;
 use bevy::render::render_resource::*;
 use bevy::{
     prelude::*,
@@ -11,6 +12,22 @@ use bevy::{
 };
 use bevy_egui::egui::{epaint, Ui};
 use bevy_egui::{egui, EguiUserTextures};
+
+#[derive(Component)]
+pub struct Plot3DCameraController {
+    pub radius: f32,
+    pub theta: f32, // horizontal rotation
+    pub phi: f32,   // vertical rotation
+    pub focus: Vec3,
+    pub sensitivity: f32,
+    pub zoom_speed: f32,
+}
+
+#[derive(Resource, Default)]
+pub struct Plot3DHovered(pub bool);
+
+#[derive(Component)]
+pub struct Plot3DCamera;
 
 #[derive(Resource)]
 pub struct Plot3DRender {
@@ -92,32 +109,101 @@ pub fn setup_plot_3d_render(
         ))
         .insert(RenderLayers::default().with(1));
 
-    commands
-        .spawn((
-            Camera3d::default(),
-            Camera {
-                // render before the "main pass" camera
-                order: -1,
-                target: RenderTarget::Image(image_handle.into()),
-                clear_color: ClearColorConfig::Custom(Color::srgba(1.0, 1.0, 1.0, 0.0)),
-                ..default()
-            },
-            Transform::from_translation(Vec3::new(0.0, 0.0, 15.0))
-                .looking_at(Vec3::default(), Vec3::Y),
-        ))
-        .insert(preview_pass_layer);
+    commands.spawn((
+        Camera3d::default(), // marker component
+        Camera {
+            order: -1,
+            target: RenderTarget::Image(image_handle.clone().into()),
+            clear_color: ClearColorConfig::Custom(Color::srgba(1.0, 1.0, 1.0, 0.0)),
+            ..default()
+        },
+        Transform::from_translation(Vec3::new(0.0, 0.0, 15.0)).looking_at(Vec3::ZERO, Vec3::Y),
+        GlobalTransform::default(), // Required in 0.13 for spatial hierarchy
+        RenderLayers::layer(1),
+        Plot3DCamera,
+        Plot3DCameraController {
+            radius: 15.0,
+            theta: 0.0,
+            phi: std::f32::consts::FRAC_PI_4,
+            focus: Vec3::ZERO,
+            sensitivity: 0.01,
+            zoom_speed: 0.05,
+        },
+    ));
+    commands.insert_resource(Plot3DHovered(false));
+}
 
+pub fn plot_3d_camera_controller(
+    mut motion_evr: EventReader<bevy::input::mouse::MouseMotion>,
+    buttons: Res<ButtonInput<MouseButton>>,
+    mut scroll_evr: EventReader<bevy::input::mouse::MouseWheel>,
+    windows: Query<&Window>,
+    hovered: Res<Plot3DHovered>, // custom resource, see below
+    mut query: Query<(&mut Transform, &mut Plot3DCameraController), With<Plot3DCamera>>,
+) {
+    let window = if let Ok(w) = windows.get_single() {
+        w
+    } else {
+        return;
+    };
+
+    if !hovered.0 {
+        return; // Don't rotate if mouse isn't over UI plot area
+    }
+
+    let mut delta = Vec2::ZERO;
+    for ev in motion_evr.read() {
+        delta += ev.delta;
+    }
+
+    let scroll: f32 = scroll_evr.read().map(|e| e.y).sum();
+
+    for (mut transform, mut controller) in query.iter_mut() {
+        // Zoom
+        controller.radius -= scroll * controller.zoom_speed;
+        controller.radius = controller.radius.clamp(2.0, 100.0);
+
+        if buttons.pressed(MouseButton::Left) {
+            controller.theta += delta.x * controller.sensitivity;
+            controller.phi -= delta.y * controller.sensitivity;
+            controller.phi = controller.phi.clamp(0.1, std::f32::consts::PI - 0.1);
+        }
+
+        // Update position
+        let sin_phi = controller.phi.sin();
+        let x = controller.radius * controller.theta.cos() * sin_phi;
+        let y = controller.radius * controller.phi.cos();
+        let z = controller.radius * controller.theta.sin() * sin_phi;
+
+        let eye = controller.focus + Vec3::new(x, y, z);
+        *transform = Transform::from_translation(eye).looking_at(controller.focus, Vec3::Y);
+    }
 }
 
 pub fn three_dimensional_plot_ui(
+    hovered: &mut ResMut<Plot3DHovered>,
     cube_preview_texture_id: &epaint::TextureId,
     ui: &mut Ui,
 ) {
     ui.label("plot: ");
 
-    // Show the texture in UI
-    ui.image(egui::load::SizedTexture::new(
-        *cube_preview_texture_id,
-        egui::vec2(500., 500.),
-    ));
+    let available_size = egui::vec2(500.0, 500.0);
+
+    ui.allocate_ui(available_size, |ui| {
+        // Show the texture in UI
+        ui.image(egui::load::SizedTexture::new(
+            *cube_preview_texture_id,
+            egui::vec2(500., 500.),
+        ));
+
+        let rect = ui.max_rect();
+
+        if ui
+            .interact(rect, ui.id(), egui::Sense::drag() | egui::Sense::hover())
+            .dragged()
+        {
+            hovered.0 = true;
+        }
+    })
+    .response;
 }
