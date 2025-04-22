@@ -44,6 +44,7 @@ ctor = "0.4"
 once_cell = "1.21"
 plotters = "0.3.7"
 rayon = "1.10.0"
+type-uuid = "0.1.2"
 
 [features]
 default = ["self_update"]
@@ -71,3 +72,6 @@ output = "target/wix/THzImageExplorerInstaller.msi"
 
 [profile.release]
 debug = 1
+
+[workspace]
+resolver = "2"

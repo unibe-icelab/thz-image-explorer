@@ -4,7 +4,7 @@ use crate::data_thread::main_thread;
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::center_panel::rotator_system;
 use crate::gui::matrix_plot::SelectedPixel;
-use crate::gui::threed_plot::{plot_3d_camera_controller, setup_plot_3d_render};
+use crate::gui::threed_plot::{plot_3d_camera_controller, setup_plot_3d_render, setup_volume_texture, VolumeMaterial};
 use bevy::prelude::*;
 use bevy_egui::{EguiContextPass, EguiContexts, EguiPlugin};
 use crossbeam_channel::{Receiver, Sender};
@@ -107,9 +107,11 @@ fn main() {
         })
         .insert_resource(thread_communication.clone())
         .insert_non_send_resource(THzImageExplorer::new(thread_communication))
+        .add_plugins(MaterialPlugin::<VolumeMaterial>::default())
         .add_systems(Startup, setup_plot_3d_render)
         .add_systems(Startup, setup_fonts)
         .add_systems(Startup, spawn_data_thread)
+        .add_systems(Startup, setup_volume_texture)
         .add_systems(EguiContextPass, update_gui)
         //.add_systems(Update, rotator_system)
         .add_systems(Update, plot_3d_camera_controller)
