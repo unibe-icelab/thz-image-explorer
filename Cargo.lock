@@ -7298,6 +7298,7 @@ dependencies = [
  "once_cell",
  "plotters",
  "preferences",
+ "rayon",
  "realfft",
  "reqwest",
  "self_update",

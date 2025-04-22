@@ -2,7 +2,9 @@ use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::data_container::DataPoint;
 use crate::data_thread::main_thread;
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
+use crate::gui::center_panel::rotator_system;
 use crate::gui::matrix_plot::SelectedPixel;
+use crate::gui::threed_plot::{setup_plot_3d_render};
 use bevy::prelude::*;
 use bevy_egui::{EguiContextPass, EguiContexts, EguiPlugin};
 use crossbeam_channel::{Receiver, Sender};
@@ -27,10 +29,6 @@ const APP_INFO: AppInfo = AppInfo {
     name: "THz Image Explorer",
     author: "Linus Leo Stöckli",
 };
-
-fn spawn_camera(mut commands: Commands) {
-    commands.spawn(Camera3d::default());
-}
 
 fn spawn_data_thread(mut state: ResMut<ThreadCommunication>) {
     let state = state.clone(); // If ThreadCommunication is Arc/Mutex or cloneable
@@ -109,9 +107,10 @@ fn main() {
         })
         .insert_resource(thread_communication.clone())
         .insert_non_send_resource(THzImageExplorer::new(thread_communication))
+        .add_systems(Startup, setup_plot_3d_render)
         .add_systems(Startup, setup_fonts)
-        .add_systems(Startup, spawn_camera)
         .add_systems(Startup, spawn_data_thread)
         .add_systems(EguiContextPass, update_gui)
+        .add_systems(Update, rotator_system)
         .run();
 }

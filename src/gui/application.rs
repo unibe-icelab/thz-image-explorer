@@ -3,22 +3,22 @@
 //! It provides structures and methods to manage user interactions, graphical settings,
 //! file operations, and visualization panels for signal and image processing.
 
+use bevy::prelude::*;
+use bevy_egui::{egui, EguiContexts};
 use core::f64;
 use dotthz::DotthzFile;
+use eframe::egui::ThemePreference;
+use eframe::Storage;
 use egui_file_dialog::information_panel::InformationPanel;
 use egui_file_dialog::FileDialog;
-use std::fmt::{Display, Formatter};
-use std::path::PathBuf;
-use std::sync::Arc;
-use bevy::prelude::*;
-use bevy_egui::{EguiContexts, egui};
-use eframe::egui::ThemePreference;
-use eframe::{Storage};
 use egui_plot::PlotPoint;
 use home::home_dir;
 use preferences::Preferences;
 use self_update::update::Release;
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::config::ThreadCommunication;
 use crate::data_container::DataPoint;
@@ -27,6 +27,7 @@ use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
 use crate::gui::matrix_plot::{ImageState, SelectedPixel};
 use crate::gui::right_panel::right_panel;
+use crate::gui::threed_plot::{CubePreviewImage, Plot3DObject, Plot3DRender};
 use crate::math_tools::FftWindowType;
 use crate::APP_INFO;
 
@@ -178,10 +179,12 @@ impl GuiSettingsContainer {
 }
 
 pub fn update_gui(
+    cube_preview_image: Res<CubePreviewImage>,
     mut contexts: EguiContexts,
     mut explorer: NonSendMut<THzImageExplorer>,
-    mut image_state: Local<ImageState>
+    mut image_state: Local<ImageState>,
 ) {
+    let cube_preview_texture_id = contexts.image_id(&cube_preview_image).unwrap();
 
     let ctx = contexts.ctx_mut();
 
@@ -189,24 +192,16 @@ pub fn update_gui(
     let right_panel_width = 500.0;
 
     center_panel(
-        ctx,
+        &cube_preview_texture_id,
+        &ctx,
         &right_panel_width,
         &left_panel_width,
         &mut explorer,
     );
 
-    left_panel(
-        ctx,
-        &mut explorer,
-        &left_panel_width,
-        &mut image_state
-    );
+    left_panel(ctx, &mut explorer, &left_panel_width, &mut image_state);
 
-    right_panel(
-        ctx,
-        &mut explorer,
-        &right_panel_width,
-    );
+    right_panel(ctx, &mut explorer, &right_panel_width);
 
     explorer.thread_communication.gui_settings.x = ctx.used_size().x;
     explorer.thread_communication.gui_settings.y = ctx.used_size().y;

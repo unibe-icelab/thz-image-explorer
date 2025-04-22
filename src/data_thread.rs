@@ -86,9 +86,13 @@ fn filter_time_window(
     scan: &mut ScannedImage,
     thread_communication: &ThreadCommunication,
 ) {
-    // calculate fft filter and calculate ifft
+    use ndarray::{s, Axis};
+    use rayon::prelude::*;
+    use std::time::Instant;
+
     println!("updating data");
     let start = Instant::now();
+
     let lower = scan
         .filtered_time
         .iter()
@@ -98,31 +102,28 @@ fn filter_time_window(
         .filtered_time
         .iter()
         .position(|t| *t == config.time_window[1].round())
-        .unwrap_or(0);
-    (
-        scan.scaled_data.axis_iter_mut(Axis(0)),
-        scan.filtered_data.axis_iter_mut(Axis(0)),
-        scan.filtered_img.axis_iter_mut(Axis(0)),
-    )
-        .into_par_iter()
-        .for_each(
-            |(mut scaled_data_columns, mut filtered_data_columns, mut filtered_img_columns)| {
-                (
-                    scaled_data_columns.axis_iter_mut(Axis(0)),
-                    filtered_data_columns.axis_iter_mut(Axis(0)),
-                    filtered_img_columns.axis_iter_mut(Axis(0)),
-                )
-                    .into_par_iter()
-                    .for_each(|(_scaled_data, filtered_data, filtered_img)| {
-                        *filtered_img.into_scalar() = filtered_data
-                            .iter()
-                            .skip(lower)
-                            .take(upper - lower)
-                            .map(|xi| xi * xi)
-                            .sum::<f32>();
-                    });
-            },
-        );
+        .unwrap_or(scan.filtered_time.len()); // safer fallback
+
+    let range = lower..upper;
+
+    let filtered_iter = scan.filtered_data.axis_iter_mut(Axis(0));
+    let img_iter = scan.filtered_img.axis_iter_mut(Axis(0));
+
+    filtered_iter
+        .zip(img_iter)
+        .par_bridge() // parallelize outer loop only
+        .for_each(|((mut filtered_data_col), mut filtered_img_col)| {
+            for i in 0..filtered_data_col.len_of(Axis(0)) {
+                let data_slice = filtered_data_col.index_axis(Axis(0), i);
+                let sum_sq = data_slice
+                    .slice(s![range.clone()])
+                    .iter()
+                    .map(|&xi| xi * xi)
+                    .sum::<f32>();
+                filtered_img_col[i] = sum_sq;
+            }
+        });
+
     update_intensity_image(scan, thread_communication);
     println!("updated time data. This took {:?}", start.elapsed());
 }
@@ -391,10 +392,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 dbg!(&pulse_path);
                                 match open_from_npz(&mut scan, &pulse_path) {
                                     Ok(_) => {
-                                        update_intensity_image(
-                                            &scan,
-                                            &thread_communication,
-                                        );
+                                        update_intensity_image(&scan, &thread_communication);
                                     }
                                     Err(err) => {
                                         log::error!("an error occurred while trying to read data.npz {err:?}");
@@ -430,10 +428,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 {
                                     Ok(_) => {
                                         log::info!("opened {:?}", selected_file_path);
-                                        update_intensity_image(
-                                            &scan,
-                                            &thread_communication,
-                                        );
+                                        update_intensity_image(&scan, &thread_communication);
                                     }
                                     Err(err) => {
                                         log::error!(
