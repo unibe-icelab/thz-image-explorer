@@ -598,6 +598,8 @@ pub fn center_panel(
                     three_dimensional_plot_ui(
                         hovered,
                         cube_preview_texture_id,
+                        width,
+                        window_height,
                         ui,
                     );
                 }

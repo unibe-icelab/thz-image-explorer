@@ -183,17 +183,19 @@ pub fn plot_3d_camera_controller(
 pub fn three_dimensional_plot_ui(
     hovered: &mut ResMut<Plot3DHovered>,
     cube_preview_texture_id: &epaint::TextureId,
+    width: f32,
+    heigth: f32,
     ui: &mut Ui,
 ) {
-    ui.label("plot: ");
+    ui.label("3D plot:");
 
-    let available_size = egui::vec2(500.0, 500.0);
+    let available_size = egui::vec2(width.min(heigth), heigth.min(width));
 
     ui.allocate_ui(available_size, |ui| {
         // Show the texture in UI
         ui.image(egui::load::SizedTexture::new(
             *cube_preview_texture_id,
-            egui::vec2(500., 500.),
+            available_size,
         ));
 
         let rect = ui.max_rect();
