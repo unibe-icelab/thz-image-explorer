@@ -14,6 +14,7 @@ use bevy::{
 };
 use bevy_egui::egui::{epaint, Ui};
 use bevy_egui::{egui, EguiUserTextures};
+use rand::Rng;
 use type_uuid::TypeUuid;
 
 fn color_picker_widget(ui: &mut egui::Ui, color: &mut Color) -> egui::Response {
@@ -69,15 +70,8 @@ pub struct Plot3DObject;
 #[derive(Asset, TypePath, AsBindGroup, TypeUuid, Debug, Clone)]
 #[uuid = "e3e3f3a1-4444-11ee-be56-0242ac120002"]
 pub struct VolumeMaterial {
-    #[texture(0, dimension = "3d")]
-    #[sampler(1)]
-    pub volume_texture: Handle<Image>,
-
-    #[uniform(2)]
-    pub opacity: f32,
-
-    #[uniform(3)]
-    pub volume_size: Vec3,
+    #[uniform(0)]
+    pub color: Vec4, // includes RGBA
 }
 
 impl Material for VolumeMaterial {
@@ -86,23 +80,8 @@ impl Material for VolumeMaterial {
     }
 
     fn alpha_mode(&self) -> AlphaMode {
-        AlphaMode::Blend
+        AlphaMode::Premultiplied
     }
-}
-fn generate_test_volume(width: u32, height: u32, depth: u32) -> Vec<u8> {
-    let mut data = Vec::with_capacity((width * height * depth) as usize);
-    for z in 0..depth {
-        for y in 0..height {
-            for x in 0..width {
-                // Generate the value (normalized between 0 and 1)
-                let value = ((x + y + z) as f32) / (width + height + depth) as f32;
-                // Map the f32 value to a u8 (0..255)
-                let byte_value = (value * 255.0).min(255.0).max(0.0) as u8;
-                data.push(byte_value);
-            }
-        }
-    }
-    data
 }
 
 pub fn setup_plot_3d_render(
@@ -202,9 +181,8 @@ pub struct VolumeTextureResource {
 
 pub fn setup_volume_texture(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
+    mut voxel_meshes: ResMut<Assets<Mesh>>,
     mut volume_materials: ResMut<Assets<VolumeMaterial>>,
-    mut images: ResMut<Assets<Image>>,
 ) {
     let width = 120;
     let height = 120;
@@ -214,50 +192,31 @@ pub fn setup_volume_texture(
     let height = 2;
     let depth = 2;
 
-    // Generate the test volume data (this can be replaced with real volume data)
-    let volume_data = generate_test_volume(width, height, depth);
+    // Create cube mesh once
+    let cube = voxel_meshes.add(Mesh::from(Cuboid::new(0.1, 0.1, 0.1)));
 
-    let size = Extent3d {
-        width,
-        height,
-        depth_or_array_layers: depth,
-    };
+    // Generate positions (e.g. 120 x 120 x 200)
+    let nx = 120;
+    let ny = 120;
+    let nz = 200;
 
-    let volume_texture = Image {
-        texture_descriptor: TextureDescriptor {
-            label: Some("texture"),
-            size,
-            dimension: TextureDimension::D3,
-            format: TextureFormat::R8Unorm,
-            mip_level_count: 1,
-            sample_count: 1,
-            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
-            view_formats: &[],
-        },
-        data: Some(volume_data),
-        ..Default::default()
-    };
+    let mut rng = rand::thread_rng();
 
-    // Add the texture to Bevy's asset system
-    let volume_texture_handle = images.add(volume_texture);
+    for _ in 0..(nx * ny * nz) {
+        let x = rng.gen_range(-60.0..60.0);
+        let y = rng.gen_range(-60.0..60.0);
+        let z = rng.gen_range(-100.0..100.0);
+        let a = rng.gen_range(0.0..1.0);
 
-    // Insert the texture as a resource (so it can be used by shaders or materials)
-    commands.insert_resource(VolumeTextureResource {
-        texture: volume_texture_handle.clone(),
-    });
-
-    let volume_material_handle = volume_materials.add(VolumeMaterial {
-        volume_texture: volume_texture_handle.clone(), // your 3D texture handle
-        volume_size: Vec3::new(width as f32, height as f32, depth as f32),
-        opacity: 1.0,
-    });
-
-    commands.spawn((
-        Mesh3d(meshes.add(Mesh::from(Cuboid::from_length(1.0)))),
-        MeshMaterial3d(volume_material_handle),
-        Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
-        RenderLayers::layer(1),
-    ));
+        commands.spawn((
+            Mesh3d(cube.clone()),
+            MeshMaterial3d(volume_materials.add(VolumeMaterial {
+                color: Vec4::new(0.5, 0.5, 0.1, a),
+            })),
+            Transform::from_translation(Vec3::new(x, y, z)),
+            RenderLayers::layer(1),
+        ));
+    }
 }
 
 pub fn plot_3d_camera_controller(
