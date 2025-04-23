@@ -27,9 +27,9 @@ use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
 use crate::gui::matrix_plot::{ImageState, SelectedPixel};
 use crate::gui::right_panel::right_panel;
-use crate::gui::threed_plot::{CubePreviewImage, Plot3DHovered, Plot3DObject, Plot3DRender};
 use crate::math_tools::FftWindowType;
 use crate::APP_INFO;
+use crate::gui::rendering::renderer::{CubePreviewImage};
 
 /// Represents the state of the file dialog for opening, saving, or working with PSF files.
 #[derive(Clone)]
@@ -180,12 +180,11 @@ impl GuiSettingsContainer {
 
 pub fn update_gui(
     cube_preview_image: Res<CubePreviewImage>,
-    mut hovered: ResMut<Plot3DHovered>,
     mut contexts: EguiContexts,
     mut explorer: NonSendMut<THzImageExplorer>,
     mut image_state: Local<ImageState>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    preview_cube_query: Query<&MeshMaterial3d<StandardMaterial>, With<Plot3DObject>>,
+    //preview_cube_query: Query<&MeshMaterial3d<StandardMaterial>, With<Plot3DObject>>,
 ) {
     let cube_preview_texture_id = contexts.image_id(&cube_preview_image).unwrap();
 
@@ -195,14 +194,13 @@ pub fn update_gui(
     let right_panel_width = 500.0;
 
     center_panel(
-        &mut hovered,
         &cube_preview_texture_id,
         &ctx,
         &right_panel_width,
         &left_panel_width,
         &mut explorer,
         &mut materials,
-        preview_cube_query
+        //preview_cube_query
     );
 
     left_panel(ctx, &mut explorer, &left_panel_width, &mut image_state);

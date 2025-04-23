@@ -2,11 +2,18 @@ use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::data_container::DataPoint;
 use crate::data_thread::main_thread;
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
-use crate::gui::center_panel::rotator_system;
 use crate::gui::matrix_plot::SelectedPixel;
-use crate::gui::threed_plot::{plot_3d_camera_controller, setup_plot_3d_render, setup_volume_texture, VolumeMaterial};
+use crate::gui::rendering::renderer::{draw_points, setup, Points};
+use crate::gui::threed_plot::setup_volume_texture;
 use bevy::prelude::*;
-use bevy_egui::{EguiContextPass, EguiContexts, EguiPlugin};
+use bevy::render::render_resource::WgpuFeatures;
+use bevy::render::settings::{RenderCreation, WgpuSettings};
+use bevy::render::RenderPlugin;
+use bevy_common_assets::json::JsonAssetPlugin;
+use bevy_egui::{EguiContexts, EguiPlugin};
+use bevy_panorbit_camera::PanOrbitCameraPlugin;
+use bevy_vector_shapes::prelude::*;
+use bevy_vector_shapes::ShapePlugin;
 use crossbeam_channel::{Receiver, Sender};
 use dotthz::DotthzMetaData;
 use eframe::egui::{vec2, ViewportBuilder, Visuals};
@@ -92,28 +99,60 @@ fn main() {
         config_tx,
         config_rx,
     };
+
+    let mut wgpu_features = WgpuFeatures::default();
+    wgpu_features.set(WgpuFeatures::VERTEX_WRITABLE_STORAGE, true);
+
     // Start Bevy app
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "THz Image Explorer".into(),
-                resolution: (gui_settings.x, gui_settings.y).into(),
+        .add_plugins(
+            DefaultPlugins
+                .set(RenderPlugin {
+                    render_creation: RenderCreation::Automatic(WgpuSettings {
+                        features: wgpu_features,
+                        ..Default::default()
+                    }),
+                    synchronous_pipeline_compilation: false,
+                })
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        fit_canvas_to_parent: true,
+                        mode: bevy::window::WindowMode::Windowed,
+                        present_mode: bevy::window::PresentMode::AutoVsync,
+                        prevent_default_event_handling: false,
+                        title: "THz Image Explorer".into(),
+                        resolution: (gui_settings.x, gui_settings.y).into(),
+                        ..default()
+                    }),
+                    ..default()
+                }),
+        )
+        .add_plugins(EguiPlugin)
+        .add_plugins((
+            JsonAssetPlugin::<Points>::new(&["points.json"]),
+            PanOrbitCameraPlugin,
+            ShapePlugin {
+                base_config: ShapeConfig {
+                    alignment: Alignment::Billboard,
+                    ..ShapeConfig::default_3d()
+                },
                 ..default()
-            }),
-            ..default()
-        }))
-        .add_plugins(EguiPlugin {
-            enable_multipass_for_primary_context: true,
-        })
+            },
+        ))
+        .insert_resource(ClearColor(Color::rgb_u8(112 / 2, 48 / 2, 48 / 2)))
         .insert_resource(thread_communication.clone())
         .insert_non_send_resource(THzImageExplorer::new(thread_communication))
-        .add_plugins(MaterialPlugin::<VolumeMaterial>::default())
-        .add_systems(Startup, setup_plot_3d_render)
-        .add_systems(Startup, setup_fonts)
-        .add_systems(Startup, spawn_data_thread)
-        .add_systems(Startup, setup_volume_texture)
-        .add_systems(EguiContextPass, update_gui)
-        //.add_systems(Update, rotator_system)
-        .add_systems(Update, plot_3d_camera_controller)
+        .add_systems(Startup, setup)
+        .add_systems(Update, draw_points)
+        .add_systems(Update, update_gui)
+        // if self.esc_close {
+        //     app.add_systems(Update, esc_close);
+        // }
+        //
+        // if self.show_fps {
+        //     app.add_plugins(FrameTimeDiagnosticsPlugin);
+        //     app.add_systems(Startup, fps_display_setup);
+        //     app.add_systems(Update, fps_update_system);
+        // }
         .run();
 }

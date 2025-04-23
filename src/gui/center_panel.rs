@@ -1,6 +1,6 @@
 use crate::config::ConfigCommand;
 use crate::gui::application::{THzImageExplorer, Tab};
-use crate::gui::threed_plot::{three_dimensional_plot_ui, Plot3DHovered, Plot3DObject};
+use crate::gui::threed_plot::{three_dimensional_plot_ui};
 use crate::gui::toggle_widget::toggle;
 use crate::vec2;
 use bevy::prelude::*;
@@ -550,14 +550,13 @@ pub fn refractive_index_tab(
 
 #[allow(clippy::too_many_arguments)]
 pub fn center_panel(
-    hovered: &mut ResMut<Plot3DHovered>,
     cube_preview_texture_id: &epaint::TextureId,
     ctx: &egui::Context,
     right_panel_width: &f32,
     left_panel_width: &f32,
     explorer: &mut THzImageExplorer,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-    preview_cube_query: Query<&MeshMaterial3d<StandardMaterial>, With<Plot3DObject>>,
+    // preview_cube_query: Query<&MeshMaterial3d<StandardMaterial>, With<Plot3DObject>>,
 ) {
 
     egui::CentralPanel::default().show(ctx, |ui| {
@@ -599,13 +598,12 @@ pub fn center_panel(
                 }
                 Tab::ThreeD => {
                     three_dimensional_plot_ui(
-                        hovered,
                         cube_preview_texture_id,
                         width,
                         window_height,
                         ui,
                         materials,
-                        preview_cube_query,
+                        // preview_cube_query,
                     );
                 }
             }
@@ -629,14 +627,3 @@ fn generate_sample_image(width: usize, height: usize) -> Array2<f32> {
     image
 }
 
-// Rotates the cubes.
-#[allow(clippy::type_complexity)]
-pub fn rotator_system(
-    time: Res<Time>,
-    mut query: Query<&mut Transform, With<Plot3DObject>>,
-) {
-    for mut transform in &mut query {
-        transform.rotate_x(1.5 * time.delta_secs());
-        transform.rotate_z(1.3 * time.delta_secs());
-    }
-}
