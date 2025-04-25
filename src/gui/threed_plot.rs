@@ -287,7 +287,7 @@ pub fn setup(mut meshes: ResMut<Assets<Mesh>>,
     });
 
     // Truncate to top 2 million most opaque points
-    const MAX_INSTANCES: usize = 2_000_000;
+    const MAX_INSTANCES: usize = 1_000_000;
     if instances.len() > MAX_INSTANCES {
         instances.truncate(MAX_INSTANCES);
     }

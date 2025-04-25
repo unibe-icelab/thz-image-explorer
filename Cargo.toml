@@ -35,7 +35,6 @@ bevy = { version = "0.15", default-features=false, features = [
     "zstd",
     "png",
 ]}
-bevy_asset_loader = "0.22"
 bevy_common_assets = { version = "0.12", features = ["json"] }
 bevy_panorbit_camera = { version = "0.23.0"}
 bevy_vector_shapes =  { version = "0.9.3"}
@@ -53,7 +52,7 @@ ndarray-stats = "0.6.0"
 statrs = "0.18.0"
 serde_json = "1.0.95"
 itertools = "0.14.0"
-dotthz = { version = "0.2.10", features = ["serde", "hdf5-sys-static"] }
+dotthz = { version = "0.2", features = ["serde", "hdf5-sys-static"] }
 home = "0.5.11"
 self_update = { git = "https://github.com/hacknus/self_update", features = ["archive-zip", "compression-zip-deflate"], optional = true }
 tempfile = { version = "3.15", optional = true }

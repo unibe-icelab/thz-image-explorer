@@ -20,6 +20,7 @@ use ndarray::{Array2, Array3};
 use preferences::{AppInfo, Preferences};
 use std::sync::{Arc, RwLock};
 use std::thread;
+use bevy::window::ExitCondition;
 use crate::gui::threed_plot::{setup, CustomMaterialPlugin};
 
 mod config;
@@ -123,7 +124,8 @@ fn main() {
                         resolution: (gui_settings.x, gui_settings.y).into(),
                         ..default()
                     }),
-                    ..default()
+                    exit_condition: ExitCondition::OnPrimaryClosed,
+                    close_when_requested: true,
                 }),
         )
         .add_plugins(EguiPlugin)
