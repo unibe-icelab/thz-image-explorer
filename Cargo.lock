@@ -661,7 +661,7 @@ dependencies = [
  "serde",
  "smallvec",
  "thread_local",
- "uuid 1.16.0",
+ "uuid",
 ]
 
 [[package]]
@@ -714,7 +714,7 @@ dependencies = [
  "ron",
  "serde",
  "stackfuture",
- "uuid 1.16.0",
+ "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -794,7 +794,7 @@ dependencies = [
  "bevy_reflect",
  "bevy_tasks",
  "bevy_utils",
- "uuid 1.16.0",
+ "uuid",
 ]
 
 [[package]]
@@ -1227,7 +1227,7 @@ dependencies = [
  "bevy_transform",
  "bevy_utils",
  "bevy_window",
- "uuid 1.16.0",
+ "uuid",
 ]
 
 [[package]]
@@ -1255,7 +1255,7 @@ dependencies = [
  "serde",
  "smallvec",
  "smol_str",
- "uuid 1.16.0",
+ "uuid",
 ]
 
 [[package]]
@@ -1268,7 +1268,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.100",
- "uuid 1.16.0",
+ "uuid",
 ]
 
 [[package]]
@@ -1347,7 +1347,7 @@ dependencies = [
  "bevy_utils",
  "derive_more",
  "serde",
- "uuid 1.16.0",
+ "uuid",
 ]
 
 [[package]]
@@ -6807,6 +6807,7 @@ dependencies = [
  "bevy_egui",
  "bevy_panorbit_camera",
  "bevy_vector_shapes",
+ "bytemuck",
  "crossbeam-channel",
  "csv",
  "ctor",
@@ -6831,7 +6832,6 @@ dependencies = [
  "ndarray-stats",
  "once_cell",
  "preferences",
- "rand 0.8.5",
  "rayon",
  "realfft",
  "reqwest",
@@ -6841,7 +6841,6 @@ dependencies = [
  "serde_json",
  "statrs",
  "tempfile",
- "type-uuid",
 ]
 
 [[package]]
@@ -7184,26 +7183,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "type-uuid"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15043bca41f43205c9b0055d365a405d81b8e4a8ff99c36b263cf79ad1f4c051"
-dependencies = [
- "type-uuid-derive",
-]
-
-[[package]]
-name = "type-uuid-derive"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e090ee857961c746ecf7fb596022493ffaad54d189061df49f7a0cf17796dc1"
-dependencies = [
- "quote",
- "syn 1.0.109",
- "uuid 0.8.2",
-]
-
-[[package]]
 name = "typeid"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7398,12 +7377,6 @@ name = "utf8_iter"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
-
-[[package]]
-name = "uuid"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
 
 [[package]]
 name = "uuid"

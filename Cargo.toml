@@ -64,8 +64,7 @@ filter_macros = { path = "filter_macros" }
 ctor = "0.4"
 once_cell = "1.21"
 rayon = "1.10.0"
-type-uuid = "0.1.2"
-rand = "0.8.5"
+bytemuck = "1.22.0"
 
 [features]
 default = ["self_update"]

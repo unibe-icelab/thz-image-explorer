@@ -29,7 +29,7 @@ use crate::gui::matrix_plot::{ImageState, SelectedPixel};
 use crate::gui::right_panel::right_panel;
 use crate::math_tools::FftWindowType;
 use crate::APP_INFO;
-use crate::gui::rendering::renderer::{CubePreviewImage};
+use crate::gui::threed_plot::RenderImage;
 
 /// Represents the state of the file dialog for opening, saving, or working with PSF files.
 #[derive(Clone)]
@@ -179,7 +179,7 @@ impl GuiSettingsContainer {
 }
 
 pub fn update_gui(
-    cube_preview_image: Res<CubePreviewImage>,
+    cube_preview_image: Res<RenderImage>,
     mut contexts: EguiContexts,
     mut explorer: NonSendMut<THzImageExplorer>,
     mut image_state: Local<ImageState>,

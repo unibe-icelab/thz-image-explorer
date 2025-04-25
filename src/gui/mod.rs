@@ -7,4 +7,3 @@ pub mod right_panel;
 pub mod settings_window;
 pub mod toggle_widget;
 pub mod threed_plot;
-pub mod rendering;

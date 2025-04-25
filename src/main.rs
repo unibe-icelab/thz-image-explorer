@@ -3,8 +3,6 @@ use crate::data_container::DataPoint;
 use crate::data_thread::main_thread;
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::SelectedPixel;
-use crate::gui::rendering::renderer::{draw_points, setup, Points};
-use crate::gui::threed_plot::setup_volume_texture;
 use bevy::prelude::*;
 use bevy::render::render_resource::WgpuFeatures;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
@@ -22,6 +20,7 @@ use ndarray::{Array2, Array3};
 use preferences::{AppInfo, Preferences};
 use std::sync::{Arc, RwLock};
 use std::thread;
+use crate::gui::threed_plot::{setup, CustomMaterialPlugin};
 
 mod config;
 mod data_container;
@@ -129,7 +128,7 @@ fn main() {
         )
         .add_plugins(EguiPlugin)
         .add_plugins((
-            JsonAssetPlugin::<Points>::new(&["points.json"]),
+                         CustomMaterialPlugin,
             PanOrbitCameraPlugin,
             ShapePlugin {
                 base_config: ShapeConfig {
@@ -139,20 +138,10 @@ fn main() {
                 ..default()
             },
         ))
-        .insert_resource(ClearColor(Color::rgb_u8(112 / 2, 48 / 2, 48 / 2)))
+        .insert_resource(ClearColor(Color::srgba(1.0,1.0,1.0, 1.0)))
         .insert_resource(thread_communication.clone())
         .insert_non_send_resource(THzImageExplorer::new(thread_communication))
         .add_systems(Startup, setup)
-        .add_systems(Update, draw_points)
         .add_systems(Update, update_gui)
-        // if self.esc_close {
-        //     app.add_systems(Update, esc_close);
-        // }
-        //
-        // if self.show_fps {
-        //     app.add_plugins(FrameTimeDiagnosticsPlugin);
-        //     app.add_systems(Startup, fps_display_setup);
-        //     app.add_systems(Update, fps_update_system);
-        // }
         .run();
 }
