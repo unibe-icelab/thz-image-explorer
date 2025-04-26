@@ -16,8 +16,6 @@ use bevy_egui::egui;
 use bevy_egui::egui::{vec2, Visuals};
 use bevy_egui::{EguiContexts, EguiPlugin};
 use bevy_panorbit_camera::PanOrbitCameraPlugin;
-use bevy_vector_shapes::prelude::*;
-use bevy_vector_shapes::ShapePlugin;
 use crossbeam_channel::{Receiver, Sender};
 use dotthz::DotthzMetaData;
 use ndarray::{Array2, Array3};
@@ -130,17 +128,12 @@ fn main() {
                     close_when_requested: true,
                 }),
         )
-        .add_plugins(EguiPlugin)
+        .add_plugins(EguiPlugin {
+           // enable_multipass_for_primary_context: true,
+        })
         .add_plugins((
             CustomMaterialPlugin,
             PanOrbitCameraPlugin,
-            ShapePlugin {
-                base_config: ShapeConfig {
-                    alignment: Alignment::Billboard,
-                    ..ShapeConfig::default_3d()
-                },
-                ..default()
-            },
         ))
         .insert_resource(thread_communication.clone())
         .insert_resource(OpacityThreshold(0.0)) // Start with no threshold
