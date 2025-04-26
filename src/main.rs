@@ -21,7 +21,7 @@ use preferences::{AppInfo, Preferences};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use bevy::window::ExitCondition;
-use crate::gui::threed_plot::{setup, CustomMaterialPlugin};
+use crate::gui::threed_plot::{set_enable_camera_controls_system, setup, CameraInputAllowed, CustomMaterialPlugin, OpacityThreshold};
 
 mod config;
 mod data_container;
@@ -140,10 +140,13 @@ fn main() {
                 ..default()
             },
         ))
-        .insert_resource(ClearColor(Color::srgba(1.0,1.0,1.0, 1.0)))
         .insert_resource(thread_communication.clone())
+        .insert_resource(OpacityThreshold(0.0)) // Start with no threshold
+        .insert_resource(CameraInputAllowed(false))
+
         .insert_non_send_resource(THzImageExplorer::new(thread_communication))
         .add_systems(Startup, setup)
         .add_systems(Update, update_gui)
+        .add_systems(Update, set_enable_camera_controls_system)
         .run();
 }

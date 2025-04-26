@@ -27,9 +27,9 @@ use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
 use crate::gui::matrix_plot::{ImageState, SelectedPixel};
 use crate::gui::right_panel::right_panel;
+use crate::gui::threed_plot::{CameraInputAllowed, InstanceData, InstanceMaterialData, OpacityThreshold, RenderImage};
 use crate::math_tools::FftWindowType;
 use crate::APP_INFO;
-use crate::gui::threed_plot::RenderImage;
 
 /// Represents the state of the file dialog for opening, saving, or working with PSF files.
 #[derive(Clone)]
@@ -179,11 +179,14 @@ impl GuiSettingsContainer {
 }
 
 pub fn update_gui(
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut query: Query<(&mut InstanceMaterialData, &mut Mesh3d)>,
     cube_preview_image: Res<RenderImage>,
     mut contexts: EguiContexts,
     mut explorer: NonSendMut<THzImageExplorer>,
     mut image_state: Local<ImageState>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut opacity_threshold: ResMut<OpacityThreshold>,
+    mut cam_input: ResMut<CameraInputAllowed>,
     //preview_cube_query: Query<&MeshMaterial3d<StandardMaterial>, With<Plot3DObject>>,
 ) {
     let cube_preview_texture_id = contexts.image_id(&cube_preview_image).unwrap();
@@ -194,12 +197,15 @@ pub fn update_gui(
     let right_panel_width = 500.0;
 
     center_panel(
+        &mut meshes,
+        &mut query,
         &cube_preview_texture_id,
         &ctx,
         &right_panel_width,
         &left_panel_width,
         &mut explorer,
-        &mut materials,
+        &mut opacity_threshold,
+        &mut cam_input
         //preview_cube_query
     );
 

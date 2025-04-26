@@ -1,6 +1,6 @@
 use crate::config::ConfigCommand;
 use crate::gui::application::{THzImageExplorer, Tab};
-use crate::gui::threed_plot::{three_dimensional_plot_ui};
+use crate::gui::threed_plot::{three_dimensional_plot_ui, CameraInputAllowed, InstanceData, InstanceMaterialData, OpacityThreshold};
 use crate::gui::toggle_widget::toggle;
 use crate::vec2;
 use bevy::prelude::*;
@@ -550,12 +550,15 @@ pub fn refractive_index_tab(
 
 #[allow(clippy::too_many_arguments)]
 pub fn center_panel(
+    meshes: &mut ResMut<Assets<Mesh>>,
+    query: &mut Query<(&mut InstanceMaterialData, &mut Mesh3d)>,
     cube_preview_texture_id: &epaint::TextureId,
     ctx: &egui::Context,
     right_panel_width: &f32,
     left_panel_width: &f32,
     explorer: &mut THzImageExplorer,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
+    opacity_threshold: &mut ResMut<OpacityThreshold>,
+    cam_input: &mut ResMut<CameraInputAllowed>,
     // preview_cube_query: Query<&MeshMaterial3d<StandardMaterial>, With<Plot3DObject>>,
 ) {
 
@@ -598,11 +601,14 @@ pub fn center_panel(
                 }
                 Tab::ThreeD => {
                     three_dimensional_plot_ui(
+                        meshes,
                         cube_preview_texture_id,
                         width,
                         window_height,
                         ui,
-                        materials,
+                        query,
+                        opacity_threshold,
+                        cam_input,
                         // preview_cube_query,
                     );
                 }

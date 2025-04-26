@@ -1,11 +1,7 @@
-use std::f32::consts::PI;
-use std::path::Path;
-use bevy_egui::{egui, EguiUserTextures};
-use bevy_egui::egui::{epaint, Ui};
-use dotthz::DotthzFile;
-use ndarray::{s, Array1, Axis};
-
+use crate::config::ThreadCommunication;
+use bevy::render::camera::RenderTarget;
 use bevy::render::view::{NoFrustumCulling, RenderLayers};
+use bevy::window::PrimaryWindow;
 use bevy::{
     core_pipeline::core_3d::Transparent3d,
     ecs::{
@@ -17,9 +13,11 @@ use bevy::{
     },
     prelude::*,
     render::{
-        extract_component::{ExtractComponent, ExtractComponentPlugin}, mesh::{
+        extract_component::{ExtractComponent, ExtractComponentPlugin},
+        mesh::{
             allocator::MeshAllocator, MeshVertexBufferLayoutRef, RenderMesh, RenderMeshBufferInfo,
-        }, render_asset::RenderAssets,
+        },
+        render_asset::RenderAssets,
         render_phase::{
             AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand,
             RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewSortedRenderPhases,
@@ -28,20 +26,25 @@ use bevy::{
         renderer::RenderDevice,
         sync_world::MainEntity,
         view::ExtractedView,
-        Render,
-        RenderApp,
-        RenderSet,
+        Render, RenderApp, RenderSet,
     },
 };
-use bevy::render::camera::RenderTarget;
-use bevy::window::PrimaryWindow;
+use bevy_egui::egui::{epaint, Ui};
+use bevy_egui::{egui, EguiUserTextures};
 use bevy_panorbit_camera::{ActiveCameraData, PanOrbitCamera};
 use bytemuck::{Pod, Zeroable};
+use dotthz::DotthzFile;
+use ndarray::{s, Array1, Axis};
+use std::f32::consts::PI;
+use std::path::Path;
 
 const SHADER_ASSET_PATH: &str = "shaders/instancing.wgsl";
 
 #[derive(Deref, Resource)]
 pub struct RenderImage(Handle<Image>);
+
+#[derive(Resource, Default)]
+pub struct CameraInputAllowed(pub bool);
 
 fn generate_dummy_data() -> (Vec<InstanceData>, f32, f32, f32) {
     let mut instances = vec![];
@@ -135,7 +138,6 @@ fn load_thz() -> (Vec<InstanceData>, f32, f32, f32) {
 
     let dataset = arr.into_dimensionality::<ndarray::Ix3>().unwrap();
 
-
     // Assuming time is a 1D ndarray of f32 values
     let start = time
         .iter()
@@ -206,9 +208,7 @@ fn load_thz() -> (Vec<InstanceData>, f32, f32, f32) {
     // Normalize along z-axis
     for x in 0..grid_width {
         for y in 0..grid_height {
-            let z_values: Vec<f32> = (0..grid_depth)
-                .map(|z| dataset[[x, y, z]])
-                .collect();
+            let z_values: Vec<f32> = (0..grid_depth).map(|z| dataset[[x, y, z]]).collect();
 
             // Compute min and max for normalization
             let min = z_values.iter().cloned().fold(f32::INFINITY, f32::min);
@@ -244,7 +244,8 @@ fn load_thz() -> (Vec<InstanceData>, f32, f32, f32) {
                 let mut opacity = *dataset
                     .index_axis(Axis(0), x)
                     .index_axis(Axis(0), y)
-                    .index_axis(Axis(0), z).into_scalar();
+                    .index_axis(Axis(0), z)
+                    .into_scalar();
                 opacity = opacity.powf(2.0);
 
                 let (r, g, b) = jet_colormap(opacity);
@@ -252,7 +253,7 @@ fn load_thz() -> (Vec<InstanceData>, f32, f32, f32) {
                 // Create the instance data with the calculated position and opacity
                 let instance = InstanceData {
                     pos_scale: [position.x, position.y, position.z, 1.0],
-                    color: LinearRgba::from(Color::srgba(r,g,b, opacity)).to_f32_array(),
+                    color: LinearRgba::from(Color::srgba(r, g, b, opacity)).to_f32_array(),
                 };
 
                 // Push the instance into the vector
@@ -266,24 +267,37 @@ fn load_thz() -> (Vec<InstanceData>, f32, f32, f32) {
     (instances, cube_width, cube_height, cube_depth)
 }
 
-pub fn setup(mut meshes: ResMut<Assets<Mesh>>,
-         mut egui_user_textures: ResMut<EguiUserTextures>,
-         mut commands: Commands,
-         mut images: ResMut<Assets<Image>>,
-         asset_server: Res<AssetServer>,
-         mut active_cam: ResMut<ActiveCameraData>,
-         windows: Query<&Window, With<PrimaryWindow>>,) {
+pub fn set_enable_camera_controls_system(
+    cam_input: Res<CameraInputAllowed>,
+    mut pan_orbit_query: Query<&mut PanOrbitCamera>,
+) {
+    for mut pan_orbit in pan_orbit_query.iter_mut() {
+        pan_orbit.enabled = cam_input.0;
+    }
+}
+
+pub fn setup(
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut egui_user_textures: ResMut<EguiUserTextures>,
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    asset_server: Res<AssetServer>,
+    mut active_cam: ResMut<ActiveCameraData>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+) {
     let (instances, cube_width, cube_height, cube_depth) = load_thz();
 
     dbg!(&instances.len());
 
-    let mut instances: Vec<InstanceData> = instances
-        .into_iter()
-        .collect();
+    let mut instances: Vec<InstanceData> = instances.into_iter().collect();
+
+    // TODO: needs to be sped up
 
     // Sort by opacity (color alpha channel) descending
     instances.sort_by(|a, b| {
-        b.color[3].partial_cmp(&a.color[3]).unwrap_or(std::cmp::Ordering::Equal)
+        b.color[3]
+            .partial_cmp(&a.color[3])
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
 
     // Truncate to top 2 million most opaque points
@@ -354,7 +368,7 @@ pub fn setup(mut meshes: ResMut<Assets<Mesh>>,
         .spawn((
             Camera {
                 // render before the "main pass" camera
-                clear_color: ClearColorConfig::Custom(bevy::color::Color::srgba(1.0, 1.0, 1.0, 0.0)),
+                clear_color: ClearColorConfig::Custom(Color::srgba(1.0, 1.0, 1.0, 0.0)),
                 order: -1,
                 target: RenderTarget::Image(image_handle.clone()),
                 ..default()
@@ -387,9 +401,12 @@ pub fn setup(mut meshes: ResMut<Assets<Mesh>>,
 }
 
 #[derive(Component)]
-struct InstanceMaterialData {
+pub struct InstanceMaterialData {
     instances: Vec<InstanceData>,
 }
+
+#[derive(Resource)]
+pub struct OpacityThreshold(pub f32);
 
 impl ExtractComponent for InstanceMaterialData {
     type QueryData = &'static InstanceMaterialData;
@@ -425,9 +442,9 @@ impl Plugin for CustomMaterialPlugin {
     }
 }
 
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Asset, TypePath, Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-struct InstanceData {
+pub struct InstanceData {
     pos_scale: [f32; 4], // x, y, z, scale
     color: [f32; 4],
 }
@@ -500,6 +517,12 @@ fn prepare_instance_buffers(
 
     for (entity, instance_data) in &query {
         let mut sorted_instances = instance_data.instances.clone();
+
+        if sorted_instances.is_empty() {
+            // No instances, remove any existing buffer or do nothing
+            commands.entity(entity).remove::<InstanceBuffer>();
+            continue;
+        }
 
         // Sort instances by distance from camera (back-to-front)
         sorted_instances.sort_by(|a, b| {
@@ -677,59 +700,77 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
     }
 }
 
-
 pub fn three_dimensional_plot_ui(
+    meshes: &mut ResMut<Assets<Mesh>>,
     cube_preview_texture_id: &epaint::TextureId,
     width: f32,
-    height: f32,
+    mut height: f32,
     ui: &mut Ui,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
-    // preview_cube_query: Query<&MeshMaterial3d<StandardMaterial>, With<Plot3DObject>>,
+    query: &mut Query<(&mut InstanceMaterialData, &mut Mesh3d)>,
+    opacity_threshold: &mut ResMut<OpacityThreshold>,
+    cam_input: &mut ResMut<CameraInputAllowed>,
 ) {
-    ui.label("3D plot:");
-
+    height -= 100.0;
     let available_size = egui::vec2(width.min(height), width.min(height));
 
     ui.vertical(|ui| {
-        ui.label(format!("{} x {}", available_size.x, available_size.y));
+        ui.label("3D Voxel Plot");
 
-        // ui.allocate_ui(available_size, |ui| {
-        //     // Show the texture in UI
-        //     ui.image(egui::load::SizedTexture::new(
-        //         *cube_preview_texture_id,
-        //         available_size,
-        //     ));
-        //
-        //     let rect = ui.max_rect();
-        //
-        //     let response = ui.interact(
-        //         rect,
-        //         egui::Id::from("sense"),
-        //         egui::Sense::drag() | egui::Sense::hover(),
-        //     );
-        //     // Interaction for dragging
-        //     if response.dragged() || response.hovered() {
-        //         hovered.0 = true;
-        //     } else {
-        //         hovered.0 = false;
-        //     }
-        // })
-        // .response;
+        if ui.button("Refresh").clicked() {
+            let (instances, cube_width, cube_height, cube_depth) = generate_dummy_data();
 
-        ui.image(egui::load::SizedTexture::new(
-            *cube_preview_texture_id,
-            available_size,
-        ));
+            let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
 
-        // Add a slider for opacity control
-        // ui.label("Opacity:");
-        // if let Ok(material_handle) = preview_cube_query.single() {
-        //     let preview_material = materials.get_mut(material_handle).unwrap();
-        //
-        //     let mut opacity = preview_material.base_color.alpha();
-        //     // Create the slider
-        //     ui.add(egui::Slider::new(&mut opacity, 0.0..=1.0)); // Get the value from the slider
-        //     preview_material.base_color.set_alpha(opacity);
-        // }
+            // Update existing entity
+            if let Ok((mut instance_data, mut mesh3d)) = query.get_single_mut() {
+                instance_data.instances = instances;
+                mesh3d.0 = new_mesh;
+
+                instance_data
+                    .instances
+                    .retain(|instance| instance.color[3] >= opacity_threshold.0);
+            } else {
+                println!("No existing entity found to update.");
+            }
+        }
+
+        ui.allocate_ui(available_size, |ui| {
+            ui.image(egui::load::SizedTexture::new(
+                *cube_preview_texture_id,
+                available_size,
+            ));
+
+            let rect = ui.max_rect();
+
+            let response = ui.interact(
+                rect,
+                egui::Id::new("sense"),
+                egui::Sense::drag() | egui::Sense::hover(),
+            );
+
+            if response.dragged() || response.hovered() {
+                cam_input.0 = true;
+            } else {
+                cam_input.0 = false;
+            }
+        });
+
+        ui.label("Opacity:");
+
+        if ui
+            .add(egui::Slider::new(&mut opacity_threshold.0, 0.0..=1.0).text("Opacity Threshold"))
+            .changed()
+        {
+            let (instances, cube_width, cube_height, cube_depth) = generate_dummy_data();
+            let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
+
+            if let Ok((mut instance_data, mut mesh3d)) = query.get_single_mut() {
+                instance_data.instances = instances;
+                mesh3d.0 = new_mesh;
+                instance_data
+                    .instances
+                    .retain(|instance| instance.color[3] >= opacity_threshold.0);
+            }
+        }
     });
 }
