@@ -717,12 +717,12 @@ pub fn three_dimensional_plot_ui(
         ui.label("3D Voxel Plot");
 
         if ui.button("Refresh").clicked() {
-            let (instances, cube_width, cube_height, cube_depth) = generate_dummy_data();
-
-            let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
-
             // Update existing entity
             if let Ok((mut instance_data, mut mesh3d)) = query.get_single_mut() {
+                let (instances, cube_width, cube_height, cube_depth) = load_thz();
+
+                let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
+
                 instance_data.instances = instances;
                 mesh3d.0 = new_mesh;
 
@@ -758,13 +758,13 @@ pub fn three_dimensional_plot_ui(
         ui.label("Opacity:");
 
         if ui
-            .add(egui::Slider::new(&mut opacity_threshold.0, 0.0..=1.0).text("Opacity Threshold"))
+            .add(egui::Slider::new(&mut opacity_threshold.0, 0.01..=1.0).text("Opacity Threshold"))
             .changed()
         {
-            let (instances, cube_width, cube_height, cube_depth) = generate_dummy_data();
-            let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
-
             if let Ok((mut instance_data, mut mesh3d)) = query.get_single_mut() {
+                let (instances, cube_width, cube_height, cube_depth) = load_thz();
+                let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
+
                 instance_data.instances = instances;
                 mesh3d.0 = new_mesh;
                 instance_data
