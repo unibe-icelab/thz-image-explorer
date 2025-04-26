@@ -3,7 +3,7 @@ use crate::data_container::ScannedImage;
 use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
 use crate::gui::application::GuiSettingsContainer;
 use crate::math_tools::apply_adapted_blackman_window;
-use eframe::egui::{self, Ui};
+use bevy_egui::egui::{self, Ui};
 use filter_macros::register_filter;
 use ndarray::{concatenate, s, Array1, Array3, Axis};
 use realfft::RealFftPlanner;

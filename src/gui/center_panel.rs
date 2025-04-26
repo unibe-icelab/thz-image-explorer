@@ -12,7 +12,7 @@ use bevy_egui::{
 use egui_plot::{GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 use ndarray::Array2;
 use std::ops::RangeInclusive;
-use eframe::epaint;
+use bevy_egui::egui::epaint;
 
 const MOVE_SCALE: f32 = 0.01;
 const SCROLL_SCALE: f32 = 0.001;

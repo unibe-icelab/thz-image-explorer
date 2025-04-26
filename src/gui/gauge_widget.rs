@@ -3,10 +3,10 @@
 
 use std::f64::consts::PI;
 
-use eframe::egui;
-use eframe::egui::Shape::Path;
-use eframe::egui::{pos2, Align2, Color32, FontId, Pos2, Stroke, Visuals};
-use eframe::epaint::{FontFamily, PathShape};
+use bevy_egui::egui;
+use bevy_egui::egui::Shape::Path;
+use bevy_egui::egui::{pos2, Align2, Color32, FontId, Pos2, Stroke, Visuals};
+use bevy_egui::egui::epaint::{FontFamily, PathShape};
 
 pub fn map(x: &f64, min: f64, max: f64, min_i: f64, max_i: f64) -> f64 {
     (*x - min_i) / (max_i - min_i) * (max - min) + min

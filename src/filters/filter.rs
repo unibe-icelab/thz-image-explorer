@@ -8,7 +8,7 @@ use crate::gui::application::GuiSettingsContainer;
 #[allow(unused_imports)]
 use ctor::ctor;
 // this dependency is required by the `register_filter` macro
-use eframe::egui;
+use bevy_egui::egui;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;

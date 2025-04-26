@@ -10,9 +10,9 @@ use crate::math_tools::{
 };
 use crate::update::check_update;
 use crate::DataPoint;
-use eframe::egui;
-use eframe::egui::panel::Side;
-use eframe::egui::{vec2, DragValue, Stroke, Vec2, Visuals};
+use bevy_egui::egui;
+use bevy_egui::egui::panel::Side;
+use bevy_egui::egui::{vec2, DragValue, Stroke, Vec2, Visuals};
 use egui_double_slider::DoubleSlider;
 use egui_file_dialog::FileDialog;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};

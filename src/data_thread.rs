@@ -16,7 +16,7 @@ use crate::math_tools::{
 };
 use csv::ReaderBuilder;
 use dotthz::DotthzMetaData;
-use eframe::egui::ColorImage;
+use bevy_egui::egui::ColorImage;
 use image::RgbaImage;
 use ndarray::parallel::prelude::*;
 use ndarray::{Array1, Array2, Array3, Axis};

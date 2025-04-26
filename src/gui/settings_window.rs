@@ -1,8 +1,8 @@
 use crate::gui::application::{FileDialogState, GuiSettingsContainer, THzImageExplorer};
 #[cfg(feature = "self_update")]
 use crate::update::{check_update, update};
-use eframe::egui;
-use eframe::egui::{
+use bevy_egui::egui;
+use bevy_egui::egui::{
     vec2, Align2, Color32, ColorImage, InnerResponse, TextureOptions, Vec2, Visuals,
 };
 use egui_file_dialog::FileDialog;

@@ -3,25 +3,27 @@ use crate::data_container::DataPoint;
 use crate::data_thread::main_thread;
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::SelectedPixel;
+use crate::gui::threed_plot::{
+    set_enable_camera_controls_system, setup, CameraInputAllowed, CustomMaterialPlugin,
+    OpacityThreshold,
+};
 use bevy::prelude::*;
 use bevy::render::render_resource::WgpuFeatures;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy::render::RenderPlugin;
-use bevy_common_assets::json::JsonAssetPlugin;
+use bevy::window::ExitCondition;
+use bevy_egui::egui;
+use bevy_egui::egui::{vec2, Visuals};
 use bevy_egui::{EguiContexts, EguiPlugin};
 use bevy_panorbit_camera::PanOrbitCameraPlugin;
 use bevy_vector_shapes::prelude::*;
 use bevy_vector_shapes::ShapePlugin;
 use crossbeam_channel::{Receiver, Sender};
 use dotthz::DotthzMetaData;
-use eframe::egui::{vec2, ViewportBuilder, Visuals};
-use eframe::{egui, icon_data};
 use ndarray::{Array2, Array3};
 use preferences::{AppInfo, Preferences};
 use std::sync::{Arc, RwLock};
 use std::thread;
-use bevy::window::ExitCondition;
-use crate::gui::threed_plot::{set_enable_camera_controls_system, setup, CameraInputAllowed, CustomMaterialPlugin, OpacityThreshold};
 
 mod config;
 mod data_container;
@@ -130,7 +132,7 @@ fn main() {
         )
         .add_plugins(EguiPlugin)
         .add_plugins((
-                         CustomMaterialPlugin,
+            CustomMaterialPlugin,
             PanOrbitCameraPlugin,
             ShapePlugin {
                 base_config: ShapeConfig {
@@ -143,9 +145,10 @@ fn main() {
         .insert_resource(thread_communication.clone())
         .insert_resource(OpacityThreshold(0.0)) // Start with no threshold
         .insert_resource(CameraInputAllowed(false))
-
         .insert_non_send_resource(THzImageExplorer::new(thread_communication))
         .add_systems(Startup, setup)
+        .add_systems(Startup, spawn_data_thread)
+        .add_systems(Startup, setup_fonts)
         .add_systems(Update, update_gui)
         .add_systems(Update, set_enable_camera_controls_system)
         .run();

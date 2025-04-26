@@ -1,6 +1,6 @@
 use bevy_egui::egui::TextureHandle;
-use eframe::egui;
-use eframe::egui::{
+use bevy_egui::egui;
+use bevy_egui::egui::{
     pos2, vec2, Color32, ColorImage, DragValue, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
 };
 use egui::TextureOptions;

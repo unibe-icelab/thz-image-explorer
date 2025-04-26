@@ -1,8 +1,8 @@
 //! Source code example of how to create your own widget.
 //! This is meant to be read as a tutorial, hence the plethora of comments.
 
-use eframe::egui;
-use eframe::egui::StrokeKind;
+use bevy_egui::egui;
+use bevy_egui::egui::StrokeKind;
 
 /// iOS-style toggle switch:
 ///

@@ -7,8 +7,7 @@ use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 use core::f64;
 use dotthz::DotthzFile;
-use eframe::egui::ThemePreference;
-use eframe::Storage;
+use bevy_egui::egui::ThemePreference;
 use egui_file_dialog::information_panel::InformationPanel;
 use egui_file_dialog::FileDialog;
 use egui_plot::PlotPoint;
@@ -398,81 +397,5 @@ impl THzImageExplorer {
             #[cfg(feature = "self_update")]
             new_release: None,
         }
-    }
-}
-
-impl eframe::App for THzImageExplorer {
-    /// Updates the GUI state during each frame.
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let left_panel_width = 300.0;
-        let right_panel_width = 500.0;
-
-        // center_panel(
-        //     ctx,
-        //     &right_panel_width,
-        //     &left_panel_width,
-        //     &mut self.thread_communication,
-        //     &mut self.data,
-        //     &self.water_vapour_lines,
-        // );
-        //
-        // left_panel(
-        //     ctx,
-        //     &mut self.thread_communication,
-        //     &left_panel_width,
-        //     &mut self.pixel_selected,
-        //     &mut self.val,
-        //     &mut self.mid_point,
-        //     &mut self.bw,
-        //     &mut self.cut_off,
-        //     &mut self.file_dialog_state,
-        //     &mut self.file_dialog,
-        //     &mut self.information_panel,
-        //     &mut self.other_files,
-        //     &mut self.selected_file_name,
-        //     &mut self.scroll_to_selection,
-        // );
-        //
-        // right_panel(
-        //     ctx,
-        //     &mut self.settings_window_open,
-        //     &mut self.update_text,
-        //     &right_panel_width,
-        //     &mut self.thread_communication,
-        //     &mut self.filter_bounds,
-        //     &mut self.fft_bounds,
-        //     &mut self.fft_window_type,
-        //     &mut self.time_window,
-        //     &mut self.pixel_selected,
-        //     self.wp.clone(),
-        //     &mut self.file_dialog_state,
-        //     &mut self.file_dialog,
-        //     #[cfg(feature = "self_update")]
-        //     &mut self.new_release,
-        // );
-
-        self.thread_communication.gui_settings.x = ctx.used_size().x;
-        self.thread_communication.gui_settings.y = ctx.used_size().y;
-    }
-
-    /// Saves the current GUI settings and file dialog state persistently.
-    fn save(&mut self, storage: &mut dyn Storage) {
-        let prefs_key = "config/gui";
-        match self
-            .thread_communication
-            .gui_settings
-            .save(&APP_INFO, prefs_key)
-        {
-            Ok(_) => {}
-            Err(err) => {
-                log::error!("error saving gui_conf: {err:?}");
-            }
-        }
-        // Save the persistent data of the file dialog
-        eframe::set_value(
-            storage,
-            "file_dialog_storage",
-            self.file_dialog.storage_mut(),
-        );
     }
 }
