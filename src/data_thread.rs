@@ -71,6 +71,9 @@ fn update_intensity_image(scan: &ScannedImage, thread_communication: &ThreadComm
     if let Ok(mut write_guard) = thread_communication.filtered_data_lock.write() {
         *write_guard = scan.filtered_data.clone();
     }
+    if let Ok(mut write_guard) = thread_communication.filtered_time_lock.write() {
+        *write_guard = scan.filtered_time.clone();
+    }
 }
 
 /// Filters the scan data using a time window defined in the configuration container.

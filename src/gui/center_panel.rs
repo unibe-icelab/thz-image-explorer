@@ -1,4 +1,4 @@
-use crate::config::ConfigCommand;
+use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::gui::application::{THzImageExplorer, Tab};
 use crate::gui::threed_plot::{three_dimensional_plot_ui, CameraInputAllowed, InstanceData, InstanceMaterialData, OpacityThreshold};
 use crate::gui::toggle_widget::toggle;
@@ -559,7 +559,7 @@ pub fn center_panel(
     explorer: &mut THzImageExplorer,
     opacity_threshold: &mut ResMut<OpacityThreshold>,
     cam_input: &mut ResMut<CameraInputAllowed>,
-    // preview_cube_query: Query<&MeshMaterial3d<StandardMaterial>, With<Plot3DObject>>,
+    thread_communication: &mut ResMut<ThreadCommunication>,
 ) {
 
     egui::CentralPanel::default().show(ctx, |ui| {
@@ -609,7 +609,7 @@ pub fn center_panel(
                         query,
                         opacity_threshold,
                         cam_input,
-                        // preview_cube_query,
+                        thread_communication
                     );
                 }
             }

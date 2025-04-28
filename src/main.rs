@@ -18,7 +18,7 @@ use bevy_egui::{EguiContexts, EguiPlugin};
 use bevy_panorbit_camera::PanOrbitCameraPlugin;
 use crossbeam_channel::{Receiver, Sender};
 use dotthz::DotthzMetaData;
-use ndarray::{Array2, Array3};
+use ndarray::{Array1, Array2, Array3};
 use preferences::{AppInfo, Preferences};
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -82,6 +82,10 @@ fn main() {
         (1, 1, 1),
         |(_, _, _)| 0.0,
     )));
+    let filtered_time_lock = Arc::new(RwLock::new(Array1::from_shape_fn(
+        1,
+        |(_)| 0.0,
+    )));
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
     let scaling_lock = Arc::new(RwLock::new(1));
     let md_lock = Arc::new(RwLock::new(DotthzMetaData::default()));
@@ -92,6 +96,7 @@ fn main() {
         md_lock: md_lock.clone(),
         data_lock: data_lock.clone(),
         filtered_data_lock: filtered_data_lock.clone(),
+        filtered_time_lock: filtered_time_lock.clone(),
         pixel_lock: pixel_lock.clone(),
         scaling_lock: scaling_lock.clone(),
         img_lock: img_lock.clone(),

@@ -186,7 +186,7 @@ pub fn update_gui(
     mut image_state: Local<ImageState>,
     mut opacity_threshold: ResMut<OpacityThreshold>,
     mut cam_input: ResMut<CameraInputAllowed>,
-    //preview_cube_query: Query<&MeshMaterial3d<StandardMaterial>, With<Plot3DObject>>,
+    mut thread_communication: ResMut<ThreadCommunication>,
 ) {
     let cube_preview_texture_id = contexts.image_id(&cube_preview_image).unwrap();
 
@@ -204,8 +204,8 @@ pub fn update_gui(
         &left_panel_width,
         &mut explorer,
         &mut opacity_threshold,
-        &mut cam_input
-        //preview_cube_query
+        &mut cam_input,
+        &mut thread_communication
     );
 
     left_panel(ctx, &mut explorer, &left_panel_width, &mut image_state);

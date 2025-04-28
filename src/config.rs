@@ -8,7 +8,7 @@ use crate::gui::matrix_plot::SelectedPixel;
 use crate::math_tools::FftWindowType;
 use bevy::prelude::Resource;
 use dotthz::DotthzMetaData;
-use ndarray::{Array2, Array3};
+use ndarray::{Array1, Array2, Array3};
 use std::path::PathBuf;
 use crossbeam_channel::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
@@ -140,8 +140,11 @@ pub struct ThreadCommunication {
     /// Lock for the [`DataPoint`] containing signal data.
     pub data_lock: Arc<RwLock<DataPoint>>,
 
-    /// Lock for the [`Scan`] containing all data.
+    /// Lock for the filtered_data containing the filtered 3D matrix.
     pub filtered_data_lock: Arc<RwLock<Array3<f32>>>,
+
+    /// Lock for the time containing the time array of the filtered data.
+    pub filtered_time_lock: Arc<RwLock<Array1<f32>>>,
 
     /// Lock for the currently selected pixel in the image.
     pub pixel_lock: Arc<RwLock<SelectedPixel>>,

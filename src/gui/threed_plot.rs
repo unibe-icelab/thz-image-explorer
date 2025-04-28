@@ -34,9 +34,10 @@ use bevy_egui::{egui, EguiUserTextures};
 use bevy_panorbit_camera::{ActiveCameraData, PanOrbitCamera};
 use bytemuck::{Pod, Zeroable};
 use dotthz::DotthzFile;
-use ndarray::{s, Array1, Axis};
+use ndarray::{s, Array1, Array3, Axis};
 use std::f32::consts::PI;
 use std::path::Path;
+use std::time::Instant;
 
 const SHADER_ASSET_PATH: &str = "shaders/instancing.wgsl";
 
@@ -267,6 +268,109 @@ fn load_thz() -> (Vec<InstanceData>, f32, f32, f32) {
     (instances, cube_width, cube_height, cube_depth)
 }
 
+fn instance_from_data(time_span: f32, mut dataset: Array3<f32>) -> (Vec<InstanceData>, f32, f32, f32) {
+    let mut timer = Instant::now();
+
+    let mut instances = vec![];
+
+    let grid_width = dataset.shape()[0];
+    let grid_height = dataset.shape()[1];
+    let grid_depth = dataset.shape()[2];
+
+    let cube_width = 1.0 / 4.0;
+    let cube_height = 1.0 / 4.0;
+
+    let c = 300_000_000.0;
+
+    let cube_depth = cube_width / ((time_span) * c / 1.0e9 * 2.0);
+
+    // Inside your main dataset loop:
+    for x in 0..grid_width {
+        for y in 0..grid_height {
+            // Extract the z-axis slice at (x, y)
+            let mut line = dataset.slice(s![x, y, ..]).to_owned();
+            line = line.powf(2.0);
+
+            // Square values (p ** 2)
+            line.mapv_inplace(|v| v.powi(2));
+
+            // Create Gaussian kernel
+            let kernel = gaussian_kernel1d(3.0, 9);
+
+            // Convolve along z
+            let envelope = convolve1d(&line, &kernel);
+
+            // (Optional) Write the result back into dataset
+            for z in 0..grid_depth {
+                dataset[[x, y, z]] = envelope[z];
+            }
+        }
+    }
+    println!("calculating envelope: {:?}", timer.elapsed());
+    let mut timer = Instant::now();
+
+    // Normalize along z-axis
+    for x in 0..grid_width {
+        for y in 0..grid_height {
+            let z_values: Vec<f32> = (0..grid_depth).map(|z| dataset[[x, y, z]]).collect();
+
+            // Compute min and max for normalization
+            let min = z_values.iter().cloned().fold(f32::INFINITY, f32::min);
+            let max = z_values.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+
+            // Avoid division by zero
+            if max != min {
+                for z in 0..grid_depth {
+                    dataset[[x, y, z]] = (dataset[[x, y, z]] - min) / (max - min);
+                }
+            } else {
+                // All values are the same, set to 0.0 (or 1.0 – your call)
+                for z in 0..grid_depth {
+                    dataset[[x, y, z]] = 0.0;
+                }
+            }
+        }
+    }
+
+    println!("normalizing: {:?}", timer.elapsed());
+    let mut timer = Instant::now();
+
+    for z in 0..grid_depth {
+        for y in 0..grid_height {
+            for x in 0..grid_width {
+                // Calculate the position based on the indices (x, y, z)
+                let position = Vec3::new(
+                    x as f32 * cube_width - (grid_width as f32 * cube_width) / 2.0,
+                    y as f32 * cube_height - (grid_height as f32 * cube_height) / 2.0,
+                    z as f32 * cube_depth - (grid_depth as f32 * cube_depth) / 2.0,
+                );
+
+                let mut opacity = *dataset
+                    .index_axis(Axis(0), x)
+                    .index_axis(Axis(0), y)
+                    .index_axis(Axis(0), z)
+                    .into_scalar();
+                opacity = opacity.powf(2.0);
+
+                let (r, g, b) = jet_colormap(opacity);
+
+                // Create the instance data with the calculated position and opacity
+                let instance = InstanceData {
+                    pos_scale: [position.x, position.y, position.z, 1.0],
+                    color: LinearRgba::from(Color::srgba(r, g, b, opacity)).to_f32_array(),
+                };
+
+                // Push the instance into the vector
+                instances.push(instance);
+            }
+        }
+    }
+
+    println!("pushing instances: {:?}", timer.elapsed());
+
+    (instances, cube_width, cube_height, cube_depth)
+}
+
 pub fn set_enable_camera_controls_system(
     cam_input: Res<CameraInputAllowed>,
     mut pan_orbit_query: Query<&mut PanOrbitCamera>,
@@ -281,7 +385,6 @@ pub fn setup(
     mut egui_user_textures: ResMut<EguiUserTextures>,
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
-    asset_server: Res<AssetServer>,
     mut active_cam: ResMut<ActiveCameraData>,
     windows: Query<&Window, With<PrimaryWindow>>,
 ) {
@@ -709,68 +812,73 @@ pub fn three_dimensional_plot_ui(
     query: &mut Query<(&mut InstanceMaterialData, &mut Mesh3d)>,
     opacity_threshold: &mut ResMut<OpacityThreshold>,
     cam_input: &mut ResMut<CameraInputAllowed>,
+    thread_communication: &mut ResMut<ThreadCommunication>,
 ) {
     height -= 100.0;
     let available_size = egui::vec2(width.min(height), width.min(height));
 
-    ui.vertical(|ui| {
-        ui.label("3D Voxel Plot");
+    if let Ok(data) = thread_communication.filtered_data_lock.read() {
+        let time_span = if let Ok(time) = thread_communication.filtered_time_lock.try_read() {
+            time.last().unwrap() - time.first().unwrap()
+        } else {
+            50.0
+        };
+        let (instances, cube_width, cube_height, cube_depth) = instance_from_data(time_span, data.clone());
+        let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
 
-        if ui.button("Refresh").clicked() {
-            // Update existing entity
-            if let Ok((mut instance_data, mut mesh3d)) = query.get_single_mut() {
-                let (instances, cube_width, cube_height, cube_depth) = load_thz();
+        ui.vertical(|ui| {
+            ui.label("3D Voxel Plot");
 
-                let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
+            if ui.button("Refresh").clicked() {
+                // Update existing entity
+                if let Ok((mut instance_data, mut mesh3d)) = query.get_single_mut() {
+                    instance_data.instances = instances.clone();
+                    mesh3d.0 = new_mesh.clone();
 
-                instance_data.instances = instances;
-                mesh3d.0 = new_mesh;
-
-                instance_data
-                    .instances
-                    .retain(|instance| instance.color[3] >= opacity_threshold.0);
-            } else {
-                println!("No existing entity found to update.");
+                    instance_data
+                        .instances
+                        .retain(|instance| instance.color[3] >= opacity_threshold.0);
+                } else {
+                    println!("No existing entity found to update.");
+                }
             }
-        }
 
-        ui.allocate_ui(available_size, |ui| {
-            ui.image(egui::load::SizedTexture::new(
-                *cube_preview_texture_id,
-                available_size,
-            ));
+            ui.allocate_ui(available_size, |ui| {
+                ui.image(egui::load::SizedTexture::new(
+                    *cube_preview_texture_id,
+                    available_size,
+                ));
 
-            let rect = ui.max_rect();
+                let rect = ui.max_rect();
 
-            let response = ui.interact(
-                rect,
-                egui::Id::new("sense"),
-                egui::Sense::drag() | egui::Sense::hover(),
-            );
+                let response = ui.interact(
+                    rect,
+                    egui::Id::new("sense"),
+                    egui::Sense::drag() | egui::Sense::hover(),
+                );
 
-            if response.dragged() || response.hovered() {
-                cam_input.0 = true;
-            } else {
-                cam_input.0 = false;
+                if response.dragged() || response.hovered() {
+                    cam_input.0 = true;
+                } else {
+                    cam_input.0 = false;
+                }
+            });
+
+            ui.label("Opacity:");
+
+            if ui
+                .add(egui::Slider::new(&mut opacity_threshold.0, 0.01..=1.0).text("Opacity Threshold"))
+                .changed()
+            {
+                if let Ok((mut instance_data, mut mesh3d)) = query.get_single_mut() {
+
+                    instance_data.instances = instances;
+                    mesh3d.0 = new_mesh;
+                    instance_data
+                        .instances
+                        .retain(|instance| instance.color[3] >= opacity_threshold.0);
+                }
             }
         });
-
-        ui.label("Opacity:");
-
-        if ui
-            .add(egui::Slider::new(&mut opacity_threshold.0, 0.01..=1.0).text("Opacity Threshold"))
-            .changed()
-        {
-            if let Ok((mut instance_data, mut mesh3d)) = query.get_single_mut() {
-                let (instances, cube_width, cube_height, cube_depth) = load_thz();
-                let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
-
-                instance_data.instances = instances;
-                mesh3d.0 = new_mesh;
-                instance_data
-                    .instances
-                    .retain(|instance| instance.color[3] >= opacity_threshold.0);
-            }
-        }
-    });
+    }
 }
