@@ -9,7 +9,7 @@ use crate::gui::threed_plot::{
 use bevy::prelude::*;
 use bevy::render::render_resource::WgpuFeatures;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
-use bevy::render::RenderPlugin;
+use bevy::render::{RenderDebugFlags, RenderPlugin};
 use bevy::window::ExitCondition;
 use bevy_egui::egui;
 use bevy_egui::egui::{vec2, Visuals};
@@ -115,6 +115,7 @@ fn main() {
                         ..Default::default()
                     }),
                     synchronous_pipeline_compilation: false,
+                    debug_flags: RenderDebugFlags::all(),
                 })
                 .set(WindowPlugin {
                     primary_window: Some(Window {
@@ -131,7 +132,8 @@ fn main() {
                 }),
         )
         .add_plugins(EguiPlugin {
-           // enable_multipass_for_primary_context: true,
+            // TODO: change this to implement drag&drop
+            enable_multipass_for_primary_context: false,
         })
         .add_plugins((VoxelMaterialPlugin, PanOrbitCameraPlugin))
         .insert_resource(thread_communication.clone())

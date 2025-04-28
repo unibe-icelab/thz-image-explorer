@@ -14,8 +14,8 @@ egui_logger = { git = "https://github.com/hacknus/egui_logger" }
 egui-theme-switch = { git = "https://github.com/hacknus/egui-theme-switch" }
 egui-file-dialog = { git = "https://github.com/hacknus/egui-file-dialog", branch = "sort_by_metadata", features = ["information_view"] }
 egui_double_slider = "0.7.0"
-bevy_egui = { version = "0.33", features = ["serde"] }
-bevy = { version = "0.15", default-features = false, features = [
+bevy_egui = { version = "0.34", features = ["serde"] }
+bevy = { version = "0.16", default-features = false, features = [
     "animation",
     "bevy_animation",
     "bevy_asset",
@@ -34,8 +34,8 @@ bevy = { version = "0.15", default-features = false, features = [
     "zstd",
     "png",
 ] }
-bevy_voxel_plot = { git = "https://github.com/hacknus/bevy_voxel_plot" }
-bevy_panorbit_camera = { version = "0.23.0" }
+bevy_voxel_plot = { git = "https://github.com/hacknus/bevy_voxel_plot", branch="update_to_bevy_0.16" }
+bevy_panorbit_camera = { version = "0.26" }
 crossbeam-channel = "0.5"
 log = "0.4.22"
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "gif", "png", "tiff", "rayon"] }

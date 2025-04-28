@@ -1,13 +1,8 @@
 use crate::config::ThreadCommunication;
-use bevy::render::camera::RenderTarget;
+use bevy::render::camera::{ImageRenderTarget, RenderTarget};
 use bevy::render::view::{NoFrustumCulling, RenderLayers};
 use bevy::window::PrimaryWindow;
-use bevy::{
-    prelude::*,
-    render::{
-        extract_component::ExtractComponent, render_phase::RenderCommand, render_resource::*,
-    },
-};
+use bevy::{prelude::*, render::render_resource::*};
 use bevy_egui::egui::{epaint, Ui};
 use bevy_egui::{egui, EguiUserTextures};
 use bevy_panorbit_camera::{ActiveCameraData, PanOrbitCamera};
@@ -26,38 +21,6 @@ pub struct RenderImage(Handle<Image>);
 
 #[derive(Resource, Default)]
 pub struct CameraInputAllowed(pub bool);
-
-fn generate_dummy_data() -> (Vec<InstanceData>, f32, f32, f32) {
-    let mut instances = vec![];
-
-    let grid_width = 12;
-    let grid_height = 12;
-    let grid_depth = 12;
-    let cube_width = 1.0;
-    let cube_height = 1.0;
-    let cube_depth = 1.0;
-
-    let mut opacity = 0.0;
-    for x in 0..grid_width {
-        for y in 0..grid_height {
-            for z in 0..grid_depth {
-                opacity += 1.0 / (grid_width * grid_height * grid_depth) as f32;
-                let position = Vec3::new(
-                    x as f32 * cube_width - (grid_width as f32 * cube_width) / 2.0,
-                    y as f32 * cube_height - (grid_height as f32 * cube_height) / 2.0,
-                    z as f32 * cube_depth - (grid_depth as f32 * cube_depth) / 2.0,
-                );
-                let instance = InstanceData {
-                    pos_scale: [position.x, position.y, position.z, 1.0],
-                    color: LinearRgba::from(Color::srgba(1.0, 0.0, 0.0, opacity.powf(2.0)))
-                        .to_f32_array(),
-                };
-                instances.push(instance);
-            }
-        }
-    }
-    (instances, cube_width, cube_height, cube_depth)
-}
 
 // Generate a 1D Gaussian kernel
 fn gaussian_kernel1d(sigma: f32, radius: usize) -> Vec<f32> {
@@ -252,7 +215,7 @@ fn instance_from_data(
     time_span: f32,
     mut dataset: Array3<f32>,
 ) -> (Vec<InstanceData>, f32, f32, f32) {
-    let mut timer = Instant::now();
+    let timer = Instant::now();
 
     let mut instances = vec![];
 
@@ -290,7 +253,7 @@ fn instance_from_data(
         }
     }
     println!("calculating envelope: {:?}", timer.elapsed());
-    let mut timer = Instant::now();
+    let timer = Instant::now();
 
     // Normalize along z-axis
     for x in 0..grid_width {
@@ -316,7 +279,7 @@ fn instance_from_data(
     }
 
     println!("normalizing: {:?}", timer.elapsed());
-    let mut timer = Instant::now();
+    let timer = Instant::now();
 
     for z in 0..grid_depth {
         for y in 0..grid_height {
@@ -415,6 +378,7 @@ pub fn setup(
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
         brightness: 2.0, // Increase this to wash out shadows
+        affects_lightmapped_meshes: false,
     });
 
     let size = Extent3d {
@@ -456,7 +420,7 @@ pub fn setup(
                 // render before the "main pass" camera
                 clear_color: ClearColorConfig::Custom(Color::srgba(1.0, 1.0, 1.0, 0.0)),
                 order: -1,
-                target: RenderTarget::Image(image_handle.clone()),
+                target: RenderTarget::Image(ImageRenderTarget::from(image_handle.clone())),
                 ..default()
             },
             Transform::from_translation(Vec3::new(0.0, 0.0, 15.0)).looking_at(Vec3::ZERO, Vec3::Y),
@@ -470,7 +434,7 @@ pub fn setup(
     // Note: you probably want to update the `viewport_size` and `window_size` whenever they change,
     // I haven't done this here for simplicity.
     let primary_window = windows
-        .get_single()
+        .single()
         .expect("There is only ever one primary window");
     active_cam.set_if_neq(ActiveCameraData {
         // Set the entity to the entity ID of the camera you want to control. In this case, it's
@@ -515,7 +479,7 @@ pub fn three_dimensional_plot_ui(
 
             if ui.button("Refresh").clicked() {
                 // Update existing entity
-                if let Ok((mut instance_data, mut mesh3d)) = query.get_single_mut() {
+                if let Ok((mut instance_data, mut mesh3d)) = query.single_mut() {
                     instance_data.instances = instances.clone();
                     mesh3d.0 = new_mesh.clone();
 
@@ -557,7 +521,7 @@ pub fn three_dimensional_plot_ui(
                 )
                 .changed()
             {
-                if let Ok((mut instance_data, mut mesh3d)) = query.get_single_mut() {
+                if let Ok((mut instance_data, mut mesh3d)) = query.single_mut() {
                     instance_data.instances = instances;
                     mesh3d.0 = new_mesh;
                     instance_data
