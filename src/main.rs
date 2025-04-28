@@ -37,7 +37,7 @@ const APP_INFO: AppInfo = AppInfo {
     author: "Linus Leo Stöckli",
 };
 
-fn spawn_data_thread(mut state: ResMut<ThreadCommunication>) {
+fn spawn_data_thread(state: ResMut<ThreadCommunication>) {
     let state = state.clone(); // If ThreadCommunication is Arc/Mutex or cloneable
     thread::spawn(move || {
         main_thread(state);
@@ -82,7 +82,7 @@ fn main() {
         (1, 1, 1),
         |(_, _, _)| 0.0,
     )));
-    let filtered_time_lock = Arc::new(RwLock::new(Array1::from_shape_fn(1, |(_)| 0.0)));
+    let filtered_time_lock = Arc::new(RwLock::new(Array1::from_shape_fn(1, |_| 0.0)));
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
     let scaling_lock = Arc::new(RwLock::new(1));
     let md_lock = Arc::new(RwLock::new(DotthzMetaData::default()));

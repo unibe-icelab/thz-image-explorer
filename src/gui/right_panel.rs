@@ -1,7 +1,6 @@
-use crate::config::{ConfigCommand, ThreadCommunication};
+use crate::config::ConfigCommand;
 use crate::filters::filter::FILTER_REGISTRY;
-use crate::gui::application::{FileDialogState, THzImageExplorer};
-use crate::gui::matrix_plot::SelectedPixel;
+use crate::gui::application::THzImageExplorer;
 use crate::gui::settings_window::settings_window;
 use crate::gui::toggle_widget::toggle;
 use crate::math_tools::{
@@ -14,20 +13,13 @@ use bevy_egui::egui;
 use bevy_egui::egui::panel::Side;
 use bevy_egui::egui::{vec2, DragValue, Stroke, Vec2, Visuals};
 use egui_double_slider::DoubleSlider;
-use egui_file_dialog::FileDialog;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use itertools_num::linspace;
 use ndarray::Array1;
-use self_update::update::Release;
 use std::f32::consts::E;
 
 #[allow(clippy::too_many_arguments)]
-pub fn right_panel(
-    ctx: &egui::Context,
-    explorer: &mut THzImageExplorer,
-    right_panel_width: &f32,
-) {
-
+pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_panel_width: &f32) {
     let mut data = DataPoint::default();
     if let Ok(read_guard) = explorer.thread_communication.data_lock.read() {
         data = read_guard.clone();
@@ -50,10 +42,13 @@ pub fn right_panel(
                     .show(ui, |ui| {
                         ui.label("Log Mode: ");
                         if ui
-                            .add(toggle(&mut explorer.thread_communication.gui_settings.log_plot))
+                            .add(toggle(
+                                &mut explorer.thread_communication.gui_settings.log_plot,
+                            ))
                             .changed()
                         {
-                            explorer.thread_communication
+                            explorer
+                                .thread_communication
                                 .config_tx
                                 .send(ConfigCommand::SetFFTLogPlot(
                                     explorer.thread_communication.gui_settings.log_plot,
@@ -64,10 +59,13 @@ pub fn right_panel(
 
                         ui.label("Normalize FFT: ");
                         if ui
-                            .add(toggle(&mut explorer.thread_communication.gui_settings.normalize_fft))
+                            .add(toggle(
+                                &mut explorer.thread_communication.gui_settings.normalize_fft,
+                            ))
                             .changed()
                         {
-                            explorer.thread_communication
+                            explorer
+                                .thread_communication
                                 .config_tx
                                 .send(ConfigCommand::SetFFTNormalization(
                                     explorer.thread_communication.gui_settings.normalize_fft,
@@ -90,46 +88,59 @@ pub fn right_panel(
                             explorer.pixel_selected.rect = vec![
                                 [
                                     (explorer.pixel_selected.x as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling as f64,
+                                        / explorer.thread_communication.gui_settings.down_scaling
+                                            as f64,
                                     (explorer.pixel_selected.y as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling as f64,
+                                        / explorer.thread_communication.gui_settings.down_scaling
+                                            as f64,
                                 ],
                                 [
                                     (explorer.pixel_selected.x as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling as f64
+                                        / explorer.thread_communication.gui_settings.down_scaling
+                                            as f64
                                         + 1.0,
                                     (explorer.pixel_selected.y as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling as f64,
+                                        / explorer.thread_communication.gui_settings.down_scaling
+                                            as f64,
                                 ],
                                 [
                                     (explorer.pixel_selected.x as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling as f64
+                                        / explorer.thread_communication.gui_settings.down_scaling
+                                            as f64
                                         + 1.0,
                                     (explorer.pixel_selected.y as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling as f64
-                                        + 1.0,
-                                ],
-                                [
-                                    (explorer.pixel_selected.x as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling as f64,
-                                    (explorer.pixel_selected.y as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling as f64
+                                        / explorer.thread_communication.gui_settings.down_scaling
+                                            as f64
                                         + 1.0,
                                 ],
                                 [
                                     (explorer.pixel_selected.x as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling as f64,
+                                        / explorer.thread_communication.gui_settings.down_scaling
+                                            as f64,
                                     (explorer.pixel_selected.y as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling as f64,
+                                        / explorer.thread_communication.gui_settings.down_scaling
+                                            as f64
+                                        + 1.0,
+                                ],
+                                [
+                                    (explorer.pixel_selected.x as f64)
+                                        / explorer.thread_communication.gui_settings.down_scaling
+                                            as f64,
+                                    (explorer.pixel_selected.y as f64)
+                                        / explorer.thread_communication.gui_settings.down_scaling
+                                            as f64,
                                 ],
                             ];
                             if let Ok(mut s) = explorer.thread_communication.scaling_lock.write() {
                                 *s = explorer.thread_communication.gui_settings.down_scaling as u8;
                             }
-                            if let Ok(mut write_guard) = explorer.thread_communication.pixel_lock.write() {
+                            if let Ok(mut write_guard) =
+                                explorer.thread_communication.pixel_lock.write()
+                            {
                                 *write_guard = explorer.pixel_selected.clone();
                             }
-                            explorer.thread_communication
+                            explorer
+                                .thread_communication
                                 .config_tx
                                 .send(ConfigCommand::SetDownScaling)
                                 .expect("unable to send config");
@@ -175,9 +186,12 @@ pub fn right_panel(
                     });
                 if fft_window_type_old != explorer.fft_window_type {
                     println!("changing type");
-                    explorer.thread_communication
+                    explorer
+                        .thread_communication
                         .config_tx
-                        .send(ConfigCommand::SetFftWindowType(explorer.fft_window_type.clone()))
+                        .send(ConfigCommand::SetFftWindowType(
+                            explorer.fft_window_type.clone(),
+                        ))
                         .unwrap();
                 }
 
@@ -219,14 +233,18 @@ pub fn right_panel(
                                 .name("Window"),
                         );
                         window_plot_ui.vline(
-                            VLine::new(data.time.first().unwrap_or(&1000.0) + explorer.fft_bounds[0])
-                                .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                                .name("Lower Bound"),
+                            VLine::new(
+                                data.time.first().unwrap_or(&1000.0) + explorer.fft_bounds[0],
+                            )
+                            .stroke(Stroke::new(1.0, egui::Color32::GRAY))
+                            .name("Lower Bound"),
                         );
                         window_plot_ui.vline(
-                            VLine::new(data.time.last().unwrap_or(&1050.0) - explorer.fft_bounds[1])
-                                .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                                .name("Upper Bound"),
+                            VLine::new(
+                                data.time.last().unwrap_or(&1050.0) - explorer.fft_bounds[1],
+                            )
+                            .stroke(Stroke::new(1.0, egui::Color32::GRAY))
+                            .name("Upper Bound"),
                         );
                     });
                 });
@@ -269,18 +287,24 @@ pub fn right_panel(
                 });
 
                 ui.horizontal(|ui| {
-                    let val1_changed = ui.add(DragValue::new(&mut explorer.fft_bounds[0])).changed();
+                    let val1_changed = ui
+                        .add(DragValue::new(&mut explorer.fft_bounds[0]))
+                        .changed();
 
                     ui.add_space(0.75 * right_panel_width);
 
-                    let val2_changed = ui.add(DragValue::new(&mut explorer.fft_bounds[1])).changed();
+                    let val2_changed = ui
+                        .add(DragValue::new(&mut explorer.fft_bounds[1]))
+                        .changed();
 
                     if slider_changed.inner || val1_changed || val2_changed {
-                        explorer.thread_communication
+                        explorer
+                            .thread_communication
                             .config_tx
                             .send(ConfigCommand::SetFFTWindowLow(explorer.fft_bounds[0]))
                             .unwrap();
-                        explorer.thread_communication
+                        explorer
+                            .thread_communication
                             .config_tx
                             .send(ConfigCommand::SetFFTWindowHigh(explorer.fft_bounds[1]))
                             .unwrap();
@@ -318,7 +342,9 @@ pub fn right_panel(
                 let mut filter_vals: Vec<[f64; 2]> = Vec::new();
                 let filter_f: Vec<f64> = linspace::<f64>(0.0, 10.0, data.time.len()).collect();
                 for fi in filter_f {
-                    let a = if fi >= explorer.filter_bounds[0] as f64 && fi <= explorer.filter_bounds[1] as f64 {
+                    let a = if fi >= explorer.filter_bounds[0] as f64
+                        && fi <= explorer.filter_bounds[1] as f64
+                    {
                         max
                     } else {
                         0.0
@@ -397,18 +423,24 @@ pub fn right_panel(
                 });
 
                 ui.horizontal(|ui| {
-                    let val1_changed = ui.add(DragValue::new(&mut explorer.filter_bounds[0])).changed();
+                    let val1_changed = ui
+                        .add(DragValue::new(&mut explorer.filter_bounds[0]))
+                        .changed();
 
                     ui.add_space(0.75 * right_panel_width);
 
-                    let val2_changed = ui.add(DragValue::new(&mut explorer.filter_bounds[1])).changed();
+                    let val2_changed = ui
+                        .add(DragValue::new(&mut explorer.filter_bounds[1]))
+                        .changed();
 
                     if slider_changed.inner || val1_changed || val2_changed {
-                        explorer.thread_communication
+                        explorer
+                            .thread_communication
                             .config_tx
                             .send(ConfigCommand::SetFFTFilterLow(explorer.filter_bounds[0]))
                             .unwrap();
-                        explorer.thread_communication
+                        explorer
+                            .thread_communication
                             .config_tx
                             .send(ConfigCommand::SetFFTFilterHigh(explorer.filter_bounds[1]))
                             .unwrap();
@@ -469,7 +501,7 @@ pub fn right_panel(
                     let left_offset = 0.01 * right_panel_width;
                     ui.add_space(left_offset);
                     // Display slider, linked to the same range as the plot
-                    let mut time_window_lower_bound =explorer. time_window[0];
+                    let mut time_window_lower_bound = explorer.time_window[0];
                     let mut time_window_upper_bound = explorer.time_window[1];
                     let lower = data.time.first().unwrap_or(&1000.0);
                     let upper = data.time.last().unwrap_or(&1050.0);
@@ -498,41 +530,52 @@ pub fn right_panel(
                 });
 
                 ui.horizontal(|ui| {
-                    let val1_changed = ui.add(DragValue::new(&mut explorer.time_window[0])).changed();
+                    let val1_changed = ui
+                        .add(DragValue::new(&mut explorer.time_window[0]))
+                        .changed();
 
                     ui.add_space(0.75 * right_panel_width);
 
-                    let val2_changed = ui.add(DragValue::new(&mut explorer.time_window[1])).changed();
+                    let val2_changed = ui
+                        .add(DragValue::new(&mut explorer.time_window[1]))
+                        .changed();
 
                     if slider_changed.inner || val1_changed || val2_changed {
                         if explorer.time_window[0] == explorer.time_window[1] {
                             explorer.time_window[0] = *data.time.first().unwrap_or(&1000.0);
                             explorer.time_window[1] = *data.time.last().unwrap_or(&1050.0);
                         }
-                        explorer.thread_communication
+                        explorer
+                            .thread_communication
                             .config_tx
                             .send(ConfigCommand::SetTimeWindow(explorer.time_window))
                             .unwrap();
                     }
                 });
 
-                let width = explorer.time_window[1] -explorer. time_window[0];
+                let width = explorer.time_window[1] - explorer.time_window[0];
                 let first = *data.time.first().unwrap_or(&1000.0);
                 let last = *data.time.last().unwrap_or(&1050.0);
 
-                if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && explorer.time_window[1] < last {
+                if ui.input(|i| i.key_pressed(egui::Key::ArrowRight))
+                    && explorer.time_window[1] < last
+                {
                     explorer.time_window[0] += 1.0;
                     explorer.time_window[1] = width + explorer.time_window[0];
-                    explorer.thread_communication
+                    explorer
+                        .thread_communication
                         .config_tx
                         .send(ConfigCommand::SetTimeWindow(explorer.time_window))
                         .unwrap();
                 }
 
-                if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) && explorer.time_window[0] > first {
+                if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft))
+                    && explorer.time_window[0] > first
+                {
                     explorer.time_window[0] -= 1.0;
                     explorer.time_window[1] = width + explorer.time_window[0];
-                    explorer.thread_communication
+                    explorer
+                        .thread_communication
                         .config_tx
                         .send(ConfigCommand::SetTimeWindow(explorer.time_window))
                         .unwrap();
@@ -552,7 +595,8 @@ pub fn right_panel(
                     explorer.time_window[0] -= zoom_delta * zoom_factor;
 
                     if scroll_delta != Vec2::ZERO || zoom_delta != 0.0 {
-                        explorer.thread_communication
+                        explorer
+                            .thread_communication
                             .config_tx
                             .send(ConfigCommand::SetTimeWindow(explorer.time_window))
                             .unwrap();
@@ -567,17 +611,20 @@ pub fn right_panel(
                     for filter in filters.iter_mut() {
                         ui.separator();
                         ui.heading(filter.config().clone().name);
-                        update_requested |= filter.ui(ui, &mut explorer.thread_communication).changed();
+                        update_requested |=
+                            filter.ui(ui, &mut explorer.thread_communication).changed();
                     }
                     if update_requested {
-                        explorer.thread_communication
+                        explorer
+                            .thread_communication
                             .config_tx
                             .send(ConfigCommand::UpdateFilters)
                             .unwrap();
                     }
                 }
 
-                explorer.thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
+                explorer.thread_communication.gui_settings.dark_mode =
+                    ui.visuals() == &Visuals::dark();
 
                 ui.separator();
                 ui.collapsing("Debug logs:", |ui| {
@@ -605,10 +652,7 @@ pub fn right_panel(
                     explorer.settings_window_open = true;
                 }
                 if explorer.settings_window_open {
-                    settings_window(
-                        ui.ctx(),
-                        explorer
-                    );
+                    settings_window(ui.ctx(), explorer);
                 }
 
                 ui.add_space(5.0);
@@ -617,7 +661,10 @@ pub fn right_panel(
                 let height = ui.available_size().y - 38.0 - 20.0;
                 ui.add_space(height);
                 ui.centered_and_justified(|ui| {
-                    ui.add(egui::Image::from_bytes("WP", explorer.wp).fit_to_exact_size(vec2(80.0, 38.0)));
+                    ui.add(
+                        egui::Image::from_bytes("WP", explorer.wp)
+                            .fit_to_exact_size(vec2(80.0, 38.0)),
+                    );
                 });
             });
         });

@@ -1,18 +1,15 @@
-use crate::gui::application::{FileDialogState, GuiSettingsContainer, THzImageExplorer};
+use crate::gui::application::{FileDialogState, THzImageExplorer};
 #[cfg(feature = "self_update")]
 use crate::update::{check_update, update};
 use bevy_egui::egui;
 use bevy_egui::egui::{
     vec2, Align2, Color32, ColorImage, InnerResponse, TextureOptions, Vec2, Visuals,
 };
-use egui_file_dialog::FileDialog;
 use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotPoint, PlotPoints};
 use egui_theme_switch::ThemeSwitch;
 use ndarray::{Array1, Axis};
 #[cfg(feature = "self_update")]
 use self_update::restart::restart;
-#[cfg(feature = "self_update")]
-use self_update::update::Release;
 #[cfg(feature = "self_update")]
 use semver::Version;
 
@@ -38,12 +35,16 @@ pub fn settings_window(
                 .show(ui, |ui| {
                     ui.label("Theme: ");
                     if ui
-                        .add(ThemeSwitch::new(&mut explorer.thread_communication.gui_settings.theme_preference))
+                        .add(ThemeSwitch::new(
+                            &mut explorer.thread_communication.gui_settings.theme_preference,
+                        ))
                         .changed()
                     {
-                        ui.ctx().set_theme(explorer.thread_communication.gui_settings.theme_preference);
+                        ui.ctx()
+                            .set_theme(explorer.thread_communication.gui_settings.theme_preference);
                     };
-                    explorer.thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
+                    explorer.thread_communication.gui_settings.dark_mode =
+                        ui.visuals() == &Visuals::dark();
 
                     ui.end_row();
                     ui.end_row();
@@ -67,11 +68,19 @@ pub fn settings_window(
                     }
 
                     // TODO: maybe change this check here...
-                    if explorer.thread_communication.gui_settings.psf.popt_x.is_empty() {
+                    if explorer
+                        .thread_communication
+                        .gui_settings
+                        .psf
+                        .popt_x
+                        .is_empty()
+                    {
                         ui.colored_label(egui::Color32::RED, "No PSF loaded.");
                     } else {
                         ui.label(
-                            explorer.thread_communication.gui_settings
+                            explorer
+                                .thread_communication
+                                .gui_settings
                                 .beam_shape_path
                                 .file_name()
                                 .unwrap_or("invalid name".as_ref())
@@ -96,7 +105,12 @@ pub fn settings_window(
               ;
 
             // Assuming `beam_x` is of type `Array2<f64>`
-            let beam_x_array = explorer.thread_communication.gui_settings.clone().psf.popt_x;
+            let beam_x_array = explorer
+                .thread_communication
+                .gui_settings
+                .clone()
+                .psf
+                .popt_x;
 
             let start = -5.0;
             let end = 5.0;

@@ -3,8 +3,8 @@
 //! unwrapping phase ranges in periodic signals.
 
 use ndarray::{Array1, ArrayViewMut, Ix1, Zip};
-use std::fmt::{Display, Formatter};
 use realfft::num_complex::Complex32;
+use std::fmt::{Display, Formatter};
 
 /// Enum representing the different types of FFT window functions supported.
 ///
@@ -99,8 +99,6 @@ pub fn apply_adapted_blackman_window(
         }
     }
 }
-
-
 
 /// Applies a smooth bandpass filter with soft Blackman-style transitions to the spectrum.
 pub fn apply_soft_bandpass(

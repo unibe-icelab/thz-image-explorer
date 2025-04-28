@@ -14,9 +14,9 @@ use crate::math_tools::{
     apply_adapted_blackman_window, apply_blackman, apply_flat_top, apply_hamming, apply_hanning,
     apply_soft_bandpass, numpy_unwrap, FftWindowType,
 };
+use bevy_egui::egui::ColorImage;
 use csv::ReaderBuilder;
 use dotthz::DotthzMetaData;
-use bevy_egui::egui::ColorImage;
 use image::RgbaImage;
 use ndarray::parallel::prelude::*;
 use ndarray::{Array1, Array2, Array3, Axis};

@@ -7,10 +7,10 @@ use crate::gui::application::GuiSettingsContainer;
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::math_tools::FftWindowType;
 use bevy::prelude::Resource;
+use crossbeam_channel::{Receiver, Sender};
 use dotthz::DotthzMetaData;
 use ndarray::{Array1, Array2, Array3};
 use std::path::PathBuf;
-use crossbeam_channel::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 
 /// Enum representing the various commands sent to the configuration thread.

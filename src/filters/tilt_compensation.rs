@@ -100,12 +100,7 @@ impl Filter for TiltCompensation {
                     let mut raw_trace_copy = raw_trace.to_owned(); // Create a mutable copy
                     let mut data_view = raw_trace_copy.view_mut(); // Obtain a mutable view
 
-                    apply_adapted_blackman_window(
-                        &mut data_view,
-                        &original_time,
-                        &0.0,
-                        &7.0,
-                    );
+                    apply_adapted_blackman_window(&mut data_view, &original_time, &0.0, &7.0);
                     extended_trace
                         .slice_mut(s![insert_index..end_index])
                         .assign(&data_view.slice(s![..(end_index - insert_index)]));

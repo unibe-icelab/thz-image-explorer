@@ -1,5 +1,6 @@
-use bevy_egui::egui::TextureHandle;
+use crate::gui::application::THzImageExplorer;
 use bevy_egui::egui;
+use bevy_egui::egui::TextureHandle;
 use bevy_egui::egui::{
     pos2, vec2, Color32, ColorImage, DragValue, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
 };
@@ -7,7 +8,6 @@ use egui::TextureOptions;
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotPoint, PlotPoints, Polygon};
 use ndarray::{Array2, Axis};
-use crate::gui::application::THzImageExplorer;
 
 #[derive(Default)]
 pub struct ImageState {
@@ -94,7 +94,7 @@ pub fn color_from_intensity(
             v: remapped_y,
             a: 1.0,
         }
-            .into()
+        .into()
     } else {
         egui::ecolor::Hsva {
             h: hue,
@@ -102,7 +102,7 @@ pub fn color_from_intensity(
             v: 1.0,
             a: 1.0,
         }
-            .into()
+        .into()
     }
 }
 fn colorbar_with_midpoint_slider(
@@ -341,7 +341,13 @@ pub fn plot_matrix(
     for y in 0..height {
         for x in 0..width {
             if let Some(i) = data.get((x, y)) {
-                img[(x, y)] = color_from_intensity(i, &max, &explorer.cut_off, &explorer.mid_point, &explorer.bw);
+                img[(x, y)] = color_from_intensity(
+                    i,
+                    &max,
+                    &explorer.cut_off,
+                    &explorer.mid_point,
+                    &explorer.bw,
+                );
                 intensity_matrix[x][height - 1 - y] = *i as f64 / max * 100.0;
                 id_matrix[x][height - 1 - y] = format!("{:05}-{:05}", x, y);
             }
@@ -350,13 +356,17 @@ pub fn plot_matrix(
 
     // Only load once
     if let Some(texture) = &mut state.texture {
-        texture.set(img.clone(), TextureOptions::NEAREST ); // This *updates* the GPU texture in-place
+        texture.set(img.clone(), TextureOptions::NEAREST); // This *updates* the GPU texture in-place
     } else {
-        let texture = ui.ctx().load_texture("image", img.clone(), TextureOptions::NEAREST);
+        let texture = ui
+            .ctx()
+            .load_texture("image", img.clone(), TextureOptions::NEAREST);
         state.texture = Some(texture);
     }
 
-    let Some(texture) = &state.texture else { return pixel_clicked };
+    let Some(texture) = &state.texture else {
+        return pixel_clicked;
+    };
 
     let im = PlotImage::new(
         texture,
@@ -375,7 +385,6 @@ pub fn plot_matrix(
             .allow_drag(false);
 
         let plot_response = plot.show(ui, |plot_ui| {
-
             plot_ui.image(im);
 
             // Draw selected single pixel
@@ -436,7 +445,8 @@ pub fn plot_matrix(
                 let _pixel_x = plot_x.floor() as usize;
                 let _pixel_y = height - 1 - plot_y.floor() as usize;
 
-                if (!explorer.pixel_selected.rois.is_empty() && explorer.pixel_selected.rois.last().unwrap().closed)
+                if (!explorer.pixel_selected.rois.is_empty()
+                    && explorer.pixel_selected.rois.last().unwrap().closed)
                     || explorer.pixel_selected.rois.is_empty()
                 {
                     // If last ROI is closed, start a new one
@@ -485,7 +495,8 @@ pub fn plot_matrix(
                     ];
                     explorer.pixel_selected.x = explorer.val.x.floor() as usize;
                     explorer.pixel_selected.y = height - 1 - explorer.val.y.floor() as usize;
-                    explorer.pixel_selected.id = id_matrix[explorer.pixel_selected.x][explorer.pixel_selected.y].clone();
+                    explorer.pixel_selected.id =
+                        id_matrix[explorer.pixel_selected.x][explorer.pixel_selected.y].clone();
                 }
                 pixel_clicked = true;
             }

@@ -4,19 +4,12 @@ use crate::gui::threed_plot::{three_dimensional_plot_ui, CameraInputAllowed, Opa
 use crate::gui::toggle_widget::toggle;
 use crate::vec2;
 use bevy::prelude::*;
-use bevy::render::render_resource::*;
-use bevy_egui::{
-    egui::{self, Checkbox, DragValue, Stroke, Ui},
-    EguiContexts,
-};
+use bevy_egui::egui::epaint;
+use bevy_egui::egui::{self, Checkbox, DragValue, Stroke, Ui};
+use bevy_voxel_plot::InstanceMaterialData;
 use egui_plot::{GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 use ndarray::Array2;
 use std::ops::RangeInclusive;
-use bevy_egui::egui::epaint;
-use bevy_voxel_plot::InstanceMaterialData;
-
-const MOVE_SCALE: f32 = 0.01;
-const SCROLL_SCALE: f32 = 0.001;
 
 pub fn pulse_tab(
     ui: &mut Ui,
@@ -562,7 +555,6 @@ pub fn center_panel(
     cam_input: &mut ResMut<CameraInputAllowed>,
     thread_communication: &mut ResMut<ThreadCommunication>,
 ) {
-
     egui::CentralPanel::default().show(ctx, |ui| {
         let window_height = ui.available_height();
         let height = ui.available_size().y * 0.45;
@@ -610,7 +602,7 @@ pub fn center_panel(
                         query,
                         opacity_threshold,
                         cam_input,
-                        thread_communication
+                        thread_communication,
                     );
                 }
             }
@@ -633,4 +625,3 @@ fn generate_sample_image(width: usize, height: usize) -> Array2<f32> {
     }
     image
 }
-

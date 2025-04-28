@@ -3,22 +3,6 @@
 //! It provides structures and methods to manage user interactions, graphical settings,
 //! file operations, and visualization panels for signal and image processing.
 
-use bevy::prelude::*;
-use bevy_egui::{egui, EguiContexts};
-use core::f64;
-use dotthz::DotthzFile;
-use bevy_egui::egui::ThemePreference;
-use egui_file_dialog::information_panel::InformationPanel;
-use egui_file_dialog::FileDialog;
-use egui_plot::PlotPoint;
-use home::home_dir;
-use preferences::Preferences;
-use self_update::update::Release;
-use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
-use std::path::PathBuf;
-use std::sync::Arc;
-use bevy_voxel_plot::InstanceMaterialData;
 use crate::config::ThreadCommunication;
 use crate::data_container::DataPoint;
 use crate::filters::psf::PSF;
@@ -29,6 +13,22 @@ use crate::gui::right_panel::right_panel;
 use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage};
 use crate::math_tools::FftWindowType;
 use crate::APP_INFO;
+use bevy::prelude::*;
+use bevy_egui::egui::ThemePreference;
+use bevy_egui::{egui, EguiContexts};
+use bevy_voxel_plot::InstanceMaterialData;
+use core::f64;
+use dotthz::DotthzFile;
+use egui_file_dialog::information_panel::InformationPanel;
+use egui_file_dialog::FileDialog;
+use egui_plot::PlotPoint;
+use home::home_dir;
+use preferences::Preferences;
+use self_update::update::Release;
+use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Represents the state of the file dialog for opening, saving, or working with PSF files.
 #[derive(Clone)]
@@ -205,7 +205,7 @@ pub fn update_gui(
         &mut explorer,
         &mut opacity_threshold,
         &mut cam_input,
-        &mut thread_communication
+        &mut thread_communication,
     );
 
     left_panel(ctx, &mut explorer, &left_panel_width, &mut image_state);
