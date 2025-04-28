@@ -34,6 +34,7 @@ bevy = { version = "0.15", default-features = false, features = [
     "zstd",
     "png",
 ] }
+bevy_voxel_plot = { git = "https://github.com/hacknus/bevy_voxel_plot" }
 bevy_panorbit_camera = { version = "0.23.0" }
 crossbeam-channel = "0.5"
 log = "0.4.22"
@@ -60,7 +61,6 @@ filter_macros = { path = "filter_macros" }
 ctor = "0.4"
 once_cell = "1.21"
 rayon = "1.10.0"
-bytemuck = "1.22.0"
 
 [features]
 default = ["self_update"]

@@ -4,8 +4,7 @@ use crate::data_thread::main_thread;
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::gui::threed_plot::{
-    set_enable_camera_controls_system, setup, CameraInputAllowed, CustomMaterialPlugin,
-    OpacityThreshold,
+    set_enable_camera_controls_system, setup, CameraInputAllowed, OpacityThreshold,
 };
 use bevy::prelude::*;
 use bevy::render::render_resource::WgpuFeatures;
@@ -16,6 +15,7 @@ use bevy_egui::egui;
 use bevy_egui::egui::{vec2, Visuals};
 use bevy_egui::{EguiContexts, EguiPlugin};
 use bevy_panorbit_camera::PanOrbitCameraPlugin;
+use bevy_voxel_plot::VoxelMaterialPlugin;
 use crossbeam_channel::{Receiver, Sender};
 use dotthz::DotthzMetaData;
 use ndarray::{Array1, Array2, Array3};
@@ -82,10 +82,7 @@ fn main() {
         (1, 1, 1),
         |(_, _, _)| 0.0,
     )));
-    let filtered_time_lock = Arc::new(RwLock::new(Array1::from_shape_fn(
-        1,
-        |(_)| 0.0,
-    )));
+    let filtered_time_lock = Arc::new(RwLock::new(Array1::from_shape_fn(1, |(_)| 0.0)));
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
     let scaling_lock = Arc::new(RwLock::new(1));
     let md_lock = Arc::new(RwLock::new(DotthzMetaData::default()));
@@ -136,10 +133,7 @@ fn main() {
         .add_plugins(EguiPlugin {
            // enable_multipass_for_primary_context: true,
         })
-        .add_plugins((
-            CustomMaterialPlugin,
-            PanOrbitCameraPlugin,
-        ))
+        .add_plugins((VoxelMaterialPlugin, PanOrbitCameraPlugin))
         .insert_resource(thread_communication.clone())
         .insert_resource(OpacityThreshold(0.0)) // Start with no threshold
         .insert_resource(CameraInputAllowed(false))

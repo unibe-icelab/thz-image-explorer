@@ -1,6 +1,6 @@
 use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::gui::application::{THzImageExplorer, Tab};
-use crate::gui::threed_plot::{three_dimensional_plot_ui, CameraInputAllowed, InstanceData, InstanceMaterialData, OpacityThreshold};
+use crate::gui::threed_plot::{three_dimensional_plot_ui, CameraInputAllowed, OpacityThreshold};
 use crate::gui::toggle_widget::toggle;
 use crate::vec2;
 use bevy::prelude::*;
@@ -13,6 +13,7 @@ use egui_plot::{GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 use ndarray::Array2;
 use std::ops::RangeInclusive;
 use bevy_egui::egui::epaint;
+use bevy_voxel_plot::InstanceMaterialData;
 
 const MOVE_SCALE: f32 = 0.01;
 const SCROLL_SCALE: f32 = 0.001;

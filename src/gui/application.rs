@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use std::sync::Arc;
-
+use bevy_voxel_plot::InstanceMaterialData;
 use crate::config::ThreadCommunication;
 use crate::data_container::DataPoint;
 use crate::filters::psf::PSF;
@@ -26,7 +26,7 @@ use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
 use crate::gui::matrix_plot::{ImageState, SelectedPixel};
 use crate::gui::right_panel::right_panel;
-use crate::gui::threed_plot::{CameraInputAllowed, InstanceData, InstanceMaterialData, OpacityThreshold, RenderImage};
+use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage};
 use crate::math_tools::FftWindowType;
 use crate::APP_INFO;
 

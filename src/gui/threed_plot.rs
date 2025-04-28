@@ -3,43 +3,23 @@ use bevy::render::camera::RenderTarget;
 use bevy::render::view::{NoFrustumCulling, RenderLayers};
 use bevy::window::PrimaryWindow;
 use bevy::{
-    core_pipeline::core_3d::Transparent3d,
-    ecs::{
-        query::QueryItem,
-        system::{lifetimeless::*, SystemParamItem},
-    },
-    pbr::{
-        MeshPipeline, MeshPipelineKey, RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
-    },
     prelude::*,
     render::{
-        extract_component::{ExtractComponent, ExtractComponentPlugin},
-        mesh::{
-            allocator::MeshAllocator, MeshVertexBufferLayoutRef, RenderMesh, RenderMeshBufferInfo,
-        },
-        render_asset::RenderAssets,
-        render_phase::{
-            AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand,
-            RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewSortedRenderPhases,
-        },
-        render_resource::*,
-        renderer::RenderDevice,
-        sync_world::MainEntity,
-        view::ExtractedView,
-        Render, RenderApp, RenderSet,
+        extract_component::ExtractComponent, render_phase::RenderCommand, render_resource::*,
     },
 };
 use bevy_egui::egui::{epaint, Ui};
 use bevy_egui::{egui, EguiUserTextures};
 use bevy_panorbit_camera::{ActiveCameraData, PanOrbitCamera};
-use bytemuck::{Pod, Zeroable};
+use bevy_voxel_plot::{InstanceData, InstanceMaterialData};
 use dotthz::DotthzFile;
 use ndarray::{s, Array1, Array3, Axis};
 use std::f32::consts::PI;
 use std::path::Path;
 use std::time::Instant;
 
-const SHADER_ASSET_PATH: &str = "shaders/instancing.wgsl";
+#[derive(Resource)]
+pub struct OpacityThreshold(pub f32);
 
 #[derive(Deref, Resource)]
 pub struct RenderImage(Handle<Image>);
@@ -268,7 +248,10 @@ fn load_thz() -> (Vec<InstanceData>, f32, f32, f32) {
     (instances, cube_width, cube_height, cube_depth)
 }
 
-fn instance_from_data(time_span: f32, mut dataset: Array3<f32>) -> (Vec<InstanceData>, f32, f32, f32) {
+fn instance_from_data(
+    time_span: f32,
+    mut dataset: Array3<f32>,
+) -> (Vec<InstanceData>, f32, f32, f32) {
     let mut timer = Instant::now();
 
     let mut instances = vec![];
@@ -503,306 +486,6 @@ pub fn setup(
     });
 }
 
-#[derive(Component)]
-pub struct InstanceMaterialData {
-    instances: Vec<InstanceData>,
-}
-
-#[derive(Resource)]
-pub struct OpacityThreshold(pub f32);
-
-impl ExtractComponent for InstanceMaterialData {
-    type QueryData = &'static InstanceMaterialData;
-    type QueryFilter = ();
-    type Out = Self;
-
-    fn extract_component(item: QueryItem<'_, Self::QueryData>) -> Option<Self> {
-        Some(InstanceMaterialData {
-            instances: item.instances.clone(),
-        })
-    }
-}
-
-pub struct CustomMaterialPlugin;
-
-impl Plugin for CustomMaterialPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_plugins(ExtractComponentPlugin::<InstanceMaterialData>::default());
-        app.sub_app_mut(RenderApp)
-            .add_render_command::<Transparent3d, DrawCustom>()
-            .init_resource::<SpecializedMeshPipelines<CustomPipeline>>()
-            .add_systems(
-                Render,
-                (
-                    queue_custom.in_set(RenderSet::QueueMeshes),
-                    prepare_instance_buffers.in_set(RenderSet::PrepareResources),
-                ),
-            );
-    }
-
-    fn finish(&self, app: &mut App) {
-        app.sub_app_mut(RenderApp).init_resource::<CustomPipeline>();
-    }
-}
-
-#[derive(Asset, TypePath, Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-pub struct InstanceData {
-    pos_scale: [f32; 4], // x, y, z, scale
-    color: [f32; 4],
-}
-
-#[allow(clippy::too_many_arguments)]
-fn queue_custom(
-    transparent_3d_draw_functions: Res<DrawFunctions<Transparent3d>>,
-    custom_pipeline: Res<CustomPipeline>,
-    mut pipelines: ResMut<SpecializedMeshPipelines<CustomPipeline>>,
-    pipeline_cache: Res<PipelineCache>,
-    meshes: Res<RenderAssets<RenderMesh>>,
-    render_mesh_instances: Res<RenderMeshInstances>,
-    material_meshes: Query<(Entity, &MainEntity), With<InstanceMaterialData>>,
-    mut transparent_render_phases: ResMut<ViewSortedRenderPhases<Transparent3d>>,
-    views: Query<(Entity, &ExtractedView, &Msaa)>,
-) {
-    let draw_custom = transparent_3d_draw_functions.read().id::<DrawCustom>();
-
-    for (view_entity, view, msaa) in &views {
-        let Some(transparent_phase) = transparent_render_phases.get_mut(&view_entity) else {
-            continue;
-        };
-
-        let msaa_key = MeshPipelineKey::from_msaa_samples(msaa.samples());
-
-        let view_key = msaa_key | MeshPipelineKey::from_hdr(view.hdr);
-        let rangefinder = view.rangefinder3d();
-        for (entity, main_entity) in &material_meshes {
-            let Some(mesh_instance) = render_mesh_instances.render_mesh_queue_data(*main_entity)
-            else {
-                continue;
-            };
-            let Some(mesh) = meshes.get(mesh_instance.mesh_asset_id) else {
-                continue;
-            };
-            let key =
-                view_key | MeshPipelineKey::from_primitive_topology(mesh.primitive_topology());
-            let pipeline = pipelines
-                .specialize(&pipeline_cache, &custom_pipeline, key, &mesh.layout)
-                .unwrap();
-            transparent_phase.add(Transparent3d {
-                entity: (entity, *main_entity),
-                pipeline,
-                draw_function: draw_custom,
-                distance: rangefinder.distance_translation(&mesh_instance.translation),
-                batch_range: 0..1,
-                extra_index: PhaseItemExtraIndex::NONE,
-            });
-        }
-    }
-}
-
-#[derive(Component)]
-struct InstanceBuffer {
-    buffer: Buffer,
-    length: usize,
-}
-
-fn prepare_instance_buffers(
-    mut commands: Commands,
-    query: Query<(Entity, &InstanceMaterialData)>,
-    cameras: Query<&ExtractedView>,
-    render_device: Res<RenderDevice>,
-) {
-    let Some(camera) = cameras.iter().next() else {
-        return;
-    };
-
-    let cam_pos = camera.world_from_view.transform_point(Vec3::ZERO);
-
-    for (entity, instance_data) in &query {
-        let mut sorted_instances = instance_data.instances.clone();
-
-        if sorted_instances.is_empty() {
-            // No instances, remove any existing buffer or do nothing
-            commands.entity(entity).remove::<InstanceBuffer>();
-            continue;
-        }
-
-        // Sort instances by distance from camera (back-to-front)
-        sorted_instances.sort_by(|a, b| {
-            let a_pos = Vec3::new(a.pos_scale[0], a.pos_scale[1], a.pos_scale[2]);
-            let b_pos = Vec3::new(b.pos_scale[0], b.pos_scale[1], b.pos_scale[2]);
-
-            let a_dist = cam_pos.distance_squared(a_pos);
-            let b_dist = cam_pos.distance_squared(b_pos);
-
-            b_dist
-                .partial_cmp(&a_dist)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-
-        let buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
-            label: Some("sorted instance data buffer"),
-            contents: bytemuck::cast_slice(sorted_instances.as_slice()),
-            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-        });
-
-        commands.entity(entity).insert(InstanceBuffer {
-            buffer,
-            length: sorted_instances.len(),
-        });
-    }
-}
-
-#[derive(Resource)]
-struct CustomPipeline {
-    shader: Handle<Shader>,
-    mesh_pipeline: MeshPipeline,
-}
-
-impl FromWorld for CustomPipeline {
-    fn from_world(world: &mut World) -> Self {
-        let mesh_pipeline = world.resource::<MeshPipeline>();
-
-        CustomPipeline {
-            shader: world.load_asset(SHADER_ASSET_PATH),
-            mesh_pipeline: mesh_pipeline.clone(),
-        }
-    }
-}
-
-impl SpecializedMeshPipeline for CustomPipeline {
-    type Key = MeshPipelineKey;
-
-    fn specialize(
-        &self,
-        key: Self::Key,
-        layout: &MeshVertexBufferLayoutRef,
-    ) -> Result<RenderPipelineDescriptor, SpecializedMeshPipelineError> {
-        let mut descriptor = self.mesh_pipeline.specialize(key, layout)?;
-
-        let color_format = TextureFormat::Rgba8UnormSrgb;
-
-        // Custom depth stencil settings
-        descriptor.depth_stencil = Some(DepthStencilState {
-            format: TextureFormat::Depth32Float,
-            depth_compare: CompareFunction::Always,
-            stencil: StencilState {
-                front: Default::default(),
-                back: Default::default(),
-                read_mask: 0,
-                write_mask: 0,
-            }, // Use default stencil state
-            depth_write_enabled: false,
-            bias: DepthBiasState {
-                constant: 0,
-                slope_scale: 0.0,
-                clamp: 0.0,
-            },
-        });
-
-        descriptor.fragment.as_mut().unwrap().targets[0] = Some(ColorTargetState {
-            format: color_format,
-            blend: Some(BlendState::ALPHA_BLENDING),
-            write_mask: ColorWrites::ALL,
-        });
-
-        descriptor.vertex.shader = self.shader.clone();
-        descriptor.vertex.buffers.push(VertexBufferLayout {
-            array_stride: size_of::<InstanceData>() as u64,
-            step_mode: VertexStepMode::Instance,
-            attributes: vec![
-                VertexAttribute {
-                    format: VertexFormat::Float32x4,
-                    offset: 0,
-                    shader_location: 3, // shader locations 0-2 are taken up by Position, Normal and UV attributes
-                },
-                VertexAttribute {
-                    format: VertexFormat::Float32x4,
-                    offset: VertexFormat::Float32x4.size(),
-                    shader_location: 4,
-                },
-            ],
-        });
-
-        descriptor.fragment.as_mut().unwrap().shader = self.shader.clone();
-        Ok(descriptor)
-    }
-}
-
-type DrawCustom = (
-    SetItemPipeline,
-    SetMeshViewBindGroup<0>,
-    SetMeshBindGroup<1>,
-    DrawMeshInstanced,
-);
-
-struct DrawMeshInstanced;
-
-impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
-    type Param = (
-        SRes<RenderAssets<RenderMesh>>,
-        SRes<RenderMeshInstances>,
-        SRes<MeshAllocator>,
-    );
-    type ViewQuery = ();
-    type ItemQuery = Read<InstanceBuffer>;
-
-    #[inline]
-    fn render<'w>(
-        item: &P,
-        _view: (),
-        instance_buffer: Option<&'w InstanceBuffer>,
-        (meshes, render_mesh_instances, mesh_allocator): SystemParamItem<'w, '_, Self::Param>,
-        pass: &mut TrackedRenderPass<'w>,
-    ) -> RenderCommandResult {
-        // A borrow check workaround.
-        let mesh_allocator = mesh_allocator.into_inner();
-
-        let Some(mesh_instance) = render_mesh_instances.render_mesh_queue_data(item.main_entity())
-        else {
-            return RenderCommandResult::Skip;
-        };
-        let Some(gpu_mesh) = meshes.into_inner().get(mesh_instance.mesh_asset_id) else {
-            return RenderCommandResult::Skip;
-        };
-        let Some(instance_buffer) = instance_buffer else {
-            return RenderCommandResult::Skip;
-        };
-        let Some(vertex_buffer_slice) =
-            mesh_allocator.mesh_vertex_slice(&mesh_instance.mesh_asset_id)
-        else {
-            return RenderCommandResult::Skip;
-        };
-
-        pass.set_vertex_buffer(0, vertex_buffer_slice.buffer.slice(..));
-        pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
-
-        match &gpu_mesh.buffer_info {
-            RenderMeshBufferInfo::Indexed {
-                index_format,
-                count,
-            } => {
-                let Some(index_buffer_slice) =
-                    mesh_allocator.mesh_index_slice(&mesh_instance.mesh_asset_id)
-                else {
-                    return RenderCommandResult::Skip;
-                };
-
-                pass.set_index_buffer(index_buffer_slice.buffer.slice(..), 0, *index_format);
-                pass.draw_indexed(
-                    index_buffer_slice.range.start..(index_buffer_slice.range.start + count),
-                    vertex_buffer_slice.range.start as i32,
-                    0..instance_buffer.length as u32,
-                );
-            }
-            RenderMeshBufferInfo::NonIndexed => {
-                pass.draw(vertex_buffer_slice.range, 0..instance_buffer.length as u32);
-            }
-        }
-        RenderCommandResult::Success
-    }
-}
-
 pub fn three_dimensional_plot_ui(
     meshes: &mut ResMut<Assets<Mesh>>,
     cube_preview_texture_id: &epaint::TextureId,
@@ -823,7 +506,8 @@ pub fn three_dimensional_plot_ui(
         } else {
             50.0
         };
-        let (instances, cube_width, cube_height, cube_depth) = instance_from_data(time_span, data.clone());
+        let (instances, cube_width, cube_height, cube_depth) =
+            instance_from_data(time_span, data.clone());
         let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
 
         ui.vertical(|ui| {
@@ -867,11 +551,13 @@ pub fn three_dimensional_plot_ui(
             ui.label("Opacity:");
 
             if ui
-                .add(egui::Slider::new(&mut opacity_threshold.0, 0.01..=1.0).text("Opacity Threshold"))
+                .add(
+                    egui::Slider::new(&mut opacity_threshold.0, 0.01..=1.0)
+                        .text("Opacity Threshold"),
+                )
                 .changed()
             {
                 if let Ok((mut instance_data, mut mesh3d)) = query.get_single_mut() {
-
                     instance_data.instances = instances;
                     mesh3d.0 = new_mesh;
                     instance_data
