@@ -689,7 +689,7 @@ dependencies = [
  "const-fnv1a-hash",
  "log",
  "serde",
- "sysinfo 0.34.2",
+ "sysinfo",
 ]
 
 [[package]]
@@ -1674,9 +1674,9 @@ checksum = "5ce89b21cab1437276d2650d57e971f9d548a2d9037cc231abdc0562b97498ce"
 
 [[package]]
 name = "bytemuck"
-version = "1.22.0"
+version = "1.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6b1fc10dbac614ebc03540c9dbd60e83887fda27794998c6528f1782047d540"
+checksum = "9134a6ef01ce4b366b50689c94f82c14bc72bc5d0386829828a2e2752ef7958c"
 dependencies = [
  "bytemuck_derive",
 ]
@@ -2504,7 +2504,7 @@ dependencies = [
 [[package]]
 name = "egui-file-dialog"
 version = "0.9.0"
-source = "git+https://github.com/hacknus/egui-file-dialog?branch=sort_by_metadata#e463dae6d2179e90a5e0d67db9e227da2abfb51e"
+source = "git+https://github.com/hacknus/egui-file-dialog?branch=sort_by_metadata#f6e26ea7779bba20af6010cfa1ef1f80778d8bd4"
 dependencies = [
  "chrono",
  "directories",
@@ -2514,7 +2514,7 @@ dependencies = [
  "image-meta",
  "indexmap",
  "serde",
- "sysinfo 0.33.1",
+ "sysinfo",
 ]
 
 [[package]]
@@ -6581,17 +6581,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8eab9a99a024a169fe8a903cf9d4a3b3601109bcc13bd9e3c6fff259138626c4"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "sysinfo"
-version = "0.33.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fc858248ea01b66f19d8e8a6d55f41deaf91e9d495246fd01368d99935c6c01"
-dependencies = [
- "core-foundation-sys",
- "libc",
- "windows 0.57.0",
 ]
 
 [[package]]

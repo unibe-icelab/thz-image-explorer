@@ -326,6 +326,7 @@ impl THzImageExplorer {
             .initial_directory(thread_communication.gui_settings.selected_path.clone())
             //.default_file_filter("dotTHz files")
             ;
+        // TODO: fix this!!
         // // Load the persistent data of the file dialog.
         // // Alternatively, you can also use the `FileDialog::storage` builder method.
         // if let Some(storage) = cc.storage {
