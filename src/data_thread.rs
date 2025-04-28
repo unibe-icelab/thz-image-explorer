@@ -19,11 +19,9 @@ use csv::ReaderBuilder;
 use dotthz::DotthzMetaData;
 use image::RgbaImage;
 use ndarray::parallel::prelude::*;
-use ndarray::{Array1, Array2, Array3, Axis};
-use realfft::num_complex::Complex32;
+use ndarray::{Array1, Axis};
 use std::f32::consts::PI;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 /// Saves an image to a given file location.
@@ -115,7 +113,7 @@ fn filter_time_window(
     filtered_iter
         .zip(img_iter)
         .par_bridge() // parallelize outer loop only
-        .for_each(|((mut filtered_data_col), mut filtered_img_col)| {
+        .for_each(|(filtered_data_col, mut filtered_img_col)| {
             for i in 0..filtered_data_col.len_of(Axis(0)) {
                 let data_slice = filtered_data_col.index_axis(Axis(0), i);
                 let sum_sq = data_slice

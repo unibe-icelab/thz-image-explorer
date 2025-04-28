@@ -34,7 +34,7 @@ impl Filter for TiltCompensation {
         }
     }
 
-    fn filter(&self, scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer) {
+    fn filter(&self, scan: &mut ScannedImage, _gui_settings: &mut GuiSettingsContainer) {
         // only rotation around the center are implemented, offset rotations are still to be done.
         let time_shift_x = self.tilt_x as f32 / 180.0 * PI;
         let time_shift_y = self.tilt_y as f32 / 180.0 * PI;

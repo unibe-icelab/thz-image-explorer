@@ -14,7 +14,7 @@ use crate::filters::psf::PSF;
 use csv::ReaderBuilder;
 use dotthz::{DotthzFile, DotthzMetaData};
 use glob::glob;
-use ndarray::{arr2, Array0, Array1, Array2, Array3, Axis, Ix0, Ix1, Ix2, OwnedRepr};
+use ndarray::{Array0, Array1, Array2, Array3, Axis, Ix0, Ix1, Ix2, OwnedRepr};
 use ndarray_npy::NpzReader;
 use realfft::RealFftPlanner;
 use std::error::Error;
@@ -353,7 +353,7 @@ pub fn load_meta_data_of_thz_file(
     metadata: &mut DotthzMetaData,
 ) -> Result<(), Box<dyn Error>> {
     // Create a new DotthzFile for reading
-    let mut file = DotthzFile::open(file_path)?;
+    let file = DotthzFile::open(file_path)?;
 
     // Define a group name
     let group_name = "Image";
@@ -369,7 +369,7 @@ pub fn update_meta_data_of_thz_file(
     metadata: &DotthzMetaData,
 ) -> Result<(), Box<dyn Error>> {
     // Create a new DotthzFile for writing
-    let mut file = DotthzFile::open_rw(file_path)?;
+    let file = DotthzFile::open_rw(file_path)?;
 
     // Define a group name
     let group_name = "Image";
