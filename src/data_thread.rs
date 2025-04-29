@@ -88,7 +88,7 @@ fn update_intensity_image(scan: &ScannedImage, thread_communication: &ThreadComm
 
         let time_span = scan.filtered_time.last().unwrap() - scan.filtered_time.first().unwrap();
         let (instances, cube_width, cube_height, cube_depth) =
-            crate::gui::threed_plot::instance_from_data(time_span, scan.filtered_data.clone());
+            crate::gui::threed_plot::instance_from_data(time_span, scan.filtered_data.clone(), thread_communication.gui_settings.opacity_threshold);
         write_guard.0 = instances;
         write_guard.1 = cube_width;
         write_guard.2 = cube_height;

@@ -74,6 +74,7 @@ fn jet_colormap(value: f32) -> (f32, f32, f32) {
 pub(crate) fn instance_from_data(
     time_span: f32,
     mut dataset: Array3<f32>,
+    opacity_threshold: f32
 ) -> (Vec<InstanceData>, f32, f32, f32) {
     let timer = Instant::now();
 
@@ -144,6 +145,10 @@ pub(crate) fn instance_from_data(
                 let mut opacity = dataset_slice[flat_index];
                 opacity = opacity * opacity; // opacity.powf(2.0)
 
+                if opacity < opacity_threshold {
+                    continue;
+                }
+
                 let (r, g, b) = jet_colormap(opacity);
 
                 let position = Vec3::new(
@@ -159,6 +164,7 @@ pub(crate) fn instance_from_data(
             }
         }
     }
+    println!("instances amount: {}", instances.len());
     println!("pushing instances: {:?}", timer.elapsed());
 
     (instances, cube_width, cube_height, cube_depth)
@@ -347,4 +353,5 @@ pub fn three_dimensional_plot_ui(
             }
         });
     }
+    thread_communication.gui_settings.opacity_threshold = opacity_threshold.0;
 }
