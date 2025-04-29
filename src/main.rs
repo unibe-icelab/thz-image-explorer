@@ -138,7 +138,7 @@ fn main() {
         })
         .add_plugins((VoxelMaterialPlugin, PanOrbitCameraPlugin))
         .insert_resource(thread_communication.clone())
-        .insert_resource(OpacityThreshold(0.0)) // Start with no threshold
+        .insert_resource(OpacityThreshold(0.1)) // Start with something that is not too high
         .insert_resource(CameraInputAllowed(false))
         .insert_non_send_resource(THzImageExplorer::new(thread_communication))
         .add_systems(Startup, setup)
