@@ -20,6 +20,8 @@ use dotthz::DotthzMetaData;
 use image::RgbaImage;
 use ndarray::parallel::prelude::*;
 use ndarray::{Array1, Axis};
+use realfft::num_complex::Complex;
+use realfft::num_traits::Zero;
 use std::f32::consts::PI;
 use std::path::Path;
 use std::time::Instant;
@@ -196,75 +198,71 @@ fn filter(
                         mut filtered_data_columns,
                         mut filtered_img_columns,
                     )| {
-                        (
-                            scaled_data_columns.axis_iter_mut(Axis(0)),
-                            filtered_data_columns.axis_iter_mut(Axis(0)),
-                            filtered_img_columns.axis_iter_mut(Axis(0)),
-                        )
-                            .into_par_iter()
-                            .for_each(
-                                |(scaled_data, mut filtered_data, filtered_img)| {
-                                    // filtered_data.assign(&filtered_data);
+                        let mut output = c2r.make_output_vec();
+                        let mut input = vec![0.0; scan.filtered_time.len()];
+                        let mut spectrum = r2c.make_output_vec();
+                        for ((scaled_data, mut filtered_data), filtered_img) in scaled_data_columns
+                            .axis_iter_mut(Axis(0))
+                            .zip(filtered_data_columns.axis_iter_mut(Axis(0)))
+                            .zip(filtered_img_columns.axis_iter_mut(Axis(0)))
+                        {
+                            // filtered_data.assign(&filtered_data);
 
-                                    match config.fft_window_type {
-                                        FftWindowType::AdaptedBlackman => {
-                                            apply_adapted_blackman_window(
-                                                &mut filtered_data,
-                                                &scan.filtered_time,
-                                                &config.fft_window[0],
-                                                &config.fft_window[1],
-                                            );
-                                        }
-                                        FftWindowType::Blackman => {
-                                            apply_blackman(&mut filtered_data, &scan.filtered_time)
-                                        }
-                                        FftWindowType::Hanning => {
-                                            apply_hanning(&mut filtered_data, &scan.filtered_time)
-                                        }
-                                        FftWindowType::Hamming => {
-                                            apply_hamming(&mut filtered_data, &scan.filtered_time)
-                                        }
-                                        FftWindowType::FlatTop => {
-                                            apply_flat_top(&mut filtered_data, &scan.filtered_time)
-                                        }
-                                    }
-
-                                    // calculate fft
-                                    let mut spectrum = r2c.make_output_vec();
-                                    // Forward transform the input data
-                                    r2c.process(&mut filtered_data.to_vec(), &mut spectrum)
-                                        .unwrap();
-
-                                    apply_soft_bandpass(
-                                        &scan.frequencies,
-                                        &mut spectrum,
-                                        (config.fft_filter[0], config.fft_filter[1]),
-                                        0.1, // smooth transition over 100 Hz
+                            match config.fft_window_type {
+                                FftWindowType::AdaptedBlackman => {
+                                    apply_adapted_blackman_window(
+                                        &mut filtered_data,
+                                        &scan.filtered_time,
+                                        &config.fft_window[0],
+                                        &config.fft_window[1],
                                     );
+                                }
+                                FftWindowType::Blackman => {
+                                    apply_blackman(&mut filtered_data, &scan.filtered_time)
+                                }
+                                FftWindowType::Hanning => {
+                                    apply_hanning(&mut filtered_data, &scan.filtered_time)
+                                }
+                                FftWindowType::Hamming => {
+                                    apply_hamming(&mut filtered_data, &scan.filtered_time)
+                                }
+                                FftWindowType::FlatTop => {
+                                    apply_flat_top(&mut filtered_data, &scan.filtered_time)
+                                }
+                            }
 
-                                    let mut output = c2r.make_output_vec();
+                            // calculate fft
+                            // Forward transform the input data
+                            input.clone_from_slice(filtered_data.as_slice().unwrap());
+                            r2c.process(&mut input, &mut spectrum).unwrap();
 
-                                    // Forward transform the input data
-                                    match c2r.process(&mut spectrum, &mut output) {
-                                        Ok(_) => {}
-                                        Err(err) => {
-                                            log::error!("error in iFFT: {err:?}");
-                                        }
-                                    };
-                                    let length = output.len();
-                                    let output = output
-                                        .iter()
-                                        .map(|p| *p / length as f32)
-                                        .collect::<Vec<f32>>();
-                                    *filtered_img.into_scalar() = output
-                                        .iter()
-                                        .skip(lower)
-                                        .take(upper - lower)
-                                        .map(|xi| xi * xi)
-                                        .sum::<f32>();
-                                    filtered_data.assign(&Array1::from_vec(output));
-                                },
+                            apply_soft_bandpass(
+                                &scan.frequencies,
+                                &mut spectrum,
+                                (config.fft_filter[0], config.fft_filter[1]),
+                                0.1, // smooth transition over 100 Hz
                             );
+
+                            // Forward transform the input data
+                            match c2r.process(&mut spectrum, &mut output) {
+                                Ok(_) => {}
+                                Err(err) => {
+                                    log::error!("error in iFFT: {err:?}");
+                                }
+                            };
+                            let length = output.len();
+                            let output = output
+                                .iter()
+                                .map(|p| *p / length as f32)
+                                .collect::<Vec<f32>>();
+                            *filtered_img.into_scalar() = output
+                                .iter()
+                                .skip(lower)
+                                .take(upper - lower)
+                                .map(|xi| xi * xi)
+                                .sum::<f32>();
+                            filtered_data.assign(&Array1::from_vec(output));
+                        }
                     },
                 );
         };
@@ -275,8 +273,9 @@ fn filter(
         }
     };
     // update images
+    println!("updated fft. This took {:?}", start.elapsed());
     update_intensity_image(scan, &thread_communication);
-    println!("updated data. This took {:?}", start.elapsed());
+    println!("updated and synced data. This took {:?}", start.elapsed());
 }
 
 /// Enum representing supported file types for reading data.

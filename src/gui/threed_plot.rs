@@ -7,8 +7,8 @@ use bevy_egui::egui::{epaint, Ui};
 use bevy_egui::{egui, EguiUserTextures};
 use bevy_panorbit_camera::{ActiveCameraData, PanOrbitCamera};
 use bevy_voxel_plot::{InstanceData, InstanceMaterialData};
-use ndarray::{s, Array1, Array3, Axis};
-use std::f32::consts::PI;
+use ndarray::{Array1, Array3, ArrayView1, Axis};
+use rayon::prelude::*;
 use std::time::Instant;
 
 #[derive(Resource)]
@@ -22,33 +22,43 @@ pub struct CameraInputAllowed(pub bool);
 
 // Generate a 1D Gaussian kernel
 fn gaussian_kernel1d(sigma: f32, radius: usize) -> Vec<f32> {
-    let mut kernel = Vec::with_capacity(2 * radius + 1);
-    let norm = 1.0 / (sigma * (2.0 * PI).sqrt());
-    for i in 0..=2 * radius {
+    let size = 2 * radius + 1;
+    let mut kernel = Vec::with_capacity(size);
+
+    let sigma2 = 2.0 * sigma * sigma;
+    let mut sum = 0.0;
+
+    for i in 0..size {
         let x = i as f32 - radius as f32;
-        kernel.push(norm * (-0.5 * (x / sigma).powi(2)).exp());
+        let value = (-x * x / sigma2).exp();
+        sum += value;
+        kernel.push(value);
     }
-    // Normalize the kernel
-    let sum: f32 = kernel.iter().sum();
-    kernel.iter_mut().for_each(|v| *v /= sum);
+
+    // Normalize in-place
+    for v in &mut kernel {
+        *v /= sum;
+    }
+
     kernel
 }
 
 // Apply 1D convolution (valid for edge-safe Gaussian)
-fn convolve1d(data: &Array1<f32>, kernel: &[f32]) -> Array1<f32> {
+fn convolve1d(data: &ArrayView1<f32>, kernel: &[f32]) -> Array1<f32> {
     let radius = kernel.len() / 2;
     let mut output = Array1::<f32>::zeros(data.len());
 
-    for i in 0..data.len() {
+    for (i, out) in output.iter_mut().enumerate() {
         let mut acc = 0.0;
-        for k in 0..kernel.len() {
+        for (k, &coeff) in kernel.iter().enumerate() {
             let j = i as isize + k as isize - radius as isize;
-            if j >= 0 && (j as usize) < data.len() {
-                acc += data[j as usize] * kernel[k];
+            if (0..data.len() as isize).contains(&j) {
+                acc += data[j as usize] * coeff;
             }
         }
-        output[i] = acc;
+        *out = acc;
     }
+
     output
 }
 
@@ -67,101 +77,88 @@ pub(crate) fn instance_from_data(
 ) -> (Vec<InstanceData>, f32, f32, f32) {
     let timer = Instant::now();
 
-    let mut instances = vec![];
-
     let grid_width = dataset.shape()[0];
     let grid_height = dataset.shape()[1];
     let grid_depth = dataset.shape()[2];
 
     let cube_width = 1.0 / 4.0;
     let cube_height = 1.0 / 4.0;
-
     let c = 300_000_000.0;
+    let cube_depth = cube_width / (time_span * c / 1.0e9 * 2.0);
 
-    let cube_depth = cube_width / ((time_span) * c / 1.0e9 * 2.0);
+    // Precompute kernel once
+    let kernel = gaussian_kernel1d(3.0, 9);
 
-    // Inside your main dataset loop:
-    for x in 0..grid_width {
-        for y in 0..grid_height {
-            // Extract the z-axis slice at (x, y)
-            let mut line = dataset.slice(s![x, y, ..]).to_owned();
-            line = line.powf(2.0);
+    // Step 1: Envelope (convolve and square)
+    dataset
+        .axis_iter_mut(Axis(0))
+        .into_par_iter()
+        .for_each(|mut plane| {
+            for mut line in plane.axis_iter_mut(Axis(0)) {
+                line.mapv_inplace(|v| v.powi(2)); // single squaring
 
-            // Square values (p ** 2)
-            line.mapv_inplace(|v| v.powi(2));
+                let envelope = convolve1d(&line.view(), &kernel);
 
-            // Create Gaussian kernel
-            let kernel = gaussian_kernel1d(3.0, 9);
-
-            // Convolve along z
-            let envelope = convolve1d(&line, &kernel);
-
-            // (Optional) Write the result back into dataset
-            for z in 0..grid_depth {
-                dataset[[x, y, z]] = envelope[z];
+                // Write envelope back
+                line.assign(&envelope);
             }
-        }
-    }
+        });
+
     println!("calculating envelope: {:?}", timer.elapsed());
     let timer = Instant::now();
 
-    // Normalize along z-axis
-    for x in 0..grid_width {
-        for y in 0..grid_height {
-            let z_values: Vec<f32> = (0..grid_depth).map(|z| dataset[[x, y, z]]).collect();
+    // Step 2: Normalize (min-max normalization along z)
+    dataset
+        .axis_iter_mut(Axis(0))
+        .into_par_iter()
+        .for_each(|mut plane| {
+            for mut line in plane.axis_iter_mut(Axis(0)) {
+                let min = line.fold(f32::INFINITY, |a, &b| a.min(b));
+                let max = line.fold(f32::NEG_INFINITY, |a, &b| a.max(b));
 
-            // Compute min and max for normalization
-            let min = z_values.iter().cloned().fold(f32::INFINITY, f32::min);
-            let max = z_values.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-
-            // Avoid division by zero
-            if max != min {
-                for z in 0..grid_depth {
-                    dataset[[x, y, z]] = (dataset[[x, y, z]] - min) / (max - min);
-                }
-            } else {
-                // All values are the same, set to 0.0 (or 1.0 – your call)
-                for z in 0..grid_depth {
-                    dataset[[x, y, z]] = 0.0;
+                if (max - min).abs() > 1e-6 {
+                    line.mapv_inplace(|v| (v - min) / (max - min));
+                } else {
+                    line.fill(0.0);
                 }
             }
-        }
-    }
+        });
 
     println!("normalizing: {:?}", timer.elapsed());
     let timer = Instant::now();
 
-    for z in 0..grid_depth {
-        for y in 0..grid_height {
-            for x in 0..grid_width {
-                // Calculate the position based on the indices (x, y, z)
-                let position = Vec3::new(
-                    x as f32 * cube_width - (grid_width as f32 * cube_width) / 2.0,
-                    y as f32 * cube_height - (grid_height as f32 * cube_height) / 2.0,
-                    z as f32 * cube_depth - (grid_depth as f32 * cube_depth) / 2.0,
-                );
+    let total_instances = grid_width * grid_height * grid_depth;
+    let mut instances = Vec::with_capacity(total_instances);
 
-                let mut opacity = *dataset
-                    .index_axis(Axis(0), x)
-                    .index_axis(Axis(0), y)
-                    .index_axis(Axis(0), z)
-                    .into_scalar();
-                opacity = opacity.powf(2.0);
+    // Precalculate
+    let half_width = (grid_width as f32 * cube_width) / 2.0;
+    let half_height = (grid_height as f32 * cube_height) / 2.0;
+    let half_depth = (grid_depth as f32 * cube_depth) / 2.0;
+
+    let dataset_slice = dataset.as_slice().unwrap(); // SAFER: unwrap once, not every time
+
+    for x in 0..grid_width {
+        for y in 0..grid_height {
+            for z in 0..grid_depth {
+                let flat_index = x * grid_height * grid_depth + y * grid_depth + z;
+                let mut opacity = dataset_slice[flat_index];
+                opacity = opacity * opacity; // opacity.powf(2.0)
 
                 let (r, g, b) = jet_colormap(opacity);
 
-                // Create the instance data with the calculated position and opacity
-                let instance = InstanceData {
+                let position = Vec3::new(
+                    x as f32 * cube_width - half_width,
+                    y as f32 * cube_height - half_height,
+                    z as f32 * cube_depth - half_depth,
+                );
+
+                instances.push(InstanceData {
                     pos_scale: [position.x, position.y, position.z, 1.0],
                     color: LinearRgba::from(Color::srgba(r, g, b, opacity)).to_f32_array(),
-                };
-
-                // Push the instance into the vector
-                instances.push(instance);
+                });
             }
         }
     }
-
     println!("pushing instances: {:?}", timer.elapsed());
 
     (instances, cube_width, cube_height, cube_depth)
