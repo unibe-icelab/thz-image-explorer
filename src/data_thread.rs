@@ -72,6 +72,26 @@ fn update_intensity_image(scan: &ScannedImage, thread_communication: &ThreadComm
     if let Ok(mut write_guard) = thread_communication.filtered_time_lock.write() {
         *write_guard = scan.filtered_time.clone();
     }
+    if let Ok(mut write_guard) = thread_communication.voxel_plot_instances_lock.write() {
+        // let lower = scan
+        //     .filtered_time
+        //     .iter()
+        //     .position(|t| *t == config.time_window[0].round())
+        //     .unwrap_or(0);
+        // let upper = scan
+        //     .filtered_time
+        //     .iter()
+        //     .position(|t| *t == config.time_window[1].round())
+        //     .unwrap_or(scan.filtered_time.len()); // safer fallback
+
+        let time_span = scan.filtered_time.last().unwrap() - scan.filtered_time.first().unwrap();
+        let (instances, cube_width, cube_height, cube_depth) =
+            crate::gui::threed_plot::instance_from_data(time_span, scan.filtered_data.clone());
+        write_guard.0 = instances;
+        write_guard.1 = cube_width;
+        write_guard.2 = cube_height;
+        write_guard.3 = cube_depth;
+    }
 }
 
 /// Filters the scan data using a time window defined in the configuration container.

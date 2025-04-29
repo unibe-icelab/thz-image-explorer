@@ -7,10 +7,8 @@ use bevy_egui::egui::{epaint, Ui};
 use bevy_egui::{egui, EguiUserTextures};
 use bevy_panorbit_camera::{ActiveCameraData, PanOrbitCamera};
 use bevy_voxel_plot::{InstanceData, InstanceMaterialData};
-use dotthz::DotthzFile;
 use ndarray::{s, Array1, Array3, Axis};
 use std::f32::consts::PI;
-use std::path::Path;
 use std::time::Instant;
 
 #[derive(Resource)]
@@ -63,155 +61,7 @@ fn jet_colormap(value: f32) -> (f32, f32, f32) {
     (r, g, b)
 }
 
-fn load_thz() -> (Vec<InstanceData>, f32, f32, f32) {
-    let mut instances = vec![];
-
-    let file_path = Path::new("assets/data/scan.thz");
-    let file = DotthzFile::open(&file_path.to_path_buf()).unwrap();
-
-    let time = file
-        .get_dataset("Image", "ds1")
-        .unwrap()
-        .read_1d::<f32>()
-        .unwrap();
-    let arr = file
-        .get_dataset("Image", "ds2")
-        .unwrap()
-        .read_dyn::<f32>()
-        .unwrap();
-
-    let dataset = arr.into_dimensionality::<ndarray::Ix3>().unwrap();
-
-    // Assuming time is a 1D ndarray of f32 values
-    let start = time
-        .iter()
-        .enumerate()
-        .filter(|&(_, &t)| t < 1890.0)
-        .map(|(i, _)| i)
-        .last()
-        .expect("No value in `time` less than 1890");
-
-    let offset = time
-        .iter()
-        .enumerate()
-        .find(|&(_, &t)| t > 1975.0)
-        .map(|(i, _)| i)
-        .expect("No value in `time` greater than 1975");
-
-    // Crop the dataset along the z-axis (3rd axis)
-    let mut dataset = dataset.slice_move(s![.., .., start..offset]);
-
-    // Subtract the first time slice from all slices along z
-    let first_slice = dataset.slice(s![.., .., 0]).to_owned();
-
-    for mut subview in dataset.axis_iter_mut(ndarray::Axis(2)) {
-        subview -= &first_slice;
-    }
-
-    // Crop the time array
-    let time = time.slice(s![start..offset]).to_owned();
-
-    let grid_width = dataset.shape()[0];
-    let grid_height = dataset.shape()[1];
-    let grid_depth = dataset.shape()[2];
-
-    dbg!(&grid_width, &grid_height, &grid_depth);
-
-    let cube_width = 1.0 / 4.0;
-    let cube_height = 1.0 / 4.0;
-
-    let dt = time.last().unwrap() - time.first().unwrap();
-    let c = 300_000_000.0;
-
-    let cube_depth = cube_width / ((dt) * c / 1.0e9 * 2.0);
-
-    dataset = dataset.powf(2.0);
-
-    // Inside your main dataset loop:
-    for x in 0..grid_width {
-        for y in 0..grid_height {
-            // Extract the z-axis slice at (x, y)
-            let mut line = dataset.slice(s![x, y, ..]).to_owned();
-
-            // Square values (p ** 2)
-            line.mapv_inplace(|v| v.powi(2));
-
-            // Create Gaussian kernel
-            let kernel = gaussian_kernel1d(3.0, 9);
-
-            // Convolve along z
-            let envelope = convolve1d(&line, &kernel);
-
-            // (Optional) Write the result back into dataset
-            for z in 0..grid_depth {
-                dataset[[x, y, z]] = envelope[z];
-            }
-        }
-    }
-
-    // Normalize along z-axis
-    for x in 0..grid_width {
-        for y in 0..grid_height {
-            let z_values: Vec<f32> = (0..grid_depth).map(|z| dataset[[x, y, z]]).collect();
-
-            // Compute min and max for normalization
-            let min = z_values.iter().cloned().fold(f32::INFINITY, f32::min);
-            let max = z_values.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-
-            // Avoid division by zero
-            if max != min {
-                for z in 0..grid_depth {
-                    dataset[[x, y, z]] = (dataset[[x, y, z]] - min) / (max - min);
-                }
-            } else {
-                // All values are the same, set to 0.0 (or 1.0 – your call)
-                for z in 0..grid_depth {
-                    dataset[[x, y, z]] = 0.0;
-                }
-            }
-        }
-    }
-
-    let maxval = dataset.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-    dbg!(&maxval);
-
-    for z in 0..grid_depth {
-        for y in 0..grid_height {
-            for x in 0..grid_width {
-                // Calculate the position based on the indices (x, y, z)
-                let position = Vec3::new(
-                    x as f32 * cube_width - (grid_width as f32 * cube_width) / 2.0,
-                    y as f32 * cube_height - (grid_height as f32 * cube_height) / 2.0,
-                    z as f32 * cube_depth - (grid_depth as f32 * cube_depth) / 2.0,
-                );
-
-                let mut opacity = *dataset
-                    .index_axis(Axis(0), x)
-                    .index_axis(Axis(0), y)
-                    .index_axis(Axis(0), z)
-                    .into_scalar();
-                opacity = opacity.powf(2.0);
-
-                let (r, g, b) = jet_colormap(opacity);
-
-                // Create the instance data with the calculated position and opacity
-                let instance = InstanceData {
-                    pos_scale: [position.x, position.y, position.z, 1.0],
-                    color: LinearRgba::from(Color::srgba(r, g, b, opacity)).to_f32_array(),
-                };
-
-                // Push the instance into the vector
-                instances.push(instance);
-            }
-        }
-    }
-
-    dbg!(&cube_width, &cube_height, &cube_depth);
-
-    (instances, cube_width, cube_height, cube_depth)
-}
-
-fn instance_from_data(
+pub(crate) fn instance_from_data(
     time_span: f32,
     mut dataset: Array3<f32>,
 ) -> (Vec<InstanceData>, f32, f32, f32) {
@@ -334,33 +184,7 @@ pub fn setup(
     mut active_cam: ResMut<ActiveCameraData>,
     windows: Query<&Window, With<PrimaryWindow>>,
 ) {
-    let (instances, cube_width, cube_height, cube_depth) = load_thz();
-
-    dbg!(&instances.len());
-
-    let mut instances: Vec<InstanceData> = instances.into_iter().collect();
-
-    // TODO: needs to be sped up
-
-    // Sort by opacity (color alpha channel) descending
-    instances.sort_by(|a, b| {
-        b.color[3]
-            .partial_cmp(&a.color[3])
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    // Truncate to top 2 million most opaque points
-    const MAX_INSTANCES: usize = 1_000_000;
-    if instances.len() > MAX_INSTANCES {
-        instances.truncate(MAX_INSTANCES);
-    }
-
-    if instances.len() == MAX_INSTANCES {
-        let threshold = instances.last().unwrap().color[3];
-        println!("Auto threshold for opacity was: {}", threshold);
-    }
-
-    dbg!(&instances.len());
+    let (instances, cube_width, cube_height, cube_depth) = (vec![], 1.0, 1.0, 1.0);
 
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(cube_width, cube_height, cube_depth))),
@@ -464,14 +288,9 @@ pub fn three_dimensional_plot_ui(
     height -= 100.0;
     let available_size = egui::vec2(width.min(height), width.min(height));
 
-    if let Ok(data) = thread_communication.filtered_data_lock.read() {
-        let time_span = if let Ok(time) = thread_communication.filtered_time_lock.try_read() {
-            time.last().unwrap() - time.first().unwrap()
-        } else {
-            50.0
-        };
-        let (instances, cube_width, cube_height, cube_depth) =
-            instance_from_data(time_span, data.clone());
+    if let Ok(read_guard) = thread_communication.voxel_plot_instances_lock.read() {
+        let (instances, cube_width, cube_height, cube_depth) = read_guard.clone();
+
         let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
 
         ui.vertical(|ui| {

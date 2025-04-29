@@ -7,6 +7,7 @@ use crate::gui::application::GuiSettingsContainer;
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::math_tools::FftWindowType;
 use bevy::prelude::Resource;
+use bevy_voxel_plot::InstanceData;
 use crossbeam_channel::{Receiver, Sender};
 use dotthz::DotthzMetaData;
 use ndarray::{Array1, Array2, Array3};
@@ -145,6 +146,9 @@ pub struct ThreadCommunication {
 
     /// Lock for the time containing the time array of the filtered data.
     pub filtered_time_lock: Arc<RwLock<Array1<f32>>>,
+
+    /// Lock for the instances and cuboid dimensions of the voxel plot.
+    pub voxel_plot_instances_lock: Arc<RwLock<(Vec<InstanceData>, f32, f32, f32)>>,
 
     /// Lock for the currently selected pixel in the image.
     pub pixel_lock: Arc<RwLock<SelectedPixel>>,

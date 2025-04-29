@@ -1465,8 +1465,8 @@ dependencies = [
 
 [[package]]
 name = "bevy_voxel_plot"
-version = "2.0.0"
-source = "git+https://github.com/hacknus/bevy_voxel_plot?branch=update_to_bevy_0.16#7b295807d29f811e51d1ae53e3bc1d5d396c1f92"
+version = "2.1.0"
+source = "git+https://github.com/hacknus/bevy_voxel_plot#832727cdabcd158196b6e8e81c35c83b6a744d92"
 dependencies = [
  "bevy",
  "bytemuck",

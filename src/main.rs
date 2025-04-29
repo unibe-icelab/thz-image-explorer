@@ -86,6 +86,7 @@ fn main() {
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
     let scaling_lock = Arc::new(RwLock::new(1));
     let md_lock = Arc::new(RwLock::new(DotthzMetaData::default()));
+    let voxel_plot_instances_lock = Arc::new(RwLock::new((vec![], 1.0, 1.0, 1.0)));
 
     let (config_tx, config_rx): (Sender<ConfigCommand>, Receiver<ConfigCommand>) =
         crossbeam_channel::unbounded();
@@ -94,6 +95,7 @@ fn main() {
         data_lock: data_lock.clone(),
         filtered_data_lock: filtered_data_lock.clone(),
         filtered_time_lock: filtered_time_lock.clone(),
+        voxel_plot_instances_lock: voxel_plot_instances_lock.clone(),
         pixel_lock: pixel_lock.clone(),
         scaling_lock: scaling_lock.clone(),
         img_lock: img_lock.clone(),
@@ -132,7 +134,6 @@ fn main() {
                 }),
         )
         .add_plugins(EguiPlugin {
-            // TODO: change this to implement drag&drop
             enable_multipass_for_primary_context: false,
         })
         .add_plugins((VoxelMaterialPlugin, PanOrbitCameraPlugin))
