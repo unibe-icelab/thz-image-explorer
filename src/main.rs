@@ -22,6 +22,7 @@ use ndarray::{Array1, Array2, Array3};
 use preferences::{AppInfo, Preferences};
 use std::sync::{Arc, RwLock};
 use std::thread;
+use bevy::winit::WinitSettings;
 
 mod config;
 mod data_container;
@@ -109,6 +110,7 @@ fn main() {
 
     // Start Bevy app
     App::new()
+        .insert_resource(WinitSettings::desktop_app())
         .add_plugins(
             DefaultPlugins
                 .set(RenderPlugin {
