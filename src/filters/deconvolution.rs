@@ -492,6 +492,7 @@ impl Filter for Deconvolution {
 
         let start = Instant::now();
 
+        // Combining data
         for data in processed_data {
             scan.filtered_data += &data;
         }
