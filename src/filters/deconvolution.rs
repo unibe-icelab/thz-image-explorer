@@ -454,12 +454,6 @@ impl Filter for Deconvolution {
                 // Computing the filtered image
                 let filtered_image = filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
 
-                /*
-                let n_iter = (((gui_settings.psf.popt_x.row(i)[1] - w_min) / (w_max - w_min)
-                    * (self.n_iterations as f32 - 1.0)
-                    + 1.0)
-                    .floor()) as usize;
-                */
                 let n_iter = (((gui_settings.psf.popt_x.row(i)[1] - w_min) / (w_max - w_min)
                 * (self.n_iterations as f32 - 1.0)
                 + 1.0)
@@ -477,10 +471,14 @@ impl Filter for Deconvolution {
                     .for_each(|&u, &d, g| *g = (u / d).sqrt());
 
                 // Apply the deconvolution gains to the filtered data
-                filtered_data
-                    .iter_mut()
-                    .zip(deconvolution_gains.iter())
-                    .for_each(|(data, &gain)| *data *= gain);
+                let shape = filtered_data.dim();  // (m, n, p)
+
+                for i in 0..shape.0 {
+                    for j in 0..shape.1 {
+                        let gain = deconvolution_gains[[i, j]];
+                        filtered_data.slice_mut(s![i, j, ..]).mapv_inplace(|x| x * gain);
+                    }
+                }
 
                 filtered_data
             })
