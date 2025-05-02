@@ -498,14 +498,12 @@ impl Filter for Deconvolution {
             scan.filtered_data += &data;
         }
 
-        scan.raw_data = scan.filtered_data.clone();
-
         let duration = start.elapsed();
         println!("Time elapsed: {:?}", duration);
 
         println!("Calculating filtered image...");
 
-        scan.raw_img = scan.filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
+        scan.filtered_img = scan.filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
 
         println!("Deconvolution filter completed.");
     }
