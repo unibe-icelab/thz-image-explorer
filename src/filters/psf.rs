@@ -1,5 +1,4 @@
-use ndarray::{s, Array1, Array2, Axis, Ix1, Zip};
-use ndarray_stats::QuantileExt;
+use ndarray::{Array1, Array2, Zip};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use interp1d::Interp1d;
@@ -145,6 +144,7 @@ pub fn create_psf_2d(
 }
 
 /// Computes the sum of squared residuals
+#[allow(dead_code)]
 fn residual_sum_squares(
     x: &Array1<f64>,
     y: &Array1<f64>,
@@ -158,6 +158,7 @@ fn residual_sum_squares(
 }
 
 /// Curve fitting implementation
+#[allow(dead_code)]
 fn curve_fit(
     func: fn(&Array1<f64>, &[f64]) -> Array1<f64>,
     x_data: &Array1<f64>,
@@ -201,6 +202,7 @@ fn compute_gradient(
 }
 
 /// Gaussian function
+#[allow(dead_code)]
 fn gaussian(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
     let x0 = params[0];
     let w = params[1];
@@ -219,6 +221,7 @@ pub fn gaussian2(x: &Array1<f32>, params: &[f32]) -> Array1<f32> {
 }
 
 /// Error function
+#[allow(dead_code)]
 fn error_f(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
     let x0 = params[0];
     let w = params[1];
@@ -227,7 +230,8 @@ fn error_f(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
     })
 }
 
-/// TODO: this does not yet work
+// TODO: this does not yet work
+/*
 pub fn get_center(
     x_axis_psf: &Array1<f64>,
     y_axis_psf: &Array1<f64>,
@@ -248,6 +252,7 @@ pub fn get_center(
 > {
     println!("Extracting the center of the PSF...");
     todo!();
+    
 
     // Cropping the PSF to improve the fit
     let x_axis_psf_2 = x_axis_psf.slice(s![n_min..n_max]).to_owned();
@@ -311,3 +316,4 @@ pub fn get_center(
         intensity_y_2,
     ))
 }
+*/

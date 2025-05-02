@@ -10,7 +10,6 @@ use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
 use crate::filters::psf::create_psf_2d;
 use crate::filters::psf::gaussian2;
 use crate::gui::application::GuiSettingsContainer;
-use eframe::egui::debug_text::print;
 use eframe::egui::{self, Ui};
 use filter_macros::register_filter;
 use ndarray::{arr1, s, Array1, Array2, Array3, Axis, Zip};
@@ -34,10 +33,7 @@ use std::sync::Arc;
 #[derive(Debug)]
 #[register_filter]
 pub struct Deconvolution {
-    pub n_iterations: usize,
-    pub filter_number: usize,
-    pub start_frequency: f64,
-    pub end_frequency: f64,
+    pub n_iterations: usize
 }
 
 pub fn convolve1d(a: &Array1<f32>, b: &Array1<f32>) -> Array1<f32> {
@@ -340,10 +336,7 @@ impl Filter for Deconvolution {
     /// - `end_frequency`: 10.0
     fn new() -> Self {
         Deconvolution {
-            n_iterations: 10,
-            filter_number: 10,
-            start_frequency: 0.0,
-            end_frequency: 10.0,
+            n_iterations: 500
         }
     }
 
@@ -363,6 +356,11 @@ impl Filter for Deconvolution {
     /// # Notes:
     /// This method currently contains a placeholder for the Richardson-Lucy algorithm.
     fn filter(&self, scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer) {
+        if scan.dx.is_none() || scan.dy.is_none() {
+            println!("No data loaded, skipping deconvolution.");
+            return;
+        }
+
         println!("Starting deconvolution filter...");
         scan.filtered_data = Array3::zeros((
             scan.raw_data.dim().0,
@@ -403,7 +401,7 @@ impl Filter for Deconvolution {
             .enumerate()
             .par_bridge()
             .map(|(i, _)| {
-                println!("Processing filter {}...", i);
+                println!("Processing filter {}/{}...", i + 1, gui_settings.psf.n_filters);
 
                 // Calculating the range for the PSF
                 let range_max_x = self.range_max_min(
@@ -461,7 +459,7 @@ impl Filter for Deconvolution {
                     .floor()) as usize;
                 */
                 let n_iter = (((gui_settings.psf.popt_x.row(i)[1] - w_min) / (w_max - w_min)
-                * (500 as f32 - 1.0)
+                * (self.n_iterations as f32 - 1.0)
                 + 1.0)
                 .floor()) as usize;
 

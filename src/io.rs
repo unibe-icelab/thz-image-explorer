@@ -355,7 +355,7 @@ pub fn load_meta_data_of_thz_file(
     metadata: &mut DotthzMetaData,
 ) -> Result<(), Box<dyn Error>> {
     // Create a new DotthzFile for reading
-    let mut file = DotthzFile::open(file_path)?;
+    let file = DotthzFile::open(file_path)?;
 
     // Define a group name
     let group_name = "Image";
@@ -371,7 +371,7 @@ pub fn update_meta_data_of_thz_file(
     metadata: &DotthzMetaData,
 ) -> Result<(), Box<dyn Error>> {
     // Create a new DotthzFile for writing
-    let mut file = DotthzFile::open_rw(file_path)?;
+    let file = DotthzFile::open_rw(file_path)?;
 
     // Define a group name
     let group_name = "Image";
@@ -530,6 +530,7 @@ pub fn open_from_thz(
 }
 
 /// Helper function to extract a substring between two delimiters.
+#[allow(dead_code)]
 fn extract_substring(text: &str, start: &str, end: &str) -> Option<String> {
     let start_idx = text.find(start)? + start.len();
     let end_idx = text[start_idx..].find(end)? + start_idx;
@@ -537,6 +538,7 @@ fn extract_substring(text: &str, start: &str, end: &str) -> Option<String> {
 }
 
 /// Helper function for trimming signals (placeholder; implement your logic here).
+#[allow(dead_code)]
 pub fn get_windowed_signal(
     signal: &Vec<f64>,
     _ratio: f64,
@@ -548,6 +550,7 @@ pub fn get_windowed_signal(
     (signal.clone(), vec![1.0; signal.len()]) // Placeholder
 }
 
+#[allow(dead_code)]
 pub fn load_psfs(
     raw_psf_path: &PathBuf,
     trim: bool,

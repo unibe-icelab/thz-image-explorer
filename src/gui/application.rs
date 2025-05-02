@@ -39,6 +39,7 @@ pub enum FileDialogState {
     /// File dialog is set to open a PSF file.
     OpenPSF,
     /// File dialog is set to save a file.
+    #[allow(dead_code)]
     Save,
     /// File dialog is not active.
     None,

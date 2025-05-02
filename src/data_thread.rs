@@ -34,6 +34,7 @@ use std::time::Instant;
 /// # Arguments
 /// * `img` - The `ColorImage` object to be saved.
 /// * `file_path` - The directory path where the image will be saved.
+#[allow(dead_code)]
 fn save_image(img: &ColorImage, file_path: &Path) {
     let height = img.height();
     let width = img.width();
@@ -78,6 +79,7 @@ fn update_intensity_image(scan: &ScannedImage, img_lock: &Arc<RwLock<Array2<f32>
 /// * `config` - The configuration container with filter parameters.
 /// * `scan` - A mutable reference to the scanned image data.
 /// * `img_lock` - A thread-safe lock for the intensity image array.
+#[allow(dead_code)]
 fn filter_time_window(
     config: &ConfigContainer,
     scan: &mut ScannedImage,
@@ -263,6 +265,7 @@ fn filter(
 /// - `Npy`: Represents `.npy` files.
 /// - `Npz`: Represents `.npz` files.
 #[derive(Clone, PartialEq)]
+#[allow(dead_code)]
 enum FileType {
     Npy,
     Npz,
@@ -490,7 +493,7 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                 }
                 ConfigCommand::SetTimeWindow(time_window) => {
                     config.time_window = time_window;
-                    filter_time_window(&config, &mut scan, &thread_communication.img_lock);
+                    //filter_time_window(&config, &mut scan, &thread_communication.img_lock);
                 }
                 ConfigCommand::SetFFTLogPlot(log_plot) => {
                     config.fft_log_plot = log_plot;
@@ -534,7 +537,7 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                             filter.filter(&mut scan, &mut thread_communication.gui_settings)
                         }
                     }
-                    filter_time_window(&config, &mut scan, &thread_communication.img_lock);
+                    //filter_time_window(&config, &mut scan, &thread_communication.img_lock);
                     // update the intensity image
                     update_intensity_image(&scan, &thread_communication.img_lock);
                 }

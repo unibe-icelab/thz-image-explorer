@@ -508,7 +508,7 @@ pub fn left_panel(
                     .striped(true)
                     .show(ui, |ui| {
                         let mut changed = false;
-                        for mut roi in pixel_selected.rois.iter_mut() {
+                        for roi in pixel_selected.rois.iter_mut() {
                             changed |= ui.add(egui::TextEdit::singleline(&mut roi.name)).changed();
                             let points = roi
                                 .polygon

@@ -452,14 +452,14 @@ pub fn pulse_tab(
 }
 
 pub fn refractive_index_tab(
-    ui: &mut Ui,
-    height: f32,
-    width: f32,
-    spacing: f32,
-    right_panel_width: f32,
-    thread_communication: &mut GuiThreadCommunication,
-    data: &mut DataPoint,
-    water_vapour_lines: &[f64],
+    _ui: &mut Ui,
+    _height: f32,
+    _width: f32,
+    _spacing: f32,
+    _right_panel_width: f32,
+    _thread_communication: &mut GuiThreadCommunication,
+    _data: &mut DataPoint,
+    _water_vapour_lines: &[f64],
 ) {
 }
 
