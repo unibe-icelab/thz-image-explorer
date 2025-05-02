@@ -17,6 +17,7 @@ use num_complex::Complex32;
 use rayon::prelude::*;
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::time::Instant;
+use std::io::{self, Write};
 
 use std::sync::Arc;
 
@@ -401,7 +402,8 @@ impl Filter for Deconvolution {
             .enumerate()
             .par_bridge()
             .map(|(i, _)| {
-                println!("Processing filter {}/{}...", i + 1, gui_settings.psf.n_filters);
+                print!("\rProcessing frequency band {}/{}...", i + 1, gui_settings.psf.n_filters);
+                io::stdout().flush().unwrap();
 
                 // Calculating the range for the PSF
                 let range_max_x = self.range_max_min(
@@ -485,19 +487,25 @@ impl Filter for Deconvolution {
             .collect();
 
             let duration = start.elapsed();
-            println!("Time elapsed for filtering: {:?}", duration);
+            println!("\nTime elapsed for filtering: {:?}", duration);
 
 
         println!("Combining processed data...");
 
-        // Combine the processed data
+        let start = Instant::now();
+
         for data in processed_data {
             scan.filtered_data += &data;
         }
 
+        scan.raw_data = scan.filtered_data.clone();
+
+        let duration = start.elapsed();
+        println!("Time elapsed: {:?}", duration);
+
         println!("Calculating filtered image...");
 
-        scan.filtered_img = scan.filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
+        scan.raw_img = scan.filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
 
         println!("Deconvolution filter completed.");
     }
