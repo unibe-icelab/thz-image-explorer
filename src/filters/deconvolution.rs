@@ -511,10 +511,18 @@ impl Filter for Deconvolution {
     ) -> egui::Response {
         // thread_communication can be used, but is not required. It contains the gui_settings GuiSettingsContainer
         // implement your GUI parameter handling here, for example like this:
-        ui.horizontal(|ui| {
-            ui.label("Iterations: ");
-            ui.add(egui::Slider::new(&mut self.n_iterations, 0..=500))
-        })
-        .inner
+        let mut clicked = false;
+        let mut response = ui.horizontal(|ui| {
+             let button_response =  ui.add(egui::Button::new("Apply"));
+                if button_response.clicked() {
+                    clicked = true;
+                }
+            button_response
+            })
+            .inner;
+        if clicked {
+            response.mark_changed();
+        }
+        response 
     }
 }
