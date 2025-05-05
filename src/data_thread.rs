@@ -4,7 +4,7 @@
 
 use crate::config::{ConfigCommand, ConfigContainer, MainThreadCommunication};
 use crate::data_container::{DataPoint, ScannedImage};
-use crate::filters::filter::FILTER_REGISTRY;
+use crate::filters::filter::{Filter, FILTER_REGISTRY};
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::io::{
     load_meta_data_of_thz_file, open_from_npz, open_from_thz, open_json, save_to_thz,
@@ -530,12 +530,29 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                 }
                 ConfigCommand::UpdateFilters => {
                     println!("update filters");
-                    if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+
+                    let mut filters_cloned: Option<Vec<Box<dyn Filter>>> = None;
+
+                    // we need to clone the filters out of the filter_registry, otherwise this
+                    // would block the gui thread (because it is also required to update the filters)
+
+                    if let Ok(filters) = FILTER_REGISTRY.lock() {
+                        // clone the filters without holding the mutex
+                        filters_cloned = Some(
+                            filters
+                                .filters
+                                .iter()
+                                .map(|(_, filter)| filter.clone()) // requires `impl Clone for Box<dyn Filter>`
+                                .collect(),
+                        );
+                    }
+
+                    if let Some(mut filters) = filters_cloned {
                         for filter in filters.iter_mut() {
-                            // call the filter functions
                             println!("update filter: {}", filter.config().name);
-                            filter.filter(&mut scan, &mut thread_communication.gui_settings)
+                            filter.filter(&mut scan, &mut thread_communication.gui_settings);
                         }
+
                         (
                             scan.scaled_data.axis_iter_mut(Axis(0)),
                             scan.filtered_data.axis_iter_mut(Axis(0)),
@@ -551,17 +568,13 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                                     )
                                         .into_par_iter()
                                         .for_each(|(_scaled_data, filtered_data, filtered_img)| {
-                                            *filtered_img.into_scalar() = filtered_data
-                                                .iter()
-                                                .map(|xi| xi * xi)
-                                                .sum::<f32>();
+                                            *filtered_img.into_scalar() = filtered_data.iter().map(|xi| xi * xi).sum::<f32>();
                                         });
                                 },
                             );
+
+                        update_intensity_image(&scan, &thread_communication.img_lock);
                     }
-                    //filter_time_window(&config, &mut scan, &thread_communication.img_lock);
-                    // update the intensity image
-                    update_intensity_image(&scan, &thread_communication.img_lock);
                 }
             }
 

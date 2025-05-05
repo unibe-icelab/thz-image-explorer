@@ -9,7 +9,7 @@ use ndarray::{concatenate, s, Array1, Array3, Axis};
 use realfft::RealFftPlanner;
 use std::f32::consts::PI;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 //#[register_filter]
 pub struct TiltCompensation {
     pub tilt_x: f64,

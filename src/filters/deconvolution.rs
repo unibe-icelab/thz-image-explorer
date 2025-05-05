@@ -28,7 +28,7 @@ use std::sync::Arc;
 ///
 /// Fields:
 /// - `n_iterations`: The number of iterations for performing the deconvolution.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[register_filter]
 pub struct Deconvolution {
     pub n_iterations: usize,

@@ -43,7 +43,7 @@ use std::sync::Mutex;
 ///     }
 /// }
 /// ```
-pub trait Filter: Send + Sync + Debug {
+pub trait Filter: Send + Sync + Debug + CloneBoxedFilter {
     /// Creates a new instance of the filter with default parameters.
     fn new() -> Self
     where
@@ -126,6 +126,25 @@ pub struct FilterConfig {
     pub domain: FilterDomain,
 }
 
+pub trait CloneBoxedFilter {
+    fn clone_box(&self) -> Box<dyn Filter>;
+}
+
+impl<T> CloneBoxedFilter for T
+where
+    T: 'static + Filter + Clone,
+{
+    fn clone_box(&self) -> Box<dyn Filter> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<dyn Filter> {
+    fn clone(&self) -> Box<dyn Filter> {
+        self.as_ref().clone_box()
+    }
+}
+
 /// A registry to manage and retrieve registered filters.
 ///
 /// The `FilterRegistry` provides functionality to:
@@ -148,7 +167,7 @@ pub struct FilterConfig {
 /// ```
 #[derive(Debug)]
 pub struct FilterRegistry {
-    filters: HashMap<String, Box<dyn Filter>>,
+    pub filters: HashMap<String, Box<dyn Filter>>,
 }
 
 impl FilterRegistry {
