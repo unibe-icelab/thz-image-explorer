@@ -16,8 +16,8 @@ use ndarray::{arr1, s, Array1, Array2, Array3, Axis, Zip};
 use num_complex::Complex32;
 use rayon::prelude::*;
 use rustfft::{num_complex::Complex, FftPlanner};
-use std::time::Instant;
 use std::io::{self, Write};
+use std::time::Instant;
 
 use std::sync::Arc;
 
@@ -27,24 +27,20 @@ use std::sync::Arc;
 /// and a defined frequency range. It is implemented to work in the frequency domain.
 ///
 /// Fields:
-/// - `filter_number`: A placeholder for selecting predefined filters within the algorithm.
-/// - `start_frequency`: The starting range for the frequency domain.
-/// - `end_frequency`: The ending range for the frequency domain.
 /// - `n_iterations`: The number of iterations for performing the deconvolution.
 #[derive(Debug)]
 #[register_filter]
 pub struct Deconvolution {
-    pub n_iterations: usize
+    pub n_iterations: usize,
 }
 
-pub fn convolve1d(a: &Array1<f32>, b: &Array1<f32>) -> Array1<f32> {
-    let conv_size = a.len() + b.len() - 1; // Adjusted convolution size
-    let fft_size = conv_size.next_power_of_two(); // Use next power of two for efficiency
-
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(fft_size);
-    let ifft = planner.plan_fft_inverse(fft_size);
-
+pub fn convolve1d(
+    a: &Array1<f32>,
+    b: &Array1<f32>,
+    fft: &dyn rustfft::Fft<f64>,
+    ifft: &dyn rustfft::Fft<f64>,
+    fft_size: usize,
+) -> Array1<f32> {
     // Pad input signals to the FFT size
     let mut a_padded: Vec<Complex<f64>> = vec![Complex { re: 0.0, im: 0.0 }; fft_size];
     let mut b_padded: Vec<Complex<f64>> = vec![Complex { re: 0.0, im: 0.0 }; fft_size];
@@ -87,12 +83,6 @@ pub fn convolve1d(a: &Array1<f32>, b: &Array1<f32>) -> Array1<f32> {
     )
 }
 
-
-/// Pad size to the next power of two
-fn next_power_of_two(n: usize) -> usize {
-    n.next_power_of_two()
-}
-
 /// Perform element-wise multiplication of two complex matrices
 fn multiply_freq_domain(
     a: &Array2<Complex<f32>>,
@@ -119,23 +109,17 @@ pub fn pad_array(input: &Array2<f32>, padded_shape: (usize, usize)) -> Array2<Co
             output[[y, x]] = Complex32::new(input[[y, x]], 0.0);
         }
     }
-
     output
 }
 
 /// Perform 2D FFT (in-place) on a matrix
-fn fft2d(matrix: &mut Array2<Complex<f32>>, planner: &mut FftPlanner<f32>, inverse: bool) {
+fn fft2d(
+    matrix: &mut Array2<Complex<f32>>,
+    fft_cols: &dyn rustfft::Fft<f32>,
+    fft_rows: &dyn rustfft::Fft<f32>,
+    inverse: bool,
+) {
     let (rows, cols) = matrix.dim();
-    let fft_cols: Arc<dyn rustfft::Fft<f32>> = if inverse {
-        planner.plan_fft_inverse(cols)
-    } else {
-        planner.plan_fft_forward(cols)
-    };
-    let fft_rows: Arc<dyn rustfft::Fft<f32>> = if inverse {
-        planner.plan_fft_inverse(rows)
-    } else {
-        planner.plan_fft_forward(rows)
-    };
 
     // FFT on rows
     for mut row in matrix.outer_iter_mut() {
@@ -184,7 +168,14 @@ fn direct_convolve2d(a: &Array2<f32>, b: &Array2<f32>) -> Array2<f32> {
 }
 
 /// FFT-based convolution (output same size as `a`)
-pub fn convolve2d(a: &Array2<f32>, b: &Array2<f32>) -> Array2<f32> {
+pub fn convolve2d(
+    a: &Array2<f32>,
+    b: &Array2<f32>,
+    fft_cols: &dyn rustfft::Fft<f32>,
+    ifft_cols: &dyn rustfft::Fft<f32>,
+    fft_rows: &dyn rustfft::Fft<f32>,
+    ifft_rows: &dyn rustfft::Fft<f32>,
+) -> Array2<f32> {
     let (a_rows, a_cols) = a.dim();
     let (b_rows, b_cols) = b.dim();
 
@@ -194,24 +185,22 @@ pub fn convolve2d(a: &Array2<f32>, b: &Array2<f32>) -> Array2<f32> {
         return direct_convolve2d(a, b);
     }
 
-    let padded_rows = next_power_of_two(a_rows + b_rows - 1);
-    let padded_cols = next_power_of_two(a_cols + b_cols - 1);
-
-    let mut planner = FftPlanner::new();
+    let padded_rows = a_rows.next_power_of_two();
+    let padded_cols = a_cols.next_power_of_two();
 
     // Pad both inputs to complex arrays
     let mut a_padded = pad_array(a, (padded_rows, padded_cols));
     let mut b_padded = pad_array(b, (padded_rows, padded_cols));
 
     // FFT
-    fft2d(&mut a_padded, &mut planner, false);
-    fft2d(&mut b_padded, &mut planner, false);
+    fft2d(&mut a_padded, &*fft_cols, &*fft_rows, false);
+    fft2d(&mut b_padded, &*fft_cols, &*fft_rows, false);
 
     // Frequency domain multiplication
     let mut result_freq = multiply_freq_domain(&a_padded, &b_padded);
 
     // Inverse FFT
-    fft2d(&mut result_freq, &mut planner, true);
+    fft2d(&mut result_freq, &*ifft_cols, &*ifft_rows, true);
 
     // Crop the central part
     let start_row = (b_rows - 1) / 2;
@@ -248,14 +237,32 @@ impl Deconvolution {
         let (rows, cols, depth) = _scan.raw_data.dim();
         let mut filtered_data = Array3::<f32>::zeros((rows, cols, depth));
 
-        // Filter each time trace in the scan
-        filtered_data.axis_iter_mut(Axis(0)).into_iter().enumerate().for_each(|(i, mut row)| {
-            row.axis_iter_mut(Axis(0)).enumerate().for_each(|(j, mut slice)| {
-                let input_slice = _scan.raw_data.slice(s![i, j, ..]);
-                slice.assign(&convolve1d(&input_slice.to_owned(), &filter));
-            });
-        });
+        let conv_size = _scan.raw_data.slice(s![0, 0, ..]).len() + filter.len() - 1; // Adjusted convolution size
+        let fft_size = conv_size.next_power_of_two(); // Use next power of two for efficiency
 
+        let mut planner = FftPlanner::new();
+        let fft = planner.plan_fft_forward(fft_size);
+        let ifft = planner.plan_fft_inverse(fft_size);
+
+        // Filter each time trace in the scan
+        filtered_data
+            .axis_iter_mut(Axis(0))
+            .into_iter()
+            .enumerate()
+            .for_each(|(i, mut row)| {
+                row.axis_iter_mut(Axis(0))
+                    .enumerate()
+                    .for_each(|(j, mut slice)| {
+                        let input_slice = _scan.raw_data.slice(s![i, j, ..]);
+                        slice.assign(&convolve1d(
+                            &input_slice.to_owned(),
+                            &filter,
+                            &*fft,
+                            &*ifft,
+                            fft_size,
+                        ));
+                    });
+            });
         filtered_data
     }
 
@@ -280,6 +287,8 @@ impl Deconvolution {
         padded_image
             .slice_mut(s![pad_y..pad_y + h, pad_x..pad_x + w])
             .assign(image);
+
+        // Padding with reflection to avoid edge effects
 
         // Top and Bottom reflection
         for i in 0..pad_y {
@@ -309,12 +318,30 @@ impl Deconvolution {
 
         let eps: f32 = 1e-12;
 
+        let (n_rows, n_cols) = padded_image.dim();
+        let n_rows = n_rows.next_power_of_two();
+        let n_cols = n_cols.next_power_of_two();
+
+        let mut planner = FftPlanner::new();
+
+        let fft_cols: Arc<dyn rustfft::Fft<f32>> = planner.plan_fft_forward(n_cols);
+        let ifft_cols: Arc<dyn rustfft::Fft<f32>> = planner.plan_fft_inverse(n_cols);
+        let fft_rows: Arc<dyn rustfft::Fft<f32>> = planner.plan_fft_forward(n_rows);
+        let ifft_rows: Arc<dyn rustfft::Fft<f32>> = planner.plan_fft_inverse(n_rows);
+
         for _ in 0..n_iterations {
-            let ustarp = convolve2d(&u, &psf);
+            let ustarp = convolve2d(&u, &psf, &*fft_cols, &*ifft_cols, &*fft_rows, &*ifft_rows);
             let relative_blur = Zip::from(&padded_image)
                 .and(&ustarp)
                 .map_collect(|&d, &c| d / (c + eps));
-            let correction = convolve2d(&relative_blur, &psf_mirror);
+            let correction = convolve2d(
+                &relative_blur,
+                &psf_mirror,
+                &*fft_cols,
+                &*ifft_cols,
+                &*fft_rows,
+                &*ifft_rows,
+            );
             Zip::from(&mut u).and(&correction).for_each(|e, &c| *e *= c);
         }
 
@@ -327,14 +354,9 @@ impl Filter for Deconvolution {
     /// Creates a new `Deconvolution` filter with default settings.
     ///
     /// Default values:
-    /// - `n_iterations`: 10
-    /// - `filter_number`: 10
-    /// - `start_frequency`: 0.0
-    /// - `end_frequency`: 10.0
+    /// - `n_iterations`: 500
     fn new() -> Self {
-        Deconvolution {
-            n_iterations: 500
-        }
+        Deconvolution { n_iterations: 500 }
     }
 
     fn config(&self) -> FilterConfig {
@@ -365,7 +387,7 @@ impl Filter for Deconvolution {
             scan.raw_data.dim().2,
         ));
 
-        // Pré-calcul des valeurs minimales et maximales pour éviter de les recalculer à chaque itération
+        // Pre-calculation of min and max values to avoid recalculating them in each iteration
         let (wx_min, wx_max) = gui_settings
             .psf
             .popt_x
@@ -390,7 +412,7 @@ impl Filter for Deconvolution {
         let w_max = wx_max.max(wy_max);
 
         let start = Instant::now();
-        
+
         let processed_data = gui_settings
             .psf
             .filters
@@ -398,7 +420,11 @@ impl Filter for Deconvolution {
             .enumerate()
             .par_bridge()
             .map(|(i, _)| {
-                print!("\rProcessing frequency band {}/{}...", i + 1, gui_settings.psf.n_filters);
+                print!(
+                    "\rProcessing frequency band {}/{}...",
+                    i + 1,
+                    gui_settings.psf.n_filters
+                );
                 io::stdout().flush().unwrap();
 
                 // Calculating the range for the PSF
@@ -451,9 +477,9 @@ impl Filter for Deconvolution {
                 let filtered_image = filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
 
                 let n_iter = (((gui_settings.psf.popt_x.row(i)[1] - w_min) / (w_max - w_min)
-                * (self.n_iterations as f32 - 1.0)
-                + 1.0)
-                .floor()) as usize;
+                    * (self.n_iterations as f32 - 1.0)
+                    + 1.0)
+                    .floor()) as usize;
 
                 let deconvolved_image = self
                     .richardson_lucy(&filtered_image, &psf_2d, n_iter)
@@ -461,7 +487,7 @@ impl Filter for Deconvolution {
 
                 let mut deconvolution_gains =
                     Array2::zeros((scan.raw_data.dim().0, scan.raw_data.dim().1));
-                    
+
                 // Compute deconvolution gains
                 Zip::from(&deconvolved_image)
                     .and(&filtered_image)
@@ -473,27 +499,30 @@ impl Filter for Deconvolution {
                 for i in 0..shape.0 {
                     for j in 0..shape.1 {
                         let gain = deconvolution_gains[[i, j]];
-                        filtered_data.slice_mut(s![i, j, ..]).mapv_inplace(|x| x * gain);
+                        filtered_data
+                            .slice_mut(s![i, j, ..])
+                            .mapv_inplace(|x| x * gain);
                     }
                 }
 
                 filtered_data
             })
-            .reduce(|| Array3::zeros(scan.filtered_data.dim()), |mut acc, data| {
-                acc += &data; // Accumulate the results to reconstruct the time traces
-                acc
-            });
+            .reduce(
+                || Array3::zeros(scan.filtered_data.dim()),
+                |mut acc, data| {
+                    acc += &data; // Accumulate the results to reconstruct the time traces
+                    acc
+                },
+            );
 
         scan.filtered_data = processed_data;
 
         let duration = start.elapsed();
-        println!("\nTime elapsed for filtering: {:?}", duration);
 
-        println!("Calculating filtered image...");
+        println!("\nDeconvolution filter completed.");
+        println!("Processing time: {:?}", duration);
 
         scan.filtered_img = scan.filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
-
-        println!("Deconvolution filter completed.");
     }
 
     fn ui(
@@ -504,17 +533,18 @@ impl Filter for Deconvolution {
         // thread_communication can be used, but is not required. It contains the gui_settings GuiSettingsContainer
         // implement your GUI parameter handling here, for example like this:
         let mut clicked = false;
-        let mut response = ui.horizontal(|ui| {
-             let button_response =  ui.add(egui::Button::new("Apply"));
+        let mut response = ui
+            .horizontal(|ui| {
+                let button_response = ui.add(egui::Button::new("Apply"));
                 if button_response.clicked() {
                     clicked = true;
                 }
-            button_response
+                button_response
             })
             .inner;
         if clicked {
             response.mark_changed();
         }
-        response 
+        response
     }
 }
