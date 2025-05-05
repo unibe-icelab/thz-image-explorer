@@ -395,7 +395,7 @@ impl Filter for Deconvolution {
 
         let start = Instant::now();
         
-        let processed_data: Vec<Array3<f32>> = gui_settings
+        let processed_data = gui_settings
             .psf
             .filters
             .outer_iter()
@@ -482,23 +482,15 @@ impl Filter for Deconvolution {
 
                 filtered_data
             })
-            .collect();
+            .reduce(|| Array3::zeros(scan.filtered_data.dim()), |mut acc, data| {
+                acc += &data;
+                acc
+            });
 
-            let duration = start.elapsed();
-            println!("\nTime elapsed for filtering: {:?}", duration);
-
-
-        println!("Combining processed data...");
-
-        let start = Instant::now();
-
-        // Combining data
-        for data in processed_data {
-            scan.filtered_data += &data;
-        }
+        scan.filtered_data = processed_data;
 
         let duration = start.elapsed();
-        println!("Time elapsed: {:?}", duration);
+        println!("\nTime elapsed for filtering: {:?}", duration);
 
         println!("Calculating filtered image...");
 
