@@ -247,19 +247,15 @@ impl Deconvolution {
     fn filter_scan(&self, _scan: &ScannedImage, filter: &Array1<f32>) -> Array3<f32> {
         let (rows, cols, depth) = _scan.raw_data.dim();
         let mut filtered_data = Array3::<f32>::zeros((rows, cols, depth));
-    
-        // Iterate over the 2D space (rows, cols)
-        for j in 0..cols {
-            for i in 0..rows {
-                // Get the slice along the last axis (depth)
-                let slice = _scan.raw_data.slice(s![i, j, ..]).to_owned();
-                
-                // Apply convolution and assign the result directly to filtered_data
-                filtered_data.slice_mut(s![i, j, ..])
-                    .assign(&convolve1d(&slice, &filter));
-            }
-        }
-    
+
+        // Filter each time trace in the scan
+        filtered_data.axis_iter_mut(Axis(0)).into_iter().enumerate().for_each(|(i, mut row)| {
+            row.axis_iter_mut(Axis(0)).enumerate().for_each(|(j, mut slice)| {
+                let input_slice = _scan.raw_data.slice(s![i, j, ..]);
+                slice.assign(&convolve1d(&input_slice.to_owned(), &filter));
+            });
+        });
+
         filtered_data
     }
 
@@ -447,11 +443,11 @@ impl Filter for Deconvolution {
 
                 let psf_2d = create_psf_2d(gaussian_x, gaussian_y, x, y, dx, dy);
 
-                // Filtering the scan data
+                // Filter scan data in-place
                 let mut filtered_data =
-                    self.filter_scan(&scan.clone(), &gui_settings.psf.filters.row(i).to_owned());
+                    self.filter_scan(&scan, &gui_settings.psf.filters.row(i).to_owned());
 
-                // Computing the filtered image
+                // Compute filtered image
                 let filtered_image = filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
 
                 let n_iter = (((gui_settings.psf.popt_x.row(i)[1] - w_min) / (w_max - w_min)
@@ -461,18 +457,19 @@ impl Filter for Deconvolution {
 
                 let deconvolved_image = self
                     .richardson_lucy(&filtered_image, &psf_2d, n_iter)
-                    .mapv(|x| x.max(0.0)); // Force negative values to zero
+                    .mapv(|x| x.max(0.0));
 
                 let mut deconvolution_gains =
                     Array2::zeros((scan.raw_data.dim().0, scan.raw_data.dim().1));
+                    
+                // Compute deconvolution gains
                 Zip::from(&deconvolved_image)
                     .and(&filtered_image)
                     .and(&mut deconvolution_gains)
                     .for_each(|&u, &d, g| *g = (u / d).sqrt());
 
-                // Apply the deconvolution gains to the filtered data
-                let shape = filtered_data.dim();  // (m, n, p)
-
+                // Apply deconvolution gains in-place
+                let shape = filtered_data.dim();
                 for i in 0..shape.0 {
                     for j in 0..shape.1 {
                         let gain = deconvolution_gains[[i, j]];
@@ -483,7 +480,7 @@ impl Filter for Deconvolution {
                 filtered_data
             })
             .reduce(|| Array3::zeros(scan.filtered_data.dim()), |mut acc, data| {
-                acc += &data;
+                acc += &data; // Accumulate the results to reconstruct the time traces
                 acc
             });
 
