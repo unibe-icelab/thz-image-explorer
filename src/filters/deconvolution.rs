@@ -281,14 +281,14 @@ impl Deconvolution {
         let padded_h = h + 2 * pad_y;
         let padded_w = w + 2 * pad_x;
 
+        // Padding with reflection to avoid edge effects
+        
         let mut padded_image = Array2::<f32>::zeros((padded_h, padded_w));
 
         // Center
         padded_image
             .slice_mut(s![pad_y..pad_y + h, pad_x..pad_x + w])
             .assign(image);
-
-        // Padding with reflection to avoid edge effects
 
         // Top and Bottom reflection
         for i in 0..pad_y {
