@@ -45,6 +45,8 @@ pub fn convolve1d(
     let mut a_padded: Vec<Complex<f64>> = vec![Complex { re: 0.0, im: 0.0 }; fft_size];
     let mut b_padded: Vec<Complex<f64>> = vec![Complex { re: 0.0, im: 0.0 }; fft_size];
 
+    let shift_len = (b.len() - 1) / 2;
+
     // Copy input data into padded arrays
     a.iter().enumerate().for_each(|(i, &val)| {
         a_padded[i] = Complex {
@@ -76,7 +78,7 @@ pub fn convolve1d(
 
     // Normalize and extract the result
     Array1::from(
-        result_freq[..a.len()]
+        result_freq[shift_len..a.len() + shift_len]
             .iter()
             .map(|c| (c.re / fft_size as f64) as f32) // Normalize by FFT size and cast to f32
             .collect::<Vec<f32>>(),
