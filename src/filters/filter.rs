@@ -12,7 +12,7 @@ use eframe::egui;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, RwLock};
 
 /// The `Filter` trait defines the structure and behavior of an image filter.
 ///
@@ -57,7 +57,12 @@ pub trait Filter: Send + Sync + Debug + CloneBoxedFilter {
     ///
     /// - `_scan`: A mutable reference to the image to be processed.
     /// - `gui_settings`: Mutable reference to GUI settings associated with the filter.
-    fn filter(&self, _scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer);
+    fn filter(
+        &self,
+        scan: &mut ScannedImage,
+        gui_settings: &mut GuiSettingsContainer,
+        progress_lock: &mut Arc<RwLock<Option<f32>>>,
+    );
 
     /// Renders the filter configuration in the GUI.
     /// make sure to return the `egui::Reponse` of the GUI elements. This way, the application
@@ -119,7 +124,6 @@ pub enum FilterDomain {
 /// **Fields**:
 /// - `name`: A human-readable name for the filter.
 /// - `domain`: The working domain, represented as a `FilterDomain`.
-/// - `parameters`: A vector of customizable filter parameters.
 #[derive(Debug, Clone)]
 pub struct FilterConfig {
     pub name: String,

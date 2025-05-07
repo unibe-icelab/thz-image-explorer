@@ -550,7 +550,16 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                     if let Some(mut filters) = filters_cloned {
                         for filter in filters.iter_mut() {
                             println!("update filter: {}", filter.config().name);
-                            filter.filter(&mut scan, &mut thread_communication.gui_settings);
+                            if let Some(progress) = thread_communication
+                                .progress_lock
+                                .get_mut(&filter.config().name)
+                            {
+                                filter.filter(
+                                    &mut scan,
+                                    &mut thread_communication.gui_settings,
+                                    progress,
+                                );
+                            }
                         }
 
                         (
@@ -560,16 +569,25 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                         )
                             .into_par_iter()
                             .for_each(
-                                |(mut scaled_data_columns, mut filtered_data_columns, mut filtered_img_columns)| {
+                                |(
+                                    mut scaled_data_columns,
+                                    mut filtered_data_columns,
+                                    mut filtered_img_columns,
+                                )| {
                                     (
                                         scaled_data_columns.axis_iter_mut(Axis(0)),
                                         filtered_data_columns.axis_iter_mut(Axis(0)),
                                         filtered_img_columns.axis_iter_mut(Axis(0)),
                                     )
                                         .into_par_iter()
-                                        .for_each(|(_scaled_data, filtered_data, filtered_img)| {
-                                            *filtered_img.into_scalar() = filtered_data.iter().map(|xi| xi * xi).sum::<f32>();
-                                        });
+                                        .for_each(
+                                            |(_scaled_data, filtered_data, filtered_img)| {
+                                                *filtered_img.into_scalar() = filtered_data
+                                                    .iter()
+                                                    .map(|xi| xi * xi)
+                                                    .sum::<f32>();
+                                            },
+                                        );
                                 },
                             );
 

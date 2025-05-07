@@ -8,6 +8,7 @@ use eframe::egui::{self, Ui};
 use ndarray::{concatenate, s, Array1, Array3, Axis};
 use realfft::RealFftPlanner;
 use std::f32::consts::PI;
+use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone)]
 //#[register_filter]
@@ -34,7 +35,12 @@ impl Filter for TiltCompensation {
         }
     }
 
-    fn filter(&self, scan: &mut ScannedImage, _gui_settings: &mut GuiSettingsContainer) {
+    fn filter(
+        &self,
+        scan: &mut ScannedImage,
+        _gui_settings: &mut GuiSettingsContainer,
+        _progress_lock: &mut Arc<RwLock<Option<f32>>>,
+    ) {
         // only rotation around the center are implemented, offset rotations are still to be done.
         let time_shift_x = self.tilt_x as f32 / 180.0 * PI;
         let time_shift_y = self.tilt_y as f32 / 180.0 * PI;
@@ -100,12 +106,7 @@ impl Filter for TiltCompensation {
                     let mut raw_trace_copy = raw_trace.to_owned(); // Create a mutable copy
                     let mut data_view = raw_trace_copy.view_mut(); // Obtain a mutable view
 
-                    apply_adapted_blackman_window(
-                        &mut data_view,
-                        &original_time,
-                        &0.0,
-                        &7.0,
-                    );
+                    apply_adapted_blackman_window(&mut data_view, &original_time, &0.0, &7.0);
                     extended_trace
                         .slice_mut(s![insert_index..end_index])
                         .assign(&data_view.slice(s![..(end_index - insert_index)]));

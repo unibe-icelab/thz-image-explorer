@@ -87,7 +87,7 @@ pub fn color_from_intensity(
             v: remapped_y,
             a: 1.0,
         }
-            .into()
+        .into()
     } else {
         egui::ecolor::Hsva {
             h: hue,
@@ -95,7 +95,7 @@ pub fn color_from_intensity(
             v: 1.0,
             a: 1.0,
         }
-            .into()
+        .into()
     }
 }
 fn colorbar_with_midpoint_slider(

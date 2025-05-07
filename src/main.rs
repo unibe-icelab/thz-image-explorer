@@ -9,6 +9,7 @@ extern crate serde;
 use crate::config::{ConfigCommand, GuiThreadCommunication, MainThreadCommunication};
 use crate::data_container::DataPoint;
 use crate::data_thread::main_thread;
+use crate::filters::filter::FILTER_REGISTRY;
 use crate::gui::application::{GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::SelectedPixel;
 use dotthz::DotthzMetaData;
@@ -16,6 +17,7 @@ use eframe::egui::{vec2, ViewportBuilder, Visuals};
 use eframe::{egui, icon_data};
 use ndarray::Array2;
 use preferences::{AppInfo, Preferences};
+use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, RwLock};
 use std::thread;
@@ -64,7 +66,12 @@ fn main() {
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
     let scaling_lock = Arc::new(RwLock::new(1));
     let md_lock = Arc::new(RwLock::new(DotthzMetaData::default()));
-
+    let mut progress_lock = HashMap::new();
+    if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+        for filter in filters.iter_mut() {
+            progress_lock.insert(filter.config().name, Arc::new(RwLock::new(None)));
+        }
+    }
     let (config_tx, config_rx): (Sender<ConfigCommand>, Receiver<ConfigCommand>) = mpsc::channel();
 
     let gui_communication = GuiThreadCommunication {
@@ -73,6 +80,7 @@ fn main() {
         pixel_lock: pixel_lock.clone(),
         scaling_lock: scaling_lock.clone(),
         img_lock: img_lock.clone(),
+        progress_lock: progress_lock.clone(),
         gui_settings: gui_settings.clone(),
         config_tx,
     };
@@ -83,6 +91,7 @@ fn main() {
         pixel_lock,
         scaling_lock,
         img_lock,
+        progress_lock,
         gui_settings: gui_settings.clone(),
         config_rx,
     };

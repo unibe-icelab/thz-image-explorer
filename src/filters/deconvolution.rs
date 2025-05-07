@@ -19,7 +19,7 @@ use rustfft::{num_complex::Complex, FftPlanner};
 use std::io::{self, Write};
 use std::time::Instant;
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 /// Represents a `Deconvolution` filter.
 ///
@@ -284,7 +284,7 @@ impl Deconvolution {
         let padded_w = w + 2 * pad_x;
 
         // Padding with reflection to avoid edge effects
-        
+
         let mut padded_image = Array2::<f32>::zeros((padded_h, padded_w));
 
         // Center
@@ -376,7 +376,16 @@ impl Filter for Deconvolution {
     ///
     /// # Notes:
     /// This method currently contains a placeholder for the Richardson-Lucy algorithm.
-    fn filter(&self, scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer) {
+    fn filter(
+        &self,
+        scan: &mut ScannedImage,
+        gui_settings: &mut GuiSettingsContainer,
+        progress_lock: &mut Arc<RwLock<Option<f32>>>,
+    ) {
+        if let Ok(mut p) = progress_lock.write() {
+            *p = Some(0.0);
+        }
+
         if scan.dx.is_none() || scan.dy.is_none() {
             println!("No data loaded, skipping deconvolution.");
             return;
@@ -422,6 +431,9 @@ impl Filter for Deconvolution {
             .enumerate()
             .par_bridge()
             .map(|(i, _)| {
+                if let Ok(mut p) = progress_lock.write() {
+                    *p = Some((i as f32) / (gui_settings.psf.n_filters as f32));
+                }
                 print!(
                     "\rProcessing frequency band {}/{}...",
                     i + 1,
@@ -516,6 +528,9 @@ impl Filter for Deconvolution {
                     acc
                 },
             );
+        if let Ok(mut p) = progress_lock.write() {
+            *p = Some(1.0);
+        }
 
         scan.filtered_data = processed_data;
 
@@ -525,6 +540,10 @@ impl Filter for Deconvolution {
         println!("Processing time: {:?}", duration);
 
         scan.filtered_img = scan.filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
+
+        if let Ok(mut p) = progress_lock.write() {
+            *p = None;
+        }
     }
 
     fn ui(

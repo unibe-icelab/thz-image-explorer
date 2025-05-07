@@ -8,6 +8,7 @@ use crate::gui::matrix_plot::SelectedPixel;
 use crate::math_tools::FftWindowType;
 use dotthz::DotthzMetaData;
 use ndarray::Array2;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
@@ -71,7 +72,7 @@ pub enum ConfigCommand {
     SetSelectedPixel(SelectedPixel),
 
     /// Update Custom Filters
-    UpdateFilters
+    UpdateFilters,
 }
 
 /// A container for storing configuration settings related to FFT and filtering processes.
@@ -153,6 +154,9 @@ pub struct GuiThreadCommunication {
 
     /// Sender channel for sending configuration commands (`ConfigCommand`) from the GUI.
     pub config_tx: Sender<ConfigCommand>,
+
+    /// Lock for Filter progressbars
+    pub progress_lock: HashMap<String, Arc<RwLock<Option<f32>>>>,
 }
 
 /// Structure for handling communication related to the main thread.
@@ -181,4 +185,7 @@ pub struct MainThreadCommunication {
     /// Receiver channel for receiving configuration commands (`ConfigCommand`)
     /// from other threads.
     pub config_rx: Receiver<ConfigCommand>,
+
+    /// Lock for Filter progressbars
+    pub progress_lock: HashMap<String, Arc<RwLock<Option<f32>>>>,
 }

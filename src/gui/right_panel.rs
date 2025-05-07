@@ -575,9 +575,49 @@ pub fn right_panel(
                 if let Ok(mut filters) = FILTER_REGISTRY.lock() {
                     let mut update_requested = false;
                     for filter in filters.iter_mut() {
+
+                        // TODO: disable the full parameter UI if the filtering is running
+                        // if let Some(progress) = thread_communication
+                        //     .progress_lock
+                        //     .get(&filter.config().name)
+                        // {
+                        //     if let Ok(progress) = progress.read() {
+                        //         if progress.is_some() {
+                        //             ui.disable();
+                        //         }
+                        //     }
+                        // }
                         ui.separator();
                         ui.heading(filter.config().clone().name);
                         update_requested |= filter.ui(ui, thread_communication).changed();
+                        if let Some(progress) = thread_communication
+                            .progress_lock
+                            .get(&filter.config().name)
+                        {
+                            if let Ok(progress) = progress.read() {
+                                if let Some(progress) = *progress {
+                                    if progress > 0.0 {
+                                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
+                                        ui.add(
+                                            egui::ProgressBar::new(progress)
+                                                .text(format!("{} %", (progress * 100.0) as u8))
+                                                .desired_width(*right_panel_width - 50.0),
+                                        );
+                                        ui.ctx().request_repaint();
+                                    } else {
+                                        ui.output_mut(|o| {
+                                            o.cursor_icon = egui::CursorIcon::Default
+                                        });
+                                    }
+                                } else {
+                                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
+                                }
+                            } else {
+                                ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
+                            }
+                        } else {
+                            ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
+                        }
                     }
                     if update_requested {
                         thread_communication
@@ -588,7 +628,6 @@ pub fn right_panel(
                 }
 
                 thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
-
                 ui.separator();
                 ui.collapsing("Debug logs:", |ui| {
                     ui.set_height(175.0);

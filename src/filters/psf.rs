@@ -1,7 +1,7 @@
+use interp1d::Interp1d;
 use ndarray::{Array1, Array2, Zip};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use interp1d::Interp1d;
 
 /// Represents a Point Spread Function (PSF) used in spectroscopy and imaging analysis.
 ///
@@ -25,7 +25,7 @@ use interp1d::Interp1d;
 /// - `[y_0, w_y]` (*Array2<f32>*): A 2D array representing the PSF in the Y-axis, typically used for spatial resolution analysis.
 ///    the first dimension represents the fit parameters, and the second dimension represents the frequency index.
 ///    The fit parameters are the center and width of the PSF (in this order).
-/// 
+///
 /// TODO: improve the names of the fields for the fit parameters.
 ///
 /// # Typical Usage
@@ -129,10 +129,10 @@ pub fn create_psf_2d(
     let mut psf_2d = Array2::zeros((xx.len(), yy.len()));
 
     // Fill in the PSF 2D array using linear interpolation
-    let interp_x = Interp1d::new_unsorted(x.to_vec(), psf_x.to_vec())
-        .expect("Failed to create interpolator");
-    let interp_y = Interp1d::new_unsorted(y.to_vec(), psf_y.to_vec())
-        .expect("Failed to create interpolator");
+    let interp_x =
+        Interp1d::new_unsorted(x.to_vec(), psf_x.to_vec()).expect("Failed to create interpolator");
+    let interp_y =
+        Interp1d::new_unsorted(y.to_vec(), psf_y.to_vec()).expect("Failed to create interpolator");
     for (i, &x_val) in xx.iter().enumerate() {
         for (j, &y_val) in yy.iter().enumerate() {
             let psf_x_interp = interp_x.interpolate(x_val);
@@ -225,9 +225,7 @@ pub fn gaussian2(x: &Array1<f32>, params: &[f32]) -> Array1<f32> {
 fn error_f(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
     let x0 = params[0];
     let w = params[1];
-    x.mapv(|xi| {
-        (1.0 + statrs::function::erf::erf(2.0_f64.sqrt() * (xi - x0) / w)) / 2.0
-    })
+    x.mapv(|xi| (1.0 + statrs::function::erf::erf(2.0_f64.sqrt() * (xi - x0) / w)) / 2.0)
 }
 
 // TODO: this does not yet work
@@ -252,7 +250,7 @@ pub fn get_center(
 > {
     println!("Extracting the center of the PSF...");
     todo!();
-    
+
 
     // Cropping the PSF to improve the fit
     let x_axis_psf_2 = x_axis_psf.slice(s![n_min..n_max]).to_owned();
