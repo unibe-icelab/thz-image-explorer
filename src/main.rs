@@ -70,7 +70,9 @@ fn main() {
     if let Ok(mut filters) = FILTER_REGISTRY.lock() {
         for filter in filters.iter_mut() {
             progress_lock.insert(filter.config().name, Arc::new(RwLock::new(None)));
-            gui_settings.progress_bars.insert(filter.config().name, None);
+            gui_settings
+                .progress_bars
+                .insert(filter.config().name, None);
         }
     }
     let (config_tx, config_rx): (Sender<ConfigCommand>, Receiver<ConfigCommand>) = mpsc::channel();
