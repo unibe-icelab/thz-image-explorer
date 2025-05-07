@@ -45,6 +45,7 @@ rustfft = "6.2.0"
 num-complex = "0.4"
 rayon = "1.7"
 interp1d = "0.2.0"
+chrono = "0.4"
 
 [features]
 default = ["self_update"]

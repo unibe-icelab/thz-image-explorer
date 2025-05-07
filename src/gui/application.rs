@@ -4,13 +4,13 @@
 //! file operations, and visualization panels for signal and image processing.
 
 use core::f64;
+use std::collections::HashMap;
 use dotthz::DotthzFile;
 use egui_file_dialog::information_panel::InformationPanel;
 use egui_file_dialog::FileDialog;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use std::sync::Arc;
-
 use eframe::egui::ThemePreference;
 use eframe::{egui, Storage};
 use egui_plot::PlotPoint;
@@ -129,6 +129,8 @@ pub struct GuiSettingsContainer {
     pub chart_scale: f32,
     pub chart_pitch_vel: f32,
     pub chart_yaw_vel: f32,
+    pub last_progress_bar_update: i64,
+    pub progress_bars: HashMap<String,Option<f32>>,
     pub theme_preference: ThemePreference,
     pub beam_shape: Vec<[f64; 2]>,
     pub beam_shape_path: PathBuf,
@@ -168,6 +170,8 @@ impl GuiSettingsContainer {
             chart_scale: 0.9,
             chart_pitch_vel: 0.0,
             chart_yaw_vel: 0.0,
+            last_progress_bar_update: 0,
+            progress_bars: HashMap::new(),
             theme_preference: ThemePreference::System,
             beam_shape: vec![],
             beam_shape_path: home_dir().unwrap_or_else(|| PathBuf::from("/")),

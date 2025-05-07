@@ -5173,6 +5173,7 @@ dependencies = [
 name = "thz-image-explorer"
 version = "0.2.2"
 dependencies = [
+ "chrono",
  "csv",
  "ctor",
  "dotthz",

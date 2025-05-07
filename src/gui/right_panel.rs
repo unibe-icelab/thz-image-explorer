@@ -10,6 +10,7 @@ use crate::math_tools::{
 };
 use crate::update::check_update;
 use crate::DataPoint;
+use chrono::Utc;
 use eframe::egui;
 use eframe::egui::panel::Side;
 use eframe::egui::{vec2, DragValue, Stroke, Vec2, Visuals};
@@ -575,48 +576,64 @@ pub fn right_panel(
                 if let Ok(mut filters) = FILTER_REGISTRY.lock() {
                     let mut update_requested = false;
                     for filter in filters.iter_mut() {
+                        if Utc::now().timestamp_millis()
+                            - thread_communication.gui_settings.last_progress_bar_update
+                            > 100
+                        {
+                            if let Some(progress) = thread_communication
+                                .progress_lock
+                                .get(&filter.config().name)
+                            {
+                                thread_communication.gui_settings.last_progress_bar_update =
+                                    Utc::now().timestamp_millis();
+                                if let Ok(progress) = progress.read() {
+                                    if let Some(progress_entry) = thread_communication
+                                        .gui_settings
+                                        .progress_bars
+                                        .get_mut(&filter.config().name)
+                                    {
+                                        *progress_entry = *progress;
+                                    }
+                                }
+                            }
+                        }
 
-                        // TODO: disable the full parameter UI if the filtering is running
-                        // if let Some(progress) = thread_communication
-                        //     .progress_lock
-                        //     .get(&filter.config().name)
-                        // {
-                        //     if let Ok(progress) = progress.read() {
-                        //         if progress.is_some() {
-                        //             ui.disable();
-                        //         }
-                        //     }
-                        // }
-                        ui.separator();
-                        ui.heading(filter.config().clone().name);
-                        update_requested |= filter.ui(ui, thread_communication).changed();
+                        ui.vertical(|ui| {
+                            if let Some(progress) = thread_communication
+                                .gui_settings
+                                .progress_bars
+                                .get(&filter.config().name)
+                            {
+                                if progress.is_some() {
+                                    ui.disable();
+                                }
+                            }
+                            ui.separator();
+                            ui.heading(filter.config().clone().name);
+                            update_requested |= filter.ui(ui, thread_communication).changed();
+                        });
+
                         if let Some(progress) = thread_communication
-                            .progress_lock
+                            .gui_settings
+                            .progress_bars
                             .get(&filter.config().name)
                         {
-                            if let Ok(progress) = progress.read() {
-                                if let Some(progress) = *progress {
-                                    if progress > 0.0 {
-                                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
-                                        ui.add(
-                                            egui::ProgressBar::new(progress)
-                                                .text(format!("{} %", (progress * 100.0) as u8))
-                                                .desired_width(*right_panel_width - 50.0),
-                                        );
-                                        ui.ctx().request_repaint();
-                                    } else {
-                                        ui.output_mut(|o| {
-                                            o.cursor_icon = egui::CursorIcon::Default
-                                        });
-                                    }
+                            if let Some(p) = progress {
+                                if *p > 0.0 {
+                                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
+                                    ui.add(
+                                        // TODO: fix the width!
+                                        egui::ProgressBar::new(*p)
+                                            .text(format!("{} %", (p * 100.0) as u8))
+                                            .desired_width(*right_panel_width - 50.0),
+                                    );
+                                    ui.ctx().request_repaint();
                                 } else {
                                     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
                                 }
                             } else {
                                 ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
                             }
-                        } else {
-                            ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
                         }
                     }
                     if update_requested {

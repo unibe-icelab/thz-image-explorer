@@ -16,7 +16,6 @@ use ndarray::{arr1, s, Array1, Array2, Array3, Axis, Zip};
 use num_complex::Complex32;
 use rayon::prelude::*;
 use rustfft::{num_complex::Complex, FftPlanner};
-use std::io::{self, Write};
 use std::time::Instant;
 
 use std::sync::{Arc, RwLock};
@@ -432,14 +431,14 @@ impl Filter for Deconvolution {
             .par_bridge()
             .map(|(i, _)| {
                 if let Ok(mut p) = progress_lock.write() {
-                    *p = Some((i as f32) / (gui_settings.psf.n_filters as f32));
+                    if if let Some(p_old) = *p {
+                        p_old < (i as f32) / (gui_settings.psf.n_filters as f32)
+                    } else {
+                        false
+                    } {
+                        *p = Some((i as f32) / (gui_settings.psf.n_filters as f32));
+                    }
                 }
-                print!(
-                    "\rProcessing frequency band {}/{}...",
-                    i + 1,
-                    gui_settings.psf.n_filters
-                );
-                io::stdout().flush().unwrap();
 
                 // Calculating the range for the PSF
                 let range_max_x = self.range_max_min(
