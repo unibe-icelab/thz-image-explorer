@@ -9,6 +9,7 @@ use ndarray::{concatenate, s, Array1, Array3, Axis};
 use realfft::RealFftPlanner;
 use std::f32::consts::PI;
 use std::sync::{Arc, RwLock};
+use std::sync::atomic::AtomicBool;
 
 #[derive(Debug, Clone)]
 //#[register_filter]
@@ -40,6 +41,7 @@ impl Filter for TiltCompensation {
         scan: &mut ScannedImage,
         _gui_settings: &mut GuiSettingsContainer,
         _progress_lock: &mut Arc<RwLock<Option<f32>>>,
+        _abort_flag: &Arc<AtomicBool>,
     ) {
         // only rotation around the center are implemented, offset rotations are still to be done.
         let time_shift_x = self.tilt_x as f32 / 180.0 * PI;

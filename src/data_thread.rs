@@ -558,6 +558,7 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                                     &mut scan,
                                     &mut thread_communication.gui_settings,
                                     progress,
+                                    &thread_communication.abort_flag,
                                 );
                             }
                         }

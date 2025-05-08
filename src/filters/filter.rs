@@ -13,6 +13,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex, RwLock};
+use std::sync::atomic::AtomicBool;
 
 /// The `Filter` trait defines the structure and behavior of an image filter.
 ///
@@ -62,6 +63,7 @@ pub trait Filter: Send + Sync + Debug + CloneBoxedFilter {
         scan: &mut ScannedImage,
         gui_settings: &mut GuiSettingsContainer,
         progress_lock: &mut Arc<RwLock<Option<f32>>>,
+        abort_flag: &Arc<AtomicBool>,
     );
 
     /// Renders the filter configuration in the GUI.

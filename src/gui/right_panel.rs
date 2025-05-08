@@ -21,6 +21,7 @@ use itertools_num::linspace;
 use ndarray::Array1;
 use self_update::update::Release;
 use std::f32::consts::E;
+use std::sync::atomic::Ordering::Relaxed;
 
 #[allow(clippy::too_many_arguments)]
 pub fn right_panel(
@@ -641,12 +642,21 @@ pub fn right_panel(
                             if let Some(p) = progress {
                                 if *p > 0.0 {
                                     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
-                                    ui.add(
-                                        // TODO: fix the width!
-                                        egui::ProgressBar::new(*p)
-                                            .text(format!("{} %", (p * 100.0) as u8))
-                                            .desired_width(*right_panel_width - 50.0),
-                                    );
+                                    ui.horizontal(|ui| {
+                                        ui.add(
+                                            // TODO: fix the width!
+                                            egui::ProgressBar::new(*p)
+                                                .text(format!("{} %", (p * 100.0) as u8))
+                                                .desired_width(*right_panel_width - 50.0),
+                                        );
+                                        if ui
+                                            .button(format!("{}", egui_phosphor::regular::X_SQUARE))
+                                            .on_hover_text("Abort the current calculation")
+                                            .clicked()
+                                        {
+                                            thread_communication.abort_flag.store(true, Relaxed);
+                                        }
+                                    });
                                     ui.ctx().request_repaint();
                                 } else {
                                     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);

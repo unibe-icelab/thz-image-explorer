@@ -20,6 +20,7 @@ use preferences::{AppInfo, Preferences};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, RwLock};
+use std::sync::atomic::AtomicBool;
 use std::thread;
 
 mod config;
@@ -30,6 +31,7 @@ mod gui;
 mod io;
 mod math_tools;
 mod update;
+mod cancellable_loops;
 
 const APP_INFO: AppInfo = AppInfo {
     name: "THz Image Explorer",
@@ -77,7 +79,10 @@ fn main() {
     }
     let (config_tx, config_rx): (Sender<ConfigCommand>, Receiver<ConfigCommand>) = mpsc::channel();
 
+    let abort_flag = Arc::new(AtomicBool::new(false));
+
     let gui_communication = GuiThreadCommunication {
+        abort_flag: abort_flag.clone(),
         md_lock: md_lock.clone(),
         data_lock: data_lock.clone(),
         pixel_lock: pixel_lock.clone(),
@@ -89,6 +94,7 @@ fn main() {
     };
 
     let main_communication = MainThreadCommunication {
+        abort_flag,
         md_lock,
         data_lock,
         pixel_lock,

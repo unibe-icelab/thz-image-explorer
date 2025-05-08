@@ -18,6 +18,8 @@ use rayon::prelude::*;
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::time::Instant;
 
+use crate::cancellable_loops::par_for_each_cancellable_reduce;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
 /// Represents a `Deconvolution` filter.
@@ -380,6 +382,7 @@ impl Filter for Deconvolution {
         scan: &mut ScannedImage,
         gui_settings: &mut GuiSettingsContainer,
         progress_lock: &mut Arc<RwLock<Option<f32>>>,
+        abort_flag: &Arc<AtomicBool>,
     ) {
         if let Ok(mut p) = progress_lock.write() {
             *p = Some(0.0);
@@ -423,13 +426,15 @@ impl Filter for Deconvolution {
 
         let start = Instant::now();
 
-        let processed_data = gui_settings
-            .psf
-            .filters
-            .outer_iter()
-            .enumerate()
-            .par_bridge()
-            .map(|(i, _)| {
+        let processed_data = par_for_each_cancellable_reduce(
+            gui_settings
+                .psf
+                .filters
+                .outer_iter()
+                .enumerate()
+                .par_bridge(),
+            &abort_flag,
+            |(i, _)| {
                 if let Ok(mut p) = progress_lock.write() {
                     if if let Some(p_old) = *p {
                         p_old < (i as f32) / (gui_settings.psf.n_filters as f32)
@@ -518,15 +523,14 @@ impl Filter for Deconvolution {
                     }
                 }
 
-                filtered_data
-            })
-            .reduce(
-                || Array3::zeros(scan.filtered_data.dim()),
-                |mut acc, data| {
-                    acc += &data; // Accumulate the results to reconstruct the time traces
-                    acc
-                },
-            );
+                Some(filtered_data)
+            },
+            |mut acc, data| {
+                acc += &data;
+                acc
+            },
+            Array3::zeros(scan.filtered_data.dim()), // initial accumulator
+        );
         if let Ok(mut p) = progress_lock.write() {
             *p = Some(1.0);
         }
