@@ -78,6 +78,8 @@ license = "GPL-3.0"
 osx_minimum_system_version = "10.12"
 osx_url_schemes = ["ch.unibe.thzimageexplorer"]
 deb_depends = ["libclang-dev", "libgtk-3-dev", "libxcb-render0-dev", "libxcb-shape0-dev", "libxcb-xfixes0-dev", "libxkbcommon-dev", "libssl-dev"]
+osx_info_plist_exts = ["assets/Info.ext.plist"]
+osx_plugins = ["assets/DotTHzQLExtension.appex"]
 
 [package.metadata.wix]
 dbg-build = false
