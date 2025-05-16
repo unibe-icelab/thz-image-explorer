@@ -1,4 +1,5 @@
 use crate::config::ThreadCommunication;
+use crate::gui::application::Tab;
 use bevy::render::camera::{ImageRenderTarget, RenderTarget};
 use bevy::render::view::{NoFrustumCulling, RenderLayers};
 use bevy::window::PrimaryWindow;
@@ -9,6 +10,7 @@ use bevy_panorbit_camera::{ActiveCameraData, PanOrbitCamera};
 use bevy_voxel_plot::{InstanceData, InstanceMaterialData};
 use ndarray::{Array1, Array3, ArrayView1, Axis};
 use rayon::prelude::*;
+use std::f32::consts::TAU;
 use std::time::Instant;
 
 #[derive(Resource)]
@@ -74,7 +76,7 @@ fn jet_colormap(value: f32) -> (f32, f32, f32) {
 pub(crate) fn instance_from_data(
     time_span: f32,
     mut dataset: Array3<f32>,
-    opacity_threshold: f32
+    opacity_threshold: f32,
 ) -> (Vec<InstanceData>, f32, f32, f32) {
     let timer = Instant::now();
 
@@ -275,6 +277,26 @@ pub fn setup(
         // Setting manual to true ensures PanOrbitCameraPlugin will not overwrite this resource
         manual: true,
     });
+}
+
+// Animate the camera's position
+pub fn animate(
+    time: Res<Time>,
+    mut pan_orbit_query: Query<&mut PanOrbitCamera>,
+    thread_communication: Res<ThreadCommunication>,
+) {
+    //if thread_communication.gui_settings.tab == Tab::ThreeD {
+        for mut pan_orbit in pan_orbit_query.iter_mut() {
+            // Must set target values, not yaw/pitch directly
+            pan_orbit.target_yaw += 15f32.to_radians() * time.delta_secs();
+            pan_orbit.target_pitch = time.elapsed_secs_wrapped().sin() * TAU * 0.1;
+            pan_orbit.radius =
+                Some((((time.elapsed_secs_wrapped() * 2.0).cos() + 1.0) * 0.5) * 2.0 + 4.0);
+
+            // Force camera to update its transform
+            pan_orbit.force_update = true;
+        }
+   // }
 }
 
 pub fn three_dimensional_plot_ui(

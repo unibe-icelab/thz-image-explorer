@@ -3,9 +3,7 @@ use crate::data_container::DataPoint;
 use crate::data_thread::main_thread;
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::SelectedPixel;
-use crate::gui::threed_plot::{
-    set_enable_camera_controls_system, setup, CameraInputAllowed, OpacityThreshold,
-};
+use crate::gui::threed_plot::{animate, set_enable_camera_controls_system, setup, CameraInputAllowed, OpacityThreshold};
 use bevy::prelude::*;
 use bevy::render::render_resource::WgpuFeatures;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
@@ -147,6 +145,7 @@ fn main() {
         .add_systems(Startup, spawn_data_thread)
         .add_systems(Startup, setup_fonts)
         .add_systems(Update, update_gui)
+       // .add_systems(Update, animate)
         .add_systems(Update, set_enable_camera_controls_system)
         .run();
 }
