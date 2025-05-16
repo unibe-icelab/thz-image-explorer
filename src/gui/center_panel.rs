@@ -562,24 +562,24 @@ pub fn center_panel(
         let width = ui.available_size().x - 40.0 - *left_panel_width - *right_panel_width;
         ui.horizontal(|ui| {
             ui.add_space(*left_panel_width + 20.0);
-            let tabs = explorer.thread_communication.gui_settings.tab.to_arr();
+            let tabs = thread_communication.gui_settings.tab.to_arr();
             if ui
                 .selectable_label(tabs[0], Tab::Pulse.to_string())
                 .clicked()
             {
-                explorer.thread_communication.gui_settings.tab = Tab::Pulse;
+                thread_communication.gui_settings.tab = Tab::Pulse;
             }
             if ui
                 .selectable_label(tabs[1], Tab::RefractiveIndex.to_string())
                 .clicked()
             {
-                explorer.thread_communication.gui_settings.tab = Tab::RefractiveIndex;
+                thread_communication.gui_settings.tab = Tab::RefractiveIndex;
             }
             if ui
                 .selectable_label(tabs[2], Tab::ThreeD.to_string())
                 .clicked()
             {
-                explorer.thread_communication.gui_settings.tab = Tab::ThreeD;
+                thread_communication.gui_settings.tab = Tab::ThreeD;
             }
         });
 
@@ -587,7 +587,7 @@ pub fn center_panel(
 
         ui.horizontal(|ui| {
             ui.add_space(*left_panel_width + 20.0);
-            match explorer.thread_communication.gui_settings.tab {
+            match thread_communication.gui_settings.tab {
                 Tab::Pulse => pulse_tab(ui, height, width, spacing, *right_panel_width, explorer),
                 Tab::RefractiveIndex => {
                     refractive_index_tab(ui, height, width, spacing, *right_panel_width, explorer)

@@ -10,7 +10,7 @@ use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
 use crate::gui::matrix_plot::{ImageState, SelectedPixel};
 use crate::gui::right_panel::right_panel;
-use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage};
+use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage, SceneVisibility};
 use crate::math_tools::FftWindowType;
 use crate::APP_INFO;
 use bevy::prelude::*;
@@ -180,6 +180,7 @@ impl GuiSettingsContainer {
 }
 
 pub fn update_gui(
+    mut scene_visibility: ResMut<SceneVisibility>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut query: Query<(&mut InstanceMaterialData, &mut Mesh3d)>,
     cube_preview_image: Res<RenderImage>,
@@ -190,6 +191,15 @@ pub fn update_gui(
     mut cam_input: ResMut<CameraInputAllowed>,
     mut thread_communication: ResMut<ThreadCommunication>,
 ) {
+
+    if thread_communication.gui_settings.tab != Tab::ThreeD {
+        if let Ok((mut instance_data, _)) = query.single_mut() {
+            instance_data.instances.clear();
+        }
+    }
+
+    scene_visibility.0 = thread_communication.gui_settings.tab == Tab::ThreeD;
+
     let cube_preview_texture_id = contexts.image_id(&cube_preview_image).unwrap();
 
     let ctx = contexts.ctx_mut();

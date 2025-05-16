@@ -3,7 +3,7 @@ use crate::data_container::DataPoint;
 use crate::data_thread::main_thread;
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::SelectedPixel;
-use crate::gui::threed_plot::{animate, set_enable_camera_controls_system, setup, CameraInputAllowed, OpacityThreshold};
+use crate::gui::threed_plot::{animate, set_enable_camera_controls_system, setup, update_instance_buffer_system, CameraInputAllowed, OpacityThreshold, SceneVisibility};
 use bevy::prelude::*;
 use bevy::render::render_resource::WgpuFeatures;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
@@ -108,7 +108,7 @@ fn main() {
 
     // Start Bevy app
     App::new()
-        .insert_resource(WinitSettings::desktop_app())
+        //.insert_resource(WinitSettings::desktop_app())
         .add_plugins(
             DefaultPlugins
                 .set(RenderPlugin {
@@ -138,10 +138,12 @@ fn main() {
         })
         .add_plugins((VoxelMaterialPlugin, PanOrbitCameraPlugin))
         .insert_resource(thread_communication.clone())
-        .insert_resource(OpacityThreshold(0.1)) // Start with something that is not too high
+        .insert_resource(OpacityThreshold(0.1))
         .insert_resource(CameraInputAllowed(false))
         .insert_non_send_resource(THzImageExplorer::new(thread_communication))
+        .insert_resource(SceneVisibility(false))
         .add_systems(Startup, setup)
+        .add_systems(Update, update_instance_buffer_system.run_if(|vis: Res<SceneVisibility>| vis.0))
         .add_systems(Startup, spawn_data_thread)
         .add_systems(Startup, setup_fonts)
         .add_systems(Update, update_gui)

@@ -1,7 +1,6 @@
 use crate::config::ThreadCommunication;
-use crate::gui::application::Tab;
 use bevy::render::camera::{ImageRenderTarget, RenderTarget};
-use bevy::render::view::{NoFrustumCulling, RenderLayers};
+use bevy::render::view::RenderLayers;
 use bevy::window::PrimaryWindow;
 use bevy::{prelude::*, render::render_resource::*};
 use bevy_egui::egui::{epaint, Ui};
@@ -21,6 +20,34 @@ pub struct RenderImage(Handle<Image>);
 
 #[derive(Resource, Default)]
 pub struct CameraInputAllowed(pub bool);
+
+#[derive(Resource)]
+pub struct SceneVisibility(pub bool);
+
+pub fn update_instance_buffer_system(
+    visibility: Res<SceneVisibility>,
+    mut query: Query<(&mut InstanceMaterialData, &mut Mesh3d)>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    thread_communication: Res<ThreadCommunication>,
+    mut opacity_threshold: ResMut<OpacityThreshold>,
+) {
+    if !visibility.0 {
+        return;
+    }
+
+    if let Ok(read_guard) = thread_communication.voxel_plot_instances_lock.read() {
+        let (instances, cube_width, cube_height, cube_depth) = read_guard.clone();
+        let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
+
+        if let Ok((mut instance_data, mut mesh3d)) = query.single_mut() {
+            instance_data.instances = instances;
+            mesh3d.0 = new_mesh;
+            instance_data
+                .instances
+                .retain(|instance| instance.color[3] >= opacity_threshold.0);
+        }
+    }
+}
 
 // Generate a 1D Gaussian kernel
 fn gaussian_kernel1d(sigma: f32, radius: usize) -> Vec<f32> {
@@ -201,7 +228,7 @@ pub fn setup(
         // instancing, and that is not taken into account with the built-in frustum culling.
         // We must disable the built-in frustum culling by adding the `NoFrustumCulling` marker
         // component to avoid incorrect culling.
-        NoFrustumCulling,
+        // NoFrustumCulling,
     ));
 
     commands.insert_resource(AmbientLight {
@@ -286,17 +313,17 @@ pub fn animate(
     thread_communication: Res<ThreadCommunication>,
 ) {
     //if thread_communication.gui_settings.tab == Tab::ThreeD {
-        for mut pan_orbit in pan_orbit_query.iter_mut() {
-            // Must set target values, not yaw/pitch directly
-            pan_orbit.target_yaw += 15f32.to_radians() * time.delta_secs();
-            pan_orbit.target_pitch = time.elapsed_secs_wrapped().sin() * TAU * 0.1;
-            pan_orbit.radius =
-                Some((((time.elapsed_secs_wrapped() * 2.0).cos() + 1.0) * 0.5) * 2.0 + 4.0);
+    for mut pan_orbit in pan_orbit_query.iter_mut() {
+        // Must set target values, not yaw/pitch directly
+        pan_orbit.target_yaw += 15f32.to_radians() * time.delta_secs();
+        pan_orbit.target_pitch = time.elapsed_secs_wrapped().sin() * TAU * 0.1;
+        pan_orbit.radius =
+            Some((((time.elapsed_secs_wrapped() * 2.0).cos() + 1.0) * 0.5) * 2.0 + 4.0);
 
-            // Force camera to update its transform
-            pan_orbit.force_update = true;
-        }
-   // }
+        // Force camera to update its transform
+        pan_orbit.force_update = true;
+    }
+    // }
 }
 
 pub fn three_dimensional_plot_ui(
