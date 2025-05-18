@@ -191,7 +191,6 @@ pub fn update_gui(
     mut cam_input: ResMut<CameraInputAllowed>,
     mut thread_communication: ResMut<ThreadCommunication>,
 ) {
-
     if thread_communication.gui_settings.tab != Tab::ThreeD {
         if let Ok((mut instance_data, _)) = query.single_mut() {
             instance_data.instances.clear();
@@ -220,12 +219,23 @@ pub fn update_gui(
         &mut thread_communication,
     );
 
-    left_panel(ctx, &mut explorer, &left_panel_width, &mut image_state);
+    left_panel(
+        ctx,
+        &mut explorer,
+        &left_panel_width,
+        &mut image_state,
+        &mut thread_communication,
+    );
 
-    right_panel(ctx, &mut explorer, &right_panel_width);
+    right_panel(
+        ctx,
+        &mut explorer,
+        &right_panel_width,
+        &mut thread_communication,
+    );
 
-    explorer.thread_communication.gui_settings.x = ctx.used_size().x;
-    explorer.thread_communication.gui_settings.y = ctx.used_size().y;
+    thread_communication.gui_settings.x = ctx.used_size().x;
+    thread_communication.gui_settings.y = ctx.used_size().y;
 }
 
 /// Main application struct for the THz Image Explorer GUI.
@@ -275,7 +285,6 @@ pub struct THzImageExplorer {
     pub(crate) other_files: Vec<PathBuf>,
     pub(crate) selected_file_name: String,
     pub(crate) scroll_to_selection: bool,
-    pub(crate) thread_communication: ThreadCommunication,
     pub(crate) settings_window_open: bool,
     pub(crate) update_text: String,
     #[cfg(feature = "self_update")]
@@ -404,7 +413,6 @@ impl THzImageExplorer {
             val: PlotPoint { x: 0.0, y: 0.0 },
             mid_point: 50.0,
             bw: false,
-            thread_communication,
             settings_window_open: false,
             update_text: "".to_string(),
             #[cfg(feature = "self_update")]

@@ -1,3 +1,4 @@
+use crate::config::ThreadCommunication;
 use crate::gui::application::{FileDialogState, THzImageExplorer};
 #[cfg(feature = "self_update")]
 use crate::update::{check_update, update};
@@ -24,6 +25,7 @@ fn gaussian(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
 pub fn settings_window(
     ctx: &egui::Context,
     explorer: &mut THzImageExplorer,
+    thread_communication: &mut ThreadCommunication,
 ) -> Option<InnerResponse<Option<()>>> {
     egui::Window::new("Settings")
         .fixed_size(Vec2 { x: 600.0, y: 200.0 })
@@ -36,15 +38,14 @@ pub fn settings_window(
                     ui.label("Theme: ");
                     if ui
                         .add(ThemeSwitch::new(
-                            &mut explorer.thread_communication.gui_settings.theme_preference,
+                            &mut thread_communication.gui_settings.theme_preference,
                         ))
                         .changed()
                     {
                         ui.ctx()
-                            .set_theme(explorer.thread_communication.gui_settings.theme_preference);
+                            .set_theme(thread_communication.gui_settings.theme_preference);
                     };
-                    explorer.thread_communication.gui_settings.dark_mode =
-                        ui.visuals() == &Visuals::dark();
+                    thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
 
                     ui.end_row();
                     ui.end_row();
@@ -68,18 +69,11 @@ pub fn settings_window(
                     }
 
                     // TODO: maybe change this check here...
-                    if explorer
-                        .thread_communication
-                        .gui_settings
-                        .psf
-                        .popt_x
-                        .is_empty()
-                    {
+                    if thread_communication.gui_settings.psf.popt_x.is_empty() {
                         ui.colored_label(egui::Color32::RED, "No PSF loaded.");
                     } else {
                         ui.label(
-                            explorer
-                                .thread_communication
+                            thread_communication
                                 .gui_settings
                                 .beam_shape_path
                                 .file_name()
@@ -105,12 +99,7 @@ pub fn settings_window(
               ;
 
             // Assuming `beam_x` is of type `Array2<f64>`
-            let beam_x_array = explorer
-                .thread_communication
-                .gui_settings
-                .clone()
-                .psf
-                .popt_x;
+            let beam_x_array = thread_communication.gui_settings.clone().psf.popt_x;
 
             let start = -5.0;
             let end = 5.0;
@@ -146,7 +135,7 @@ pub fn settings_window(
 
             let plot_height = 100.0;
             let plot_width = 100.0;
-            let data = &explorer.thread_communication.gui_settings.psf.popt_x;
+            let data = &thread_communication.gui_settings.psf.popt_x;
 
             let width = data.len_of(Axis(0));
             let height = data.len_of(Axis(1));

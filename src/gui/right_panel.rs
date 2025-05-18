@@ -1,4 +1,4 @@
-use crate::config::ConfigCommand;
+use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::filters::filter::FILTER_REGISTRY;
 use crate::gui::application::THzImageExplorer;
 use crate::gui::settings_window::settings_window;
@@ -19,9 +19,14 @@ use ndarray::Array1;
 use std::f32::consts::E;
 
 #[allow(clippy::too_many_arguments)]
-pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_panel_width: &f32) {
+pub fn right_panel(
+    ctx: &egui::Context,
+    explorer: &mut THzImageExplorer,
+    right_panel_width: &f32,
+    thread_communication: &mut ThreadCommunication,
+) {
     let mut data = DataPoint::default();
-    if let Ok(read_guard) = explorer.thread_communication.data_lock.read() {
+    if let Ok(read_guard) = thread_communication.data_lock.read() {
         data = read_guard.clone();
     }
 
@@ -42,16 +47,13 @@ pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_p
                     .show(ui, |ui| {
                         ui.label("Log Mode: ");
                         if ui
-                            .add(toggle(
-                                &mut explorer.thread_communication.gui_settings.log_plot,
-                            ))
+                            .add(toggle(&mut thread_communication.gui_settings.log_plot))
                             .changed()
                         {
-                            explorer
-                                .thread_communication
+                            thread_communication
                                 .config_tx
                                 .send(ConfigCommand::SetFFTLogPlot(
-                                    explorer.thread_communication.gui_settings.log_plot,
+                                    thread_communication.gui_settings.log_plot,
                                 ))
                                 .expect("unable to send config");
                         }
@@ -59,16 +61,13 @@ pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_p
 
                         ui.label("Normalize FFT: ");
                         if ui
-                            .add(toggle(
-                                &mut explorer.thread_communication.gui_settings.normalize_fft,
-                            ))
+                            .add(toggle(&mut thread_communication.gui_settings.normalize_fft))
                             .changed()
                         {
-                            explorer
-                                .thread_communication
+                            thread_communication
                                 .config_tx
                                 .send(ConfigCommand::SetFFTNormalization(
-                                    explorer.thread_communication.gui_settings.normalize_fft,
+                                    thread_communication.gui_settings.normalize_fft,
                                 ))
                                 .expect("unable to send config");
                         }
@@ -80,7 +79,7 @@ pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_p
 
                         if ui
                             .add(egui::Slider::new(
-                                &mut explorer.thread_communication.gui_settings.down_scaling,
+                                &mut thread_communication.gui_settings.down_scaling,
                                 1..=10,
                             ))
                             .changed()
@@ -88,59 +87,46 @@ pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_p
                             explorer.pixel_selected.rect = vec![
                                 [
                                     (explorer.pixel_selected.x as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling
-                                            as f64,
+                                        / thread_communication.gui_settings.down_scaling as f64,
                                     (explorer.pixel_selected.y as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling
-                                            as f64,
+                                        / thread_communication.gui_settings.down_scaling as f64,
                                 ],
                                 [
                                     (explorer.pixel_selected.x as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling
-                                            as f64
+                                        / thread_communication.gui_settings.down_scaling as f64
                                         + 1.0,
                                     (explorer.pixel_selected.y as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling
-                                            as f64,
+                                        / thread_communication.gui_settings.down_scaling as f64,
                                 ],
                                 [
                                     (explorer.pixel_selected.x as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling
-                                            as f64
+                                        / thread_communication.gui_settings.down_scaling as f64
                                         + 1.0,
                                     (explorer.pixel_selected.y as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling
-                                            as f64
+                                        / thread_communication.gui_settings.down_scaling as f64
                                         + 1.0,
                                 ],
                                 [
                                     (explorer.pixel_selected.x as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling
-                                            as f64,
+                                        / thread_communication.gui_settings.down_scaling as f64,
                                     (explorer.pixel_selected.y as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling
-                                            as f64
+                                        / thread_communication.gui_settings.down_scaling as f64
                                         + 1.0,
                                 ],
                                 [
                                     (explorer.pixel_selected.x as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling
-                                            as f64,
+                                        / thread_communication.gui_settings.down_scaling as f64,
                                     (explorer.pixel_selected.y as f64)
-                                        / explorer.thread_communication.gui_settings.down_scaling
-                                            as f64,
+                                        / thread_communication.gui_settings.down_scaling as f64,
                                 ],
                             ];
-                            if let Ok(mut s) = explorer.thread_communication.scaling_lock.write() {
-                                *s = explorer.thread_communication.gui_settings.down_scaling as u8;
+                            if let Ok(mut s) = thread_communication.scaling_lock.write() {
+                                *s = thread_communication.gui_settings.down_scaling as u8;
                             }
-                            if let Ok(mut write_guard) =
-                                explorer.thread_communication.pixel_lock.write()
-                            {
+                            if let Ok(mut write_guard) = thread_communication.pixel_lock.write() {
                                 *write_guard = explorer.pixel_selected.clone();
                             }
-                            explorer
-                                .thread_communication
+                            thread_communication
                                 .config_tx
                                 .send(ConfigCommand::SetDownScaling)
                                 .expect("unable to send config");
@@ -186,8 +172,7 @@ pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_p
                     });
                 if fft_window_type_old != explorer.fft_window_type {
                     println!("changing type");
-                    explorer
-                        .thread_communication
+                    thread_communication
                         .config_tx
                         .send(ConfigCommand::SetFftWindowType(
                             explorer.fft_window_type.clone(),
@@ -298,13 +283,11 @@ pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_p
                         .changed();
 
                     if slider_changed.inner || val1_changed || val2_changed {
-                        explorer
-                            .thread_communication
+                        thread_communication
                             .config_tx
                             .send(ConfigCommand::SetFFTWindowLow(explorer.fft_bounds[0]))
                             .unwrap();
-                        explorer
-                            .thread_communication
+                        thread_communication
                             .config_tx
                             .send(ConfigCommand::SetFFTWindowHigh(explorer.fft_bounds[1]))
                             .unwrap();
@@ -324,7 +307,7 @@ pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_p
                     .zip(data.signal_1_fft.iter())
                     .map(|(x, y)| {
                         let mut fft;
-                        if explorer.thread_communication.gui_settings.log_plot {
+                        if thread_communication.gui_settings.log_plot {
                             fft = (*y + 1.0).log(E);
                         } else {
                             fft = *y;
@@ -434,13 +417,11 @@ pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_p
                         .changed();
 
                     if slider_changed.inner || val1_changed || val2_changed {
-                        explorer
-                            .thread_communication
+                        thread_communication
                             .config_tx
                             .send(ConfigCommand::SetFFTFilterLow(explorer.filter_bounds[0]))
                             .unwrap();
-                        explorer
-                            .thread_communication
+                        thread_communication
                             .config_tx
                             .send(ConfigCommand::SetFFTFilterHigh(explorer.filter_bounds[1]))
                             .unwrap();
@@ -545,8 +526,7 @@ pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_p
                             explorer.time_window[0] = *data.time.first().unwrap_or(&1000.0);
                             explorer.time_window[1] = *data.time.last().unwrap_or(&1050.0);
                         }
-                        explorer
-                            .thread_communication
+                        thread_communication
                             .config_tx
                             .send(ConfigCommand::SetTimeWindow(explorer.time_window))
                             .unwrap();
@@ -562,8 +542,7 @@ pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_p
                 {
                     explorer.time_window[0] += 1.0;
                     explorer.time_window[1] = width + explorer.time_window[0];
-                    explorer
-                        .thread_communication
+                    thread_communication
                         .config_tx
                         .send(ConfigCommand::SetTimeWindow(explorer.time_window))
                         .unwrap();
@@ -574,8 +553,7 @@ pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_p
                 {
                     explorer.time_window[0] -= 1.0;
                     explorer.time_window[1] = width + explorer.time_window[0];
-                    explorer
-                        .thread_communication
+                    thread_communication
                         .config_tx
                         .send(ConfigCommand::SetTimeWindow(explorer.time_window))
                         .unwrap();
@@ -595,8 +573,7 @@ pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_p
                     explorer.time_window[0] -= zoom_delta * zoom_factor;
 
                     if scroll_delta != Vec2::ZERO || zoom_delta != 0.0 {
-                        explorer
-                            .thread_communication
+                        thread_communication
                             .config_tx
                             .send(ConfigCommand::SetTimeWindow(explorer.time_window))
                             .unwrap();
@@ -611,20 +588,17 @@ pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_p
                     for filter in filters.iter_mut() {
                         ui.separator();
                         ui.heading(filter.config().clone().name);
-                        update_requested |=
-                            filter.ui(ui, &mut explorer.thread_communication).changed();
+                        update_requested |= filter.ui(ui, thread_communication).changed();
                     }
                     if update_requested {
-                        explorer
-                            .thread_communication
+                        thread_communication
                             .config_tx
                             .send(ConfigCommand::UpdateFilters)
                             .unwrap();
                     }
                 }
 
-                explorer.thread_communication.gui_settings.dark_mode =
-                    ui.visuals() == &Visuals::dark();
+                thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
 
                 ui.separator();
                 ui.collapsing("Debug logs:", |ui| {
@@ -652,7 +626,7 @@ pub fn right_panel(ctx: &egui::Context, explorer: &mut THzImageExplorer, right_p
                     explorer.settings_window_open = true;
                 }
                 if explorer.settings_window_open {
-                    settings_window(ui.ctx(), explorer);
+                    settings_window(ui.ctx(), explorer, thread_communication);
                 }
 
                 ui.add_space(5.0);

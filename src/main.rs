@@ -3,12 +3,16 @@ use crate::data_container::DataPoint;
 use crate::data_thread::main_thread;
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::SelectedPixel;
-use crate::gui::threed_plot::{animate, set_enable_camera_controls_system, setup, update_instance_buffer_system, CameraInputAllowed, OpacityThreshold, SceneVisibility};
+use crate::gui::threed_plot::{
+    animate, set_enable_camera_controls_system, setup, update_instance_buffer_system,
+    CameraInputAllowed, OpacityThreshold, SceneVisibility,
+};
 use bevy::prelude::*;
 use bevy::render::render_resource::WgpuFeatures;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy::render::{RenderDebugFlags, RenderPlugin};
 use bevy::window::ExitCondition;
+use bevy::winit::WinitSettings;
 use bevy_egui::egui;
 use bevy_egui::egui::{vec2, Visuals};
 use bevy_egui::{EguiContexts, EguiPlugin};
@@ -20,7 +24,6 @@ use ndarray::{Array1, Array2, Array3};
 use preferences::{AppInfo, Preferences};
 use std::sync::{Arc, RwLock};
 use std::thread;
-use bevy::winit::WinitSettings;
 
 mod config;
 mod data_container;
@@ -143,11 +146,14 @@ fn main() {
         .insert_non_send_resource(THzImageExplorer::new(thread_communication))
         .insert_resource(SceneVisibility(false))
         .add_systems(Startup, setup)
-        .add_systems(Update, update_instance_buffer_system.run_if(|vis: Res<SceneVisibility>| vis.0))
+        .add_systems(
+            Update,
+            update_instance_buffer_system.run_if(|vis: Res<SceneVisibility>| vis.0),
+        )
         .add_systems(Startup, spawn_data_thread)
         .add_systems(Startup, setup_fonts)
         .add_systems(Update, update_gui)
-       // .add_systems(Update, animate)
+        // .add_systems(Update, animate)
         .add_systems(Update, set_enable_camera_controls_system)
         .run();
 }
