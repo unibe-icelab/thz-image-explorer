@@ -5,10 +5,10 @@
 use crate::config::ThreadCommunication;
 use crate::data_container::ScannedImage;
 use crate::gui::application::GuiSettingsContainer;
-#[allow(unused_imports)]
-use ctor::ctor;
 // this dependency is required by the `register_filter` macro
 use bevy_egui::egui;
+#[allow(unused_imports)]
+use ctor::ctor;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -105,8 +105,9 @@ pub trait Filter: Send + Sync + Debug {
 /// - `Frequency`: The filter processes data in the frequency domain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FilterDomain {
-    Time,
+    TimeBeforeFFT,
     Frequency,
+    TimeAfterFFT,
 }
 
 /// A structure representing the configuration and metadata of a filter.

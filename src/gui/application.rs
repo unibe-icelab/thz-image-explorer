@@ -5,6 +5,7 @@
 
 use crate::config::ThreadCommunication;
 use crate::data_container::DataPoint;
+use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
 use crate::filters::psf::PSF;
 use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
@@ -12,7 +13,6 @@ use crate::gui::matrix_plot::{ImageState, SelectedPixel};
 use crate::gui::right_panel::right_panel;
 use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage, SceneVisibility};
 use crate::math_tools::FftWindowType;
-use crate::APP_INFO;
 use bevy::prelude::*;
 use bevy_egui::egui::ThemePreference;
 use bevy_egui::{egui, EguiContexts};
@@ -23,7 +23,6 @@ use egui_file_dialog::information_panel::InformationPanel;
 use egui_file_dialog::FileDialog;
 use egui_plot::PlotPoint;
 use home::home_dir;
-use preferences::Preferences;
 use self_update::update::Release;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
@@ -287,6 +286,21 @@ pub struct THzImageExplorer {
     pub(crate) scroll_to_selection: bool,
     pub(crate) settings_window_open: bool,
     pub(crate) update_text: String,
+    /// Data for the filters in time domain before FFT
+    pub(crate) time_domain_data_1: Vec<[Vec<f64>; 2]>,
+    /// Data for the filters in frequency domain after FFT and before iFFT
+    pub(crate) frequency_domain_data: Vec<[Vec<f64>; 3]>,
+    /// Data for the filters in time domain after FFT/iFFT
+    pub(crate) time_domain_data_2: Vec<[Vec<f64>; 2]>,
+    /// Maps the filter indices to the corresponding input data indices in time domain before FFT
+    /// Note that the output will always be saved in the corresponding index in the data Vec.
+    pub(crate) time_domain_filter_mapping_1: Vec<(usize, usize)>,
+    /// Maps the filter indices to the corresponding input data indices in frequency domain after FFT and before iFFT
+    /// Note that the output will always be saved in the corresponding index in the data Vec.
+    pub(crate) frequency_domain_filter_mapping: Vec<(usize, usize)>,
+    /// Maps the filter indices to the corresponding input data indices in time domain after FFT
+    /// Note that the output will always be saved in the corresponding index in the data Vec.
+    pub(crate) time_domain_filter_mapping_2: Vec<(usize, usize)>,
     #[cfg(feature = "self_update")]
     pub(crate) new_release: Option<Release>,
 }
@@ -355,6 +369,32 @@ impl THzImageExplorer {
         //         eframe::get_value(storage, "file_dialog_storage").unwrap_or_default()
         // }
 
+        let mut time_domain_data_1 = vec![];
+        let mut frequency_domain_data = vec![];
+        let mut time_domain_data_2 = vec![];
+        let mut time_domain_filter_mapping_1 = vec![];
+        let mut frequency_domain_filter_mapping = vec![];
+        let mut time_domain_filter_mapping_2 = vec![];
+
+        // populate with standard / empty values
+        if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+            for (i, filter) in filters.iter_mut().enumerate() {
+                match filter.as_ref().config().domain {
+                    FilterDomain::TimeBeforeFFT => {
+                        time_domain_data_1.push([vec![], vec![]]);
+                        time_domain_filter_mapping_1.push((i, i));
+                    }
+                    FilterDomain::Frequency => {
+                        frequency_domain_data.push([vec![], vec![], vec![]]);
+                        frequency_domain_filter_mapping.push((i, i));
+                    }
+                    FilterDomain::TimeAfterFFT => {
+                        time_domain_data_2.push([vec![], vec![]]);
+                        time_domain_filter_mapping_2.push((i, i));
+                    }
+                }
+            }
+        }
         Self {
             water_vapour_lines,
             wp: include_bytes!("../../images/WP-Logo.png"),
@@ -415,6 +455,12 @@ impl THzImageExplorer {
             bw: false,
             settings_window_open: false,
             update_text: "".to_string(),
+            time_domain_data_1,
+            frequency_domain_data,
+            time_domain_data_2,
+            time_domain_filter_mapping_1,
+            frequency_domain_filter_mapping,
+            time_domain_filter_mapping_2,
             #[cfg(feature = "self_update")]
             new_release: None,
         }

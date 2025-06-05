@@ -562,6 +562,18 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                 selected_pixel = pixel.clone();
             }
 
+            // STEP 1: apply filters in time domain
+
+            // STEP 2: calculate FFT
+
+            // STEP 3: apply filters in frequency domain
+
+            // STEP 4: calculate inverse FFT
+
+            // STEP 5: apply filters in time domain
+
+            // STEP 6: update intensity image
+
             if let Some(r2c) = &scan.r2c {
                 if let Ok(mut data) = thread_communication.data_lock.write() {
                     data.time = scan.time.to_vec();
