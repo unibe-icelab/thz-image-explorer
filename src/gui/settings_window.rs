@@ -14,9 +14,9 @@ use self_update::restart::restart;
 #[cfg(feature = "self_update")]
 use semver::Version;
 
-fn gaussian(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
-    let x0 = params[0];
-    let w = params[1];
+fn gaussian(x: &Array1<f64>, params: &[f32]) -> Array1<f64> {
+    let x0 = params[0] as f64;
+    let w = params[1] as f64;
     x.mapv(|xi| {
         (2.0 * (-2.0 * (xi - x0).powf(2.0) / (w * w)) / (2.0 * std::f64::consts::PI).sqrt() * w)
             .exp()
@@ -114,7 +114,7 @@ pub fn settings_window(
                 let binding = beam_x_array.row(0);
                 let first_row = binding.as_slice().unwrap();
 
-                let beam_x_vec: Vec<[f64; 2]> = gaussian(&array, &first_row)
+                let beam_x_vec: Vec<[f64; 2]> = gaussian(&array, first_row)
                     .iter()
                     .zip(array.iter())
                     .map(|(p, x)| [*x, *p])

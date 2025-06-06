@@ -59,7 +59,7 @@ pub trait Filter: Send + Sync + Debug + CloneBoxedFilter {
     /// - `filter_data`: A mutable reference to the image to be processed.
     /// - `gui_settings`: Mutable reference to GUI settings associated with the filter.
     fn filter(
-        &self,
+        &mut self,
         filter_data: &mut ScannedImageFilterData,
         gui_settings: &mut GuiSettingsContainer,
         progress_lock: &mut Arc<RwLock<Option<f32>>>,

@@ -37,7 +37,7 @@ impl Filter for TiltCompensation {
     }
 
     fn filter(
-        &self,
+        &mut self,
         scan: &mut ScannedImageFilterData,
         _gui_settings: &mut GuiSettingsContainer,
         _progress_lock: &mut Arc<RwLock<Option<f32>>>,

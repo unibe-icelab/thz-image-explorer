@@ -3,7 +3,7 @@
 //! FFT operations for signal processing.
 
 use crate::config::{ConfigCommand, ConfigContainer, ThreadCommunication};
-use crate::data_container::{DataPoint, ScannedImage};
+use crate::data_container::{DataPoint, ScannedImage, ScannedImageFilterData};
 use crate::filters::filter::{Filter, FILTER_REGISTRY};
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::io::{
@@ -573,7 +573,8 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 .get_mut(&filter.config().name)
                             {
                                 filter.filter(
-                                    &mut scan,
+                                    // todo!!
+                                    &mut ScannedImageFilterData::default(),
                                     &mut thread_communication.gui_settings,
                                     progress,
                                     &thread_communication.abort_flag,

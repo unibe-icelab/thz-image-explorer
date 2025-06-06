@@ -9,10 +9,10 @@ use crate::math_tools::{
 };
 use crate::update::check_update;
 use crate::DataPoint;
-use chrono::Utc;
 use bevy_egui::egui;
 use bevy_egui::egui::panel::Side;
 use bevy_egui::egui::{vec2, DragValue, Stroke, Vec2, Visuals};
+use chrono::Utc;
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use itertools_num::linspace;
@@ -346,189 +346,74 @@ pub fn right_panel(
                         .iter()
                         .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi[1]));
 
-                let mut filter_vals: Vec<[f64; 2]> = Vec::new();
-                let filter_f: Vec<f64> = linspace::<f64>(0.0, 10.0, data.time.len()).collect();
-                for fi in filter_f {
-                    let a = if fi >= explorer.filter_bounds[0] as f64
-                        && fi <= explorer.filter_bounds[1] as f64
-                    {
-                        max
-                    } else {
-                        0.0
-                    };
-                    filter_vals.push([fi, a]);
-                }
-
-                let window_plot = Plot::new("FFT Filter")
-                    .include_x(0.0)
-                    .include_x(10.0)
-                    .include_y(0.0)
-                    .allow_drag(false)
-                    .allow_zoom(false)
-                    .allow_scroll(false)
-                    .set_margin_fraction(Vec2 { x: 0.0, y: 0.05 })
-                    .height(100.0)
-                    .width(right_panel_width * 0.9);
-                ui.vertical_centered(|ui| {
-                    window_plot.show(ui, |window_plot_ui| {
-                        window_plot_ui.line(
-                            Line::new(PlotPoints::from(spectrum_vals))
-                                .color(egui::Color32::RED)
-                                .style(LineStyle::Solid)
-                                .name("Spectrum"),
-                        );
-                        window_plot_ui.line(
-                            Line::new(PlotPoints::from(filter_vals))
-                                .color(egui::Color32::BLUE)
-                                .style(LineStyle::Solid)
-                                .name("Filter"),
-                        );
-                        window_plot_ui.vline(
-                            VLine::new(explorer.filter_bounds[0])
-                                .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                                .name("Filter Lower Bound"),
-                        );
-                        window_plot_ui.vline(
-                            VLine::new(explorer.filter_bounds[1])
-                                .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                                .name("Filter Upper Bound"),
-                        );
-                    });
-                });
-
-                let slider_changed = ui.horizontal(|ui| {
-                    let right_offset = 0.09 * right_panel_width;
-                    let left_offset = 0.01 * right_panel_width;
-                    ui.add_space(left_offset);
-                    // Display slider, linked to the same range as the plot
-                    let mut filter_lower_bound = explorer.filter_bounds[0];
-                    let mut filter_upper_bound = explorer.filter_bounds[1];
-
-                    let slider = ui
-                        .add(
-                            DoubleSlider::new(
-                                &mut filter_lower_bound,
-                                &mut filter_upper_bound,
-                                0.0..=10.0,
-                            )
-                            .zoom_factor(2.0)
-                            .scroll_factor(0.005)
-                            .separation_distance(0.05)
-                            .width(right_panel_width - left_offset - right_offset),
-                        )
-                        .on_hover_text(egui::RichText::new(format!(
-                            "{} Scroll and Zoom to adjust the sliders. Double Click to reset.",
-                            egui_phosphor::regular::INFO
-                        )));
-                    let slider_changed = slider.changed();
-                    if slider.double_clicked() {
-                        filter_lower_bound = 0.0;
-                        filter_upper_bound = 10.0;
-                    }
-                    explorer.filter_bounds = [filter_lower_bound, filter_upper_bound];
-                    slider_changed
-                });
-
-                ui.horizontal(|ui| {
-                    let val1_changed = ui
-                        .add(DragValue::new(&mut explorer.filter_bounds[0]))
-                        .changed();
-
-                        ui.add_space(0.75 * right_panel_width);
-
-                    let val2_changed = ui
-                        .add(DragValue::new(&mut explorer.filter_bounds[1]))
-                        .changed();
-
-                    if slider_changed.inner || val1_changed || val2_changed {
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::SetFFTFilterLow(explorer.filter_bounds[0]))
-                            .unwrap();
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::SetFFTFilterHigh(explorer.filter_bounds[1]))
-                            .unwrap();
-                    }
-                });
-
-                ui.separator();
-                ui.add_space(10.0);
-                ui.vertical_centered(|ui| {
-                    ui.heading("---------- iFFT ----------");
-                });
-
-                ui.add_space(10.0);
-
-                ui.separator();
-                ui.heading("Time Domain: ");
-                ui.vertical(|ui| {
-                    if !thread_communication.gui_settings.filter_ui_active {
-                        ui.disable();
+                    let mut filter_vals: Vec<[f64; 2]> = Vec::new();
+                    let filter_f: Vec<f64> = linspace::<f64>(0.0, 10.0, data.time.len()).collect();
+                    for fi in filter_f {
+                        let a = if fi >= explorer.filter_bounds[0] as f64
+                            && fi <= explorer.filter_bounds[1] as f64
+                        {
+                            max
+                        } else {
+                            0.0
+                        };
+                        filter_vals.push([fi, a]);
                     }
 
-                    let zoom_factor = 5.0;
-                    let scroll_factor = 0.01;
-
-                    let mut window_vals: Vec<[f64; 2]> = Vec::new();
-                    for i in 0..data.time.len() {
-                        window_vals.push([data.time[i] as f64, data.signal_1[i] as f64]);
-                    }
-                    let time_window_plot = Plot::new("Time Window")
+                    let window_plot = Plot::new("FFT Filter")
+                        .include_x(0.0)
+                        .include_x(10.0)
+                        .include_y(0.0)
                         .allow_drag(false)
+                        .allow_zoom(false)
+                        .allow_scroll(false)
                         .set_margin_fraction(Vec2 { x: 0.0, y: 0.05 })
                         .height(100.0)
-                        .allow_scroll(false)
-                        .allow_zoom(false)
                         .width(right_panel_width * 0.9);
-                    let ui_response = ui.vertical_centered(|ui| {
-                        time_window_plot.show(ui, |window_plot_ui| {
+                    ui.vertical_centered(|ui| {
+                        window_plot.show(ui, |window_plot_ui| {
                             window_plot_ui.line(
-                                Line::new(PlotPoints::from(window_vals))
+                                Line::new(PlotPoints::from(spectrum_vals))
                                     .color(egui::Color32::RED)
                                     .style(LineStyle::Solid)
-                                    .name("Pulse"),
+                                    .name("Spectrum"),
+                            );
+                            window_plot_ui.line(
+                                Line::new(PlotPoints::from(filter_vals))
+                                    .color(egui::Color32::BLUE)
+                                    .style(LineStyle::Solid)
+                                    .name("Filter"),
                             );
                             window_plot_ui.vline(
-                                // TODO: adjust this
-                                VLine::new(time_window[0])
+                                VLine::new(explorer.filter_bounds[0])
                                     .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                                    .name("Lower Bound"),
+                                    .name("Filter Lower Bound"),
                             );
                             window_plot_ui.vline(
-                                VLine::new(time_window[1])
+                                VLine::new(explorer.filter_bounds[1])
                                     .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                                    .name("Upper Bound"),
+                                    .name("Filter Upper Bound"),
                             );
-                        })
+                        });
                     });
-
-                    ui_response
-                        .response
-                        .on_hover_text(egui::RichText::new(format!(
-                            "{} Scroll and Zoom to adjust the sliders.",
-                            egui_phosphor::regular::INFO
-                        )));
-                    let plot_response = ui_response.inner;
 
                     let slider_changed = ui.horizontal(|ui| {
                         let right_offset = 0.09 * right_panel_width;
                         let left_offset = 0.01 * right_panel_width;
                         ui.add_space(left_offset);
                         // Display slider, linked to the same range as the plot
-                        let mut time_window_lower_bound = time_window[0];
-                        let mut time_window_upper_bound = time_window[1];
-                        let lower = data.time.first().unwrap_or(&1000.0);
-                        let upper = data.time.last().unwrap_or(&1050.0);
+                        let mut filter_lower_bound = explorer.filter_bounds[0];
+                        let mut filter_upper_bound = explorer.filter_bounds[1];
+
                         let slider = ui
                             .add(
                                 DoubleSlider::new(
-                                    &mut time_window_lower_bound,
-                                    &mut time_window_upper_bound,
-                                    *lower..=*upper,
+                                    &mut filter_lower_bound,
+                                    &mut filter_upper_bound,
+                                    0.0..=10.0,
                                 )
-                                .zoom_factor(zoom_factor)
-                                .separation_distance(1.0)
+                                .zoom_factor(2.0)
+                                .scroll_factor(0.005)
+                                .separation_distance(0.05)
                                 .width(right_panel_width - left_offset - right_offset),
                             )
                             .on_hover_text(egui::RichText::new(format!(
@@ -537,196 +422,325 @@ pub fn right_panel(
                             )));
                         let slider_changed = slider.changed();
                         if slider.double_clicked() {
-                            time_window_lower_bound = *lower;
-                            time_window_upper_bound = *upper;
+                            filter_lower_bound = 0.0;
+                            filter_upper_bound = 10.0;
                         }
-                        *time_window = [time_window_lower_bound, time_window_upper_bound];
+                        explorer.filter_bounds = [filter_lower_bound, filter_upper_bound];
                         slider_changed
                     });
 
                     ui.horizontal(|ui| {
-                        let val1_changed = ui.add(DragValue::new(&mut time_window[0])).changed();
+                        let val1_changed = ui
+                            .add(DragValue::new(&mut explorer.filter_bounds[0]))
+                            .changed();
 
                         ui.add_space(0.75 * right_panel_width);
 
-                        let val2_changed = ui.add(DragValue::new(&mut time_window[1])).changed();
+                        let val2_changed = ui
+                            .add(DragValue::new(&mut explorer.filter_bounds[1]))
+                            .changed();
 
                         if slider_changed.inner || val1_changed || val2_changed {
-                            if time_window[0] == time_window[1] {
-                                time_window[0] = *data.time.first().unwrap_or(&1000.0);
-                                time_window[1] = *data.time.last().unwrap_or(&1050.0);
-                            }
                             thread_communication
                                 .config_tx
-                                .send(ConfigCommand::SetTimeWindow(*time_window))
+                                .send(ConfigCommand::SetFFTFilterLow(explorer.filter_bounds[0]))
+                                .unwrap();
+                            thread_communication
+                                .config_tx
+                                .send(ConfigCommand::SetFFTFilterHigh(explorer.filter_bounds[1]))
                                 .unwrap();
                         }
                     });
 
-                    let width = time_window[1] - time_window[0];
-                    let first = *data.time.first().unwrap_or(&1000.0);
-                    let last = *data.time.last().unwrap_or(&1050.0);
+                    ui.separator();
+                    ui.add_space(10.0);
+                    ui.vertical_centered(|ui| {
+                        ui.heading("---------- iFFT ----------");
+                    });
 
-                    if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && time_window[1] < last {
-                        time_window[0] += 1.0;
-                        time_window[1] = width + time_window[0];
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::SetTimeWindow(*time_window))
-                            .unwrap();
-                    }
+                    ui.add_space(10.0);
 
-                    if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) && time_window[0] > first {
-                        time_window[0] -= 1.0;
-                        time_window[1] = width + time_window[0];
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::SetTimeWindow(*time_window))
-                            .unwrap();
-                    }
+                    ui.separator();
+                    ui.heading("Time Domain: ");
+                    ui.vertical(|ui| {
+                        if !thread_communication.gui_settings.filter_ui_active {
+                            ui.disable();
+                        }
 
-                    // scroll through time axis
-                    if plot_response.response.hovered() {
-                        let scroll_delta = ctx.input(|i| i.smooth_scroll_delta);
-                        time_window[1] += scroll_delta.x * scroll_factor;
-                        time_window[0] += scroll_delta.x * scroll_factor;
+                        let zoom_factor = 5.0;
+                        let scroll_factor = 0.01;
 
-                        time_window[1] += scroll_delta.y * scroll_factor;
-                        time_window[0] += scroll_delta.y * scroll_factor;
-                        let zoom_delta = ctx.input(|i| i.zoom_delta() - 1.0);
+                        let mut window_vals: Vec<[f64; 2]> = Vec::new();
+                        for i in 0..data.time.len() {
+                            window_vals.push([data.time[i] as f64, data.signal_1[i] as f64]);
+                        }
+                        let time_window_plot = Plot::new("Time Window")
+                            .allow_drag(false)
+                            .set_margin_fraction(Vec2 { x: 0.0, y: 0.05 })
+                            .height(100.0)
+                            .allow_scroll(false)
+                            .allow_zoom(false)
+                            .width(right_panel_width * 0.9);
+                        let ui_response = ui.vertical_centered(|ui| {
+                            time_window_plot.show(ui, |window_plot_ui| {
+                                window_plot_ui.line(
+                                    Line::new(PlotPoints::from(window_vals))
+                                        .color(egui::Color32::RED)
+                                        .style(LineStyle::Solid)
+                                        .name("Pulse"),
+                                );
+                                window_plot_ui.vline(
+                                    // TODO: adjust this
+                                    VLine::new(explorer.time_window[0])
+                                        .stroke(Stroke::new(1.0, egui::Color32::GRAY))
+                                        .name("Lower Bound"),
+                                );
+                                window_plot_ui.vline(
+                                    VLine::new(explorer.time_window[1])
+                                        .stroke(Stroke::new(1.0, egui::Color32::GRAY))
+                                        .name("Upper Bound"),
+                                );
+                            })
+                        });
 
-                        time_window[1] += zoom_delta * zoom_factor;
-                        time_window[0] -= zoom_delta * zoom_factor;
+                        ui_response
+                            .response
+                            .on_hover_text(egui::RichText::new(format!(
+                                "{} Scroll and Zoom to adjust the sliders.",
+                                egui_phosphor::regular::INFO
+                            )));
+                        let plot_response = ui_response.inner;
 
-                        if scroll_delta != Vec2::ZERO || zoom_delta != 0.0 {
+                        let slider_changed = ui.horizontal(|ui| {
+                            let right_offset = 0.09 * right_panel_width;
+                            let left_offset = 0.01 * right_panel_width;
+                            ui.add_space(left_offset);
+                            // Display slider, linked to the same range as the plot
+                            let mut time_window_lower_bound = explorer.time_window[0];
+                            let mut time_window_upper_bound = explorer.time_window[1];
+                            let lower = data.time.first().unwrap_or(&1000.0);
+                            let upper = data.time.last().unwrap_or(&1050.0);
+                            let slider = ui
+                                .add(
+                                    DoubleSlider::new(
+                                        &mut time_window_lower_bound,
+                                        &mut time_window_upper_bound,
+                                        *lower..=*upper,
+                                    )
+                                    .zoom_factor(zoom_factor)
+                                    .separation_distance(1.0)
+                                    .width(right_panel_width - left_offset - right_offset),
+                                )
+                                .on_hover_text(egui::RichText::new(format!(
+                                "{} Scroll and Zoom to adjust the sliders. Double Click to reset.",
+                                egui_phosphor::regular::INFO
+                            )));
+                            let slider_changed = slider.changed();
+                            if slider.double_clicked() {
+                                time_window_lower_bound = *lower;
+                                time_window_upper_bound = *upper;
+                            }
+                            explorer.time_window = [time_window_lower_bound, time_window_upper_bound];
+                            slider_changed
+                        });
+
+                        ui.horizontal(|ui| {
+                            let val1_changed =
+                                ui.add(DragValue::new(&mut explorer.time_window[0])).changed();
+
+                            ui.add_space(0.75 * right_panel_width);
+
+                            let val2_changed =
+                                ui.add(DragValue::new(&mut explorer.time_window[1])).changed();
+
+                            if slider_changed.inner || val1_changed || val2_changed {
+                                if explorer.time_window[0] == explorer.time_window[1] {
+                                    explorer.time_window[0] = *data.time.first().unwrap_or(&1000.0);
+                                    explorer.time_window[1] = *data.time.last().unwrap_or(&1050.0);
+                                }
+                                thread_communication
+                                    .config_tx
+                                    .send(ConfigCommand::SetTimeWindow(explorer.time_window))
+                                    .unwrap();
+                            }
+                        });
+
+                        let width = explorer.time_window[1] - explorer.time_window[0];
+                        let first = *data.time.first().unwrap_or(&1000.0);
+                        let last = *data.time.last().unwrap_or(&1050.0);
+
+                        if ui.input(|i| i.key_pressed(egui::Key::ArrowRight))
+                            && explorer.time_window[1] < last
+                        {
+                            explorer.time_window[0] += 1.0;
+                            explorer.time_window[1] = width + explorer.time_window[0];
                             thread_communication
                                 .config_tx
-                                .send(ConfigCommand::SetTimeWindow(*time_window))
+                                .send(ConfigCommand::SetTimeWindow(explorer.time_window))
                                 .unwrap();
                         }
-                    }
-                });
 
-                // TODO: this does not yet work, since the values are lost and not stored.
-                ui.style_mut().spacing.slider_width = 320.0;
-
-                if let Ok(mut filters) = FILTER_REGISTRY.lock() {
-                    let mut update_requested = false;
-                    for filter in filters.iter_mut() {
-                        if Utc::now().timestamp_millis()
-                            - thread_communication.gui_settings.last_progress_bar_update
-                            > 100
+                        if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft))
+                            && explorer.time_window[0] > first
                         {
-                            if let Some(progress) = thread_communication
-                                .progress_lock
-                                .get(&filter.config().name)
+                            explorer.time_window[0] -= 1.0;
+                            explorer.time_window[1] = width + explorer.time_window[0];
+                            thread_communication
+                                .config_tx
+                                .send(ConfigCommand::SetTimeWindow(explorer.time_window))
+                                .unwrap();
+                        }
+
+                        // scroll through time axis
+                        if plot_response.response.hovered() {
+                            let scroll_delta = ctx.input(|i| i.smooth_scroll_delta);
+                            explorer.time_window[1] += scroll_delta.x * scroll_factor;
+                            explorer.time_window[0] += scroll_delta.x * scroll_factor;
+
+                            explorer.time_window[1] += scroll_delta.y * scroll_factor;
+                            explorer.time_window[0] += scroll_delta.y * scroll_factor;
+                            let zoom_delta = ctx.input(|i| i.zoom_delta() - 1.0);
+
+                            explorer.time_window[1] += zoom_delta * zoom_factor;
+                            explorer.time_window[0] -= zoom_delta * zoom_factor;
+
+                            if scroll_delta != Vec2::ZERO || zoom_delta != 0.0 {
+                                thread_communication
+                                    .config_tx
+                                    .send(ConfigCommand::SetTimeWindow(explorer.time_window))
+                                    .unwrap();
+                            }
+                        }
+                    });
+
+                    // TODO: this does not yet work, since the values are lost and not stored.
+                    ui.style_mut().spacing.slider_width = 320.0;
+
+                    if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+                        let mut update_requested = false;
+                        for filter in filters.iter_mut() {
+                            if Utc::now().timestamp_millis()
+                                - thread_communication.gui_settings.last_progress_bar_update
+                                > 100
                             {
-                                thread_communication.gui_settings.last_progress_bar_update =
-                                    Utc::now().timestamp_millis();
-                                if let Ok(progress) = progress.read() {
-                                    if let Some(progress_entry) = thread_communication
-                                        .gui_settings
-                                        .progress_bars
-                                        .get_mut(&filter.config().name)
-                                    {
-                                        *progress_entry = *progress;
-                                        thread_communication.gui_settings.filter_ui_active =
-                                            progress.is_none();
+                                if let Some(progress) = thread_communication
+                                    .progress_lock
+                                    .get(&filter.config().name)
+                                {
+                                    thread_communication.gui_settings.last_progress_bar_update =
+                                        Utc::now().timestamp_millis();
+                                    if let Ok(progress) = progress.read() {
+                                        if let Some(progress_entry) = thread_communication
+                                            .gui_settings
+                                            .progress_bars
+                                            .get_mut(&filter.config().name)
+                                        {
+                                            *progress_entry = *progress;
+                                            thread_communication.gui_settings.filter_ui_active =
+                                                progress.is_none();
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        ui.vertical(|ui| {
-                            if !thread_communication.gui_settings.filter_ui_active {
-                                ui.disable();
-                            }
+                            ui.vertical(|ui| {
+                                if !thread_communication.gui_settings.filter_ui_active {
+                                    ui.disable();
+                                }
 
-                            ui.separator();
-                            ui.heading(filter.config().clone().name);
-                            update_requested |= filter.ui(ui, thread_communication).changed();
-                        });
+                                ui.separator();
+                                ui.heading(filter.config().clone().name);
+                                update_requested |= filter.ui(ui, thread_communication, *right_panel_width).changed();
+                            });
 
-                        if let Some(progress) = thread_communication
-                            .gui_settings
-                            .progress_bars
-                            .get(&filter.config().name)
-                        {
-                            if let Some(p) = progress {
-                                if *p > 0.0 {
-                                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
-                                    ui.horizontal(|ui| {
-                                        ui.add(
-                                            // TODO: fix the width!
-                                            egui::ProgressBar::new(*p)
-                                                .text(format!("{} %", (p * 100.0) as u8))
-                                                .desired_width(*right_panel_width - 50.0),
-                                        );
-                                        if ui
-                                            .button(format!("{}", egui_phosphor::regular::X_SQUARE))
-                                            .on_hover_text("Abort the current calculation")
-                                            .clicked()
-                                        {
-                                            thread_communication.abort_flag.store(true, Relaxed);
-                                        }
-                                    });
-                                    ui.ctx().request_repaint();
+                            if let Some(progress) = thread_communication
+                                .gui_settings
+                                .progress_bars
+                                .get(&filter.config().name)
+                            {
+                                if let Some(p) = progress {
+                                    if *p > 0.0 {
+                                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
+                                        ui.horizontal(|ui| {
+                                            ui.add(
+                                                // TODO: fix the width!
+                                                egui::ProgressBar::new(*p)
+                                                    .text(format!("{} %", (p * 100.0) as u8))
+                                                    .desired_width(*right_panel_width - 50.0),
+                                            );
+                                            if ui
+                                                .button(format!(
+                                                    "{}",
+                                                    egui_phosphor::regular::X_SQUARE
+                                                ))
+                                                .on_hover_text("Abort the current calculation")
+                                                .clicked()
+                                            {
+                                                thread_communication
+                                                    .abort_flag
+                                                    .store(true, Relaxed);
+                                            }
+                                        });
+                                        ui.ctx().request_repaint();
+                                    } else {
+                                        ui.output_mut(|o| {
+                                            o.cursor_icon = egui::CursorIcon::Default
+                                        });
+                                    }
                                 } else {
                                     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
                                 }
-                            } else {
-                                ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
                             }
                         }
+                        if update_requested {
+                            thread_communication
+                                .config_tx
+                                .send(ConfigCommand::UpdateFilters)
+                                .unwrap();
+                        }
                     }
-                    if update_requested {
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::UpdateFilters)
-                            .unwrap();
-                    }
-                }
 
-                thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
-                ui.separator();
-                ui.collapsing("Debug logs:", |ui| {
-                    ui.set_height(175.0);
-                    egui_logger::logger_ui().show(ui);
-                });
+                    thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
+                    ui.separator();
+                    ui.collapsing("Debug logs:", |ui| {
+                        ui.set_height(175.0);
+                        egui_logger::logger_ui().show(ui);
+                    });
 
-                // let mut task_open = false;
-                // if task_open {
-                //     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
-                // } else {
-                //     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
-                // }
+                    // let mut task_open = false;
+                    // if task_open {
+                    //     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
+                    // } else {
+                    //     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
+                    // }
 
-                ui.add_space(20.0);
+                    ui.add_space(20.0);
 
-                if ui
-                    .button(format!("{} Settings", egui_phosphor::regular::GEAR_FINE))
-                    .clicked()
-                {
-                    #[cfg(feature = "self_update")]
+                    if ui
+                        .button(format!("{} Settings", egui_phosphor::regular::GEAR_FINE))
+                        .clicked()
                     {
-                        explorer.new_release = check_update();
+                        #[cfg(feature = "self_update")]
+                        {
+                            explorer.new_release = check_update();
+                        }
+                        explorer.settings_window_open = true;
                     }
-                    explorer.settings_window_open = true;
-                }
-                if explorer.settings_window_open {
-                    settings_window(ui.ctx(), explorer, thread_communication);
-                }
+                    if explorer.settings_window_open {
+                        settings_window(ui.ctx(), explorer, thread_communication);
+                    }
 
-                ui.add_space(5.0);
-                ui.separator();
+                    ui.add_space(5.0);
+                    ui.separator();
 
-                let height = ui.available_size().y - 38.0 - 20.0;
-                ui.add_space(height);
-                ui.centered_and_justified(|ui| {
-                    ui.add(
-                        egui::Image::from_bytes("WP", explorer.wp)
-                            .fit_to_exact_size(vec2(80.0, 38.0)),
-                    );
+                    let height = ui.available_size().y - 38.0 - 20.0;
+                    ui.add_space(height);
+                    ui.centered_and_justified(|ui| {
+                        ui.add(
+                            egui::Image::from_bytes("WP", explorer.wp)
+                                .fit_to_exact_size(vec2(80.0, 38.0)),
+                        );
+                    });
                 });
             });
         });

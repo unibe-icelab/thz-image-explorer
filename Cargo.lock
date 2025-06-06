@@ -1957,6 +1957,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "conv"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78ff10625fd0ac447827aa30ea8b861fead473bb60aeb73af6c1c58caf0d1299"
+dependencies = [
+ "custom_derive",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2234,6 +2243,12 @@ dependencies = [
  "quote",
  "syn 2.0.101",
 ]
+
+[[package]]
+name = "custom_derive"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef8ae57c4978a2acd8b869ce6b9ca1dfe817bff704c220209fdef2c0b75a01b9"
 
 [[package]]
 name = "dasp_sample"
@@ -3831,6 +3846,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "interp1d"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3a38f3d26c6bbdaa2a4f977d77815edeb44ed3093fd095347052e1e512029d2"
+dependencies = [
+ "conv",
+ "num-traits",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "interpolate_name"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4312,6 +4338,7 @@ version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "882ed72dce9365842bf196bdeedf5055305f11fc8c03dee7bb0194a6cad34841"
 dependencies = [
+ "approx",
  "matrixmultiply",
  "num-complex",
  "num-integer",
@@ -4321,6 +4348,16 @@ dependencies = [
  "rawpointer",
  "rayon",
  "serde",
+]
+
+[[package]]
+name = "ndarray-ndimage"
+version = "0.4.0"
+source = "git+https://github.com/hacknus/ndarray-ndimage#0670c792f039570658c48452df6fbbc9a34bf60d"
+dependencies = [
+ "ndarray",
+ "ndarray-stats",
+ "num-traits",
 ]
 
 [[package]]
@@ -6707,6 +6744,7 @@ dependencies = [
  "bevy_egui",
  "bevy_panorbit_camera",
  "bevy_voxel_plot",
+ "chrono",
  "crossbeam-channel",
  "csv",
  "ctor",
@@ -6722,17 +6760,21 @@ dependencies = [
  "glob",
  "home",
  "image",
+ "interp1d",
  "itertools 0.14.0",
  "itertools-num",
  "log",
  "ndarray",
+ "ndarray-ndimage",
  "ndarray-npy",
  "ndarray-stats",
+ "num-complex",
  "once_cell",
  "preferences",
  "rayon",
  "realfft",
  "reqwest",
+ "rustfft",
  "self_update",
  "semver",
  "serde",

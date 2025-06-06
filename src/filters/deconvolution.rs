@@ -236,11 +236,11 @@ impl Deconvolution {
     }
 
     /// Computes the filtered scan with the FIR filter by convolving each time trace with the filter.
-    fn filter_scan(&self, _scan: &ScannedImage, filter: &Array1<f32>) -> Array3<f32> {
-        let (rows, cols, depth) = _scan.raw_data.dim();
+    fn filter_scan(&self, _scan: &ScannedImageFilterData, filter: &Array1<f32>) -> Array3<f32> {
+        let (rows, cols, depth) = _scan.data.dim();
         let mut filtered_data = Array3::<f32>::zeros((rows, cols, depth));
 
-        let conv_size = _scan.raw_data.slice(s![0, 0, ..]).len() + filter.len() - 1; // Adjusted convolution size
+        let conv_size = _scan.data.slice(s![0, 0, ..]).len() + filter.len() - 1; // Adjusted convolution size
         let fft_size = conv_size.next_power_of_two(); // Use next power of two for efficiency
 
         let mut planner = FftPlanner::new();
@@ -256,7 +256,7 @@ impl Deconvolution {
                 row.axis_iter_mut(Axis(0))
                     .enumerate()
                     .for_each(|(j, mut slice)| {
-                        let input_slice = _scan.raw_data.slice(s![i, j, ..]);
+                        let input_slice = _scan.data.slice(s![i, j, ..]);
                         slice.assign(&convolve1d(
                             &input_slice.to_owned(),
                             &filter,
@@ -378,7 +378,7 @@ impl Filter for Deconvolution {
     /// # Notes:
     /// This method currently contains a placeholder for the Richardson-Lucy algorithm.
     fn filter(
-        &self,
+        &mut self,
         scan: &mut ScannedImageFilterData,
         gui_settings: &mut GuiSettingsContainer,
         progress_lock: &mut Arc<RwLock<Option<f32>>>,
@@ -394,10 +394,10 @@ impl Filter for Deconvolution {
         }
 
         println!("Starting deconvolution filter...");
-        scan.filtered_data = Array3::zeros((
-            scan.raw_data.dim().0,
-            scan.raw_data.dim().1,
-            scan.raw_data.dim().2,
+        scan.data = Array3::zeros((
+            scan.data.dim().0,
+            scan.data.dim().1,
+            scan.data.dim().2,
         ));
 
         // Pre-calculation of min and max values to avoid recalculating them in each iteration
@@ -489,7 +489,7 @@ impl Filter for Deconvolution {
 
                 // Filter scan data in-place
                 let mut filtered_data =
-                    self.filter_scan(&scan, &gui_settings.psf.filters.row(i).to_owned());
+                    self.filter_scan(scan, &gui_settings.psf.filters.row(i).to_owned());
 
                 // Compute filtered image
                 let filtered_image = filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
@@ -504,7 +504,7 @@ impl Filter for Deconvolution {
                     .mapv(|x| x.max(0.0));
 
                 let mut deconvolution_gains =
-                    Array2::zeros((scan.raw_data.dim().0, scan.raw_data.dim().1));
+                    Array2::zeros((scan.data.dim().0, scan.data.dim().1));
 
                 // Compute deconvolution gains
                 Zip::from(&deconvolved_image)
@@ -529,20 +529,20 @@ impl Filter for Deconvolution {
                 acc += &data;
                 acc
             },
-            Array3::zeros(scan.filtered_data.dim()), // initial accumulator
+            Array3::zeros(scan.data.dim()), // initial accumulator
         );
         if let Ok(mut p) = progress_lock.write() {
             *p = Some(1.0);
         }
 
-        scan.filtered_data = processed_data;
+        scan.data = processed_data;
 
         let duration = start.elapsed();
 
         println!("\nDeconvolution filter completed.");
         println!("Processing time: {:?}", duration);
 
-        scan.filtered_img = scan.filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
+        scan.img = scan.data.mapv(|x| x * x).sum_axis(Axis(2));
 
         if let Ok(mut p) = progress_lock.write() {
             *p = None;
