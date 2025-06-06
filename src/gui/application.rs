@@ -4,7 +4,7 @@
 //! file operations, and visualization panels for signal and image processing.
 
 use crate::config::ThreadCommunication;
-use crate::data_container::DataPoint;
+use crate::data_container::{DataPoint, ScannedImageFilterData, ScannedImageFrequencyDomain, ScannedImageTimeDomain};
 use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
 use crate::filters::psf::PSF;
 use crate::gui::center_panel::center_panel;
@@ -287,11 +287,11 @@ pub struct THzImageExplorer {
     pub(crate) settings_window_open: bool,
     pub(crate) update_text: String,
     /// Data for the filters in time domain before FFT
-    pub(crate) time_domain_data_1: Vec<[Vec<f64>; 2]>,
+    pub(crate) time_domain_data_1: Vec<ScannedImageTimeDomain>,
     /// Data for the filters in frequency domain after FFT and before iFFT
-    pub(crate) frequency_domain_data: Vec<[Vec<f64>; 3]>,
+    pub(crate) frequency_domain_data: Vec<ScannedImageFrequencyDomain>,
     /// Data for the filters in time domain after FFT/iFFT
-    pub(crate) time_domain_data_2: Vec<[Vec<f64>; 2]>,
+    pub(crate) time_domain_data_2: Vec<ScannedImageTimeDomain>,
     /// Maps the filter indices to the corresponding input data indices in time domain before FFT
     /// Note that the output will always be saved in the corresponding index in the data Vec.
     pub(crate) time_domain_filter_mapping_1: Vec<(usize, usize)>,
@@ -301,6 +301,11 @@ pub struct THzImageExplorer {
     /// Maps the filter indices to the corresponding input data indices in time domain after FFT
     /// Note that the output will always be saved in the corresponding index in the data Vec.
     pub(crate) time_domain_filter_mapping_2: Vec<(usize, usize)>,
+
+    pub(crate) filter_data: Vec<ScannedImageFilterData>,
+
+    pub(crate) filter_mapping: Vec<(usize, usize)>,
+    
     #[cfg(feature = "self_update")]
     pub(crate) new_release: Option<Release>,
 }
@@ -376,20 +381,26 @@ impl THzImageExplorer {
         let mut frequency_domain_filter_mapping = vec![];
         let mut time_domain_filter_mapping_2 = vec![];
 
+
+        let mut filter_mapping = vec![];
+        let mut filter_data = vec![];
+
         // populate with standard / empty values
         if let Ok(mut filters) = FILTER_REGISTRY.lock() {
             for (i, filter) in filters.iter_mut().enumerate() {
+                filter_data.push(ScannedImageFilterData::default());
+                filter_mapping.push((i, i));
                 match filter.as_ref().config().domain {
                     FilterDomain::TimeBeforeFFT => {
-                        time_domain_data_1.push([vec![], vec![]]);
+                        time_domain_data_1.push(ScannedImageTimeDomain::default());
                         time_domain_filter_mapping_1.push((i, i));
                     }
                     FilterDomain::Frequency => {
-                        frequency_domain_data.push([vec![], vec![], vec![]]);
+                        frequency_domain_data.push(ScannedImageFrequencyDomain::default());
                         frequency_domain_filter_mapping.push((i, i));
                     }
                     FilterDomain::TimeAfterFFT => {
-                        time_domain_data_2.push([vec![], vec![]]);
+                        time_domain_data_2.push(ScannedImageTimeDomain::default());
                         time_domain_filter_mapping_2.push((i, i));
                     }
                 }
@@ -461,6 +472,8 @@ impl THzImageExplorer {
             time_domain_filter_mapping_1,
             frequency_domain_filter_mapping,
             time_domain_filter_mapping_2,
+            filter_data,
+            filter_mapping,
             #[cfg(feature = "self_update")]
             new_release: None,
         }

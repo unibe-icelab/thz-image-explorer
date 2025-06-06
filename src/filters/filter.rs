@@ -3,7 +3,7 @@
 //! It also implements a global, thread-safe registry for managing filters dynamically.
 
 use crate::config::ThreadCommunication;
-use crate::data_container::ScannedImage;
+use crate::data_container::{ScannedImage, ScannedImageFilterData};
 use crate::gui::application::GuiSettingsContainer;
 // this dependency is required by the `register_filter` macro
 use bevy_egui::egui;
@@ -55,9 +55,9 @@ pub trait Filter: Send + Sync + Debug {
     ///
     /// # Arguments
     ///
-    /// - `_scan`: A mutable reference to the image to be processed.
+    /// - `filter_Data`: A mutable reference to the image to be processed.
     /// - `gui_settings`: Mutable reference to GUI settings associated with the filter.
-    fn filter(&self, _scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer);
+    fn filter(&mut self, filter_Data: &mut ScannedImageFilterData, gui_settings: &mut GuiSettingsContainer);
 
     /// Renders the filter configuration in the GUI.
     /// make sure to return the `egui::Reponse` of the GUI elements. This way, the application
@@ -96,6 +96,7 @@ pub trait Filter: Send + Sync + Debug {
         &mut self,
         ui: &mut egui::Ui,
         thread_communication: &mut ThreadCommunication,
+        panel_width: f32,
     ) -> egui::Response;
 }
 

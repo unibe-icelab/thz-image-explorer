@@ -5,6 +5,7 @@ use ndarray::{Array1, Array2, Array3};
 use realfft::{ComplexToReal, RealToComplex};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use realfft::num_complex::Complex32;
 
 /// Represents the metadata associated with an image or scan.
 ///
@@ -344,3 +345,54 @@ impl ScannedImage {
 //         }
 //     }
 // }
+
+#[derive(Default, Clone)]
+pub struct ScannedImageFilterData {
+    pub x_min: Option<f32>,
+    pub dx: Option<f32>,
+    pub y_min: Option<f32>,
+    pub dy: Option<f32>,
+    pub height: usize,
+    pub width: usize,
+    pub scaling: usize,
+    pub r2c: Option<Arc<dyn RealToComplex<f32>>>,
+    pub c2r: Option<Arc<dyn ComplexToReal<f32>>>,
+    pub time: Array1<f32>,
+    pub img: Array2<f32>,
+    pub data: Array3<f32>,
+    pub frequency: Array1<f32>,
+    pub fft: Array3<Complex32>,
+    pub amplitudes: Array3<f32>,
+    pub phases: Array3<f32>,
+}
+
+#[derive(Default, Clone)]
+pub struct ScannedImageTimeDomain {
+    pub x_min: Option<f32>,
+    pub dx: Option<f32>,
+    pub y_min: Option<f32>,
+    pub dy: Option<f32>,
+    pub height: usize,
+    pub width: usize,
+    pub scaling: usize,
+    pub c2r: Option<Arc<dyn ComplexToReal<f32>>>,
+    pub time: Array1<f32>,
+    pub img: Array2<f32>,
+    pub data: Array3<f32>,
+}
+
+#[derive(Default, Clone)]
+pub struct ScannedImageFrequencyDomain {
+    pub x_min: Option<f32>,
+    pub dx: Option<f32>,
+    pub y_min: Option<f32>,
+    pub dy: Option<f32>,
+    pub height: usize,
+    pub width: usize,
+    pub scaling: usize,
+    pub c2r: Option<Arc<dyn ComplexToReal<f32>>>,
+    pub frequency: Array1<f32>,
+    pub fft: Array3<Complex32>,
+    pub amplitudes: Array3<f32>,
+    pub phases: Array3<f32>,
+}

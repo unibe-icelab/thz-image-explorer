@@ -134,172 +134,179 @@ pub fn right_panel(
                     });
 
                 ui.separator();
-                ui.heading("I. FFT window bounds: ");
-                if data.time.is_empty() {
-                    data.time = (0..=((1050.0 - 1000.0) / 0.25) as usize)
-                        .map(|i| 1000.0 + i as f32 * 0.25)
-                        .collect();
-                    data.signal_1 = vec![1.0; data.time.len()];
-                }
-
-                let mut window_vals: Vec<[f64; 2]> = Vec::new();
-                let mut p = Array1::from_vec(vec![1.0; data.time.len()]);
-                let t: Array1<f32> = data.time.clone().into();
-
-                ui.add_space(5.0);
-
-                let fft_window_type_old = explorer.fft_window_type.clone();
-
-                egui::ComboBox::from_id_salt("Window Type")
-                    .selected_text(explorer.fft_window_type.to_string())
-                    .width(80.0)
-                    .show_ui(ui, |ui| {
-                        [
-                            FftWindowType::AdaptedBlackman,
-                            FftWindowType::Blackman,
-                            FftWindowType::Hanning,
-                            FftWindowType::Hamming,
-                            FftWindowType::FlatTop,
-                        ]
-                        .iter()
-                        .for_each(|window_type| {
-                            ui.selectable_value(
-                                &mut explorer.fft_window_type,
-                                *window_type,
-                                window_type.to_string(),
-                            );
-                        });
-                    });
-                if fft_window_type_old != explorer.fft_window_type {
-                    println!("changing type");
-                    thread_communication
-                        .config_tx
-                        .send(ConfigCommand::SetFftWindowType(
-                            explorer.fft_window_type.clone(),
-                        ))
-                        .unwrap();
-                }
-
-                ui.add_space(5.0);
-
-                match explorer.fft_window_type {
-                    FftWindowType::AdaptedBlackman => {
-                        apply_adapted_blackman_window(
-                            &mut p.view_mut(),
-                            &t,
-                            &explorer.fft_bounds[0],
-                            &explorer.fft_bounds[1],
-                        );
-                    }
-                    FftWindowType::Blackman => apply_blackman(&mut p.view_mut(), &t),
-                    FftWindowType::Hanning => apply_hanning(&mut p.view_mut(), &t),
-                    FftWindowType::Hamming => apply_hamming(&mut p.view_mut(), &t),
-                    FftWindowType::FlatTop => apply_flat_top(&mut p.view_mut(), &t),
-                }
-
-                for i in 0..t.len() {
-                    window_vals.push([t[i] as f64, p[i] as f64]);
-                }
-                let fft_window_plot = Plot::new("FFT Window")
-                    .include_y(0.0)
-                    .include_y(1.0)
-                    .allow_drag(false)
-                    .allow_zoom(false)
-                    .allow_scroll(false)
-                    .set_margin_fraction(Vec2 { x: 0.0, y: 0.05 })
-                    .height(100.0)
-                    .width(right_panel_width * 0.9);
-                ui.vertical_centered(|ui| {
-                    fft_window_plot.show(ui, |window_plot_ui| {
-                        window_plot_ui.line(
-                            Line::new(PlotPoints::from(window_vals))
-                                .color(egui::Color32::RED)
-                                .style(LineStyle::Solid)
-                                .name("Window"),
-                        );
-                        window_plot_ui.vline(
-                            VLine::new(
-                                data.time.first().unwrap_or(&1000.0) + explorer.fft_bounds[0],
-                            )
-                            .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                            .name("Lower Bound"),
-                        );
-                        window_plot_ui.vline(
-                            VLine::new(
-                                data.time.last().unwrap_or(&1050.0) - explorer.fft_bounds[1],
-                            )
-                            .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                            .name("Upper Bound"),
-                        );
-                    });
-                });
-
-                let range =
-                    data.time.last().unwrap_or(&1050.0) - data.time.first().unwrap_or(&1000.0);
-
-                let slider_changed = ui.horizontal(|ui| {
-                    let right_offset = 0.09 * right_panel_width;
-                    let left_offset = 0.01 * right_panel_width;
-                    ui.add_space(left_offset);
-                    // Display slider, linked to the same range as the plot
-                    let mut fft_lower_bound = explorer.fft_bounds[0];
-                    let mut fft_upper_bound = range - explorer.fft_bounds[1];
-
-                    let slider = ui
-                        .add(
-                            DoubleSlider::new(
-                                &mut fft_lower_bound,
-                                &mut fft_upper_bound,
-                                0.0..=range,
-                            )
-                            .zoom_factor(2.0)
-                            .scroll_factor(0.005)
-                            .separation_distance(2.0)
-                            .invert_highlighting(true)
-                            .width(right_panel_width - left_offset - right_offset),
-                        )
-                        .on_hover_text(egui::RichText::new(format!(
-                            "{} Scroll and Zoom to adjust the sliders. Double Click to reset.",
-                            egui_phosphor::regular::INFO
-                        )));
-                    let slider_changed = slider.changed();
-                    if slider.double_clicked() {
-                        fft_lower_bound = 1.0;
-                        fft_upper_bound = range - 7.0;
-                    }
-                    explorer.fft_bounds = [fft_lower_bound, range - fft_upper_bound];
-                    slider_changed
-                });
-
-                ui.horizontal(|ui| {
-                    let val1_changed = ui
-                        .add(DragValue::new(&mut explorer.fft_bounds[0]))
-                        .changed();
-
-                    ui.add_space(0.75 * right_panel_width);
-
-                    let val2_changed = ui
-                        .add(DragValue::new(&mut explorer.fft_bounds[1]))
-                        .changed();
-
-                    if slider_changed.inner || val1_changed || val2_changed {
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::SetFFTWindowLow(explorer.fft_bounds[0]))
-                            .unwrap();
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::SetFFTWindowHigh(explorer.fft_bounds[1]))
-                            .unwrap();
-                    }
-                });
+                ui.heading("Time Domain: ");
 
                 ui.add_space(10.0);
 
                 ui.separator();
-                ui.heading("II. FFT Filter: ");
+                ui.add_space(10.0);
+                ui.vertical_centered(|ui| {
+                    ui.heading("---------- FFT ----------");
+                });
+                ui.collapsing("FFT Settings",|ui| {
+                    if data.time.is_empty() {
+                        data.time = (0..=((1050.0 - 1000.0) / 0.25) as usize)
+                            .map(|i| 1000.0 + i as f32 * 0.25)
+                            .collect();
+                        data.signal_1 = vec![1.0; data.time.len()];
+                    }
 
-                // TODO: implement different windows
+                    let mut window_vals: Vec<[f64; 2]> = Vec::new();
+                    let mut p = Array1::from_vec(vec![1.0; data.time.len()]);
+                    let t: Array1<f32> = data.time.clone().into();
+
+                    ui.add_space(5.0);
+
+                    let fft_window_type_old = explorer.fft_window_type.clone();
+
+                    egui::ComboBox::from_id_salt("Window Type")
+                        .selected_text(explorer.fft_window_type.to_string())
+                        .width(80.0)
+                        .show_ui(ui, |ui| {
+                            [
+                                FftWindowType::AdaptedBlackman,
+                                FftWindowType::Blackman,
+                                FftWindowType::Hanning,
+                                FftWindowType::Hamming,
+                                FftWindowType::FlatTop,
+                            ]
+                            .iter()
+                            .for_each(|window_type| {
+                                ui.selectable_value(
+                                    &mut explorer.fft_window_type,
+                                    *window_type,
+                                    window_type.to_string(),
+                                );
+                            });
+                        });
+                    if fft_window_type_old != explorer.fft_window_type {
+                        println!("changing type");
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::SetFftWindowType(
+                                explorer.fft_window_type.clone(),
+                            ))
+                            .unwrap();
+                    }
+
+                    ui.add_space(5.0);
+
+                    match explorer.fft_window_type {
+                        FftWindowType::AdaptedBlackman => {
+                            apply_adapted_blackman_window(
+                                &mut p.view_mut(),
+                                &t,
+                                &explorer.fft_bounds[0],
+                                &explorer.fft_bounds[1],
+                            );
+                        }
+                        FftWindowType::Blackman => apply_blackman(&mut p.view_mut(), &t),
+                        FftWindowType::Hanning => apply_hanning(&mut p.view_mut(), &t),
+                        FftWindowType::Hamming => apply_hamming(&mut p.view_mut(), &t),
+                        FftWindowType::FlatTop => apply_flat_top(&mut p.view_mut(), &t),
+                    }
+
+                    for i in 0..t.len() {
+                        window_vals.push([t[i] as f64, p[i] as f64]);
+                    }
+                    let fft_window_plot = Plot::new("FFT Window")
+                        .include_y(0.0)
+                        .include_y(1.0)
+                        .allow_drag(false)
+                        .allow_zoom(false)
+                        .allow_scroll(false)
+                        .set_margin_fraction(Vec2 { x: 0.0, y: 0.05 })
+                        .height(100.0)
+                        .width(right_panel_width * 0.9);
+                    ui.vertical_centered(|ui| {
+                        fft_window_plot.show(ui, |window_plot_ui| {
+                            window_plot_ui.line(
+                                Line::new(PlotPoints::from(window_vals))
+                                    .color(egui::Color32::RED)
+                                    .style(LineStyle::Solid)
+                                    .name("Window"),
+                            );
+                            window_plot_ui.vline(
+                                VLine::new(
+                                    data.time.first().unwrap_or(&1000.0) + explorer.fft_bounds[0],
+                                )
+                                .stroke(Stroke::new(1.0, egui::Color32::GRAY))
+                                .name("Lower Bound"),
+                            );
+                            window_plot_ui.vline(
+                                VLine::new(
+                                    data.time.last().unwrap_or(&1050.0) - explorer.fft_bounds[1],
+                                )
+                                .stroke(Stroke::new(1.0, egui::Color32::GRAY))
+                                .name("Upper Bound"),
+                            );
+                        });
+                    });
+
+                    let range =
+                        data.time.last().unwrap_or(&1050.0) - data.time.first().unwrap_or(&1000.0);
+
+                    let slider_changed = ui.horizontal(|ui| {
+                        let right_offset = 0.09 * right_panel_width;
+                        let left_offset = 0.01 * right_panel_width;
+                        ui.add_space(left_offset);
+                        // Display slider, linked to the same range as the plot
+                        let mut fft_lower_bound = explorer.fft_bounds[0];
+                        let mut fft_upper_bound = range - explorer.fft_bounds[1];
+
+                        let slider = ui
+                            .add(
+                                DoubleSlider::new(
+                                    &mut fft_lower_bound,
+                                    &mut fft_upper_bound,
+                                    0.0..=range,
+                                )
+                                .zoom_factor(2.0)
+                                .scroll_factor(0.005)
+                                .separation_distance(2.0)
+                                .invert_highlighting(true)
+                                .width(right_panel_width - left_offset - right_offset),
+                            )
+                            .on_hover_text(egui::RichText::new(format!(
+                                "{} Scroll and Zoom to adjust the sliders. Double Click to reset.",
+                                egui_phosphor::regular::INFO
+                            )));
+                        let slider_changed = slider.changed();
+                        if slider.double_clicked() {
+                            fft_lower_bound = 1.0;
+                            fft_upper_bound = range - 7.0;
+                        }
+                        explorer.fft_bounds = [fft_lower_bound, range - fft_upper_bound];
+                        slider_changed
+                    });
+
+                    ui.horizontal(|ui| {
+                        let val1_changed = ui
+                            .add(DragValue::new(&mut explorer.fft_bounds[0]))
+                            .changed();
+
+                        ui.add_space(0.75 * right_panel_width);
+
+                        let val2_changed = ui
+                            .add(DragValue::new(&mut explorer.fft_bounds[1]))
+                            .changed();
+
+                        if slider_changed.inner || val1_changed || val2_changed {
+                            thread_communication
+                                .config_tx
+                                .send(ConfigCommand::SetFFTWindowLow(explorer.fft_bounds[0]))
+                                .unwrap();
+                            thread_communication
+                                .config_tx
+                                .send(ConfigCommand::SetFFTWindowHigh(explorer.fft_bounds[1]))
+                                .unwrap();
+                        }
+                    });
+                });
+                ui.separator();
+                ui.add_space(10.0);
+
+                ui.heading("Frequency Domain Filter:");
 
                 let spectrum_vals: Vec<[f64; 2]> = data
                     .frequencies
@@ -428,157 +435,18 @@ pub fn right_panel(
                     }
                 });
 
+                ui.separator();
+                ui.add_space(10.0);
+                ui.vertical_centered(|ui| {
+                    ui.heading("---------- iFFT ----------");
+                });
+
                 ui.add_space(10.0);
 
                 ui.separator();
-                ui.heading("III. Time Filter: ");
+                ui.heading("Time Domain: ");
 
-                let zoom_factor = 5.0;
-                let scroll_factor = 0.01;
-
-                let mut window_vals: Vec<[f64; 2]> = Vec::new();
-                for i in 0..data.time.len() {
-                    window_vals.push([data.time[i] as f64, data.signal_1[i] as f64]);
-                }
-                let time_window_plot = Plot::new("Time Window")
-                    .allow_drag(false)
-                    .set_margin_fraction(Vec2 { x: 0.0, y: 0.05 })
-                    .height(100.0)
-                    .allow_scroll(false)
-                    .allow_zoom(false)
-                    .width(right_panel_width * 0.9);
-                let ui_response = ui.vertical_centered(|ui| {
-                    time_window_plot.show(ui, |window_plot_ui| {
-                        window_plot_ui.line(
-                            Line::new(PlotPoints::from(window_vals))
-                                .color(egui::Color32::RED)
-                                .style(LineStyle::Solid)
-                                .name("Pulse"),
-                        );
-                        window_plot_ui.vline(
-                            // TODO: adjust this
-                            VLine::new(explorer.time_window[0])
-                                .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                                .name("Lower Bound"),
-                        );
-                        window_plot_ui.vline(
-                            VLine::new(explorer.time_window[1])
-                                .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                                .name("Upper Bound"),
-                        );
-                    })
-                });
-
-                ui_response
-                    .response
-                    .on_hover_text(egui::RichText::new(format!(
-                        "{} Scroll and Zoom to adjust the sliders.",
-                        egui_phosphor::regular::INFO
-                    )));
-                let plot_response = ui_response.inner;
-
-                let slider_changed = ui.horizontal(|ui| {
-                    let right_offset = 0.09 * right_panel_width;
-                    let left_offset = 0.01 * right_panel_width;
-                    ui.add_space(left_offset);
-                    // Display slider, linked to the same range as the plot
-                    let mut time_window_lower_bound = explorer.time_window[0];
-                    let mut time_window_upper_bound = explorer.time_window[1];
-                    let lower = data.time.first().unwrap_or(&1000.0);
-                    let upper = data.time.last().unwrap_or(&1050.0);
-                    let slider = ui
-                        .add(
-                            DoubleSlider::new(
-                                &mut time_window_lower_bound,
-                                &mut time_window_upper_bound,
-                                *lower..=*upper,
-                            )
-                            .zoom_factor(zoom_factor)
-                            .separation_distance(1.0)
-                            .width(right_panel_width - left_offset - right_offset),
-                        )
-                        .on_hover_text(egui::RichText::new(format!(
-                            "{} Scroll and Zoom to adjust the sliders. Double Click to reset.",
-                            egui_phosphor::regular::INFO
-                        )));
-                    let slider_changed = slider.changed();
-                    if slider.double_clicked() {
-                        time_window_lower_bound = *lower;
-                        time_window_upper_bound = *upper;
-                    }
-                    explorer.time_window = [time_window_lower_bound, time_window_upper_bound];
-                    slider_changed
-                });
-
-                ui.horizontal(|ui| {
-                    let val1_changed = ui
-                        .add(DragValue::new(&mut explorer.time_window[0]))
-                        .changed();
-
-                    ui.add_space(0.75 * right_panel_width);
-
-                    let val2_changed = ui
-                        .add(DragValue::new(&mut explorer.time_window[1]))
-                        .changed();
-
-                    if slider_changed.inner || val1_changed || val2_changed {
-                        if explorer.time_window[0] == explorer.time_window[1] {
-                            explorer.time_window[0] = *data.time.first().unwrap_or(&1000.0);
-                            explorer.time_window[1] = *data.time.last().unwrap_or(&1050.0);
-                        }
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::SetTimeWindow(explorer.time_window))
-                            .unwrap();
-                    }
-                });
-
-                let width = explorer.time_window[1] - explorer.time_window[0];
-                let first = *data.time.first().unwrap_or(&1000.0);
-                let last = *data.time.last().unwrap_or(&1050.0);
-
-                if ui.input(|i| i.key_pressed(egui::Key::ArrowRight))
-                    && explorer.time_window[1] < last
-                {
-                    explorer.time_window[0] += 1.0;
-                    explorer.time_window[1] = width + explorer.time_window[0];
-                    thread_communication
-                        .config_tx
-                        .send(ConfigCommand::SetTimeWindow(explorer.time_window))
-                        .unwrap();
-                }
-
-                if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft))
-                    && explorer.time_window[0] > first
-                {
-                    explorer.time_window[0] -= 1.0;
-                    explorer.time_window[1] = width + explorer.time_window[0];
-                    thread_communication
-                        .config_tx
-                        .send(ConfigCommand::SetTimeWindow(explorer.time_window))
-                        .unwrap();
-                }
-
-                // scroll through time axis
-                if plot_response.response.hovered() {
-                    let scroll_delta = ctx.input(|i| i.smooth_scroll_delta);
-                    explorer.time_window[1] += scroll_delta.x * scroll_factor;
-                    explorer.time_window[0] += scroll_delta.x * scroll_factor;
-
-                    explorer.time_window[1] += scroll_delta.y * scroll_factor;
-                    explorer.time_window[0] += scroll_delta.y * scroll_factor;
-                    let zoom_delta = ctx.input(|i| i.zoom_delta() - 1.0);
-
-                    explorer.time_window[1] += zoom_delta * zoom_factor;
-                    explorer.time_window[0] -= zoom_delta * zoom_factor;
-
-                    if scroll_delta != Vec2::ZERO || zoom_delta != 0.0 {
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::SetTimeWindow(explorer.time_window))
-                            .unwrap();
-                    }
-                }
+                
 
                 // TODO: this does not yet work, since the values are lost and not stored.
                 ui.style_mut().spacing.slider_width = 320.0;

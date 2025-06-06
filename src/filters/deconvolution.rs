@@ -5,7 +5,7 @@
 //! allowing for further customization and parameterization.
 
 use crate::config::ThreadCommunication;
-use crate::data_container::ScannedImage;
+use crate::data_container::{ScannedImage, ScannedImageFilterData};
 use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
 use crate::gui::application::GuiSettingsContainer;
 use bevy_egui::egui::{self, Ui};
@@ -62,7 +62,7 @@ impl Filter for Deconvolution {
     ///
     /// # Notes:
     /// This method currently contains a placeholder for the Richardson-Lucy algorithm.
-    fn filter(&self, _scan: &mut ScannedImage, _gui_settings: &mut GuiSettingsContainer) {
+    fn filter(&mut self, _scan: &mut ScannedImageFilterData, _gui_settings: &mut GuiSettingsContainer) {
         // Implement your Richardson-Lucy algorithm here
         // Get the psf with _gui_settings.psf
         // Iterate over the frequencies contained in the psf
@@ -77,6 +77,7 @@ impl Filter for Deconvolution {
         &mut self,
         ui: &mut Ui,
         _thread_communication: &mut ThreadCommunication,
+        _panel_width: f32,
     ) -> egui::Response {
         // thread_communication can be used, but is not required. It contains the gui_settings GuiSettingsContainer
         // implement your GUI parameter handling here, for example like this:

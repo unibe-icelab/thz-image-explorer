@@ -1,5 +1,5 @@
 use crate::config::ThreadCommunication;
-use crate::data_container::ScannedImage;
+use crate::data_container::{ScannedImage, ScannedImageFilterData};
 use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
 use crate::gui::application::GuiSettingsContainer;
 use crate::math_tools::apply_adapted_blackman_window;
@@ -34,13 +34,13 @@ impl Filter for TiltCompensation {
         }
     }
 
-    fn filter(&self, scan: &mut ScannedImage, _gui_settings: &mut GuiSettingsContainer) {
+    fn filter(&mut self, scan: &mut ScannedImageFilterData, _gui_settings: &mut GuiSettingsContainer) {
         // only rotation around the center are implemented, offset rotations are still to be done.
         let time_shift_x = self.tilt_x as f32 / 180.0 * PI;
         let time_shift_y = self.tilt_y as f32 / 180.0 * PI;
 
         if let (Some(dx), Some(dy)) = (scan.dx, scan.dy) {
-            let (width, height, time_samples) = scan.raw_data.dim();
+            let (width, height, time_samples) = scan.data.dim();
             let center_x = width as f32 / 2.0 * dx;
             let center_y = height as f32 / 2.0 * dy;
             let c = 0.299792458_f64; // mm/ps
@@ -68,7 +68,7 @@ impl Filter for TiltCompensation {
             let front_array =
                 Array1::linspace(first_value - extension, first_value - dt, num_steps);
             let back_array = Array1::linspace(last_value + dt, last_value + extension, num_steps);
-            scan.filtered_time = concatenate![Axis(0), front_array, original_time, back_array];
+            scan.time = concatenate![Axis(0), front_array, original_time, back_array];
 
             // Create new filtered_data with extra time samples
             let mut new_filtered_data = Array3::zeros((width, height, extended_samples));
@@ -84,7 +84,7 @@ impl Filter for TiltCompensation {
 
                     let delta_steps = (delta / dt).floor() as isize;
 
-                    let raw_trace = scan.filtered_data.slice_mut(s![i, j, ..]);
+                    let raw_trace = scan.data.slice_mut(s![i, j, ..]);
                     let mut extended_trace = Array1::zeros(extended_samples);
 
                     let insert_index = (num_steps as isize + delta_steps).max(0) as usize; // Ensure non-negative index
@@ -114,22 +114,22 @@ impl Filter for TiltCompensation {
                         .assign(&extended_trace);
                 }
             }
-            let n = scan.filtered_time.len();
-            let rng = scan.filtered_time.last().unwrap() - scan.filtered_time.first().unwrap();
+            let n = scan.time.len();
+            let rng = scan.time.last().unwrap() - scan.time.first().unwrap();
 
             let mut real_planner = RealFftPlanner::<f32>::new();
             let r2c = real_planner.plan_fft_forward(n);
             let c2r = real_planner.plan_fft_inverse(n);
             let spectrum = r2c.make_output_vec();
             let freq = (0..spectrum.len()).map(|i| i as f32 / rng).collect();
-            scan.filtered_frequencies = freq;
-            scan.filtered_r2c = Some(r2c);
-            scan.filtered_c2r = Some(c2r);
+            scan.frequency = freq;
+            scan.r2c = Some(r2c);
+            scan.c2r = Some(c2r);
 
-            scan.filtered_data = new_filtered_data;
+            scan.data = new_filtered_data;
 
-            dbg!(&scan.filtered_time.len());
-            dbg!(&scan.filtered_data.shape());
+            dbg!(&scan.time.len());
+            dbg!(&scan.data.shape());
         }
     }
 
@@ -137,6 +137,7 @@ impl Filter for TiltCompensation {
         &mut self,
         ui: &mut Ui,
         _thread_communication: &mut ThreadCommunication,
+        _panel_width: f32,
     ) -> egui::Response {
         let mut final_response = ui.allocate_response(egui::Vec2::ZERO, egui::Sense::hover());
 
