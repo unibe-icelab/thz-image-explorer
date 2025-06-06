@@ -383,33 +383,33 @@ impl THzImageExplorer {
         //         eframe::get_value(storage, "file_dialog_storage").unwrap_or_default()
         // }
 
-        let mut time_domain_data_1 = vec![];
-        let mut frequency_domain_data = vec![];
-        let mut time_domain_data_2 = vec![];
-        let mut time_domain_filter_mapping_1 = vec![];
-        let mut frequency_domain_filter_mapping = vec![];
-        let mut time_domain_filter_mapping_2 = vec![];
+        let mut time_domain_data_1 = vec![ScannedImageTimeDomain::default()];
+        let mut frequency_domain_data = vec![ScannedImageFrequencyDomain::default()];
+        let mut time_domain_data_2 = vec![ScannedImageTimeDomain::default()];
+        let mut time_domain_filter_mapping_1 = vec![(0, 0)];
+        let mut frequency_domain_filter_mapping = vec![(0, 0)];
+        let mut time_domain_filter_mapping_2 = vec![(0, 0)];
 
-        let mut filter_mapping = vec![];
-        let mut filter_data = vec![];
+        let mut filter_mapping = vec![(0, 0)];
+        let mut filter_data = vec![ScannedImageFilterData::default()];
 
         // populate with standard / empty values
         if let Ok(mut filters) = FILTER_REGISTRY.lock() {
             for (i, filter) in filters.iter_mut().enumerate() {
                 filter_data.push(ScannedImageFilterData::default());
-                filter_mapping.push((i, i));
+                filter_mapping.push((i, i + 1));
                 match filter.as_ref().config().domain {
                     FilterDomain::TimeBeforeFFT => {
                         time_domain_data_1.push(ScannedImageTimeDomain::default());
-                        time_domain_filter_mapping_1.push((i, i));
+                        time_domain_filter_mapping_1.push((i, i + 1));
                     }
                     FilterDomain::Frequency => {
                         frequency_domain_data.push(ScannedImageFrequencyDomain::default());
-                        frequency_domain_filter_mapping.push((i, i));
+                        frequency_domain_filter_mapping.push((i, i + 1));
                     }
                     FilterDomain::TimeAfterFFT => {
                         time_domain_data_2.push(ScannedImageTimeDomain::default());
-                        time_domain_filter_mapping_2.push((i, i));
+                        time_domain_filter_mapping_2.push((i, i + 1));
                     }
                 }
             }

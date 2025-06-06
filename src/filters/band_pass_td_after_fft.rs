@@ -16,7 +16,7 @@ use std::sync::{Arc, RwLock};
 #[derive(Debug)]
 #[register_filter]
 #[derive(Clone)]
-pub struct TimeDomainBandPassBeforeFFT {
+pub struct TimeDomainBandPassAfterFFT {
     pub low: f64,
     pub high: f64,
     pub window_width: f64,
@@ -24,12 +24,12 @@ pub struct TimeDomainBandPassBeforeFFT {
     signal_axis: Vec<f32>,
 }
 
-impl Filter for TimeDomainBandPassBeforeFFT {
+impl Filter for TimeDomainBandPassAfterFFT {
     fn new() -> Self
     where
         Self: Sized,
     {
-        TimeDomainBandPassBeforeFFT {
+        TimeDomainBandPassAfterFFT {
             low: 0.0,
             high: 0.0,
             window_width: 2.0,
@@ -40,8 +40,8 @@ impl Filter for TimeDomainBandPassBeforeFFT {
 
     fn config(&self) -> FilterConfig {
         FilterConfig {
-            name: "Time Band Pass I".to_string(),
-            domain: FilterDomain::TimeBeforeFFT,
+            name: "Time Band Pass II".to_string(),
+            domain: FilterDomain::TimeAfterFFT,
         }
     }
 

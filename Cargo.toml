@@ -92,6 +92,7 @@ rustfft = "6.2.0"
 num-complex = "0.4"
 interp1d = "0.2.0"
 chrono = "0.4"
+num-traits = "0.2.19"
 
 [features]
 default = ["self_update"]

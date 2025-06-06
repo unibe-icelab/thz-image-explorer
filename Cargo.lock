@@ -6769,6 +6769,7 @@ dependencies = [
  "ndarray-npy",
  "ndarray-stats",
  "num-complex",
+ "num-traits",
  "once_cell",
  "preferences",
  "rayon",
