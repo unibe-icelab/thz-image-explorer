@@ -13,6 +13,8 @@ use dotthz::DotthzMetaData;
 use ndarray::{Array1, Array2, Array3};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
+use std::sync::atomic::AtomicBool;
+use std::collections::HashMap;
 
 /// Enum representing the various commands sent to the configuration thread.
 ///
@@ -135,6 +137,9 @@ impl Default for ConfigContainer {
 /// and sharing data locks between the GUI and the main processing thread.
 #[derive(Resource, Clone)]
 pub struct ThreadCommunication {
+    /// Abort flag
+    pub abort_flag: Arc<AtomicBool>,
+
     /// Lock for the metadata (`DotthzMetaData`) shared across threads.
     pub md_lock: Arc<RwLock<DotthzMetaData>>,
 
@@ -164,4 +169,7 @@ pub struct ThreadCommunication {
 
     pub config_tx: Sender<ConfigCommand>,
     pub config_rx: Receiver<ConfigCommand>,
+
+    /// Lock for Filter progressbars
+    pub progress_lock: HashMap<String, Arc<RwLock<Option<f32>>>>,
 }

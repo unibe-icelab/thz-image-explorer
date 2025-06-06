@@ -24,6 +24,9 @@ use ndarray::{Array1, Array2, Array3};
 use preferences::{AppInfo, Preferences};
 use std::sync::{Arc, RwLock};
 use std::thread;
+use std::sync::atomic::AtomicBool;
+use std::collections::HashMap;
+use crate::filters::filter::FILTER_REGISTRY;
 
 mod config;
 mod data_container;
@@ -33,6 +36,7 @@ mod gui;
 mod io;
 mod math_tools;
 mod update;
+mod cancellable_loops;
 
 const APP_INFO: AppInfo = AppInfo {
     name: "THz Image Explorer",
@@ -90,9 +94,21 @@ fn main() {
     let md_lock = Arc::new(RwLock::new(DotthzMetaData::default()));
     let voxel_plot_instances_lock = Arc::new(RwLock::new((vec![], 1.0, 1.0, 1.0)));
 
+    let mut progress_lock = HashMap::new();
+    if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+        for filter in filters.iter_mut() {
+            progress_lock.insert(filter.config().name, Arc::new(RwLock::new(None)));
+            gui_settings
+                .progress_bars
+                .insert(filter.config().name, None);
+        }
+    }
     let (config_tx, config_rx): (Sender<ConfigCommand>, Receiver<ConfigCommand>) =
         crossbeam_channel::unbounded();
+    let abort_flag = Arc::new(AtomicBool::new(false));
+
     let thread_communication = ThreadCommunication {
+        abort_flag: abort_flag.clone(),
         md_lock: md_lock.clone(),
         data_lock: data_lock.clone(),
         filtered_data_lock: filtered_data_lock.clone(),
@@ -101,6 +117,7 @@ fn main() {
         pixel_lock: pixel_lock.clone(),
         scaling_lock: scaling_lock.clone(),
         img_lock: img_lock.clone(),
+        progress_lock: progress_lock.clone(),
         gui_settings: gui_settings.clone(),
         config_tx,
         config_rx,

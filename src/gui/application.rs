@@ -28,6 +28,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::collections::HashMap;
 
 /// Represents the state of the file dialog for opening, saving, or working with PSF files.
 #[derive(Clone)]
@@ -128,6 +129,9 @@ pub struct GuiSettingsContainer {
     pub chart_scale: f32,
     pub chart_pitch_vel: f32,
     pub chart_yaw_vel: f32,
+    pub last_progress_bar_update: i64,
+    pub progress_bars: HashMap<String, Option<f32>>,
+    pub filter_ui_active: bool,
     pub opacity_threshold: f32,
     pub theme_preference: ThemePreference,
     pub beam_shape: Vec<[f64; 2]>,
@@ -169,6 +173,9 @@ impl GuiSettingsContainer {
             chart_pitch_vel: 0.0,
             chart_yaw_vel: 0.0,
             opacity_threshold: 0.1,
+            last_progress_bar_update: 0,
+            progress_bars: HashMap::new(),
+            filter_ui_active: true,
             theme_preference: ThemePreference::System,
             beam_shape: vec![],
             beam_shape_path: home_dir().unwrap_or_else(|| PathBuf::from("/")),
@@ -305,7 +312,7 @@ pub struct THzImageExplorer {
     pub(crate) filter_data: Vec<ScannedImageFilterData>,
 
     pub(crate) filter_mapping: Vec<(usize, usize)>,
-    
+
     #[cfg(feature = "self_update")]
     pub(crate) new_release: Option<Release>,
 }
