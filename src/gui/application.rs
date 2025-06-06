@@ -4,7 +4,9 @@
 //! file operations, and visualization panels for signal and image processing.
 
 use crate::config::ThreadCommunication;
-use crate::data_container::{DataPoint, ScannedImageFilterData, ScannedImageFrequencyDomain, ScannedImageTimeDomain};
+use crate::data_container::{
+    DataPoint, ScannedImageFilterData, ScannedImageFrequencyDomain, ScannedImageTimeDomain,
+};
 use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
 use crate::filters::psf::PSF;
 use crate::gui::center_panel::center_panel;
@@ -25,10 +27,10 @@ use egui_plot::PlotPoint;
 use home::home_dir;
 use self_update::update::Release;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::collections::HashMap;
 
 /// Represents the state of the file dialog for opening, saving, or working with PSF files.
 #[derive(Clone)]
@@ -387,7 +389,6 @@ impl THzImageExplorer {
         let mut time_domain_filter_mapping_1 = vec![];
         let mut frequency_domain_filter_mapping = vec![];
         let mut time_domain_filter_mapping_2 = vec![];
-
 
         let mut filter_mapping = vec![];
         let mut filter_data = vec![];

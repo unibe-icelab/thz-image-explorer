@@ -540,18 +540,21 @@ pub fn right_panel(
                                 time_window_lower_bound = *lower;
                                 time_window_upper_bound = *upper;
                             }
-                            explorer.time_window = [time_window_lower_bound, time_window_upper_bound];
+                            explorer.time_window =
+                                [time_window_lower_bound, time_window_upper_bound];
                             slider_changed
                         });
 
                         ui.horizontal(|ui| {
-                            let val1_changed =
-                                ui.add(DragValue::new(&mut explorer.time_window[0])).changed();
+                            let val1_changed = ui
+                                .add(DragValue::new(&mut explorer.time_window[0]))
+                                .changed();
 
                             ui.add_space(0.75 * right_panel_width);
 
-                            let val2_changed =
-                                ui.add(DragValue::new(&mut explorer.time_window[1])).changed();
+                            let val2_changed = ui
+                                .add(DragValue::new(&mut explorer.time_window[1]))
+                                .changed();
 
                             if slider_changed.inner || val1_changed || val2_changed {
                                 if explorer.time_window[0] == explorer.time_window[1] {
@@ -650,7 +653,9 @@ pub fn right_panel(
 
                                 ui.separator();
                                 ui.heading(filter.config().clone().name);
-                                update_requested |= filter.ui(ui, thread_communication, *right_panel_width).changed();
+                                update_requested |= filter
+                                    .ui(ui, thread_communication, *right_panel_width)
+                                    .changed();
                             });
 
                             if let Some(progress) = thread_communication

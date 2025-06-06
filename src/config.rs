@@ -11,11 +11,10 @@ use bevy_voxel_plot::InstanceData;
 use crossbeam_channel::{Receiver, Sender};
 use dotthz::DotthzMetaData;
 use ndarray::{Array1, Array2, Array3};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
-use std::collections::HashMap;
 
 /// Enum representing the various commands sent to the configuration thread.
 ///

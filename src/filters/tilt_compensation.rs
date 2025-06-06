@@ -65,7 +65,7 @@ impl Filter for TiltCompensation {
 
             // Clone the original time array
             let original_time = input_data.time.clone();
-            
+
             // Get first and last values
             let first_value = *original_time.first().unwrap();
             let last_value = *original_time.last().unwrap();

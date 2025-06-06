@@ -4,14 +4,14 @@ use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
 use crate::gui::application::GuiSettingsContainer;
 use crate::math_tools::apply_adapted_blackman_window;
 use bevy_egui::egui::{self, Ui};
+use bevy_egui::egui::{DragValue, Stroke, Vec2};
+use egui_double_slider::DoubleSlider;
+use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use filter_macros::register_filter;
 use ndarray::s;
 use realfft::RealFftPlanner;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
-use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
-use bevy_egui::egui::{ DragValue, Stroke, Vec2};
-use egui_double_slider::DoubleSlider;
 
 #[derive(Debug)]
 #[register_filter]
@@ -21,7 +21,7 @@ pub struct BandPass {
     pub high: f64,
     pub window_width: f64,
     pub time_axis: Vec<f32>,
-    signal_axis: Vec<f32>
+    signal_axis: Vec<f32>,
 }
 
 impl Filter for BandPass {
@@ -66,8 +66,15 @@ impl Filter for BandPass {
         let safe_high = self.high.min(max_time as f64) as f32;
 
         // Find indices corresponding to the frequency cutoffs (with bounds checking)
-        let lower = input_data.time.iter().position(|t| *t >= safe_low).unwrap_or(0);
-        let upper = input_data.time.iter().position(|t| *t >= safe_high)
+        let lower = input_data
+            .time
+            .iter()
+            .position(|t| *t >= safe_low)
+            .unwrap_or(0);
+        let upper = input_data
+            .time
+            .iter()
+            .position(|t| *t >= safe_high)
             .unwrap_or_else(|| input_data.time.len().saturating_sub(1));
 
         // Ensure upper is greater than lower and within bounds
@@ -108,7 +115,8 @@ impl Filter for BandPass {
 
         // Setup FFT planners
         let n = output_data.time.len();
-        let rng = output_data.time.last().unwrap_or(&0.0) - output_data.time.first().unwrap_or(&0.0);
+        let rng =
+            output_data.time.last().unwrap_or(&0.0) - output_data.time.first().unwrap_or(&0.0);
 
         let mut real_planner = RealFftPlanner::<f32>::new();
         let r2c = real_planner.plan_fft_forward(n);
@@ -194,9 +202,9 @@ impl Filter for BandPass {
                         &mut time_window_upper_bound,
                         lower..=upper,
                     )
-                        .zoom_factor(zoom_factor)
-                        .separation_distance(1.0)
-                        .width(panel_width - left_offset - right_offset),
+                    .zoom_factor(zoom_factor)
+                    .separation_distance(1.0)
+                    .width(panel_width - left_offset - right_offset),
                 )
                 .on_hover_text(egui::RichText::new(format!(
                     "{} Scroll and Zoom to adjust the sliders. Double Click to reset.",
@@ -213,20 +221,16 @@ impl Filter for BandPass {
         });
 
         ui.horizontal(|ui| {
-            let val1_changed = ui
-                .add(DragValue::new(&mut self.low))
-                .changed();
+            let val1_changed = ui.add(DragValue::new(&mut self.low)).changed();
 
             ui.add_space(0.75 * panel_width);
 
-            let val2_changed = ui
-                .add(DragValue::new(&mut self.high))
-                .changed();
+            let val2_changed = ui.add(DragValue::new(&mut self.high)).changed();
 
             if slider_changed.inner || val1_changed || val2_changed {
                 if self.low == self.high {
-                   self.low = *self.time_axis.first().unwrap_or(&1000.0) as f64;
-                   self.high = *self.time_axis.last().unwrap_or(&1050.0) as f64;
+                    self.low = *self.time_axis.first().unwrap_or(&1000.0) as f64;
+                    self.high = *self.time_axis.last().unwrap_or(&1050.0) as f64;
                 }
                 final_response.mark_changed();
             }
@@ -236,19 +240,15 @@ impl Filter for BandPass {
         let first = *self.time_axis.first().unwrap_or(&1000.0) as f64;
         let last = *self.time_axis.last().unwrap_or(&1050.0) as f64;
 
-        if ui.input(|i| i.key_pressed(egui::Key::ArrowRight))
-            && self.high < last
-        {
+        if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && self.high < last {
             self.low += 1.0;
             self.high = width + self.low;
             final_response.mark_changed();
         }
 
-        if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft))
-            && self.low > first
-        {
+        if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) && self.low > first {
             self.low -= 1.0;
-           self.high = width + self.low;
+            self.high = width + self.low;
             final_response.mark_changed();
         }
 
@@ -267,7 +267,6 @@ impl Filter for BandPass {
 
             if scroll_delta != Vec2::ZERO || zoom_delta != 0.0 {
                 final_response.mark_changed();
-
             }
         }
 

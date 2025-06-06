@@ -1,6 +1,7 @@
 use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::data_container::DataPoint;
 use crate::data_thread::main_thread;
+use crate::filters::filter::FILTER_REGISTRY;
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::gui::threed_plot::{
@@ -22,11 +23,10 @@ use crossbeam_channel::{Receiver, Sender};
 use dotthz::DotthzMetaData;
 use ndarray::{Array1, Array2, Array3};
 use preferences::{AppInfo, Preferences};
+use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread;
-use std::sync::atomic::AtomicBool;
-use std::collections::HashMap;
-use crate::filters::filter::FILTER_REGISTRY;
 
 mod cancellable_loops;
 mod config;
