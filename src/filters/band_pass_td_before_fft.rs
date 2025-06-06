@@ -56,31 +56,28 @@ impl Filter for BandPass {
             *p = Some(0.0);
         }
 
-        // Find indices corresponding to the frequency cutoffs
-        let lower = input_data
-            .time
-            .iter()
-            .position(|t| *t >= self.low as f32)
-            .unwrap_or(0);
-        let upper = input_data
-            .time
-            .iter()
-            .position(|t| *t >= self.high as f32)
-            .unwrap_or_else(|| input_data.time.len() - 1);
-
         let mut output_data = input_data.clone();
-
-        // Get the dimensions of the data array
         let shape = output_data.data.dim();
 
+        // Ensure high and low values are within the actual time range
+        let min_time = *input_data.time.first().unwrap_or(&0.0);
+        let max_time = *input_data.time.last().unwrap_or(&0.0);
+        let safe_low = self.low.max(min_time as f64) as f32;
+        let safe_high = self.high.min(max_time as f64) as f32;
+
+        // Find indices corresponding to the frequency cutoffs (with bounds checking)
+        let lower = input_data.time.iter().position(|t| *t >= safe_low).unwrap_or(0);
+        let upper = input_data.time.iter().position(|t| *t >= safe_high)
+            .unwrap_or_else(|| input_data.time.len().saturating_sub(1));
+
+        // Ensure upper is greater than lower and within bounds
+        let upper = upper.max(lower + 1).min(input_data.time.len());
+
         // Apply the bandpass filter to the signal
-        // For each pixel/position in the scan
         for i in 0..shape.0 {
             for j in 0..shape.1 {
-                // Get a mutable slice of the time domain data for this position
                 let mut signal = output_data.data.slice_mut(s![i, j, lower..upper]);
 
-                // Apply the Blackman window to the signal
                 apply_adapted_blackman_window(
                     &mut signal,
                     &input_data.time.slice(s![lower..upper]).to_owned(),
@@ -89,7 +86,6 @@ impl Filter for BandPass {
                 );
             }
 
-            // Update progress indicator
             if let Ok(mut p) = progress_lock.write() {
                 *p = Some((i as f32) / (shape.0 as f32));
             }
@@ -100,13 +96,20 @@ impl Filter for BandPass {
 
         // Store the time axis for UI visualization
         self.time_axis = output_data.time.to_vec();
-        let pixel = input_data.pixel_selected;
-        self.signal_axis = output_data.data.slice(s![pixel[0], pixel[1], ..]).to_vec();
 
+        // Safely get the signal for the selected pixel with bounds checking
+        let pixel = input_data.pixel_selected;
+        if pixel[0] < shape.0 && pixel[1] < shape.1 {
+            self.signal_axis = output_data.data.slice(s![pixel[0], pixel[1], ..]).to_vec();
+        } else {
+            // Use default values if pixel is out of bounds
+            self.signal_axis = vec![0.0; output_data.time.len()];
+        }
+
+        // Setup FFT planners
         let n = output_data.time.len();
         let rng = output_data.time.last().unwrap_or(&0.0) - output_data.time.first().unwrap_or(&0.0);
 
-        // Set up FFT planners for downstream processing
         let mut real_planner = RealFftPlanner::<f32>::new();
         let r2c = real_planner.plan_fft_forward(n);
         let c2r = real_planner.plan_fft_inverse(n);
@@ -275,7 +278,7 @@ impl Filter for BandPass {
         if plot_response.response.changed() || slider_changed.inner {
             final_response.mark_changed();
         }
-        
+
         final_response
     }
 }
