@@ -5,7 +5,7 @@
 //! allowing for further customization and parameterization.
 
 use crate::config::ThreadCommunication;
-use crate::data_container::{ScannedImage, ScannedImageFilterData};
+use crate::data_container::ScannedImageFilterData;
 use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
 use crate::filters::psf::create_psf_2d;
 use crate::filters::psf::gaussian2;
@@ -379,25 +379,27 @@ impl Filter for Deconvolution {
     /// This method currently contains a placeholder for the Richardson-Lucy algorithm.
     fn filter(
         &mut self,
-        scan: &mut ScannedImageFilterData,
+        input_data: &ScannedImageFilterData,
         gui_settings: &mut GuiSettingsContainer,
         progress_lock: &mut Arc<RwLock<Option<f32>>>,
         abort_flag: &Arc<AtomicBool>,
-    ) {
+    ) -> ScannedImageFilterData {
         if let Ok(mut p) = progress_lock.write() {
             *p = Some(0.0);
         }
 
-        if scan.dx.is_none() || scan.dy.is_none() {
+        let mut output_data = input_data.clone();
+
+        if input_data.dx.is_none() || input_data.dy.is_none() {
             println!("No data loaded, skipping deconvolution.");
-            return;
+            return output_data;
         }
 
         println!("Starting deconvolution filter...");
-        scan.data = Array3::zeros((
-            scan.data.dim().0,
-            scan.data.dim().1,
-            scan.data.dim().2,
+        output_data.data = Array3::zeros((
+            output_data.data.dim().0,
+            output_data.data.dim().1,
+            output_data.data.dim().2,
         ));
 
         // Pre-calculation of min and max values to avoid recalculating them in each iteration
@@ -459,8 +461,8 @@ impl Filter for Deconvolution {
                     2.5,
                 );
 
-                let dx = scan.dx.unwrap() as f32;
-                let dy = scan.dy.unwrap() as f32;
+                let dx = output_data.dx.unwrap() as f32;
+                let dy = output_data.dy.unwrap() as f32;
 
                 let range_max_x = (range_max_x / dx).floor() * dx + dx;
                 let range_max_y = (range_max_y / dy).floor() * dy + dy;
@@ -489,7 +491,7 @@ impl Filter for Deconvolution {
 
                 // Filter scan data in-place
                 let mut filtered_data =
-                    self.filter_scan(scan, &gui_settings.psf.filters.row(i).to_owned());
+                    self.filter_scan(&output_data, &gui_settings.psf.filters.row(i).to_owned());
 
                 // Compute filtered image
                 let filtered_image = filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
@@ -504,7 +506,7 @@ impl Filter for Deconvolution {
                     .mapv(|x| x.max(0.0));
 
                 let mut deconvolution_gains =
-                    Array2::zeros((scan.data.dim().0, scan.data.dim().1));
+                    Array2::zeros((output_data.data.dim().0, output_data.data.dim().1));
 
                 // Compute deconvolution gains
                 Zip::from(&deconvolved_image)
@@ -529,24 +531,26 @@ impl Filter for Deconvolution {
                 acc += &data;
                 acc
             },
-            Array3::zeros(scan.data.dim()), // initial accumulator
+            Array3::zeros(input_data.data.dim()), // initial accumulator
         );
         if let Ok(mut p) = progress_lock.write() {
             *p = Some(1.0);
         }
 
-        scan.data = processed_data;
+        output_data.data = processed_data;
 
         let duration = start.elapsed();
 
         println!("\nDeconvolution filter completed.");
         println!("Processing time: {:?}", duration);
 
-        scan.img = scan.data.mapv(|x| x * x).sum_axis(Axis(2));
+        output_data.img = output_data.data.mapv(|x| x * x).sum_axis(Axis(2));
 
         if let Ok(mut p) = progress_lock.write() {
             *p = None;
         }
+
+        output_data
     }
 
     fn ui(

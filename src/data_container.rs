@@ -2,10 +2,10 @@
 //! scanned images, and related operations for image and signal processing tasks.
 
 use ndarray::{Array1, Array2, Array3};
+use realfft::num_complex::Complex32;
 use realfft::{ComplexToReal, RealToComplex};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use realfft::num_complex::Complex32;
 
 /// Represents the metadata associated with an image or scan.
 ///
@@ -355,6 +355,7 @@ pub struct ScannedImageFilterData {
     pub height: usize,
     pub width: usize,
     pub scaling: usize,
+    pub pixel_selected: [usize; 2],
     pub r2c: Option<Arc<dyn RealToComplex<f32>>>,
     pub c2r: Option<Arc<dyn ComplexToReal<f32>>>,
     pub time: Array1<f32>,

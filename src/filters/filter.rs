@@ -60,11 +60,11 @@ pub trait Filter: Send + Sync + Debug + CloneBoxedFilter {
     /// - `gui_settings`: Mutable reference to GUI settings associated with the filter.
     fn filter(
         &mut self,
-        filter_data: &mut ScannedImageFilterData,
+        input_data: &ScannedImageFilterData,
         gui_settings: &mut GuiSettingsContainer,
         progress_lock: &mut Arc<RwLock<Option<f32>>>,
         abort_flag: &Arc<AtomicBool>,
-    );
+    ) -> ScannedImageFilterData;
 
     /// Renders the filter configuration in the GUI.
     /// make sure to return the `egui::Reponse` of the GUI elements. This way, the application

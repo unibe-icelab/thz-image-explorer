@@ -574,7 +574,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             {
                                 filter.filter(
                                     // todo!!
-                                    &mut ScannedImageFilterData::default(),
+                                    &ScannedImageFilterData::default(),
                                     &mut thread_communication.gui_settings,
                                     progress,
                                     &thread_communication.abort_flag,
