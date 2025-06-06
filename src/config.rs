@@ -8,6 +8,7 @@ use crate::gui::matrix_plot::SelectedPixel;
 use crate::math_tools::FftWindowType;
 use dotthz::DotthzMetaData;
 use ndarray::Array2;
+use ndarray::Array3;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};

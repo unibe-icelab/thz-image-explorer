@@ -591,7 +591,7 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                                 },
                             );
 
-                        update_intensity_image(&scan, &thread_communication.img_lock);
+                        update_intensity_image(&scan, &thread_communication);
                     }
                 }
             }
