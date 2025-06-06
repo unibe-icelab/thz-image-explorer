@@ -8,8 +8,8 @@ use filter_macros::register_filter;
 use ndarray::{concatenate, s, Array1, Array3, Axis};
 use realfft::RealFftPlanner;
 use std::f32::consts::PI;
-use std::sync::{Arc, RwLock};
 use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone)]
 #[register_filter]

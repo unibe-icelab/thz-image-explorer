@@ -12,8 +12,8 @@ use ctor::ctor;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::{Arc, Mutex, RwLock};
 use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex, RwLock};
 
 /// The `Filter` trait defines the structure and behavior of an image filter.
 ///

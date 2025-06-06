@@ -28,6 +28,7 @@ use std::sync::atomic::AtomicBool;
 use std::collections::HashMap;
 use crate::filters::filter::FILTER_REGISTRY;
 
+mod cancellable_loops;
 mod config;
 mod data_container;
 mod data_thread;
@@ -36,7 +37,6 @@ mod gui;
 mod io;
 mod math_tools;
 mod update;
-mod cancellable_loops;
 
 const APP_INFO: AppInfo = AppInfo {
     name: "THz Image Explorer",
