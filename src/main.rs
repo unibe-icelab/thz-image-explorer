@@ -18,11 +18,12 @@ use eframe::{egui, icon_data};
 use ndarray::{Array2, Array3};
 use preferences::{AppInfo, Preferences};
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, RwLock};
-use std::sync::atomic::AtomicBool;
 use std::thread;
 
+mod cancellable_loops;
 mod config;
 mod data_container;
 mod data_thread;
@@ -31,7 +32,6 @@ mod gui;
 mod io;
 mod math_tools;
 mod update;
-mod cancellable_loops;
 
 const APP_INFO: AppInfo = AppInfo {
     name: "THz Image Explorer",
@@ -65,7 +65,10 @@ fn main() {
 
     let data_lock = Arc::new(RwLock::new(DataPoint::default()));
     let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
-    let filtered_data_lock = Arc::new(RwLock::new(Array3::from_shape_fn((1, 1, 1), |(_, _, _)| 0.0)));
+    let filtered_data_lock = Arc::new(RwLock::new(Array3::from_shape_fn(
+        (1, 1, 1),
+        |(_, _, _)| 0.0,
+    )));
     let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
     let scaling_lock = Arc::new(RwLock::new(1));
     let md_lock = Arc::new(RwLock::new(DotthzMetaData::default()));

@@ -394,10 +394,7 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                                 dbg!(&pulse_path);
                                 match open_from_npz(&mut scan, &pulse_path) {
                                     Ok(_) => {
-                                        update_intensity_image(
-                                            &scan,
-                                            &thread_communication,
-                                        );
+                                        update_intensity_image(&scan, &thread_communication);
                                     }
                                     Err(err) => {
                                         log::error!("an error occurred while trying to read data.npz {err:?}");
@@ -433,10 +430,7 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                                 {
                                     Ok(_) => {
                                         log::info!("opened {:?}", selected_file_path);
-                                        update_intensity_image(
-                                            &scan,
-                                            &thread_communication,
-                                        );
+                                        update_intensity_image(&scan, &thread_communication);
                                     }
                                     Err(err) => {
                                         log::error!(
