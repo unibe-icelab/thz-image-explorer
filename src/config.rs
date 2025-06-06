@@ -7,10 +7,12 @@ use crate::gui::application::GuiSettingsContainer;
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::math_tools::FftWindowType;
 use dotthz::DotthzMetaData;
-use ndarray::{Array2, Array3};
+use ndarray::Array2;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
+use std::sync::atomic::AtomicBool;
 
 /// Enum representing the various commands sent to the configuration thread.
 ///
@@ -133,6 +135,9 @@ impl Default for ConfigContainer {
 /// between the main application logic and the GUI thread. It includes locks
 /// for accessing shared data and settings.
 pub struct GuiThreadCommunication {
+    /// Abort flag
+    pub abort_flag: Arc<AtomicBool>,
+
     /// Lock for the metadata (`DotthzMetaData`) shared across threads.
     pub md_lock: Arc<RwLock<DotthzMetaData>>,
 
@@ -156,6 +161,9 @@ pub struct GuiThreadCommunication {
 
     /// Sender channel for sending configuration commands (`ConfigCommand`) from the GUI.
     pub config_tx: Sender<ConfigCommand>,
+
+    /// Lock for Filter progressbars
+    pub progress_lock: HashMap<String, Arc<RwLock<Option<f32>>>>,
 }
 
 /// Structure for handling communication related to the main thread.
@@ -163,6 +171,9 @@ pub struct GuiThreadCommunication {
 /// This struct is used for managing the reception of configuration commands (`ConfigCommand`)
 /// and sharing data locks between the GUI and the main processing thread.
 pub struct MainThreadCommunication {
+    /// Abort flag
+    pub abort_flag: Arc<AtomicBool>,
+
     /// Lock for the metadata (`DotthzMetaData`) shared across threads.
     pub md_lock: Arc<RwLock<DotthzMetaData>>,
 
@@ -187,4 +198,7 @@ pub struct MainThreadCommunication {
     /// Receiver channel for receiving configuration commands (`ConfigCommand`)
     /// from other threads.
     pub config_rx: Receiver<ConfigCommand>,
+
+    /// Lock for Filter progressbars
+    pub progress_lock: HashMap<String, Arc<RwLock<Option<f32>>>>,
 }

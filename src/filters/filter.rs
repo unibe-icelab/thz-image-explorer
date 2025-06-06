@@ -12,7 +12,8 @@ use eframe::egui;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, RwLock};
+use std::sync::atomic::AtomicBool;
 
 /// The `Filter` trait defines the structure and behavior of an image filter.
 ///
@@ -43,7 +44,7 @@ use std::sync::Mutex;
 ///     }
 /// }
 /// ```
-pub trait Filter: Send + Sync + Debug {
+pub trait Filter: Send + Sync + Debug + CloneBoxedFilter {
     /// Creates a new instance of the filter with default parameters.
     fn new() -> Self
     where
@@ -57,7 +58,13 @@ pub trait Filter: Send + Sync + Debug {
     ///
     /// - `_scan`: A mutable reference to the image to be processed.
     /// - `gui_settings`: Mutable reference to GUI settings associated with the filter.
-    fn filter(&self, _scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer);
+    fn filter(
+        &self,
+        scan: &mut ScannedImage,
+        gui_settings: &mut GuiSettingsContainer,
+        progress_lock: &mut Arc<RwLock<Option<f32>>>,
+        abort_flag: &Arc<AtomicBool>,
+    );
 
     /// Renders the filter configuration in the GUI.
     /// make sure to return the `egui::Reponse` of the GUI elements. This way, the application
@@ -119,11 +126,29 @@ pub enum FilterDomain {
 /// **Fields**:
 /// - `name`: A human-readable name for the filter.
 /// - `domain`: The working domain, represented as a `FilterDomain`.
-/// - `parameters`: A vector of customizable filter parameters.
 #[derive(Debug, Clone)]
 pub struct FilterConfig {
     pub name: String,
     pub domain: FilterDomain,
+}
+
+pub trait CloneBoxedFilter {
+    fn clone_box(&self) -> Box<dyn Filter>;
+}
+
+impl<T> CloneBoxedFilter for T
+where
+    T: 'static + Filter + Clone,
+{
+    fn clone_box(&self) -> Box<dyn Filter> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<dyn Filter> {
+    fn clone(&self) -> Box<dyn Filter> {
+        self.as_ref().clone_box()
+    }
 }
 
 /// A registry to manage and retrieve registered filters.
@@ -148,7 +173,7 @@ pub struct FilterConfig {
 /// ```
 #[derive(Debug)]
 pub struct FilterRegistry {
-    filters: HashMap<String, Box<dyn Filter>>,
+    pub filters: HashMap<String, Box<dyn Filter>>,
 }
 
 impl FilterRegistry {

@@ -4,7 +4,7 @@
 
 use crate::config::{ConfigCommand, ConfigContainer, MainThreadCommunication};
 use crate::data_container::{DataPoint, ScannedImage};
-use crate::filters::filter::FILTER_REGISTRY;
+use crate::filters::filter::{Filter, FILTER_REGISTRY};
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::io::{
     load_meta_data_of_thz_file, open_from_npz, open_from_thz, open_json, save_to_thz,
@@ -34,6 +34,7 @@ use std::time::Instant;
 /// # Arguments
 /// * `img` - The `ColorImage` object to be saved.
 /// * `file_path` - The directory path where the image will be saved.
+#[allow(dead_code)]
 fn save_image(img: &ColorImage, file_path: &Path) {
     let height = img.height();
     let width = img.width();
@@ -81,6 +82,7 @@ fn update_intensity_image(scan: &ScannedImage, thread_communication: &MainThread
 /// * `config` - The configuration container with filter parameters.
 /// * `scan` - A mutable reference to the scanned image data.
 /// * `img_lock` - A thread-safe lock for the intensity image array.
+#[allow(dead_code)]
 fn filter_time_window(
     config: &ConfigContainer,
     scan: &mut ScannedImage,
@@ -262,6 +264,7 @@ fn filter(
 /// - `Npy`: Represents `.npy` files.
 /// - `Npz`: Represents `.npz` files.
 #[derive(Clone, PartialEq)]
+#[allow(dead_code)]
 enum FileType {
     Npy,
     Npz,
@@ -526,16 +529,70 @@ pub fn main_thread(mut thread_communication: MainThreadCommunication) {
                 }
                 ConfigCommand::UpdateFilters => {
                     println!("update filters");
-                    if let Ok(mut filters) = FILTER_REGISTRY.lock() {
-                        for filter in filters.iter_mut() {
-                            // call the filter functions
-                            println!("update filter: {}", filter.config().name);
-                            filter.filter(&mut scan, &mut thread_communication.gui_settings)
-                        }
+
+                    let mut filters_cloned: Option<Vec<Box<dyn Filter>>> = None;
+
+                    // we need to clone the filters out of the filter_registry, otherwise this
+                    // would block the gui thread (because it is also required to update the filters)
+
+                    if let Ok(filters) = FILTER_REGISTRY.lock() {
+                        // clone the filters without holding the mutex
+                        filters_cloned = Some(
+                            filters
+                                .filters
+                                .iter()
+                                .map(|(_, filter)| filter.clone()) // requires `impl Clone for Box<dyn Filter>`
+                                .collect(),
+                        );
                     }
-                    filter_time_window(&config, &mut scan, &thread_communication);
-                    // update the intensity image
-                    update_intensity_image(&scan, &thread_communication);
+
+                    if let Some(mut filters) = filters_cloned {
+                        for filter in filters.iter_mut() {
+                            println!("update filter: {}", filter.config().name);
+                            if let Some(progress) = thread_communication
+                                .progress_lock
+                                .get_mut(&filter.config().name)
+                            {
+                                filter.filter(
+                                    &mut scan,
+                                    &mut thread_communication.gui_settings,
+                                    progress,
+                                    &thread_communication.abort_flag,
+                                );
+                            }
+                        }
+
+                        (
+                            scan.scaled_data.axis_iter_mut(Axis(0)),
+                            scan.filtered_data.axis_iter_mut(Axis(0)),
+                            scan.filtered_img.axis_iter_mut(Axis(0)),
+                        )
+                            .into_par_iter()
+                            .for_each(
+                                |(
+                                    mut scaled_data_columns,
+                                    mut filtered_data_columns,
+                                    mut filtered_img_columns,
+                                )| {
+                                    (
+                                        scaled_data_columns.axis_iter_mut(Axis(0)),
+                                        filtered_data_columns.axis_iter_mut(Axis(0)),
+                                        filtered_img_columns.axis_iter_mut(Axis(0)),
+                                    )
+                                        .into_par_iter()
+                                        .for_each(
+                                            |(_scaled_data, filtered_data, filtered_img)| {
+                                                *filtered_img.into_scalar() = filtered_data
+                                                    .iter()
+                                                    .map(|xi| xi * xi)
+                                                    .sum::<f32>();
+                                            },
+                                        );
+                                },
+                            );
+
+                        update_intensity_image(&scan, &thread_communication.img_lock);
+                    }
                 }
             }
 

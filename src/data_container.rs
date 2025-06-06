@@ -196,7 +196,7 @@ impl ScannedImage {
             time: Array1::default(1),
             filtered_time: Array1::default(1),
             frequencies: Array1::default(1),
-            filtered_frequencies:Array1::default(1),
+            filtered_frequencies: Array1::default(1),
             raw_img: Array2::default((1, 1)),
             raw_data: Array3::default((1, 1, 1)),
             scaled_data: Array3::default((1, 1, 1)),
