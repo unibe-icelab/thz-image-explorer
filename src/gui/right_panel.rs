@@ -273,6 +273,7 @@ pub fn right_panel(
                                             &mut fft_upper_bound,
                                             0.0..=range,
                                         )
+                                            .vertical_scroll(false)
                                             .zoom_factor(2.0)
                                             .scroll_factor(0.005)
                                             .separation_distance(2.0)

@@ -10,8 +10,6 @@ use filter_macros::register_filter;
 use ndarray::s;
 use num_complex::Complex;
 use num_traits::Float;
-use realfft::RealFftPlanner;
-use std::f64::consts::E;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use std::sync::{Arc, RwLock};
 
@@ -230,6 +228,7 @@ impl Filter for FrequencyDomainBandPass {
             let slider = ui
                 .add(
                     DoubleSlider::new(&mut freq_lower_bound, &mut freq_upper_bound, 0.0..=max_freq)
+                        .vertical_scroll(false)
                         .zoom_factor(zoom_factor)
                         .scroll_factor(scroll_factor)
                         .separation_distance(0.1)
@@ -300,9 +299,6 @@ impl Filter for FrequencyDomainBandPass {
             let scroll_delta = ui.ctx().input(|i| i.smooth_scroll_delta);
             self.high += scroll_delta.x as f64 * scroll_factor as f64;
             self.low += scroll_delta.x as f64 * scroll_factor as f64;
-
-            self.high += scroll_delta.y as f64 * scroll_factor as f64;
-            self.low += scroll_delta.y as f64 * scroll_factor as f64;
 
             let zoom_delta = ui.ctx().input(|i| i.zoom_delta() - 1.0);
             self.high += zoom_delta as f64 * zoom_factor as f64 * 0.1;

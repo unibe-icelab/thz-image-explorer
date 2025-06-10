@@ -202,6 +202,7 @@ impl Filter for TimeDomainBandPassAfterFFT {
                         &mut time_window_upper_bound,
                         lower..=upper,
                     )
+                    .vertical_scroll(false)
                     .zoom_factor(zoom_factor)
                     .separation_distance(1.0)
                     .width(panel_width - left_offset - right_offset),
@@ -258,8 +259,6 @@ impl Filter for TimeDomainBandPassAfterFFT {
             self.high += scroll_delta.x as f64 * scroll_factor as f64;
             self.low += scroll_delta.x as f64 * scroll_factor as f64;
 
-            self.high += scroll_delta.y as f64 * scroll_factor as f64;
-            self.low += scroll_delta.y as f64 * scroll_factor as f64;
             let zoom_delta = ui.ctx().input(|i| i.zoom_delta() - 1.0);
 
             self.high += zoom_delta as f64 * zoom_factor as f64;
