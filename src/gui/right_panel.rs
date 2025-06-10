@@ -139,7 +139,7 @@ pub fn right_panel(
                             }
                         });
                     });
-                egui::ScrollArea::vertical().max_height(ui.available_height() - 100.0).show(ui, |ui| {
+                egui::ScrollArea::vertical().max_height(ui.available_height() - 200.0).show(ui, |ui| {
 
                     if !thread_communication.gui_settings.filter_ui_active {
                         ui.disable();
@@ -148,15 +148,17 @@ pub fn right_panel(
                     // todo: fix this with right_panel_width or similar
                     ui.style_mut().spacing.slider_width = 320.0;
 
-                    ui.separator();
-                    ui.heading("Time Domain Filter: ");
+                    // ui.separator();
+                    // ui.heading("Time Domain Filter: ");
+                    //
+                    // ui.add_space(10.0);
 
-                    ui.add_space(10.0);
-
+                    draw_filters(ui, thread_communication, FilterDomain::TimeBeforeFFTPrioFirst, *right_panel_width);
                     draw_filters(ui, thread_communication, FilterDomain::TimeBeforeFFT, *right_panel_width);
 
                     ui.add_space(10.0);
 
+                    ui.separator();
                     ui.separator();
                     ui.add_space(10.0);
                     ui.vertical_centered(|ui| {
@@ -330,10 +332,10 @@ pub fn right_panel(
                         });
                     });
                     ui.separator();
-                    ui.add_space(10.0);
-
-                    ui.heading("Frequency Domain Filter:");
-                    ui.add_space(10.0);
+                    // ui.add_space(10.0);
+                    //
+                    // ui.heading("Frequency Domain Filter:");
+                    // ui.add_space(10.0);
 
                     // draw time domain filter after FFT
                     draw_filters(ui, thread_communication, FilterDomain::Frequency, *right_panel_width);
@@ -341,18 +343,21 @@ pub fn right_panel(
                     ui.add_space(10.0);
 
                     ui.separator();
+                    ui.separator();
                     ui.add_space(10.0);
                     ui.vertical_centered(|ui| {
                         ui.heading("---------- iFFT ----------");
                     });
-
-                    ui.add_space(10.0);
-
                     ui.separator();
-                    ui.heading("Time Domain Filter: ");
+
+                    // ui.add_space(10.0);
+                    //
+                    // ui.separator();
+                    // ui.heading("Time Domain Filter: ");
 
                     // draw time domain filter after FFT
                     draw_filters(ui, thread_communication, FilterDomain::TimeAfterFFT, *right_panel_width);
+                    draw_filters(ui, thread_communication, FilterDomain::TimeAfterFFTPrioLast, *right_panel_width);
                 });
 
                 thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();

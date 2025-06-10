@@ -6,16 +6,19 @@ use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::data_container::ScannedImageFilterData;
 use crate::gui::application::GuiSettingsContainer;
 // this dependency is required by the `register_filter` macro
+use crate::gui::toggle_widget::toggle;
 use bevy_egui::egui;
 use chrono::Utc;
 #[allow(unused_imports)]
 use ctor::ctor;
 use once_cell::sync::Lazy;
+use std::any::TypeId;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Mutex, RwLock};
+use uuid::Uuid;
 
 /// The `Filter` trait defines the structure and behavior of an image filter.
 ///
@@ -115,9 +118,11 @@ pub trait Filter: Send + Sync + Debug + CloneBoxedFilter {
 /// - `Frequency`: The filter processes data in the frequency domain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FilterDomain {
+    TimeBeforeFFTPrioFirst,
     TimeBeforeFFT,
     Frequency,
     TimeAfterFFT,
+    TimeAfterFFTPrioLast,
 }
 
 /// A structure representing the configuration and metadata of a filter.
@@ -153,6 +158,19 @@ impl Clone for Box<dyn Filter> {
     fn clone(&self) -> Box<dyn Filter> {
         self.as_ref().clone_box()
     }
+}
+
+// Add this helper function to generate type-based UUIDs
+pub fn get_type_uuid<T: 'static>() -> String {
+    static TYPE_UUIDS: Lazy<Mutex<HashMap<TypeId, String>>> =
+        Lazy::new(|| Mutex::new(HashMap::new()));
+
+    let type_id = TypeId::of::<T>();
+    let mut map = TYPE_UUIDS.lock().unwrap();
+
+    map.entry(type_id)
+        .or_insert_with(|| Uuid::new_v4().to_string())
+        .clone()
 }
 
 /// A registry to manage and retrieve registered filters.
@@ -192,12 +210,21 @@ impl FilterRegistry {
         // Create an instance of the filter
         let filter_instance = F::new();
 
-        // Extract the name from the filter's config
+        // Get the UUID for this filter type
+        let uuid = Uuid::new_v4().to_string();
+
+        // Store mapping from filter name to UUID
         let name = filter_instance.config().name.clone();
+        {
+            let mut map = FILTER_INSTANCE_UUIDS.lock().unwrap();
+            map.insert(name, uuid.clone());
+        }
 
         // Register the filter in the registry
         let mut registry = FILTER_REGISTRY.lock().unwrap();
-        registry.filters.insert(name, Box::new(F::new()));
+        registry
+            .filters
+            .insert(uuid.clone(), Box::new(filter_instance));
     }
 
     /// Retrieves a registered filter by its name.
@@ -314,6 +341,19 @@ pub static FILTER_REGISTRY: Lazy<Mutex<FilterRegistry>> = Lazy::new(|| {
     })
 });
 
+static FILTER_INSTANCE_UUIDS: Lazy<Mutex<HashMap<String, String>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+pub fn get_uuid_for_filter(filter: &Box<dyn Filter>) -> String {
+    // Use the filter's name as a key to look up its UUID
+    let name = filter.config().name.clone();
+
+    let map = FILTER_INSTANCE_UUIDS.lock().unwrap();
+    map.get(&name)
+        .cloned()
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
 pub fn draw_filters(
     ui: &mut egui::Ui,
     thread_communication: &mut ThreadCommunication,
@@ -323,25 +363,24 @@ pub fn draw_filters(
     // draw time domain filter after FFT
     if let Ok(mut filters) = FILTER_REGISTRY.lock() {
         let mut update_requested = false;
-        for filter in filters.iter_mut() {
+        for (uuid, filter) in filters.filters.iter_mut() {
             if filter.config().domain != domain {
                 continue;
             }
+
+            // check progressbar
             if Utc::now().timestamp_millis()
                 - thread_communication.gui_settings.last_progress_bar_update
                 > 100
             {
-                if let Some(progress) = thread_communication
-                    .progress_lock
-                    .get(&filter.config().name)
-                {
+                if let Some(progress) = thread_communication.progress_lock.get(uuid) {
                     thread_communication.gui_settings.last_progress_bar_update =
                         Utc::now().timestamp_millis();
                     if let Ok(progress) = progress.read() {
                         if let Some(progress_entry) = thread_communication
                             .gui_settings
                             .progress_bars
-                            .get_mut(&filter.config().name)
+                            .get_mut(uuid)
                         {
                             *progress_entry = *progress;
                             thread_communication.gui_settings.filter_ui_active = progress.is_none();
@@ -350,23 +389,40 @@ pub fn draw_filters(
                 }
             }
 
+            let mut filter_is_active  = true;
+
+            // call filter update
             ui.vertical(|ui| {
                 if !thread_communication.gui_settings.filter_ui_active {
                     ui.disable();
                 }
 
                 ui.separator();
-                ui.heading(filter.config().clone().name);
+                ui.horizontal(|ui| {
+                    ui.heading(filter.config().clone().name);
+
+                    // make space for the toggle switch
+                    ui.add_space(ui.available_width() - ui.spacing().interact_size.y * 2.0 - 15.0);
+
+                    if let Ok(mut filters_active) = thread_communication.filters_active_lock.write()
+                    {
+                        if let Some(active) = filters_active.get_mut(uuid) {
+                            ui.add(toggle(active));
+                            filter_is_active = *active;
+                        }
+                    }
+                });
+                if !filter_is_active {
+                    ui.disable();
+                }
+
                 update_requested |= filter
                     .ui(ui, thread_communication, right_panel_width)
                     .changed();
             });
 
-            if let Some(progress) = thread_communication
-                .gui_settings
-                .progress_bars
-                .get(&filter.config().name)
-            {
+            // draw progress bar
+            if let Some(progress) = thread_communication.gui_settings.progress_bars.get(uuid) {
                 if let Some(p) = progress {
                     if *p > 0.0 {
                         ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
@@ -394,6 +450,8 @@ pub fn draw_filters(
                 }
             }
         }
+
+        // if this filter is dirty, we need to update it
         if update_requested {
             thread_communication
                 .config_tx

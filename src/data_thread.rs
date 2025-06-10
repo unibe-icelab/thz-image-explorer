@@ -614,6 +614,73 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         update_intensity_image(&scan, &thread_communication);
                     }
                 }
+                ConfigCommand::UpdateSelectedFilters(indices) => {
+                    let mut filters_cloned: Option<Vec<Box<dyn Filter>>> = None;
+
+                    // we need to clone the filters out of the filter_registry, otherwise this
+                    // would block the gui thread (because it is also required to update the filters)
+
+                    if let Ok(filters) = FILTER_REGISTRY.lock() {
+                        // clone the filters without holding the mutex
+                        filters_cloned = Some(
+                            filters
+                                .filters
+                                .iter()
+                                .map(|(_, filter)| filter.clone()) // requires `impl Clone for Box<dyn Filter>`
+                                .collect(),
+                        );
+                    }
+                    if let Some(mut filters) = filters_cloned {
+                        for index in indices {
+                            if let Some(filter) = filters.get_mut(index) {
+                                println!("update filter: {}", filter.config().name);
+                                if let Some(progress) = thread_communication
+                                    .progress_lock
+                                    .get_mut(&filter.config().name)
+                                {
+                                    filter.filter(
+                                        // todo!!
+                                        &ScannedImageFilterData::default(),
+                                        &mut thread_communication.gui_settings,
+                                        progress,
+                                        &thread_communication.abort_flag,
+                                    );
+                                }
+                            }
+                        }
+                        // update intensity image
+                        (
+                            scan.scaled_data.axis_iter_mut(Axis(0)),
+                            scan.filtered_data.axis_iter_mut(Axis(0)),
+                            scan.filtered_img.axis_iter_mut(Axis(0)),
+                        )
+                            .into_par_iter()
+                            .for_each(
+                                |(
+                                    mut scaled_data_columns,
+                                    mut filtered_data_columns,
+                                    mut filtered_img_columns,
+                                )| {
+                                    (
+                                        scaled_data_columns.axis_iter_mut(Axis(0)),
+                                        filtered_data_columns.axis_iter_mut(Axis(0)),
+                                        filtered_img_columns.axis_iter_mut(Axis(0)),
+                                    )
+                                        .into_par_iter()
+                                        .for_each(
+                                            |(_scaled_data, filtered_data, filtered_img)| {
+                                                *filtered_img.into_scalar() = filtered_data
+                                                    .iter()
+                                                    .map(|xi| xi * xi)
+                                                    .sum::<f32>();
+                                            },
+                                        );
+                                },
+                            );
+
+                        update_intensity_image(&scan, &thread_communication);
+                    }
+                }
             }
 
             if let Ok(pixel) = thread_communication.pixel_lock.read() {

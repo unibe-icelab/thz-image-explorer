@@ -2,7 +2,7 @@
 //! used in the application for managing data flow between threads
 //! and processing FFT settings.
 
-use crate::data_container::DataPoint;
+use crate::data_container::{DataPoint, ScannedImageFilterData};
 use crate::gui::application::GuiSettingsContainer;
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::math_tools::FftWindowType;
@@ -74,8 +74,11 @@ pub enum ConfigCommand {
     /// The selected pixel is represented by the [`SelectedPixel`] structure.
     SetSelectedPixel(SelectedPixel),
 
-    /// Update Custom Filters
+    /// Update All Custom Filters
     UpdateFilters,
+
+    /// Update Specific Custom Filters by indices.
+    UpdateSelectedFilters(Vec<usize>),
 }
 
 /// A container for storing configuration settings related to FFT and filtering processes.
@@ -163,6 +166,12 @@ pub struct ThreadCommunication {
 
     /// Lock for the 2D array representing the intensity image.
     pub img_lock: Arc<RwLock<Array2<f32>>>,
+
+    pub filter_data_lock: Arc<RwLock<HashMap<String, ScannedImageFilterData>>>,
+
+    pub filter_mapping_lock: Arc<RwLock<HashMap<String, (usize, usize)>>>,
+
+    pub filters_active_lock: Arc<RwLock<HashMap<String, bool>>>,
 
     /// GUI-specific settings stored in the [`GuiSettingsContainer`].
     pub gui_settings: GuiSettingsContainer,

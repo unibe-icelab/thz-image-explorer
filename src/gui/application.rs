@@ -311,10 +311,6 @@ pub struct THzImageExplorer {
     /// Note that the output will always be saved in the corresponding index in the data Vec.
     pub(crate) time_domain_filter_mapping_2: Vec<(usize, usize)>,
 
-    pub(crate) filter_data: Vec<ScannedImageFilterData>,
-
-    pub(crate) filter_mapping: Vec<(usize, usize)>,
-
     #[cfg(feature = "self_update")]
     pub(crate) new_release: Option<Release>,
 }
@@ -390,30 +386,25 @@ impl THzImageExplorer {
         let mut frequency_domain_filter_mapping = vec![(0, 0)];
         let mut time_domain_filter_mapping_2 = vec![(0, 0)];
 
-        let mut filter_mapping = vec![(0, 0)];
-        let mut filter_data = vec![ScannedImageFilterData::default()];
-
         // populate with standard / empty values
-        if let Ok(mut filters) = FILTER_REGISTRY.lock() {
-            for (i, filter) in filters.iter_mut().enumerate() {
-                filter_data.push(ScannedImageFilterData::default());
-                filter_mapping.push((i, i + 1));
-                match filter.as_ref().config().domain {
-                    FilterDomain::TimeBeforeFFT => {
-                        time_domain_data_1.push(ScannedImageTimeDomain::default());
-                        time_domain_filter_mapping_1.push((i, i + 1));
-                    }
-                    FilterDomain::Frequency => {
-                        frequency_domain_data.push(ScannedImageFrequencyDomain::default());
-                        frequency_domain_filter_mapping.push((i, i + 1));
-                    }
-                    FilterDomain::TimeAfterFFT => {
-                        time_domain_data_2.push(ScannedImageTimeDomain::default());
-                        time_domain_filter_mapping_2.push((i, i + 1));
-                    }
-                }
-            }
-        }
+        // if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+        //     for (i, filter) in filters.iter_mut().enumerate() {
+        //         match filter.as_ref().config().domain {
+        //             FilterDomain::TimeBeforeFFT => {
+        //                 time_domain_data_1.push(ScannedImageTimeDomain::default());
+        //                 time_domain_filter_mapping_1.push((i, i + 1));
+        //             }
+        //             FilterDomain::Frequency => {
+        //                 frequency_domain_data.push(ScannedImageFrequencyDomain::default());
+        //                 frequency_domain_filter_mapping.push((i, i + 1));
+        //             }
+        //             FilterDomain::TimeAfterFFT => {
+        //                 time_domain_data_2.push(ScannedImageTimeDomain::default());
+        //                 time_domain_filter_mapping_2.push((i, i + 1));
+        //             }
+        //         }
+        //     }
+        // }
         Self {
             water_vapour_lines,
             wp: include_bytes!("../../images/WP-Logo.png"),
@@ -480,8 +471,6 @@ impl THzImageExplorer {
             time_domain_filter_mapping_1,
             frequency_domain_filter_mapping,
             time_domain_filter_mapping_2,
-            filter_data,
-            filter_mapping,
             #[cfg(feature = "self_update")]
             new_release: None,
         }

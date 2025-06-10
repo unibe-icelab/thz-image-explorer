@@ -6823,6 +6823,7 @@ dependencies = [
  "serde_json",
  "statrs",
  "tempfile",
+ "uuid",
 ]
 
 [[package]]

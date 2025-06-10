@@ -32,7 +32,7 @@ impl Filter for TiltCompensation {
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Tilt Compensation".to_string(),
-            domain: FilterDomain::Frequency,
+            domain: FilterDomain::TimeBeforeFFTPrioFirst,
         }
     }
 

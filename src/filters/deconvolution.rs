@@ -365,7 +365,7 @@ impl Filter for Deconvolution {
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Deconvolution".to_string(),
-            domain: FilterDomain::Frequency,
+            domain: FilterDomain::TimeAfterFFTPrioLast,
         }
     }
 

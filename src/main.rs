@@ -1,7 +1,7 @@
 use crate::config::{ConfigCommand, ThreadCommunication};
-use crate::data_container::DataPoint;
+use crate::data_container::{DataPoint, ScannedImageFilterData};
 use crate::data_thread::main_thread;
-use crate::filters::filter::FILTER_REGISTRY;
+use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::gui::threed_plot::{
@@ -82,6 +82,64 @@ fn main() {
         gui_settings.chart_scale = 1.0;
     }
 
+    let mut filter_mapping = HashMap::new();
+    filter_mapping.insert("initial".to_string(), (0, 1));
+
+    let mut filter_data = HashMap::new();
+    filter_data.insert("initial".to_string(), ScannedImageFilterData::default());
+
+    let mut filters_active = HashMap::new();
+    filters_active.insert("initial".to_string(), true);
+
+    // populate with standard / empty values
+    if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+        let mut counter = 0;
+        for (uuid, filter) in filters.filters.iter_mut() {
+            if filter.config().domain == FilterDomain::TimeBeforeFFTPrioFirst {
+                filter_data.insert(uuid.clone(), ScannedImageFilterData::default());
+                filter_mapping.insert(uuid.clone(), (counter, counter + 1));
+                filters_active.insert(uuid.clone(), true);
+                counter += 1;
+            }
+        }
+        for (uuid, filter) in filters.filters.iter_mut() {
+            if filter.config().domain == FilterDomain::TimeBeforeFFT {
+                filter_data.insert(uuid.clone(), ScannedImageFilterData::default());
+                filter_mapping.insert(uuid.clone(), (counter, counter + 1));
+                filters_active.insert(uuid.clone(), true);
+                counter += 1;
+            }
+        }
+        for (uuid, filter) in filters.filters.iter_mut() {
+            if filter.config().domain == FilterDomain::Frequency {
+                filter_data.insert(uuid.clone(), ScannedImageFilterData::default());
+                filter_mapping.insert(uuid.clone(), (counter, counter + 1));
+                filters_active.insert(uuid.clone(), true);
+                counter += 1;
+            }
+        }
+        for (uuid, filter) in filters.filters.iter_mut() {
+            if filter.config().domain == FilterDomain::TimeAfterFFT {
+                filter_data.insert(uuid.clone(), ScannedImageFilterData::default());
+                filter_mapping.insert(uuid.clone(), (counter, counter + 1));
+                filters_active.insert(uuid.clone(), true);
+                counter += 1;
+            }
+        }
+        for (uuid, filter) in filters.filters.iter_mut() {
+            if filter.config().domain == FilterDomain::TimeAfterFFTPrioLast {
+                filter_data.insert(uuid.clone(), ScannedImageFilterData::default());
+                filter_mapping.insert(uuid.clone(), (counter, counter + 1));
+                filters_active.insert(uuid.clone(), true);
+                counter += 1;
+            }
+        }
+    }
+
+    let filter_mapping_lock = Arc::new(RwLock::new(filter_mapping));
+    let filter_data_lock = Arc::new(RwLock::new(filter_data));
+    let filters_active_lock = Arc::new(RwLock::new(filters_active));
+
     let data_lock = Arc::new(RwLock::new(DataPoint::default()));
     let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
     let filtered_data_lock = Arc::new(RwLock::new(Array3::from_shape_fn(
@@ -96,11 +154,11 @@ fn main() {
 
     let mut progress_lock = HashMap::new();
     if let Ok(mut filters) = FILTER_REGISTRY.lock() {
-        for filter in filters.iter_mut() {
-            progress_lock.insert(filter.config().name, Arc::new(RwLock::new(None)));
+        for (uuid,filter) in filters.filters.iter_mut() {
+            progress_lock.insert(uuid.clone(), Arc::new(RwLock::new(None)));
             gui_settings
                 .progress_bars
-                .insert(filter.config().name, None);
+                .insert(uuid.clone(), None);
         }
     }
     let (config_tx, config_rx): (Sender<ConfigCommand>, Receiver<ConfigCommand>) =
@@ -118,6 +176,9 @@ fn main() {
         scaling_lock: scaling_lock.clone(),
         img_lock: img_lock.clone(),
         progress_lock: progress_lock.clone(),
+        filter_mapping_lock: filter_mapping_lock.clone(),
+        filter_data_lock: filter_data_lock.clone(),
+        filters_active_lock: filters_active_lock.clone(),
         gui_settings: gui_settings.clone(),
         config_tx,
         config_rx,

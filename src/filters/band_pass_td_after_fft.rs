@@ -40,7 +40,7 @@ impl Filter for TimeDomainBandPassAfterFFT {
 
     fn config(&self) -> FilterConfig {
         FilterConfig {
-            name: "Time Band Pass II".to_string(),
+            name: "Time Band Pass".to_string(),
             domain: FilterDomain::TimeAfterFFT,
         }
     }
