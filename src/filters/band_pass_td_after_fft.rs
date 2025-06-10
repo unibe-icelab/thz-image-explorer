@@ -264,7 +264,7 @@ impl Filter for TimeDomainBandPassAfterFFT {
             self.high += zoom_delta as f64 * zoom_factor as f64;
             self.low -= zoom_delta as f64 * zoom_factor as f64;
 
-            if scroll_delta != Vec2::ZERO || zoom_delta != 0.0 {
+            if scroll_delta.x != 0.0 || zoom_delta != 0.0 {
                 final_response.mark_changed();
             }
         }

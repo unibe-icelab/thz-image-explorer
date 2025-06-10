@@ -1,5 +1,5 @@
 use crate::config::{ConfigCommand, ThreadCommunication};
-use crate::filters::filter::FILTER_REGISTRY;
+use crate::filters::filter::{draw_filters, FilterDomain, FILTER_REGISTRY};
 use crate::gui::application::THzImageExplorer;
 use crate::gui::settings_window::settings_window;
 use crate::gui::toggle_widget::toggle;
@@ -17,6 +17,7 @@ use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use ndarray::Array1;
 use std::sync::atomic::Ordering::Relaxed;
+use crate::filters::filter::FilterDomain::TimeAfterFFT;
 
 #[allow(clippy::too_many_arguments)]
 pub fn right_panel(
@@ -138,10 +139,21 @@ pub fn right_panel(
                             }
                         });
                     });
-                egui::ScrollArea::vertical().max_height(500.0).show(ui, |ui| {
+                egui::ScrollArea::vertical().max_height(ui.available_height() - 100.0).show(ui, |ui| {
+
+                    if !thread_communication.gui_settings.filter_ui_active {
+                        ui.disable();
+                    }
+
+                    // todo: fix this with right_panel_width or similar
+                    ui.style_mut().spacing.slider_width = 320.0;
 
                     ui.separator();
                     ui.heading("Time Domain Filter: ");
+
+                    ui.add_space(10.0);
+
+                    draw_filters(ui, thread_communication, FilterDomain::TimeBeforeFFT, *right_panel_width);
 
                     ui.add_space(10.0);
 
@@ -321,10 +333,12 @@ pub fn right_panel(
                     ui.add_space(10.0);
 
                     ui.heading("Frequency Domain Filter:");
+                    ui.add_space(10.0);
 
-                    if !thread_communication.gui_settings.filter_ui_active {
-                        ui.disable();
-                    }
+                    // draw time domain filter after FFT
+                    draw_filters(ui, thread_communication, FilterDomain::Frequency, *right_panel_width);
+
+                    ui.add_space(10.0);
 
                     ui.separator();
                     ui.add_space(10.0);
@@ -336,93 +350,9 @@ pub fn right_panel(
 
                     ui.separator();
                     ui.heading("Time Domain Filter: ");
-                    ui.style_mut().spacing.slider_width = 320.0;
 
-                    if let Ok(mut filters) = FILTER_REGISTRY.lock() {
-                        let mut update_requested = false;
-                        for filter in filters.iter_mut() {
-                            if Utc::now().timestamp_millis()
-                                - thread_communication.gui_settings.last_progress_bar_update
-                                > 100
-                            {
-                                if let Some(progress) = thread_communication
-                                    .progress_lock
-                                    .get(&filter.config().name)
-                                {
-                                    thread_communication.gui_settings.last_progress_bar_update =
-                                        Utc::now().timestamp_millis();
-                                    if let Ok(progress) = progress.read() {
-                                        if let Some(progress_entry) = thread_communication
-                                            .gui_settings
-                                            .progress_bars
-                                            .get_mut(&filter.config().name)
-                                        {
-                                            *progress_entry = *progress;
-                                            thread_communication.gui_settings.filter_ui_active =
-                                                progress.is_none();
-                                        }
-                                    }
-                                }
-                            }
-
-                            ui.vertical(|ui| {
-                                if !thread_communication.gui_settings.filter_ui_active {
-                                    ui.disable();
-                                }
-
-                                ui.separator();
-                                ui.heading(filter.config().clone().name);
-                                update_requested |= filter
-                                    .ui(ui, thread_communication, *right_panel_width)
-                                    .changed();
-                            });
-
-                            if let Some(progress) = thread_communication
-                                .gui_settings
-                                .progress_bars
-                                .get(&filter.config().name)
-                            {
-                                if let Some(p) = progress {
-                                    if *p > 0.0 {
-                                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
-                                        ui.horizontal(|ui| {
-                                            ui.add(
-                                                // TODO: fix the width!
-                                                egui::ProgressBar::new(*p)
-                                                    .text(format!("{} %", (p * 100.0) as u8))
-                                                    .desired_width(*right_panel_width - 50.0),
-                                            );
-                                            if ui
-                                                .button(format!(
-                                                    "{}",
-                                                    egui_phosphor::regular::X_SQUARE
-                                                ))
-                                                .on_hover_text("Abort the current calculation")
-                                                .clicked()
-                                            {
-                                                thread_communication
-                                                    .abort_flag
-                                                    .store(true, Relaxed);
-                                            }
-                                        });
-                                        ui.ctx().request_repaint();
-                                    } else {
-                                        ui.output_mut(|o| {
-                                            o.cursor_icon = egui::CursorIcon::Default
-                                        });
-                                    }
-                                } else {
-                                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
-                                }
-                            }
-                        }
-                        if update_requested {
-                            thread_communication
-                                .config_tx
-                                .send(ConfigCommand::UpdateFilters)
-                                .unwrap();
-                        }
-                    }
+                    // draw time domain filter after FFT
+                    draw_filters(ui, thread_communication, FilterDomain::TimeAfterFFT, *right_panel_width);
                 });
 
                 thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();

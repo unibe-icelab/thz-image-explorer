@@ -2,17 +2,19 @@
 //! Filters can be applied to processed data (`ScannedImage`) and customized through settings.
 //! It also implements a global, thread-safe registry for managing filters dynamically.
 
-use crate::config::ThreadCommunication;
-use crate::data_container::{ScannedImage, ScannedImageFilterData};
+use crate::config::{ConfigCommand, ThreadCommunication};
+use crate::data_container::ScannedImageFilterData;
 use crate::gui::application::GuiSettingsContainer;
 // this dependency is required by the `register_filter` macro
 use bevy_egui::egui;
+use chrono::Utc;
 #[allow(unused_imports)]
 use ctor::ctor;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Mutex, RwLock};
 
 /// The `Filter` trait defines the structure and behavior of an image filter.
@@ -311,3 +313,92 @@ pub static FILTER_REGISTRY: Lazy<Mutex<FilterRegistry>> = Lazy::new(|| {
         filters: HashMap::new(),
     })
 });
+
+pub fn draw_filters(
+    ui: &mut egui::Ui,
+    thread_communication: &mut ThreadCommunication,
+    domain: FilterDomain,
+    right_panel_width: f32,
+) {
+    // draw time domain filter after FFT
+    if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+        let mut update_requested = false;
+        for filter in filters.iter_mut() {
+            if filter.config().domain != domain {
+                continue;
+            }
+            if Utc::now().timestamp_millis()
+                - thread_communication.gui_settings.last_progress_bar_update
+                > 100
+            {
+                if let Some(progress) = thread_communication
+                    .progress_lock
+                    .get(&filter.config().name)
+                {
+                    thread_communication.gui_settings.last_progress_bar_update =
+                        Utc::now().timestamp_millis();
+                    if let Ok(progress) = progress.read() {
+                        if let Some(progress_entry) = thread_communication
+                            .gui_settings
+                            .progress_bars
+                            .get_mut(&filter.config().name)
+                        {
+                            *progress_entry = *progress;
+                            thread_communication.gui_settings.filter_ui_active = progress.is_none();
+                        }
+                    }
+                }
+            }
+
+            ui.vertical(|ui| {
+                if !thread_communication.gui_settings.filter_ui_active {
+                    ui.disable();
+                }
+
+                ui.separator();
+                ui.heading(filter.config().clone().name);
+                update_requested |= filter
+                    .ui(ui, thread_communication, right_panel_width)
+                    .changed();
+            });
+
+            if let Some(progress) = thread_communication
+                .gui_settings
+                .progress_bars
+                .get(&filter.config().name)
+            {
+                if let Some(p) = progress {
+                    if *p > 0.0 {
+                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
+                        ui.horizontal(|ui| {
+                            ui.add(
+                                // TODO: fix the width!
+                                egui::ProgressBar::new(*p)
+                                    .text(format!("{} %", (p * 100.0) as u8))
+                                    .desired_width(right_panel_width - 50.0),
+                            );
+                            if ui
+                                .button(format!("{}", egui_phosphor::regular::X_SQUARE))
+                                .on_hover_text("Abort the current calculation")
+                                .clicked()
+                            {
+                                thread_communication.abort_flag.store(true, Relaxed);
+                            }
+                        });
+                        ui.ctx().request_repaint();
+                    } else {
+                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
+                    }
+                } else {
+                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
+                }
+            }
+        }
+        if update_requested {
+            thread_communication
+                .config_tx
+                .send(ConfigCommand::UpdateFilters)
+                .unwrap();
+        }
+    }
+}
