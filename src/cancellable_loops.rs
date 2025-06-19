@@ -57,7 +57,8 @@ where
 {
     let abort = Arc::new(abort_flag);
 
-    iter.into_par_iter()
+    let r = iter
+        .into_par_iter()
         .filter_map(|item| {
             if abort.load(Ordering::Relaxed) {
                 None
@@ -65,5 +66,7 @@ where
                 func(item)
             }
         })
-        .reduce(|| init.clone(), reducer)
+        .reduce(|| init.clone(), reducer);
+    abort_flag.store(false, Ordering::Relaxed);
+    r
 }
