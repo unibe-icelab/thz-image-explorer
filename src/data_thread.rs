@@ -71,10 +71,9 @@ fn update_intensity_image(
     scan: &ScannedImageFilterData,
     thread_communication: &ThreadCommunication,
 ) {
-
     if scan.img.shape()[0] == 0 || scan.img.shape()[1] == 0 {
         if let Ok(mut write_guard) = thread_communication.img_lock.write() {
-            *write_guard = Array2::zeros((1,1));
+            *write_guard = Array2::zeros((1, 1));
         }
     } else {
         if let Ok(mut write_guard) = thread_communication.img_lock.write() {
@@ -218,15 +217,19 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 if let Ok(mut filter_data) =
                                     thread_communication.filter_data_lock.write()
                                 {
-                                    if let Some(mut input) = filter_data.first_mut() {
+                                    if let Some(input) = filter_data.first_mut() {
                                         match open_from_thz(
                                             &selected_file_path,
-                                            &mut input,
+                                            input,
                                             &mut meta_data,
                                         ) {
                                             Ok(_) => {
                                                 log::info!("opened {:?}", selected_file_path);
-                                                //update_intensity_image(&scan, &thread_communication);
+                                                // Copy the first entry into all others
+                                                let first = input.clone();
+                                                for entry in filter_data.iter_mut().skip(1) {
+                                                    *entry = first.clone();
+                                                }
                                             }
                                             Err(err) => {
                                                 log::error!(
@@ -343,7 +346,26 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
 
             match update {
                 UpdateType::Filter(start_idx) => {
-                    let start = Instant::now();
+                    // updating back the static fields
+                    // Get the filter chain and uuid->index map
+                    if reset_filters {
+                        if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+                            if let Ok(filter_chain) = thread_communication.filter_chain_lock.read() {
+                                if let Ok(filter_uuid_to_index) = thread_communication.filter_uuid_to_index_lock.read() {
+                                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                                        for (i, uuid) in filter_chain.iter().enumerate() {
+                                            let input_index = if i == 0 { 0 } else { *filter_uuid_to_index.get(&filter_chain[i - 1]).unwrap() };
+                                            if let Some((_, filter)) = filters.filters.iter_mut().find(|(id, _)| *id == uuid) {
+                                                filter.reset(&filter_data[input_index].time, filter_data[input_index].data.shape());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    reset_filters = false;
 
                     let mut filters_cloned: Option<Vec<(String, Box<dyn Filter>)>> = None;
 
@@ -408,12 +430,16 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                                     //     filter.config().name
                                                     // );
                                                     // println!("{} -> {}", input_index, output_index);
-                                                    if let Ok(actives) = thread_communication.filters_active_lock.read() {
-                                                        if let Some (active) = actives.get(uuid) {
+                                                    if let Ok(actives) = thread_communication
+                                                        .filters_active_lock
+                                                        .read()
+                                                    {
+                                                        if let Some(active) = actives.get(uuid) {
                                                             if *active {
-                                                                if let Some(progress) = thread_communication
-                                                                    .progress_lock
-                                                                    .get_mut(uuid)
+                                                                if let Some(progress) =
+                                                                    thread_communication
+                                                                        .progress_lock
+                                                                        .get_mut(uuid)
                                                                 {
                                                                     filter_data[output_index] = filter.filter(
                                                                         &filter_data[input_index],
@@ -435,10 +461,10 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                                                         }
                                                                     }
                                                                 }
-
                                                             } else {
                                                                 filter_data[output_index] =
-                                                                    filter_data[input_index].clone();
+                                                                    filter_data[input_index]
+                                                                        .clone();
                                                             }
                                                         }
                                                     }
@@ -521,36 +547,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                     filters.filters.iter_mut().find(|(id, _)| *id == uuid)
                                 {
                                     filter_from_registry.copy_static_fields_from(filter.as_ref());
-                                    if reset_filters {
-                                        if let Ok(mut filter_data) =
-                                            thread_communication.filter_data_lock.write()
-                                        {
-                                            if let Ok(filter_chain) =
-                                                thread_communication.filter_chain_lock.read()
-                                            {
-                                                if let Ok(filter_uuid_to_index) =
-                                                    thread_communication
-                                                        .filter_uuid_to_index_lock
-                                                        .read()
-                                                {
-                                                    for (i, filter_id) in filter_chain
-                                                        .iter()
-                                                        .enumerate()
-                                                        .skip(start_idx)
-                                                    {
-                                                        let input_index = *filter_uuid_to_index
-                                                            .get(&filter_chain[i - 1])
-                                                            .unwrap();
-                                                        filter_from_registry.reset(
-                                                            &filter_data[input_index].time,
-                                                            filter_data[input_index].data.shape(),
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        reset_filters = false;
-                                    }
                                 } else {
                                     log::warn!("Filter with uuid {} not found in registry", uuid);
                                 }

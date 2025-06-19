@@ -336,22 +336,23 @@ impl Filter for FrequencyDomainBandPass {
             }
         });
 
-        // Keyboard controls
-        let max_freq = *self.freq_axis.last().unwrap_or(&10.0) as f64;
-        if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && self.high < max_freq {
-            self.low += 0.1;
-            self.high += 0.1;
-            final_response.mark_changed();
-        }
-
-        if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) && self.low > 0.0 {
-            self.low -= 0.1;
-            self.high -= 0.1;
-            final_response.mark_changed();
-        }
-
         // Mouse wheel controls
         if plot_response.response.hovered() {
+
+            // Keyboard controls
+            let max_freq = *self.freq_axis.last().unwrap_or(&10.0) as f64;
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && self.high < max_freq {
+                self.low += 0.1;
+                self.high += 0.1;
+                final_response.mark_changed();
+            }
+
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) && self.low > 0.0 {
+                self.low -= 0.1;
+                self.high -= 0.1;
+                final_response.mark_changed();
+            }
+
             let scroll_delta = ui.ctx().input(|i| i.smooth_scroll_delta);
             self.high += scroll_delta.x as f64 * scroll_factor as f64;
             self.low += scroll_delta.x as f64 * scroll_factor as f64;

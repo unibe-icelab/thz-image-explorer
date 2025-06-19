@@ -42,6 +42,9 @@ impl Filter for TimeDomainBandPassAfterFFT {
     }
 
     fn reset(&mut self, time: &Array1<f32>, _shape: &[usize]) {
+        self.time_axis = time.to_vec();
+        self.signal_axis = vec![0.0; self.time_axis.len()];
+        self.input_signal_axis = vec![0.0; self.time_axis.len()];
         self.low = *time.first().unwrap_or(&0.0) as f64;
         self.high = *time.last().unwrap_or(&0.0) as f64;
     }
@@ -249,24 +252,25 @@ impl Filter for TimeDomainBandPassAfterFFT {
             }
         });
 
-        let width = self.high - self.low;
-        let first = *self.time_axis.first().unwrap_or(&1000.0) as f64;
-        let last = *self.time_axis.last().unwrap_or(&1050.0) as f64;
-
-        if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && self.high < last {
-            self.low += 1.0;
-            self.high = width + self.low;
-            final_response.mark_changed();
-        }
-
-        if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) && self.low > first {
-            self.low -= 1.0;
-            self.high = width + self.low;
-            final_response.mark_changed();
-        }
-
         // scroll through time axis
         if plot_response.response.hovered() {
+
+            let width = self.high - self.low;
+            let first = *self.time_axis.first().unwrap_or(&1000.0) as f64;
+            let last = *self.time_axis.last().unwrap_or(&1050.0) as f64;
+
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && self.high < last {
+                self.low += 1.0;
+                self.high = width + self.low;
+                final_response.mark_changed();
+            }
+
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) && self.low > first {
+                self.low -= 1.0;
+                self.high = width + self.low;
+                final_response.mark_changed();
+            }
+
             let scroll_delta = ui.ctx().input(|i| i.smooth_scroll_delta);
             self.high += scroll_delta.x as f64 * scroll_factor as f64;
             self.low += scroll_delta.x as f64 * scroll_factor as f64;
