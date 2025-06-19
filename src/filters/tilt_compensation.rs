@@ -141,9 +141,6 @@ impl Filter for TiltCompensation {
             output_data.c2r = Some(c2r);
 
             output_data.data = new_filtered_data;
-
-            dbg!(&output_data.time.len());
-            dbg!(&output_data.data.shape());
         }
         output_data
     }

@@ -392,10 +392,30 @@ pub fn draw_filters(
                     ui.heading(filter.config().clone().name);
 
                     // make space for the toggle switch
-                    ui.add_space(ui.available_width() - ui.spacing().interact_size.y * 2.0 - 15.0);
+                    ui.add_space(
+                        ui.available_width() - ui.spacing().interact_size.y * 2.0 - 15.0 - 50.0,
+                    );
 
                     if let Ok(mut filters_active) = thread_communication.filters_active_lock.write()
                     {
+                        if let Ok(filter_computation_time) =
+                            thread_communication.filter_computation_time_lock.read()
+                        {
+                            if let Some(t) = filter_computation_time.get(uuid) {
+                                if idx < filter_computation_time.len() {
+                                    ui.label(format!(
+                                        "{:.2} ms",
+                                        t.as_millis()
+                                    ));
+                                } else {
+                                    ui.label("N/A ms");
+                                }
+                            } else {
+                                ui.label("N/A ms");
+                            }
+                        } else {
+                            ui.label("N/A ms");
+                        }
                         if let Some(active) = filters_active.get_mut(uuid) {
                             ui.add(toggle(active));
                             filter_is_active = *active;
@@ -411,10 +431,9 @@ pub fn draw_filters(
                     .changed()
                 {
                     // current filter has been changed, let's request an update
-                    let indices: Vec<usize> = (idx + 1..filter_entries.len()).collect();
                     thread_communication
                         .config_tx
-                        .send(ConfigCommand::UpdateSelectedFilters(indices))
+                        .send(ConfigCommand::UpdateFilter(uuid.clone()))
                         .unwrap();
                 }
             });
