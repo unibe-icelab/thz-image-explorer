@@ -29,7 +29,7 @@ use std::sync::{Arc, RwLock};
 ///
 /// Fields:
 /// - `n_iterations`: The number of iterations for performing the deconvolution.
-//#[register_filter]
+#[register_filter]
 #[derive(Clone, Debug, CopyStaticFields)]
 pub struct Deconvolution {
     pub n_iterations: usize,
