@@ -28,6 +28,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
+use bevy::app::AppExit;
+use bevy::ecs::event::EventReader;
 
 mod cancellable_loops;
 mod config;
@@ -57,6 +59,16 @@ fn setup_fonts(mut contexts: EguiContexts) {
     contexts.ctx_mut().set_fonts(fonts);
     egui_extras::install_image_loaders(&contexts.ctx_mut());
     contexts.ctx_mut().set_visuals(Visuals::dark());
+}
+
+
+fn autosave_on_exit(
+    mut exit_events: EventReader<AppExit>,
+    thread_communication: Res<ThreadCommunication>,
+) {
+    if exit_events.read().next().is_some() {
+        let _ = thread_communication.gui_settings.save(&APP_INFO, "config/gui");
+    }
 }
 
 // --- Main ---
@@ -263,6 +275,7 @@ fn main() {
         .add_systems(Startup, spawn_data_thread)
         .add_systems(Startup, setup_fonts)
         .add_systems(Update, update_gui)
+        .add_systems(Update, autosave_on_exit)
         // .add_systems(Update, animate)
         .add_systems(Update, set_enable_camera_controls_system)
         .run();
