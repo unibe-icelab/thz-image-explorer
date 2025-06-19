@@ -10,21 +10,23 @@ use crate::io::{
     load_meta_data_of_thz_file, open_from_npz, open_from_thz, open_json, save_to_thz,
     update_meta_data_of_thz_file,
 };
-use crate::math_tools::{
-    apply_adapted_blackman_window, apply_blackman, apply_flat_top, apply_hamming, apply_hanning,
-    apply_soft_bandpass, numpy_unwrap, FftWindowType,
-};
+use crate::math_tools::{fft, ifft};
 use bevy_egui::egui::ColorImage;
 use csv::ReaderBuilder;
 use dotthz::DotthzMetaData;
 use image::RgbaImage;
 use ndarray::parallel::prelude::*;
-use ndarray::{Array1, Axis};
-use realfft::num_complex::Complex;
-use realfft::num_traits::Zero;
-use std::f32::consts::PI;
+use ndarray::{Array3, Axis};
+use realfft::RealFftPlanner;
 use std::path::Path;
 use std::time::Instant;
+
+pub enum UpdateType {
+    None,
+    Filter(usize),
+    Image,
+    Plot,
+}
 
 /// Saves an image to a given file location.
 ///
@@ -65,15 +67,19 @@ fn save_image(img: &ColorImage, file_path: &Path) {
 /// # Arguments
 /// * `scan` - A mutable reference to the `ScannedImage`.
 /// * `img_lock` - A thread-safe `RwLock` containing the 2D array for the intensity image.
-fn update_intensity_image(scan: &ScannedImage, thread_communication: &ThreadCommunication) {
+fn update_intensity_image(
+    scan: &ScannedImageFilterData,
+    thread_communication: &ThreadCommunication,
+) {
     if let Ok(mut write_guard) = thread_communication.img_lock.write() {
-        *write_guard = scan.filtered_img.clone();
+        *write_guard = scan.img.clone();
     }
+    // is this really required?
     if let Ok(mut write_guard) = thread_communication.filtered_data_lock.write() {
-        *write_guard = scan.filtered_data.clone();
+        *write_guard = scan.data.clone();
     }
     if let Ok(mut write_guard) = thread_communication.filtered_time_lock.write() {
-        *write_guard = scan.filtered_time.clone();
+        *write_guard = scan.time.clone();
     }
     if let Ok(mut write_guard) = thread_communication.voxel_plot_instances_lock.write() {
         // let lower = scan
@@ -87,11 +93,16 @@ fn update_intensity_image(scan: &ScannedImage, thread_communication: &ThreadComm
         //     .position(|t| *t == config.time_window[1].round())
         //     .unwrap_or(scan.filtered_time.len()); // safer fallback
 
-        let time_span = scan.filtered_time.last().unwrap() - scan.filtered_time.first().unwrap();
+        if scan.time.is_empty() {
+            log::warn!("scan time is empty, cannot update voxel plot instances");
+            return;
+        }
+
+        let time_span = scan.time.last().unwrap() - scan.time.first().unwrap();
         let (instances, cube_width, cube_height, cube_depth) =
             crate::gui::threed_plot::instance_from_data(
                 time_span,
-                scan.filtered_data.clone(),
+                scan.data.clone(),
                 thread_communication.gui_settings.opacity_threshold,
             );
         write_guard.0 = instances;
@@ -99,189 +110,6 @@ fn update_intensity_image(scan: &ScannedImage, thread_communication: &ThreadComm
         write_guard.2 = cube_height;
         write_guard.3 = cube_depth;
     }
-}
-
-/// Filters the scan data using a time window defined in the configuration container.
-///
-/// This function calculates the filtered data based on the lower and upper time window bounds and updates the intensity image.
-///
-/// # Arguments
-/// * `config` - The configuration container with filter parameters.
-/// * `scan` - A mutable reference to the scanned image data.
-/// * `img_lock` - A thread-safe lock for the intensity image array.
-#[allow(dead_code)]
-fn filter_time_window(
-    config: &ConfigContainer,
-    scan: &mut ScannedImage,
-    thread_communication: &ThreadCommunication,
-) {
-    use ndarray::{s, Axis};
-    use rayon::prelude::*;
-    use std::time::Instant;
-
-    println!("updating data");
-    let start = Instant::now();
-
-    let lower = scan
-        .filtered_time
-        .iter()
-        .position(|t| *t == config.time_window[0].round())
-        .unwrap_or(0);
-    let upper = scan
-        .filtered_time
-        .iter()
-        .position(|t| *t == config.time_window[1].round())
-        .unwrap_or(scan.filtered_time.len()); // safer fallback
-
-    let range = lower..upper;
-
-    let filtered_iter = scan.filtered_data.axis_iter_mut(Axis(0));
-    let img_iter = scan.filtered_img.axis_iter_mut(Axis(0));
-
-    filtered_iter
-        .zip(img_iter)
-        .par_bridge() // parallelize outer loop only
-        .for_each(|(filtered_data_col, mut filtered_img_col)| {
-            for i in 0..filtered_data_col.len_of(Axis(0)) {
-                let data_slice = filtered_data_col.index_axis(Axis(0), i);
-                let sum_sq = data_slice
-                    .slice(s![range.clone()])
-                    .iter()
-                    .map(|&xi| xi * xi)
-                    .sum::<f32>();
-                filtered_img_col[i] = sum_sq;
-            }
-        });
-
-    update_intensity_image(scan, thread_communication);
-    println!("updated time data. This took {:?}", start.elapsed());
-}
-
-/// Performs FFT-based filtering on a scan based on the configuration.
-///
-/// The function applies a specific FFT window and a bandpass filter to scale and filter the data.
-/// It uses the FFT routines defined in the scan object.
-///
-/// # Arguments
-/// * `config` - Configuration settings for the FFT and filtering process.
-/// * `scan` - A mutable reference to the scanned image data.
-/// * `img_lock` - A thread-safe lock for the intensity image array.
-fn filter(
-    config: &ConfigContainer,
-    thread_communication: &mut ThreadCommunication,
-    scan: &mut ScannedImage,
-) {
-    // calculate fft filter and calculate ifft
-    let start = Instant::now();
-    let lower = scan
-        .filtered_time
-        .iter()
-        .position(|t| *t == config.time_window[0].round())
-        .unwrap_or(0);
-    let upper = scan
-        .filtered_time
-        .iter()
-        .position(|t| *t == config.time_window[1].round())
-        .unwrap_or(scan.filtered_time.len());
-    if let Some(r2c) = &scan.filtered_r2c {
-        // scan.filtered_img =
-        //     Array2::zeros((scan.filtered_data.shape()[0], scan.filtered_data.shape()[1]));
-        // scan.filtered_data = Array3::zeros((
-        //     scan.filtered_data.shape()[0],
-        //     scan.filtered_data.shape()[1],
-        //     scan.filtered_data.shape()[2],
-        // ));
-        if let Some(c2r) = &scan.filtered_c2r {
-            (
-                scan.scaled_data.axis_iter_mut(Axis(0)),
-                scan.filtered_data.axis_iter_mut(Axis(0)),
-                scan.filtered_img.axis_iter_mut(Axis(0)),
-            )
-                .into_par_iter()
-                .for_each(
-                    |(
-                        mut scaled_data_columns,
-                        mut filtered_data_columns,
-                        mut filtered_img_columns,
-                    )| {
-                        let mut output = c2r.make_output_vec();
-                        let mut input = vec![0.0; scan.filtered_time.len()];
-                        let mut spectrum = r2c.make_output_vec();
-                        for ((scaled_data, mut filtered_data), filtered_img) in scaled_data_columns
-                            .axis_iter_mut(Axis(0))
-                            .zip(filtered_data_columns.axis_iter_mut(Axis(0)))
-                            .zip(filtered_img_columns.axis_iter_mut(Axis(0)))
-                        {
-                            // filtered_data.assign(&filtered_data);
-
-                            match config.fft_window_type {
-                                FftWindowType::AdaptedBlackman => {
-                                    apply_adapted_blackman_window(
-                                        &mut filtered_data,
-                                        &scan.filtered_time,
-                                        &config.fft_window[0],
-                                        &config.fft_window[1],
-                                    );
-                                }
-                                FftWindowType::Blackman => {
-                                    apply_blackman(&mut filtered_data, &scan.filtered_time)
-                                }
-                                FftWindowType::Hanning => {
-                                    apply_hanning(&mut filtered_data, &scan.filtered_time)
-                                }
-                                FftWindowType::Hamming => {
-                                    apply_hamming(&mut filtered_data, &scan.filtered_time)
-                                }
-                                FftWindowType::FlatTop => {
-                                    apply_flat_top(&mut filtered_data, &scan.filtered_time)
-                                }
-                            }
-
-                            // calculate fft
-                            // Forward transform the input data
-                            input.clone_from_slice(filtered_data.as_slice().unwrap());
-                            r2c.process(&mut input, &mut spectrum).unwrap();
-
-                            apply_soft_bandpass(
-                                &scan.frequencies,
-                                &mut spectrum,
-                                (config.fft_filter[0], config.fft_filter[1]),
-                                0.1, // smooth transition over 100 Hz
-                            );
-
-                            // Forward transform the input data
-                            match c2r.process(&mut spectrum, &mut output) {
-                                Ok(_) => {}
-                                Err(err) => {
-                                    log::error!("error in iFFT: {err:?}");
-                                }
-                            };
-                            let length = output.len();
-                            let output = output
-                                .iter()
-                                .map(|p| *p / length as f32)
-                                .collect::<Vec<f32>>();
-                            *filtered_img.into_scalar() = output
-                                .iter()
-                                .skip(lower)
-                                .take(upper - lower)
-                                .map(|xi| xi * xi)
-                                .sum::<f32>();
-                            filtered_data.assign(&Array1::from_vec(output));
-                        }
-                    },
-                );
-        };
-
-        for filter in FILTER_REGISTRY.lock().unwrap().iter_mut() {
-            println!("Filter found: {}", filter.config().name);
-            // filter.filter(scan, &mut thread_communication.gui_settings)
-        }
-    };
-    // update images
-    println!("updated fft. This took {:?}", start.elapsed());
-    update_intensity_image(scan, &thread_communication);
-    println!("updated and synced data. This took {:?}", start.elapsed());
 }
 
 /// Enum representing supported file types for reading data.
@@ -305,11 +133,11 @@ enum FileType {
 pub fn main_thread(mut thread_communication: ThreadCommunication) {
     // reads data from mutex, samples and saves if needed
     let mut data = DataPoint::default();
-    let mut scan = ScannedImage::default();
     let mut config = ConfigContainer::default();
     let mut selected_pixel = SelectedPixel::default();
     let mut meta_data = DotthzMetaData::default();
-    let mut hk_csv = None;
+
+    let mut update = UpdateType::None;
     loop {
         if let Ok(config_command) = thread_communication.config_rx.recv() {
             match config_command {
@@ -336,14 +164,20 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     if let Some(os_path) = path.extension() {
                         if os_path != "thz" {
                             path.set_extension("thz");
-                            // dave full file, not just metadata, since the dotTHz file does not exist yet.
-                            if let Ok(md) = thread_communication.md_lock.read() {
-                                match save_to_thz(&path, &scan, &md) {
-                                    Ok(_) => {
-                                        log::info!("saved {:?}", path);
-                                    }
-                                    Err(err) => {
-                                        log::error!("failed saving {:?}: {:?}", path, err)
+                            // save full file, not just metadata, since the dotTHz file does not exist yet.
+                            if let Ok(mut filter_data) =
+                                thread_communication.filter_data_lock.write()
+                            {
+                                if let Some(input) = filter_data.first() {
+                                    if let Ok(md) = thread_communication.md_lock.read() {
+                                        match save_to_thz(&path, &input, &md) {
+                                            Ok(_) => {
+                                                log::info!("saved {:?}", path);
+                                            }
+                                            Err(err) => {
+                                                log::error!("failed saving {:?}: {:?}", path, err)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -367,110 +201,42 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     continue;
                 }
                 ConfigCommand::OpenFile(selected_file_path) => {
+                    update = UpdateType::Filter(1);
                     if let Some(file_ending) = selected_file_path.extension() {
                         match file_ending.to_str().unwrap() {
-                            "npz" => {
-                                // check if meta.json exists in the same folder
-                                let width: usize;
-                                let height: usize;
-
-                                let json_path = selected_file_path.with_file_name("meta.json");
-
-                                match open_json(&mut data.hk, &json_path) {
-                                    Ok((w, h)) => {
-                                        width = w;
-                                        height = h;
-                                    }
-                                    Err(err) => {
-                                        log::error!("failed to open json @ {json_path:?}... {err}");
-                                        width = 0;
-                                        height = 0;
-                                    }
-                                }
-
-                                scan = ScannedImage::new(
-                                    height,
-                                    width,
-                                    data.hk.x_range[0],
-                                    data.hk.y_range[0],
-                                    data.hk.dx,
-                                    data.hk.dy,
-                                );
-
-                                let hk_path = selected_file_path.with_file_name("hk.csv");
-
-                                // read HK
-                                match ReaderBuilder::new()
-                                    .delimiter(b',')
-                                    .has_headers(true)
-                                    .from_path(hk_path)
-                                {
-                                    Ok(rdr) => {
-                                        hk_csv = Some(rdr);
-                                    }
-                                    Err(e) => {
-                                        hk_csv = None;
-                                        log::warn!("failed reading HK: {}", e)
-                                    }
-                                }
-
-                                let pulse_path = selected_file_path.with_file_name("data.npz");
-
-                                dbg!(&pulse_path);
-                                match open_from_npz(&mut scan, &pulse_path) {
-                                    Ok(_) => {
-                                        update_intensity_image(&scan, &thread_communication);
-                                    }
-                                    Err(err) => {
-                                        log::error!("an error occurred while trying to read data.npz {err:?}");
-                                    }
-                                }
-                                // if let Some(r2c) = &scan.r2c {
-                                //     if let Ok(mut data) = data_lock.write() {
-                                //         data.time = scan.time.to_vec();
-                                //         data.frequencies = scan.frequencies.to_vec();
-                                //         data.signal_1 = scan
-                                //             .raw_data
-                                //             .index_axis(Axis(0), 0)
-                                //             .index_axis(Axis(0), 0)
-                                //             .to_vec();
-                                //         let mut in_data: Vec<f32> = data.signal_1.to_vec();
-                                //         let mut spectrum = r2c.make_output_vec();
-                                //         // Forward transform the input data
-                                //         r2c.process(&mut in_data, &mut spectrum).unwrap();
-                                //         let amp: Vec<f32> =
-                                //             spectrum.iter().map(|s| s.norm()).collect();
-                                //         let phase: Vec<f32> =
-                                //             spectrum.iter().map(|s| s.arg()).collect();
-                                //         data.signal_1_fft = amp;
-                                //         data.phase_1_fft = numpy_unwrap(&phase, Some(2.0 * PI));
-                                //     }
-                                // }
-                            }
-                            "npy" => {
-                                log::error!("file ending not supported");
-                            }
                             "thz" => {
-                                match open_from_thz(&selected_file_path, &mut scan, &mut meta_data)
+                                if let Ok(mut filter_data) =
+                                    thread_communication.filter_data_lock.write()
                                 {
-                                    Ok(_) => {
-                                        log::info!("opened {:?}", selected_file_path);
-                                        update_intensity_image(&scan, &thread_communication);
+                                    if let Some(mut input) = filter_data.first_mut() {
+                                        match open_from_thz(
+                                            &selected_file_path,
+                                            &mut input,
+                                            &mut meta_data,
+                                        ) {
+                                            Ok(_) => {
+                                                log::info!("opened {:?}", selected_file_path);
+                                                //update_intensity_image(&scan, &thread_communication);
+                                            }
+                                            Err(err) => {
+                                                log::error!(
+                                                    "failed opening {:?}: {:?}",
+                                                    selected_file_path,
+                                                    err
+                                                )
+                                            }
+                                        };
+                                        if let Ok(mut md) = thread_communication.md_lock.write() {
+                                            *md = meta_data.clone();
+                                        }
                                     }
-                                    Err(err) => {
-                                        log::error!(
-                                            "failed opening {:?}: {:?}",
-                                            selected_file_path,
-                                            err
-                                        )
-                                    }
-                                };
-                                if let Ok(mut md) = thread_communication.md_lock.write() {
-                                    *md = meta_data.clone();
                                 }
                             }
                             _ => {
-                                log::warn!("file not supported: {:?} \n Close the file to connect to a spectrometer or open another file.", selected_file_path);
+                                log::warn!(
+                                    "file not supported: {:?} \n Open another file.",
+                                    selected_file_path
+                                );
                                 continue;
                             }
                         }
@@ -482,204 +248,70 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         path.set_extension("thz");
                     }
 
-                    if let Ok(md) = thread_communication.md_lock.read() {
-                        match save_to_thz(&path, &scan, &md) {
-                            Ok(_) => {
-                                log::info!("saved {:?}", path);
-                            }
-                            Err(err) => {
-                                log::error!("failed saving {:?}: {:?}", path, err)
+                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                        // note, we save the input data, not the filtered data
+                        if let Some(input) = filter_data.first() {
+                            if let Ok(md) = thread_communication.md_lock.read() {
+                                match save_to_thz(&path, &input, &md) {
+                                    Ok(_) => {
+                                        log::info!("saved {:?}", path);
+                                    }
+                                    Err(err) => {
+                                        log::error!("failed saving {:?}: {:?}", path, err)
+                                    }
+                                }
                             }
                         }
                     }
                 }
                 ConfigCommand::SetFFTWindowLow(low) => {
                     config.fft_window[0] = low;
-                    filter(&config, &mut thread_communication, &mut scan);
+                    update = UpdateType::Filter(thread_communication.fft_index);
                 }
                 ConfigCommand::SetFFTWindowHigh(high) => {
                     config.fft_window[1] = high;
-                    filter(&config, &mut thread_communication, &mut scan);
-                }
-                ConfigCommand::SetFFTFilterLow(low) => {
-                    config.fft_filter[0] = low;
-                    filter(&config, &mut thread_communication, &mut scan);
-                }
-                ConfigCommand::SetFFTFilterHigh(high) => {
-                    config.fft_filter[1] = high;
-                    filter(&config, &mut thread_communication, &mut scan);
-                }
-                ConfigCommand::SetTimeWindow(time_window) => {
-                    config.time_window = time_window;
-                    filter_time_window(&config, &mut scan, &thread_communication);
+                    update = UpdateType::Filter(thread_communication.fft_index);
                 }
                 ConfigCommand::SetFFTLogPlot(log_plot) => {
                     config.fft_log_plot = log_plot;
-                    filter(&config, &mut thread_communication, &mut scan);
+                    update = UpdateType::Plot;
                 }
                 ConfigCommand::SetFFTNormalization(normalization) => {
                     config.normalize_fft = normalization;
-                    filter(&config, &mut thread_communication, &mut scan);
+                    update = UpdateType::Plot;
                 }
                 ConfigCommand::SetFFTResolution(df) => {
                     config.fft_df = df;
-                    filter(&config, &mut thread_communication, &mut scan);
+                    update = UpdateType::Plot;
                 }
                 ConfigCommand::SetFftWindowType(wt) => {
                     config.fft_window_type = wt;
-                    filter(&config, &mut thread_communication, &mut scan);
+                    update = UpdateType::Filter(thread_communication.fft_index);
                 }
                 ConfigCommand::SetDownScaling => {
                     if let Ok(scaling) = thread_communication.scaling_lock.read() {
-                        scan.scaling = *scaling as usize;
-                        scan.rescale()
+                        //scan.scaling = *scaling as usize;
+                        // scan.rescale()
                     }
-                    filter(&config, &mut thread_communication, &mut scan);
-                    update_intensity_image(&scan, &thread_communication);
+                    // TODO implement downscaling!
+                    log::error!("scaling is not supported yet!");
+                    update = UpdateType::Filter(1);
                 }
                 ConfigCommand::SetSelectedPixel(pixel) => {
                     selected_pixel = pixel.clone();
-                    if let Ok(scaling) = thread_communication.scaling_lock.read() {
-                        scan.scaling = *scaling as usize;
-                        scan.rescale()
-                    }
+                    // if let Ok(scaling) = thread_communication.scaling_lock.read() {
+                    //     scan.scaling = *scaling as usize;
+                    //     scan.rescale()
+                    // }
                     println!("new pixel: {:} {:}", selected_pixel.x, selected_pixel.y);
-                    // send HK?
+                    update = UpdateType::Plot;
                 }
                 ConfigCommand::UpdateFilters => {
                     println!("update filters");
-
-                    let mut filters_cloned: Option<Vec<Box<dyn Filter>>> = None;
-
-                    // we need to clone the filters out of the filter_registry, otherwise this
-                    // would block the gui thread (because it is also required to update the filters)
-
-                    if let Ok(filters) = FILTER_REGISTRY.lock() {
-                        // clone the filters without holding the mutex
-                        filters_cloned = Some(
-                            filters
-                                .filters
-                                .iter()
-                                .map(|(_, filter)| filter.clone()) // requires `impl Clone for Box<dyn Filter>`
-                                .collect(),
-                        );
-                    }
-
-                    if let Some(mut filters) = filters_cloned {
-                        for filter in filters.iter_mut() {
-                            println!("update filter: {}", filter.config().name);
-                            if let Some(progress) = thread_communication
-                                .progress_lock
-                                .get_mut(&filter.config().name)
-                            {
-                                filter.filter(
-                                    // todo!!
-                                    &ScannedImageFilterData::default(),
-                                    &mut thread_communication.gui_settings,
-                                    progress,
-                                    &thread_communication.abort_flag,
-                                );
-                            }
-                        }
-
-                        (
-                            scan.scaled_data.axis_iter_mut(Axis(0)),
-                            scan.filtered_data.axis_iter_mut(Axis(0)),
-                            scan.filtered_img.axis_iter_mut(Axis(0)),
-                        )
-                            .into_par_iter()
-                            .for_each(
-                                |(
-                                    mut scaled_data_columns,
-                                    mut filtered_data_columns,
-                                    mut filtered_img_columns,
-                                )| {
-                                    (
-                                        scaled_data_columns.axis_iter_mut(Axis(0)),
-                                        filtered_data_columns.axis_iter_mut(Axis(0)),
-                                        filtered_img_columns.axis_iter_mut(Axis(0)),
-                                    )
-                                        .into_par_iter()
-                                        .for_each(
-                                            |(_scaled_data, filtered_data, filtered_img)| {
-                                                *filtered_img.into_scalar() = filtered_data
-                                                    .iter()
-                                                    .map(|xi| xi * xi)
-                                                    .sum::<f32>();
-                                            },
-                                        );
-                                },
-                            );
-
-                        update_intensity_image(&scan, &thread_communication);
-                    }
+                    update = UpdateType::Filter(1);
                 }
                 ConfigCommand::UpdateSelectedFilters(indices) => {
-                    let mut filters_cloned: Option<Vec<Box<dyn Filter>>> = None;
-
-                    // we need to clone the filters out of the filter_registry, otherwise this
-                    // would block the gui thread (because it is also required to update the filters)
-
-                    if let Ok(filters) = FILTER_REGISTRY.lock() {
-                        // clone the filters without holding the mutex
-                        filters_cloned = Some(
-                            filters
-                                .filters
-                                .iter()
-                                .map(|(_, filter)| filter.clone()) // requires `impl Clone for Box<dyn Filter>`
-                                .collect(),
-                        );
-                    }
-                    if let Some(mut filters) = filters_cloned {
-                        for index in indices {
-                            if let Some(filter) = filters.get_mut(index) {
-                                println!("update filter: {}", filter.config().name);
-                                if let Some(progress) = thread_communication
-                                    .progress_lock
-                                    .get_mut(&filter.config().name)
-                                {
-                                    filter.filter(
-                                        // todo!!
-                                        &ScannedImageFilterData::default(),
-                                        &mut thread_communication.gui_settings,
-                                        progress,
-                                        &thread_communication.abort_flag,
-                                    );
-                                }
-                            }
-                        }
-                        // update intensity image
-                        (
-                            scan.scaled_data.axis_iter_mut(Axis(0)),
-                            scan.filtered_data.axis_iter_mut(Axis(0)),
-                            scan.filtered_img.axis_iter_mut(Axis(0)),
-                        )
-                            .into_par_iter()
-                            .for_each(
-                                |(
-                                    mut scaled_data_columns,
-                                    mut filtered_data_columns,
-                                    mut filtered_img_columns,
-                                )| {
-                                    (
-                                        scaled_data_columns.axis_iter_mut(Axis(0)),
-                                        filtered_data_columns.axis_iter_mut(Axis(0)),
-                                        filtered_img_columns.axis_iter_mut(Axis(0)),
-                                    )
-                                        .into_par_iter()
-                                        .for_each(
-                                            |(_scaled_data, filtered_data, filtered_img)| {
-                                                *filtered_img.into_scalar() = filtered_data
-                                                    .iter()
-                                                    .map(|xi| xi * xi)
-                                                    .sum::<f32>();
-                                            },
-                                        );
-                                },
-                            );
-
-                        update_intensity_image(&scan, &thread_communication);
-                    }
+                    update = UpdateType::Filter(indices.into_iter().min().unwrap_or(1));
                 }
             }
 
@@ -687,143 +319,372 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                 selected_pixel = pixel.clone();
             }
 
-            // STEP 1: apply filters in time domain
+            match update {
+                UpdateType::Filter(start_idx) => {
+                    let start = Instant::now();
 
-            // STEP 2: calculate FFT
+                    let mut filters_cloned: Option<Vec<(String, Box<dyn Filter>)>> = None;
 
-            // STEP 3: apply filters in frequency domain
+                    // we need to clone the filters out of the filter_registry, otherwise this
+                    // would block the gui thread (because it is also required to update the filters)
 
-            // STEP 4: calculate inverse FFT
-
-            // STEP 5: apply filters in time domain
-
-            // STEP 6: update intensity image
-
-            if let Some(r2c) = &scan.r2c {
-                if let Ok(mut data) = thread_communication.data_lock.write() {
-                    data.time = scan.time.to_vec();
-                    data.signal_1 = scan
-                        .scaled_data
-                        .index_axis(Axis(0), selected_pixel.x / scan.scaling)
-                        .index_axis(Axis(0), selected_pixel.y / scan.scaling)
-                        .to_vec();
-                    if let Some(ref mut hk) = hk_csv {
-                        for result in hk.records() {
-                            let record = result.unwrap();
-                            // Check if the "pixel" column matches the target pixel
-                            if record.get(0)
-                                == Some(
-                                    format!(
-                                        "{:05}-{:05}",
-                                        selected_pixel.x / scan.scaling,
-                                        selected_pixel.y / scan.scaling,
-                                    )
-                                    .as_str(),
-                                )
+                    if let Ok(filters) = FILTER_REGISTRY.lock() {
+                        // Clone (uuid, filter) pairs
+                        filters_cloned = Some(
+                            filters
+                                .filters
+                                .iter()
+                                .map(|(uuid, filter)| (uuid.clone(), filter.clone()))
+                                .collect::<Vec<(String, Box<dyn Filter>)>>(),
+                        );
+                    }
+                    if let Some(ref mut filters) = filters_cloned {
+                        if let Ok(filter_chain) = thread_communication.filter_chain_lock.read() {
+                            if let Ok(mut filter_data) =
+                                thread_communication.filter_data_lock.write()
                             {
-                                if let Some(rh_value) = record.get(9) {
-                                    data.hk.ambient_humidity =
-                                        rh_value.parse::<f64>().unwrap_or(0.0);
+                                if let Ok(filter_uuid_to_index) =
+                                    thread_communication.filter_uuid_to_index_lock.read()
+                                {
+                                    for (i, filter_id) in
+                                        filter_chain.iter().enumerate().skip(start_idx)
+                                    {
+                                        let output_index =
+                                            *filter_uuid_to_index.get(filter_id).unwrap();
+                                        let input_index = *filter_uuid_to_index
+                                            .get(&filter_chain[i - 1])
+                                            .unwrap();
+
+                                        let start = Instant::now();
+                                        match filter_id.as_str() {
+                                            "fft" => {
+                                                println!("Performing FFT");
+                                                println!("{} -> {}", input_index, output_index);
+                                                filter_data[output_index] =
+                                                    fft(&filter_data[input_index], &config);
+                                            }
+                                            "ifft" => {
+                                                println!("Performing iFFT");
+                                                println!("{} -> {}", input_index, output_index);
+                                                filter_data[output_index] =
+                                                    ifft(&filter_data[input_index], &config);
+                                            }
+                                            uuid => {
+                                                if let Some((_, filter)) =
+                                                    filters.iter_mut().find(|(id, _)| id == uuid)
+                                                {
+                                                    println!(
+                                                        "Applying filter: {}",
+                                                        filter.config().name
+                                                    );
+                                                    println!("{} -> {}", input_index, output_index);
+                                                    if let Some(progress) = thread_communication
+                                                        .progress_lock
+                                                        .get_mut(uuid)
+                                                    {
+                                                        filter_data[output_index] = filter.filter(
+                                                            &filter_data[input_index],
+                                                            &mut thread_communication.gui_settings,
+                                                            progress,
+                                                            &thread_communication.abort_flag,
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // check if we need to update the fft planner due to dimension changes in time or frequency domain
+                                        if filter_data[input_index].time.len()
+                                            != filter_data[output_index].time.len()
+                                        {
+                                            let n = filter_data[output_index].time.len();
+                                            let rng = filter_data[output_index].time[n - 1]
+                                                - filter_data[output_index].time[0];
+                                            let mut real_planner = RealFftPlanner::<f32>::new();
+                                            let r2c = real_planner.plan_fft_forward(n);
+                                            let c2r = real_planner.plan_fft_inverse(n);
+                                            let spectrum = r2c.make_output_vec();
+                                            let freq = (0..spectrum.len())
+                                                .map(|i| i as f32 / rng)
+                                                .collect();
+                                            filter_data[output_index].frequency = freq;
+
+                                            filter_data[output_index].r2c = Some(r2c);
+                                            filter_data[output_index].c2r = Some(c2r);
+
+                                            filter_data[output_index].phases = Array3::zeros((
+                                                filter_data[output_index].width,
+                                                filter_data[output_index].height,
+                                                filter_data[output_index].frequency.len(),
+                                            ));
+                                            filter_data[output_index].amplitudes = Array3::zeros((
+                                                filter_data[output_index].width,
+                                                filter_data[output_index].height,
+                                                filter_data[output_index].frequency.len(),
+                                            ));
+                                            filter_data[output_index].fft = Array3::zeros((
+                                                filter_data[output_index].width,
+                                                filter_data[output_index].height,
+                                                filter_data[output_index].frequency.len(),
+                                            ));
+                                        }
+
+                                        println!(
+                                            "finished applying filter {}. This took {:?}",
+                                            i,
+                                            start.elapsed()
+                                        );
+                                    }
                                 }
-                                if let Some(rh_value) = record.get(8) {
-                                    data.hk.ambient_pressure =
-                                        rh_value.parse::<f64>().unwrap_or(0.0);
-                                }
-                                if let Some(rh_value) = record.get(6) {
-                                    data.hk.sample_temperature =
-                                        rh_value.parse::<f64>().unwrap_or(0.0);
-                                }
-                                if let Some(rh_value) = record.get(5) {
-                                    data.hk.ambient_temperature =
-                                        rh_value.parse::<f64>().unwrap_or(0.0);
+
+                                println!("finished applying filters");
+                                println!("updating intensity image...");
+
+                                // update intensity image
+                                if let Some(filtered) = filter_data.last_mut() {
+                                    (
+                                        filtered.data.axis_iter(Axis(0)),
+                                        filtered.img.axis_iter_mut(Axis(0)),
+                                    )
+                                        .into_par_iter()
+                                        .for_each(
+                                            |(data_columns, mut img_columns)| {
+                                                (
+                                                    data_columns.axis_iter(Axis(0)),
+                                                    img_columns.axis_iter_mut(Axis(0)),
+                                                )
+                                                    .into_par_iter()
+                                                    .for_each(|(data, img)| {
+                                                        *img.into_scalar() = data
+                                                            .iter()
+                                                            .map(|xi| xi * xi)
+                                                            .sum::<f32>();
+                                                    });
+                                            },
+                                        );
+
+                                    update_intensity_image(&filtered, &thread_communication);
                                 }
                             }
                         }
                     }
-                    let mut in_data: Vec<f32> = data.signal_1.to_vec();
-                    let mut spectrum = r2c.make_output_vec();
-                    // Forward transform the input data
-                    r2c.process(&mut in_data, &mut spectrum).unwrap();
-                    let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
-                    let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
-                    data.signal_1_fft = amp;
-                    data.phase_1_fft = numpy_unwrap(&phase, Some(2.0 * PI));
+
+                    // updating back the static fields
+                    if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+                        if let Some(mut filters_cloned) = filters_cloned {
+                            for (uuid, filter) in filters_cloned.iter() {
+                                if let Some((_, filter_from_registry)) =
+                                    filters.filters.iter_mut().find(|(id, _)| *id == uuid)
+                                {
+                                    filter_from_registry.copy_static_fields_from(filter.as_ref());
+                                } else {
+                                    log::warn!("Filter with uuid {} not found in registry", uuid);
+                                }
+                            }
+                        }
+                    }
+                    println!("updating plots...");
+
+                    // add selected pixel and avg data to the data lock for the plot
+                    if let Ok(mut data) = thread_communication.data_lock.write() {
+                        if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
+                            // raw trace
+                            // time domain
+                            if let Some(raw) = filter_data.first() {
+                                if raw.data.dim().0 <= selected_pixel.x
+                                    || raw.data.dim().1 <= selected_pixel.y
+                                {
+                                    log::warn!(
+                                        "selected pixel ({}, {}) is out of bounds for raw data with shape {:?}",
+                                        selected_pixel.x,
+                                        selected_pixel.y,
+                                        raw.data.shape()
+                                        );
+                                    continue;
+                                }
+                                data.time = raw.time.to_vec();
+                                data.signal_1 = raw
+                                    .data
+                                    .index_axis(Axis(0), selected_pixel.x)
+                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .to_vec();
+                                // frequency domain
+                                data.frequencies = raw.frequency.to_vec();
+                                data.signal_1_fft = raw
+                                    .amplitudes
+                                    .index_axis(Axis(0), selected_pixel.x)
+                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .to_vec();
+                                data.phase_1_fft = raw
+                                    .phases
+                                    .index_axis(Axis(0), selected_pixel.x)
+                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .to_vec();
+                            }
+
+                            // filtered trace
+                            if let Some(filtered) = filter_data.last() {
+                                data.filtered_time = filtered.time.to_vec();
+                                data.filtered_signal_1 = filtered
+                                    .data
+                                    .index_axis(Axis(0), selected_pixel.x)
+                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .to_vec();
+                                // frequency domain
+                                data.filtered_frequencies = filtered.frequency.to_vec();
+                                data.filtered_signal_1_fft = filtered
+                                    .amplitudes
+                                    .index_axis(Axis(0), selected_pixel.x)
+                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .to_vec();
+                                data.filtered_phase_fft = filtered
+                                    .phases
+                                    .index_axis(Axis(0), selected_pixel.x)
+                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .to_vec();
+
+                                // averaged
+                                data.avg_signal_1 = filtered
+                                    .data
+                                    .mean_axis(Axis(0))
+                                    .expect("Axis 2 mean failed")
+                                    .mean_axis(Axis(0))
+                                    .expect("Axis 1 mean failed")
+                                    .to_vec();
+                                data.avg_signal_1_fft = filtered
+                                    .amplitudes
+                                    .mean_axis(Axis(0))
+                                    .expect("Axis 2 mean failed")
+                                    .mean_axis(Axis(0))
+                                    .expect("Axis 1 mean failed")
+                                    .to_vec();
+                                data.avg_phase_fft = filtered
+                                    .phases
+                                    .mean_axis(Axis(0))
+                                    .expect("Axis 2 mean failed")
+                                    .mean_axis(Axis(0))
+                                    .expect("Axis 1 mean failed")
+                                    .to_vec();
+                            }
+                        }
+                    }
+
+                    println!(
+                        "updated filters starting with {}. This took {:?}",
+                        start_idx,
+                        start.elapsed()
+                    );
                 }
-            }
-            if let Some(r2c) = &scan.filtered_r2c {
-                if let Ok(mut data) = thread_communication.data_lock.write() {
-                    data.filtered_time = scan.filtered_time.to_vec();
-                    data.frequencies = scan.frequencies.to_vec();
-                    data.filtered_frequencies = scan.filtered_frequencies.to_vec();
-                    // get avg and filtered data
-                    data.filtered_signal_1 = scan
-                        .filtered_data
-                        .index_axis(Axis(0), selected_pixel.x / scan.scaling)
-                        .index_axis(Axis(0), selected_pixel.y / scan.scaling)
-                        .to_vec();
+                UpdateType::Image => {
+                    // update intensity image
+                    let start = Instant::now();
+                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                        if let Some(filtered) = filter_data.last_mut() {
+                            (
+                                filtered.data.axis_iter(Axis(0)),
+                                filtered.img.axis_iter_mut(Axis(0)),
+                            )
+                                .into_par_iter()
+                                .for_each(
+                                    |(data_columns, mut img_columns)| {
+                                        (
+                                            data_columns.axis_iter(Axis(0)),
+                                            img_columns.axis_iter_mut(Axis(0)),
+                                        )
+                                            .into_par_iter()
+                                            .for_each(
+                                                |(data, img)| {
+                                                    *img.into_scalar() =
+                                                        data.iter().map(|xi| xi * xi).sum::<f32>();
+                                                },
+                                            );
+                                    },
+                                );
 
-                    let mut in_data: Vec<f32> = data.filtered_signal_1.to_vec();
-                    let mut spectrum = r2c.make_output_vec();
-                    // Forward transform the input data
-                    r2c.process(&mut in_data, &mut spectrum).unwrap();
-                    let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
-                    let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
-                    data.filtered_signal_1_fft = amp;
-                    data.filtered_phase_fft = numpy_unwrap(&phase, Some(2.0 * PI));
+                            update_intensity_image(&filtered, &thread_communication);
+                        }
+                    }
+                    println!("updated image. This took {:?}", start.elapsed());
+                }
+                UpdateType::Plot => {
+                    // add selected pixel and avg data to the data lock for the plot
+                    let start = Instant::now();
 
-                    data.avg_signal_1 = scan
-                        .filtered_data
-                        .mean_axis(Axis(0))
-                        .expect("Axis 2 mean failed")
-                        .mean_axis(Axis(0))
-                        .expect("Axis 1 mean failed")
-                        .to_vec();
+                    if let Ok(mut data) = thread_communication.data_lock.write() {
+                        if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
+                            // raw trace
+                            // time domain
+                            if let Some(raw) = filter_data.first() {
+                                data.time = raw.time.to_vec();
+                                data.signal_1 = raw
+                                    .data
+                                    .index_axis(Axis(0), selected_pixel.x)
+                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .to_vec();
+                                // frequency domain
+                                data.frequencies = raw.frequency.to_vec();
+                                data.signal_1_fft = raw
+                                    .amplitudes
+                                    .index_axis(Axis(0), selected_pixel.x)
+                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .to_vec();
+                                data.phase_1_fft = raw
+                                    .phases
+                                    .index_axis(Axis(0), selected_pixel.x)
+                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .to_vec();
+                            }
 
-                    data.avg_signal_1_fft = vec![0.0; data.signal_1_fft.len()];
-                    data.avg_phase_fft = vec![0.0; data.phase_1_fft.len()];
+                            // filtered trace
+                            if let Some(filtered) = filter_data.last() {
+                                data.filtered_time = filtered.time.to_vec();
+                                data.filtered_signal_1 = filtered
+                                    .data
+                                    .index_axis(Axis(0), selected_pixel.x)
+                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .to_vec();
+                                // frequency domain
+                                data.filtered_frequencies = filtered.frequency.to_vec();
+                                data.filtered_signal_1_fft = filtered
+                                    .amplitudes
+                                    .index_axis(Axis(0), selected_pixel.x)
+                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .to_vec();
+                                data.filtered_phase_fft = filtered
+                                    .phases
+                                    .index_axis(Axis(0), selected_pixel.x)
+                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .to_vec();
 
-                    // for x in 0..scan.filtered_data.shape()[0] {
-                    //     for y in 0..scan.filtered_data.shape()[1] {
-                    //         let mut in_data: Vec<f32> = scan
-                    //             .filtered_data
-                    //             .index_axis(Axis(0), x)
-                    //             .index_axis(Axis(0), y)
-                    //             .to_vec();
-                    //         let mut spectrum = r2c.make_output_vec();
-                    //         // Forward transform the input data
-                    //         r2c.process(&mut in_data, &mut spectrum).unwrap();
-                    //         let amp: Vec<f32> = spectrum.iter().map(|s| s.norm()).collect();
-                    //         let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
-                    //         data.avg_signal_1_fft = data
-                    //             .avg_signal_1_fft
-                    //             .iter()
-                    //             .zip(amp.iter()) // Combine the two iterators
-                    //             .map(|(a, b)| a + b) // Add the elements together
-                    //             .collect();
-                    //         data.filtered_phase_fft = data
-                    //             .filtered_phase_fft
-                    //             .iter()
-                    //             .zip(numpy_unwrap(&phase, Some(2.0 * PI)).iter()) // Combine the two iterators
-                    //             .map(|(a, b)| a + b) // Add the elements together
-                    //             .collect();
-                    //     }
-                    // }
-                    data.avg_signal_1_fft = data
-                        .avg_signal_1_fft
-                        .iter()
-                        .map(|&i| {
-                            i / (scan.filtered_data.shape()[0] * scan.filtered_data.shape()[1])
-                                as f32
-                        }) // Perform division
-                        .collect();
-                    data.avg_phase_fft = data
-                        .avg_phase_fft
-                        .iter()
-                        .map(|&i| {
-                            i / (scan.filtered_data.shape()[0] * scan.filtered_data.shape()[1])
-                                as f32
-                        }) // Perform division
-                        .collect();
+                                // averaged
+                                data.avg_signal_1 = filtered
+                                    .data
+                                    .mean_axis(Axis(0))
+                                    .expect("Axis 2 mean failed")
+                                    .mean_axis(Axis(0))
+                                    .expect("Axis 1 mean failed")
+                                    .to_vec();
+                                data.avg_signal_1_fft = filtered
+                                    .amplitudes
+                                    .mean_axis(Axis(0))
+                                    .expect("Axis 2 mean failed")
+                                    .mean_axis(Axis(0))
+                                    .expect("Axis 1 mean failed")
+                                    .to_vec();
+                                data.avg_phase_fft = filtered
+                                    .phases
+                                    .mean_axis(Axis(0))
+                                    .expect("Axis 2 mean failed")
+                                    .mean_axis(Axis(0))
+                                    .expect("Axis 1 mean failed")
+                                    .to_vec();
+                            }
+                        }
+                    }
+                    println!("updated plot. This took {:?}", start.elapsed());
+                }
+                UpdateType::None => {
+                    // do nothing
                 }
             }
         }

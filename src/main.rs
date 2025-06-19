@@ -82,61 +82,85 @@ fn main() {
         gui_settings.chart_scale = 1.0;
     }
 
-    let mut filter_mapping = HashMap::new();
-    filter_mapping.insert("initial".to_string(), (0, 1));
-
-    let mut filter_data = HashMap::new();
-    filter_data.insert("initial".to_string(), ScannedImageFilterData::default());
+    let mut filter_data = vec![];
+    filter_data.push(ScannedImageFilterData::default());
 
     let mut filters_active = HashMap::new();
     filters_active.insert("initial".to_string(), true);
 
-    // populate with standard / empty values
+    let mut filter_chain = vec!["initial".to_string()];
+    let mut filter_uuid_to_index = HashMap::new();
+    filter_uuid_to_index.insert("initial".to_string(), 0);
+
+    let mut fft_index = 0;
+    let mut ifft_index = 0;
+
     if let Ok(mut filters) = FILTER_REGISTRY.lock() {
-        let mut counter = 0;
-        for (uuid, filter) in filters.filters.iter_mut() {
-            if filter.config().domain == FilterDomain::TimeBeforeFFTPrioFirst {
-                filter_data.insert(uuid.clone(), ScannedImageFilterData::default());
-                filter_mapping.insert(uuid.clone(), (counter, counter + 1));
-                filters_active.insert(uuid.clone(), true);
-                counter += 1;
+        let mut ordered_filters = vec![];
+
+        // Collect filters in the desired order, inserting FFT and iFFT manually
+        for domain in [
+            FilterDomain::TimeBeforeFFTPrioFirst,
+            FilterDomain::TimeBeforeFFT,
+        ] {
+            for (uuid, filter) in filters.filters.iter_mut() {
+                if filter.config().domain == domain {
+                    ordered_filters.push(uuid.clone());
+                }
             }
         }
-        for (uuid, filter) in filters.filters.iter_mut() {
-            if filter.config().domain == FilterDomain::TimeBeforeFFT {
-                filter_data.insert(uuid.clone(), ScannedImageFilterData::default());
-                filter_mapping.insert(uuid.clone(), (counter, counter + 1));
-                filters_active.insert(uuid.clone(), true);
-                counter += 1;
-            }
-        }
+
+        fft_index = ordered_filters.len();
+
+        // Insert FFT step
+        ordered_filters.push("fft".to_string());
+
+        // Frequency domain filters
         for (uuid, filter) in filters.filters.iter_mut() {
             if filter.config().domain == FilterDomain::Frequency {
-                filter_data.insert(uuid.clone(), ScannedImageFilterData::default());
-                filter_mapping.insert(uuid.clone(), (counter, counter + 1));
-                filters_active.insert(uuid.clone(), true);
-                counter += 1;
+                ordered_filters.push(uuid.clone());
             }
         }
-        for (uuid, filter) in filters.filters.iter_mut() {
-            if filter.config().domain == FilterDomain::TimeAfterFFT {
-                filter_data.insert(uuid.clone(), ScannedImageFilterData::default());
-                filter_mapping.insert(uuid.clone(), (counter, counter + 1));
-                filters_active.insert(uuid.clone(), true);
-                counter += 1;
+
+        ifft_index = ordered_filters.len();
+
+        // Insert iFFT step
+        ordered_filters.push("ifft".to_string());
+
+        // Remaining filters
+        for domain in [
+            FilterDomain::TimeAfterFFT,
+            FilterDomain::TimeAfterFFTPrioLast,
+        ] {
+            for (uuid, filter) in filters.filters.iter_mut() {
+                if filter.config().domain == domain {
+                    ordered_filters.push(uuid.clone());
+                }
             }
         }
-        for (uuid, filter) in filters.filters.iter_mut() {
-            if filter.config().domain == FilterDomain::TimeAfterFFTPrioLast {
-                filter_data.insert(uuid.clone(), ScannedImageFilterData::default());
-                filter_mapping.insert(uuid.clone(), (counter, counter + 1));
-                filters_active.insert(uuid.clone(), true);
-                counter += 1;
-            }
+
+        // Build the chain and mapping
+        for (i, uuid) in ordered_filters.iter().enumerate() {
+            filter_chain.push(uuid.clone());
+            filter_uuid_to_index.insert(uuid.clone(), i + 1);
         }
     }
 
-    let filter_mapping_lock = Arc::new(RwLock::new(filter_mapping));
+    // populate with standard / empty values
+    if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+        for (uuid, _) in filters.filters.iter_mut() {
+            filter_data.push(ScannedImageFilterData::default());
+            filters_active.insert(uuid.clone(), true);
+        }
+    }
+
+    // FFT
+    filter_data.push(ScannedImageFilterData::default());
+    // iFFT
+    filter_data.push(ScannedImageFilterData::default());
+
+    let filter_chain_lock = Arc::new(RwLock::new(filter_chain));
+    let filter_uuid_to_index_lock = Arc::new(RwLock::new(filter_uuid_to_index));
     let filter_data_lock = Arc::new(RwLock::new(filter_data));
     let filters_active_lock = Arc::new(RwLock::new(filters_active));
 
@@ -154,11 +178,9 @@ fn main() {
 
     let mut progress_lock = HashMap::new();
     if let Ok(mut filters) = FILTER_REGISTRY.lock() {
-        for (uuid,filter) in filters.filters.iter_mut() {
+        for (uuid, _) in filters.filters.iter_mut() {
             progress_lock.insert(uuid.clone(), Arc::new(RwLock::new(None)));
-            gui_settings
-                .progress_bars
-                .insert(uuid.clone(), None);
+            gui_settings.progress_bars.insert(uuid.clone(), None);
         }
     }
     let (config_tx, config_rx): (Sender<ConfigCommand>, Receiver<ConfigCommand>) =
@@ -176,7 +198,10 @@ fn main() {
         scaling_lock: scaling_lock.clone(),
         img_lock: img_lock.clone(),
         progress_lock: progress_lock.clone(),
-        filter_mapping_lock: filter_mapping_lock.clone(),
+        fft_index,
+        ifft_index,
+        filter_chain_lock: filter_chain_lock.clone(),
+        filter_uuid_to_index_lock: filter_uuid_to_index_lock.clone(),
         filter_data_lock: filter_data_lock.clone(),
         filters_active_lock: filters_active_lock.clone(),
         gui_settings: gui_settings.clone(),
@@ -189,7 +214,7 @@ fn main() {
 
     // Start Bevy app
     App::new()
-        //.insert_resource(WinitSettings::desktop_app())
+        .insert_resource(WinitSettings::desktop_app())
         .add_plugins(
             DefaultPlugins
                 .set(RenderPlugin {

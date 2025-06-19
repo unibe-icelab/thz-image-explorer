@@ -11,14 +11,19 @@ use bevy_egui::egui;
 use chrono::Utc;
 #[allow(unused_imports)]
 use ctor::ctor;
+use downcast_rs::Downcast;
 use once_cell::sync::Lazy;
-use std::any::TypeId;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Mutex, RwLock};
 use uuid::Uuid;
+
+pub trait CopyStaticFieldsTrait: Downcast {
+    fn copy_static_fields_from(&mut self, other: &dyn CopyStaticFieldsTrait);
+}
+downcast_rs::impl_downcast!(CopyStaticFieldsTrait);
 
 /// The `Filter` trait defines the structure and behavior of an image filter.
 ///
@@ -49,7 +54,7 @@ use uuid::Uuid;
 ///     }
 /// }
 /// ```
-pub trait Filter: Send + Sync + Debug + CloneBoxedFilter {
+pub trait Filter: Send + Sync + Debug + CloneBoxedFilter + CopyStaticFieldsTrait {
     /// Creates a new instance of the filter with default parameters.
     fn new() -> Self
     where
@@ -158,19 +163,6 @@ impl Clone for Box<dyn Filter> {
     fn clone(&self) -> Box<dyn Filter> {
         self.as_ref().clone_box()
     }
-}
-
-// Add this helper function to generate type-based UUIDs
-pub fn get_type_uuid<T: 'static>() -> String {
-    static TYPE_UUIDS: Lazy<Mutex<HashMap<TypeId, String>>> =
-        Lazy::new(|| Mutex::new(HashMap::new()));
-
-    let type_id = TypeId::of::<T>();
-    let mut map = TYPE_UUIDS.lock().unwrap();
-
-    map.entry(type_id)
-        .or_insert_with(|| Uuid::new_v4().to_string())
-        .clone()
 }
 
 /// A registry to manage and retrieve registered filters.
@@ -344,16 +336,6 @@ pub static FILTER_REGISTRY: Lazy<Mutex<FilterRegistry>> = Lazy::new(|| {
 static FILTER_INSTANCE_UUIDS: Lazy<Mutex<HashMap<String, String>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
-pub fn get_uuid_for_filter(filter: &Box<dyn Filter>) -> String {
-    // Use the filter's name as a key to look up its UUID
-    let name = filter.config().name.clone();
-
-    let map = FILTER_INSTANCE_UUIDS.lock().unwrap();
-    map.get(&name)
-        .cloned()
-        .unwrap_or_else(|| "unknown".to_string())
-}
-
 pub fn draw_filters(
     ui: &mut egui::Ui,
     thread_communication: &mut ThreadCommunication,
@@ -362,8 +344,12 @@ pub fn draw_filters(
 ) {
     // draw time domain filter after FFT
     if let Ok(mut filters) = FILTER_REGISTRY.lock() {
-        let mut update_requested = false;
-        for (uuid, filter) in filters.filters.iter_mut() {
+        // Collect UUIDs and indices first to avoid double mutable borrow
+        let filter_entries: Vec<(String, usize)> =
+            filters.filters.keys().cloned().zip(0..).collect();
+
+        for (idx, (uuid, _)) in filter_entries.iter().enumerate() {
+            let filter = filters.filters.get_mut(uuid).unwrap();
             if filter.config().domain != domain {
                 continue;
             }
@@ -389,7 +375,7 @@ pub fn draw_filters(
                 }
             }
 
-            let mut filter_is_active  = true;
+            let mut filter_is_active = true;
 
             // call filter update
             ui.vertical(|ui| {
@@ -416,9 +402,17 @@ pub fn draw_filters(
                     ui.disable();
                 }
 
-                update_requested |= filter
+                if filter
                     .ui(ui, thread_communication, right_panel_width)
-                    .changed();
+                    .changed()
+                {
+                    // current filter has been changed, let's request an update
+                    let indices: Vec<usize> = (idx + 1..filter_entries.len()).collect();
+                    thread_communication
+                        .config_tx
+                        .send(ConfigCommand::UpdateSelectedFilters(indices))
+                        .unwrap();
+                }
             });
 
             // draw progress bar
@@ -449,14 +443,6 @@ pub fn draw_filters(
                     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
                 }
             }
-        }
-
-        // if this filter is dirty, we need to update it
-        if update_requested {
-            thread_communication
-                .config_tx
-                .send(ConfigCommand::UpdateFilters)
-                .unwrap();
         }
     }
 }

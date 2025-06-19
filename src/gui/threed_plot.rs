@@ -29,7 +29,7 @@ pub fn update_instance_buffer_system(
     mut query: Query<(&mut InstanceMaterialData, &mut Mesh3d)>,
     mut meshes: ResMut<Assets<Mesh>>,
     thread_communication: Res<ThreadCommunication>,
-    mut opacity_threshold: ResMut<OpacityThreshold>,
+    opacity_threshold: Res<OpacityThreshold>,
 ) {
     if !visibility.0 {
         return;
@@ -310,7 +310,7 @@ pub fn setup(
 pub fn animate(
     time: Res<Time>,
     mut pan_orbit_query: Query<&mut PanOrbitCamera>,
-    thread_communication: Res<ThreadCommunication>,
+    _thread_communication: Res<ThreadCommunication>,
 ) {
     //if thread_communication.gui_settings.tab == Tab::ThreeD {
     for mut pan_orbit in pan_orbit_query.iter_mut() {

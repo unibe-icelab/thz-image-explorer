@@ -6,12 +6,12 @@
 
 use crate::config::ThreadCommunication;
 use crate::data_container::ScannedImageFilterData;
-use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
+use crate::filters::filter::{CopyStaticFieldsTrait, Filter, FilterConfig, FilterDomain};
 use crate::filters::psf::create_psf_2d;
 use crate::filters::psf::gaussian2;
 use crate::gui::application::GuiSettingsContainer;
 use bevy_egui::egui::{self, Ui};
-use filter_macros::register_filter;
+use filter_macros::{register_filter, CopyStaticFields};
 use ndarray::{arr1, s, Array1, Array2, Array3, Axis, Zip};
 use num_complex::Complex32;
 use rayon::prelude::*;
@@ -29,8 +29,8 @@ use std::sync::{Arc, RwLock};
 ///
 /// Fields:
 /// - `n_iterations`: The number of iterations for performing the deconvolution.
-#[derive(Debug, Clone)]
-#[register_filter]
+//#[register_filter]
+#[derive(Clone, Debug, CopyStaticFields)]
 pub struct Deconvolution {
     pub n_iterations: usize,
 }

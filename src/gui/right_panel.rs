@@ -1,5 +1,5 @@
 use crate::config::{ConfigCommand, ThreadCommunication};
-use crate::filters::filter::{draw_filters, FilterDomain, FILTER_REGISTRY};
+use crate::filters::filter::{draw_filters, FilterDomain};
 use crate::gui::application::THzImageExplorer;
 use crate::gui::settings_window::settings_window;
 use crate::gui::toggle_widget::toggle;
@@ -12,12 +12,9 @@ use crate::DataPoint;
 use bevy_egui::egui;
 use bevy_egui::egui::panel::Side;
 use bevy_egui::egui::{vec2, DragValue, Stroke, Vec2, Visuals};
-use chrono::Utc;
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use ndarray::Array1;
-use std::sync::atomic::Ordering::Relaxed;
-use crate::filters::filter::FilterDomain::TimeAfterFFT;
 
 #[allow(clippy::too_many_arguments)]
 pub fn right_panel(
@@ -139,6 +136,17 @@ pub fn right_panel(
                             }
                         });
                     });
+
+                ui.add_space(10.0);
+                if ui.button("Calculate All Filters").clicked() {
+                    thread_communication
+                        .config_tx
+                        .send(ConfigCommand::UpdateFilters)
+                        .expect("unable to send config");
+                }
+                ui.add_space(10.0);
+                ui.separator();
+
                 egui::ScrollArea::vertical().max_height(ui.available_height() - 200.0).show(ui, |ui| {
 
                     if !thread_communication.gui_settings.filter_ui_active {
@@ -359,9 +367,10 @@ pub fn right_panel(
                     draw_filters(ui, thread_communication, FilterDomain::TimeAfterFFT, *right_panel_width);
                     draw_filters(ui, thread_communication, FilterDomain::TimeAfterFFTPrioLast, *right_panel_width);
                 });
+                ui.separator();
+                ui.add_space(20.0);
 
                 thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
-                ui.separator();
                 ui.collapsing("Debug logs:", |ui| {
                     ui.set_height(175.0);
                     egui_logger::logger_ui().show(ui);

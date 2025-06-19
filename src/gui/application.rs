@@ -4,10 +4,7 @@
 //! file operations, and visualization panels for signal and image processing.
 
 use crate::config::ThreadCommunication;
-use crate::data_container::{
-    DataPoint, ScannedImageFilterData, ScannedImageFrequencyDomain, ScannedImageTimeDomain,
-};
-use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
+use crate::data_container::DataPoint;
 use crate::filters::psf::PSF;
 use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
@@ -278,8 +275,6 @@ pub struct THzImageExplorer {
     pub(crate) cut_off: [f32; 2],
     pub(crate) fft_bounds: [f32; 2],
     pub(crate) fft_window_type: FftWindowType,
-    pub(crate) filter_bounds: [f32; 2],
-    pub(crate) time_window: [f32; 2],
     pub(crate) pixel_selected: SelectedPixel,
     pub(crate) val: PlotPoint,
     pub(crate) mid_point: f32,
@@ -295,22 +290,6 @@ pub struct THzImageExplorer {
     pub(crate) scroll_to_selection: bool,
     pub(crate) settings_window_open: bool,
     pub(crate) update_text: String,
-    /// Data for the filters in time domain before FFT
-    pub(crate) time_domain_data_1: Vec<ScannedImageTimeDomain>,
-    /// Data for the filters in frequency domain after FFT and before iFFT
-    pub(crate) frequency_domain_data: Vec<ScannedImageFrequencyDomain>,
-    /// Data for the filters in time domain after FFT/iFFT
-    pub(crate) time_domain_data_2: Vec<ScannedImageTimeDomain>,
-    /// Maps the filter indices to the corresponding input data indices in time domain before FFT
-    /// Note that the output will always be saved in the corresponding index in the data Vec.
-    pub(crate) time_domain_filter_mapping_1: Vec<(usize, usize)>,
-    /// Maps the filter indices to the corresponding input data indices in frequency domain after FFT and before iFFT
-    /// Note that the output will always be saved in the corresponding index in the data Vec.
-    pub(crate) frequency_domain_filter_mapping: Vec<(usize, usize)>,
-    /// Maps the filter indices to the corresponding input data indices in time domain after FFT
-    /// Note that the output will always be saved in the corresponding index in the data Vec.
-    pub(crate) time_domain_filter_mapping_2: Vec<(usize, usize)>,
-
     #[cfg(feature = "self_update")]
     pub(crate) new_release: Option<Release>,
 }
@@ -379,32 +358,6 @@ impl THzImageExplorer {
         //         eframe::get_value(storage, "file_dialog_storage").unwrap_or_default()
         // }
 
-        let mut time_domain_data_1 = vec![ScannedImageTimeDomain::default()];
-        let mut frequency_domain_data = vec![ScannedImageFrequencyDomain::default()];
-        let mut time_domain_data_2 = vec![ScannedImageTimeDomain::default()];
-        let mut time_domain_filter_mapping_1 = vec![(0, 0)];
-        let mut frequency_domain_filter_mapping = vec![(0, 0)];
-        let mut time_domain_filter_mapping_2 = vec![(0, 0)];
-
-        // populate with standard / empty values
-        // if let Ok(mut filters) = FILTER_REGISTRY.lock() {
-        //     for (i, filter) in filters.iter_mut().enumerate() {
-        //         match filter.as_ref().config().domain {
-        //             FilterDomain::TimeBeforeFFT => {
-        //                 time_domain_data_1.push(ScannedImageTimeDomain::default());
-        //                 time_domain_filter_mapping_1.push((i, i + 1));
-        //             }
-        //             FilterDomain::Frequency => {
-        //                 frequency_domain_data.push(ScannedImageFrequencyDomain::default());
-        //                 frequency_domain_filter_mapping.push((i, i + 1));
-        //             }
-        //             FilterDomain::TimeAfterFFT => {
-        //                 time_domain_data_2.push(ScannedImageTimeDomain::default());
-        //                 time_domain_filter_mapping_2.push((i, i + 1));
-        //             }
-        //         }
-        //     }
-        // }
         Self {
             water_vapour_lines,
             wp: include_bytes!("../../images/WP-Logo.png"),
@@ -457,20 +410,12 @@ impl THzImageExplorer {
             cut_off: [0.0, 100.0],
             fft_bounds: [1.0, 7.0],
             fft_window_type: FftWindowType::AdaptedBlackman,
-            filter_bounds: [0.0, 10.0],
-            time_window: [1000.0, 1050.0],
             pixel_selected: SelectedPixel::default(),
             val: PlotPoint { x: 0.0, y: 0.0 },
             mid_point: 50.0,
             bw: false,
             settings_window_open: false,
             update_text: "".to_string(),
-            time_domain_data_1,
-            frequency_domain_data,
-            time_domain_data_2,
-            time_domain_filter_mapping_1,
-            frequency_domain_filter_mapping,
-            time_domain_filter_mapping_2,
             #[cfg(feature = "self_update")]
             new_release: None,
         }

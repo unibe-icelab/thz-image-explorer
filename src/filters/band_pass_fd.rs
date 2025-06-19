@@ -1,26 +1,27 @@
 use crate::config::ThreadCommunication;
 use crate::data_container::ScannedImageFilterData;
-use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
+use crate::filters::filter::{CopyStaticFieldsTrait, Filter, FilterConfig, FilterDomain};
 use crate::gui::application::GuiSettingsContainer;
+use crate::math_tools::apply_adapted_blackman_window;
 use bevy_egui::egui::{self, Ui};
 use bevy_egui::egui::{DragValue, Stroke, Vec2};
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
-use filter_macros::register_filter;
-use ndarray::s;
-use num_complex::Complex;
+use filter_macros::{register_filter, CopyStaticFields};
+use ndarray::{s, Array1};
 use num_traits::Float;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use std::sync::{Arc, RwLock};
 
-#[derive(Debug)]
 #[register_filter]
-#[derive(Clone)]
+#[derive(Clone, Debug, CopyStaticFields)]
 pub struct FrequencyDomainBandPass {
     pub low: f64,  // Low cutoff frequency
     pub high: f64, // High cutoff frequency
     pub window_width: f64,
-    pub freq_axis: Vec<f32>,
+    #[static_field]
+    freq_axis: Vec<f32>,
+    #[static_field]
     signal_axis: Vec<f32>,
 }
 
@@ -30,9 +31,9 @@ impl Filter for FrequencyDomainBandPass {
         Self: Sized,
     {
         FrequencyDomainBandPass {
-            low: 0.5,
+            low: 0.2,
             high: 5.0,
-            window_width: 2.0,
+            window_width: 0.1,
             freq_axis: vec![],
             signal_axis: vec![],
         }
@@ -57,76 +58,95 @@ impl Filter for FrequencyDomainBandPass {
         }
 
         let mut output_data = input_data.clone();
-        let shape = output_data.data.dim();
+        let shape = output_data.fft.dim();
+        let h = shape.0;
+        let w = shape.1;
 
         // Store the frequency axis for UI visualization
         self.freq_axis = output_data.frequency.to_vec();
 
-        // Get pixel data for visualization
-        let pixel = input_data.pixel_selected;
+        let safe_low = self.low.max(0.0) as f32;
+        let safe_high = self
+            .high
+            .min(output_data.frequency.last().copied().unwrap_or(10.0) as f64)
+            as f32;
 
-        // Transform all signals to frequency domain
-        for i in 0..shape.0 {
+        let lower = output_data
+            .frequency
+            .iter()
+            .position(|&f| f >= safe_low)
+            .unwrap_or(0);
+        let upper = output_data
+            .frequency
+            .iter()
+            .rposition(|&f| f <= safe_high)
+            .map(|i| i + 1) // rposition is inclusive, so add 1 for slicing
+            .unwrap_or(output_data.frequency.len());
+
+        // Slice and convert to owned arrays
+        output_data.fft = input_data.fft.slice(s![.., .., lower..upper]).to_owned();
+        output_data.amplitudes = input_data
+            .amplitudes
+            .slice(s![.., .., lower..upper])
+            .to_owned();
+
+        // Create and apply window
+        let mut freq_window = Array1::<f32>::ones(upper - lower);
+        apply_adapted_blackman_window(
+            &mut freq_window.view_mut(),
+            &input_data.frequency.slice(s![lower..upper]).to_owned(),
+            &(self.window_width as f32),
+            &(self.window_width as f32),
+        );
+
+        // Apply window to each pixel's spectrum
+        for i in 0..h {
             if abort_flag.load(Relaxed) {
                 break;
             }
-
-            for j in 0..shape.1 {
-                // Get the time domain signal for this pixel
-                let mut signal = output_data.data.slice(s![i, j, ..]).to_vec();
-
-                // Transform to frequency domain
-                let mut spectrum = vec![Complex::new(0.0, 0.0); signal.len() / 2 + 1];
-                if let Some(r2c) = &output_data.r2c {
-                    r2c.process(&mut signal, &mut spectrum).unwrap_or_default();
-
-                    // Apply frequency domain bandpass filter
-                    let safe_low = self.low.max(0.0) as f32;
-                    let safe_high = self.high.min(output_data.frequency.len() as f64) as f32;
-
-                    // Zero out frequencies outside the passband
-                    for (k, freq) in output_data.frequency.iter().enumerate() {
-                        if *freq < safe_low || *freq > safe_high {
-                            spectrum[k] = Complex::new(0.0, 0.0);
-                        }
-                    }
-
-                    // Transform back to time domain
-                    if let Some(c2r) = &output_data.c2r {
-                        c2r.process(&mut spectrum, &mut signal).unwrap_or_default();
-
-                        // Normalize (IFFT scaling)
-                        let scale = 1.0 / signal.len() as f32;
-                        signal.iter_mut().for_each(|v| *v *= scale);
-
-                        // Update the data
-                        for (k, v) in signal.iter().enumerate() {
-                            output_data.data[[i, j, k]] = *v;
-                        }
-                    }
+            for j in 0..w {
+                let mut spectrum = output_data.fft.slice_mut(s![i, j, ..]);
+                let mut amplitudes = output_data.amplitudes.slice_mut(s![i, j, ..]);
+                for k in 0..freq_window.len() {
+                    spectrum[k] = spectrum[k] * freq_window[k];
+                    amplitudes[k] = amplitudes[k] * freq_window[k];
                 }
             }
-
-            // Update progress
             if let Ok(mut p) = progress_lock.write() {
-                *p = Some((i as f32) / (shape.0 as f32));
+                *p = Some((i as f32) / (h as f32));
             }
         }
 
-        // Get the spectrum of the selected pixel for visualization
-        if pixel[0] < shape.0 && pixel[1] < shape.1 {
-            let mut signal = output_data.data.slice(s![pixel[0], pixel[1], ..]).to_vec();
-            let mut spectrum = vec![Complex::new(0.0, 0.0); signal.len() / 2 + 1];
-
-            if let Some(r2c) = &output_data.r2c {
-                r2c.process(&mut signal, &mut spectrum).unwrap_or_default();
-                self.signal_axis = spectrum.iter().map(|c| c.norm()).collect();
-            } else {
-                self.signal_axis = vec![0.0; output_data.frequency.len()];
-            }
+        // Visualization for selected pixel
+        let pixel = output_data.pixel_selected;
+        if pixel[0] < h && pixel[1] < w {
+            let spectrum = output_data.fft.slice(s![pixel[0], pixel[1], ..]);
+            self.signal_axis = spectrum.iter().map(|c| c.norm()).collect();
         } else {
             self.signal_axis = vec![0.0; output_data.frequency.len()];
         }
+
+        let original_freq_len = input_data.frequency.len();
+
+        // Zero-pad the filtered FFT back to the original frequency length
+        let mut padded_fft = ndarray::Array3::zeros((h, w, original_freq_len));
+        let mut padded_amplitudes = ndarray::Array3::zeros((h, w, original_freq_len));
+
+        for i in 0..h {
+            for j in 0..w {
+                let n_data = output_data.fft.shape()[2];
+                let filtered = output_data.fft.slice(s![i, j, ..]);
+                let filtered_amp = output_data.amplitudes.slice(s![i, j, ..]);
+                padded_fft
+                    .slice_mut(s![i, j, lower..n_data + lower])
+                    .assign(&filtered);
+                padded_amplitudes
+                    .slice_mut(s![i, j, lower..n_data + lower])
+                    .assign(&filtered_amp);
+            }
+        }
+        output_data.fft = padded_fft;
+        output_data.amplitudes = padded_amplitudes;
 
         if let Ok(mut p) = progress_lock.write() {
             *p = None;
@@ -138,7 +158,7 @@ impl Filter for FrequencyDomainBandPass {
     fn ui(
         &mut self,
         ui: &mut Ui,
-        thread_communication: &mut ThreadCommunication,
+        _thread_communication: &mut ThreadCommunication,
         panel_width: f32,
     ) -> egui::Response {
         let mut final_response = ui.allocate_response(Vec2::ZERO, egui::Sense::hover());
@@ -160,7 +180,7 @@ impl Filter for FrequencyDomainBandPass {
 
         // Create filter visualization
         let mut filter_vals: Vec<[f64; 2]> = Vec::new();
-        for (i, freq) in self.freq_axis.iter().enumerate() {
+        for freq in self.freq_axis.iter() {
             let amplitude = if *freq as f64 >= self.low && *freq as f64 <= self.high {
                 max
             } else {
@@ -169,11 +189,36 @@ impl Filter for FrequencyDomainBandPass {
             filter_vals.push([*freq as f64, amplitude]);
         }
 
+        // Generate the frequency window for visualization
+        let mut freq_window = ndarray::Array1::<f32>::zeros(self.freq_axis.len());
+        let safe_low = self.low.max(0.0) as f32;
+        let safe_high =
+            self.high
+                .min(self.freq_axis.last().copied().unwrap_or(10.0) as f64) as f32;
+        let freq_axis_arr = ndarray::Array1::from(self.freq_axis.clone());
+        apply_adapted_blackman_window(
+            &mut freq_window.view_mut(),
+            &freq_axis_arr,
+            &(safe_low - self.window_width as f32),
+            &(safe_high + self.window_width as f32),
+        );
+
+        // Scale the window to the max amplitude
+        let max = spectrum_vals.iter().fold(0.0, |acc, &[_, y]| acc.max(y));
+        let window_line: Vec<[f64; 2]> = self
+            .freq_axis
+            .iter()
+            .zip(freq_window.iter())
+            .map(|(&f, &w)| [f as f64, w as f64 * max])
+            .collect();
+
         // Frequency domain plot
         let freq_plot = Plot::new("Frequency Domain")
             .allow_drag(false)
             .allow_zoom(false)
             .allow_scroll(false)
+            .include_x(0.0)
+            .include_x(10.0)
             .set_margin_fraction(Vec2 { x: 0.0, y: 0.05 })
             .height(100.0)
             .width(panel_width * 0.9);
@@ -206,6 +251,13 @@ impl Filter for FrequencyDomainBandPass {
                     VLine::new(self.high)
                         .stroke(Stroke::new(1.0, egui::Color32::GRAY))
                         .name("High Cutoff"),
+                );
+
+                plot_ui.line(
+                    Line::new(PlotPoints::from(window_line))
+                        .style(LineStyle::Solid)
+                        .stroke(Stroke::new(1.0, egui::Color32::WHITE))
+                        .name("Window"),
                 );
             })
         });
@@ -256,7 +308,7 @@ impl Filter for FrequencyDomainBandPass {
                 .add(
                     DragValue::new(&mut self.low)
                         .speed(0.01)
-                        .clamp_range(0.0..=self.high),
+                        .range(0.0..=self.high),
                 )
                 .changed();
 
@@ -267,7 +319,7 @@ impl Filter for FrequencyDomainBandPass {
                 .add(
                     DragValue::new(&mut self.high)
                         .speed(0.01)
-                        .clamp_range(self.low..=*self.freq_axis.last().unwrap_or(&10.0) as f64),
+                        .range(self.low..=*self.freq_axis.last().unwrap_or(&10.0) as f64),
                 )
                 .changed();
 

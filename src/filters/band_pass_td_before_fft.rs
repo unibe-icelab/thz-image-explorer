@@ -1,27 +1,29 @@
 use crate::config::ThreadCommunication;
 use crate::data_container::ScannedImageFilterData;
-use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
+use crate::filters::filter::{CopyStaticFieldsTrait, Filter, FilterConfig, FilterDomain};
 use crate::gui::application::GuiSettingsContainer;
 use crate::math_tools::apply_adapted_blackman_window;
 use bevy_egui::egui::{self, Ui};
 use bevy_egui::egui::{DragValue, Stroke, Vec2};
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
-use filter_macros::register_filter;
+use filter_macros::{register_filter, CopyStaticFields};
 use ndarray::s;
-use realfft::RealFftPlanner;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
-#[derive(Debug)]
 #[register_filter]
-#[derive(Clone)]
+#[derive(Clone, Debug, CopyStaticFields)]
 pub struct TimeDomainBandPassBeforeFFT {
     pub low: f64,
     pub high: f64,
     pub window_width: f64,
-    pub time_axis: Vec<f32>,
+    #[static_field]
+    time_axis: Vec<f32>,
+    #[static_field]
     signal_axis: Vec<f32>,
+    #[static_field]
+    input_signal_axis: Vec<f32>,
 }
 
 impl Filter for TimeDomainBandPassBeforeFFT {
@@ -35,6 +37,7 @@ impl Filter for TimeDomainBandPassBeforeFFT {
             window_width: 2.0,
             time_axis: vec![],
             signal_axis: vec![],
+            input_signal_axis: vec![],
         }
     }
 
@@ -62,27 +65,35 @@ impl Filter for TimeDomainBandPassBeforeFFT {
         // Ensure high and low values are within the actual time range
         let min_time = *input_data.time.first().unwrap_or(&0.0);
         let max_time = *input_data.time.last().unwrap_or(&0.0);
-        let safe_low = self.low.max(min_time as f64) as f32;
-        let safe_high = self.high.min(max_time as f64) as f32;
+        self.low = self.low.max(min_time as f64);
+        self.high = self.high.min(max_time as f64);
 
         // Find indices corresponding to the frequency cutoffs (with bounds checking)
         let lower = input_data
             .time
             .iter()
-            .position(|t| *t >= safe_low)
+            .position(|t| *t >= self.low as f32)
             .unwrap_or(0);
         let upper = input_data
             .time
             .iter()
-            .position(|t| *t >= safe_high)
+            .position(|t| *t >= self.high as f32)
             .unwrap_or_else(|| input_data.time.len().saturating_sub(1));
-
         // Ensure upper is greater than lower and within bounds
         let upper = upper.max(lower + 1).min(input_data.time.len());
 
         // Apply the bandpass filter to the signal
         for i in 0..shape.0 {
             for j in 0..shape.1 {
+                // Zero values before the lower bound
+                if lower > 0 {
+                    output_data.data.slice_mut(s![i, j, 0..lower]).fill(0.0);
+                }
+                // Zero values after the upper bound
+                if upper < output_data.data.shape()[2] {
+                    output_data.data.slice_mut(s![i, j, upper..]).fill(0.0);
+                }
+
                 let mut signal = output_data.data.slice_mut(s![i, j, lower..upper]);
 
                 apply_adapted_blackman_window(
@@ -98,9 +109,6 @@ impl Filter for TimeDomainBandPassBeforeFFT {
             }
         }
 
-        // Update the time window in the filter data
-        output_data.time = input_data.time.slice(s![lower..upper]).to_owned();
-
         // Store the time axis for UI visualization
         self.time_axis = output_data.time.to_vec();
 
@@ -113,19 +121,7 @@ impl Filter for TimeDomainBandPassBeforeFFT {
             self.signal_axis = vec![0.0; output_data.time.len()];
         }
 
-        // Setup FFT planners
-        let n = output_data.time.len();
-        let rng =
-            output_data.time.last().unwrap_or(&0.0) - output_data.time.first().unwrap_or(&0.0);
-
-        let mut real_planner = RealFftPlanner::<f32>::new();
-        let r2c = real_planner.plan_fft_forward(n);
-        let c2r = real_planner.plan_fft_inverse(n);
-        let spectrum = r2c.make_output_vec();
-        let freq = (0..spectrum.len()).map(|i| i as f32 / rng).collect();
-        output_data.frequency = freq;
-        output_data.r2c = Some(r2c);
-        output_data.c2r = Some(c2r);
+        self.input_signal_axis = input_data.data.slice(s![pixel[0], pixel[1], ..]).to_vec();
 
         if let Ok(mut p) = progress_lock.write() {
             *p = None;
@@ -149,6 +145,10 @@ impl Filter for TimeDomainBandPassBeforeFFT {
         for i in 0..self.time_axis.len() {
             window_vals.push([self.time_axis[i] as f64, self.signal_axis[i] as f64]);
         }
+        let mut input_signal: Vec<[f64; 2]> = Vec::new();
+        for i in 0..self.time_axis.len() {
+            input_signal.push([self.time_axis[i] as f64, self.input_signal_axis[i] as f64]);
+        }
         let time_window_plot = Plot::new("Time Window")
             .allow_drag(false)
             .set_margin_fraction(Vec2 { x: 0.0, y: 0.05 })
@@ -159,10 +159,16 @@ impl Filter for TimeDomainBandPassBeforeFFT {
         let ui_response = ui.vertical_centered(|ui| {
             time_window_plot.show(ui, |window_plot_ui| {
                 window_plot_ui.line(
-                    Line::new(PlotPoints::from(window_vals))
+                    Line::new(PlotPoints::from(input_signal))
                         .color(egui::Color32::RED)
                         .style(LineStyle::Solid)
-                        .name("Pulse"),
+                        .name("Input Pulse"),
+                );
+                window_plot_ui.line(
+                    Line::new(PlotPoints::from(window_vals))
+                        .color(egui::Color32::BLUE)
+                        .style(LineStyle::Solid)
+                        .name("Filtered Pulse"),
                 );
                 window_plot_ui.vline(
                     // TODO: adjust this

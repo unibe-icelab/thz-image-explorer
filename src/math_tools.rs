@@ -2,8 +2,13 @@
 //! Flat Top windows, and an adapted Blackman window implementation. Additionally, it includes a utility for
 //! unwrapping phase ranges in periodic signals.
 
-use ndarray::{Array1, ArrayViewMut, Ix1, Zip};
+use crate::config::ConfigContainer;
+use crate::data_container::ScannedImageFilterData;
+use ndarray::{Array1, ArrayViewMut, Axis, Ix1, Zip};
+use rayon::iter::IntoParallelIterator;
+use rayon::iter::ParallelIterator;
 use realfft::num_complex::Complex32;
+use std::f32::consts::PI;
 use std::fmt::{Display, Formatter};
 
 /// Enum representing the different types of FFT window functions supported.
@@ -97,36 +102,6 @@ pub fn apply_adapted_blackman_window(
             );
             *s *= bw;
         }
-    }
-}
-
-/// Applies a smooth bandpass filter with soft Blackman-style transitions to the spectrum.
-pub fn apply_soft_bandpass(
-    frequencies: &Array1<f32>,
-    spectrum: &mut Vec<Complex32>,
-    passband: (f32, f32),
-    transition_width: f32,
-) {
-    let (low, high) = passband;
-
-    for (i, f) in frequencies.iter().enumerate() {
-        let gain = if *f < low - transition_width || *f > high + transition_width {
-            0.0
-        } else if *f >= low && *f <= high {
-            1.0
-        } else if *f >= low - transition_width && *f < low {
-            // Fade in
-            let x = (low - *f) / transition_width;
-            blackman_window((1.0 - x) * transition_width, 2.0 * transition_width)
-        } else if *f > high && *f <= high + transition_width {
-            // Fade out
-            let x = (*f - high) / transition_width;
-            blackman_window((1.0 - x) * transition_width, 2.0 * transition_width)
-        } else {
-            0.0
-        };
-
-        spectrum[i] *= gain;
     }
 }
 
@@ -246,4 +221,103 @@ pub fn numpy_unwrap(x: &[f32], period: Option<f32>) -> Vec<f32> {
         unwrapped[i] = unwrapped_val;
     }
     unwrapped
+}
+
+pub fn fft(output: &ScannedImageFilterData, config: &ConfigContainer) -> ScannedImageFilterData {
+    let mut output = output.clone();
+    if let Some(r2c) = &output.r2c {
+        (
+            output.data.axis_iter_mut(Axis(0)),
+            output.phases.axis_iter_mut(Axis(0)),
+            output.amplitudes.axis_iter_mut(Axis(0)),
+            output.fft.axis_iter_mut(Axis(0)),
+        )
+            .into_par_iter()
+            .for_each(
+                |(
+                    mut data_columns,
+                    mut output_phases_columns,
+                    mut output_amplitude_columns,
+                    mut output_fft_columns,
+                )| {
+                    let mut input_vec = vec![0.0; output.time.len()];
+                    let mut spectrum = r2c.make_output_vec();
+                    for (((mut input_data, mut phases), mut amplitudes), mut fft) in data_columns
+                        .axis_iter_mut(Axis(0))
+                        .zip(output_phases_columns.axis_iter_mut(Axis(0)))
+                        .zip(output_amplitude_columns.axis_iter_mut(Axis(0)))
+                        .zip(output_fft_columns.axis_iter_mut(Axis(0)))
+                    {
+                        match config.fft_window_type {
+                            FftWindowType::AdaptedBlackman => {
+                                apply_adapted_blackman_window(
+                                    &mut input_data,
+                                    &output.time,
+                                    &config.fft_window[0],
+                                    &config.fft_window[1],
+                                );
+                            }
+                            FftWindowType::Blackman => {
+                                apply_blackman(&mut input_data, &output.time)
+                            }
+                            FftWindowType::Hanning => apply_hanning(&mut input_data, &output.time),
+                            FftWindowType::Hamming => apply_hamming(&mut input_data, &output.time),
+                            FftWindowType::FlatTop => apply_flat_top(&mut input_data, &output.time),
+                        }
+
+                        // Forward transform the input data
+                        input_vec.clone_from_slice(input_data.as_slice().unwrap());
+                        r2c.process(&mut input_vec, &mut spectrum).unwrap();
+
+                        // Assign spectrum to fft
+                        fft.assign(&Array1::from_vec(spectrum.clone()));
+
+                        // Assign amplitudes
+                        amplitudes
+                            .iter_mut()
+                            .zip(spectrum.iter())
+                            .for_each(|(a, s)| *a = s.norm());
+
+                        // Assign phases (unwrap)
+                        let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
+                        let unwrapped = numpy_unwrap(&phase, Some(2.0 * PI));
+                        phases
+                            .iter_mut()
+                            .zip(unwrapped.iter())
+                            .for_each(|(p, v)| *p = *v);
+                    }
+                },
+            );
+    };
+    output
+}
+
+pub fn ifft(output: &ScannedImageFilterData, _config: &ConfigContainer) -> ScannedImageFilterData {
+    let mut output = output.clone();
+    if let Some(c2r) = &output.c2r {
+        (
+            output.fft.axis_iter(Axis(0)),
+            output.data.axis_iter_mut(Axis(0)),
+        )
+            .into_par_iter()
+            .for_each(|(fft_columns, mut data_columns)| {
+                let mut spectrum = vec![Complex32::new(0.0, 0.0); output.frequency.len()];
+                let mut real_output = vec![0.0; output.time.len()];
+                for (fft, mut data) in fft_columns
+                    .axis_iter(Axis(0))
+                    .zip(data_columns.axis_iter_mut(Axis(0)))
+                {
+                    // Copy spectrum from fft view
+                    spectrum.clone_from_slice(fft.as_slice().unwrap());
+                    // Perform inverse FFT
+                    c2r.process(&mut spectrum, &mut real_output).unwrap();
+                    // Normalize if needed (realfft does not always normalize)
+                    let length = real_output.len();
+                    let normalized: Vec<f32> =
+                        real_output.iter().map(|&v| v / length as f32).collect();
+                    data.assign(&Array1::from_vec(normalized));
+                }
+            });
+    }
+    output
 }

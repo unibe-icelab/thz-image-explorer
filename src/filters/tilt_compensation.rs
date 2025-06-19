@@ -1,18 +1,18 @@
 use crate::config::ThreadCommunication;
-use crate::data_container::{ScannedImage, ScannedImageFilterData};
-use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
+use crate::data_container::ScannedImageFilterData;
+use crate::filters::filter::{CopyStaticFieldsTrait, Filter, FilterConfig, FilterDomain};
 use crate::gui::application::GuiSettingsContainer;
 use crate::math_tools::apply_adapted_blackman_window;
 use bevy_egui::egui::{self, Ui};
-use filter_macros::register_filter;
+use filter_macros::{register_filter, CopyStaticFields};
 use ndarray::{concatenate, s, Array1, Array3, Axis};
 use realfft::RealFftPlanner;
 use std::f32::consts::PI;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
-#[derive(Debug, Clone)]
 #[register_filter]
+#[derive(Clone, Debug, CopyStaticFields)]
 pub struct TiltCompensation {
     pub tilt_x: f64,
     pub tilt_y: f64,

@@ -40,16 +40,6 @@ pub enum ConfigCommand {
     /// Command to set the upper bound of the FFT window.
     SetFFTWindowHigh(f32),
 
-    /// Command to set the lower bound of the FFT filter.
-    SetFFTFilterLow(f32),
-
-    /// Command to set the upper bound of the FFT filter.
-    SetFFTFilterHigh(f32),
-
-    /// Command to set the time window for signal analysis.
-    /// The window is specified as an array of two values, `[start, stop]`.
-    SetTimeWindow([f32; 2]),
-
     /// Command to toggle logarithmic plotting of FFT data.
     /// A `true` value enables logarithmic plotting, while `false` disables it.
     SetFFTLogPlot(bool),
@@ -90,12 +80,6 @@ pub struct ConfigContainer {
     /// Lower and upper bounds of the FFT window used for processing.
     pub fft_window: [f32; 2],
 
-    /// Lower and upper bounds of the FFT filter applied to the frequency spectrum.
-    pub fft_filter: [f32; 2],
-
-    /// Start and end times of the time window applied to the signal data.
-    pub time_window: [f32; 2],
-
     /// Type of FFT window function to be used.
     /// See [`FftWindowType`] for details.
     pub fft_window_type: FftWindowType,
@@ -124,8 +108,6 @@ impl Default for ConfigContainer {
     fn default() -> Self {
         ConfigContainer {
             fft_window: [1.0, 7.0],
-            fft_filter: [0.0, 10.0],
-            time_window: [1000.0, 1050.0],
             fft_window_type: FftWindowType::AdaptedBlackman,
             fft_log_plot: false,
             normalize_fft: false,
@@ -167,9 +149,15 @@ pub struct ThreadCommunication {
     /// Lock for the 2D array representing the intensity image.
     pub img_lock: Arc<RwLock<Array2<f32>>>,
 
-    pub filter_data_lock: Arc<RwLock<HashMap<String, ScannedImageFilterData>>>,
+    pub fft_index: usize,
 
-    pub filter_mapping_lock: Arc<RwLock<HashMap<String, (usize, usize)>>>,
+    pub ifft_index: usize,
+
+    pub filter_data_lock: Arc<RwLock<Vec<ScannedImageFilterData>>>,
+
+    pub filter_chain_lock: Arc<RwLock<Vec<String>>>,
+
+    pub filter_uuid_to_index_lock: Arc<RwLock<HashMap<String, usize>>>,
 
     pub filters_active_lock: Arc<RwLock<HashMap<String, bool>>>,
 

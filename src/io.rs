@@ -9,7 +9,7 @@
 //! These functionalities are essential for managing and analyzing large-scale spectroscopic or
 //! imaging datasets efficiently.
 
-use crate::data_container::{HouseKeeping, Meta, ScannedImage};
+use crate::data_container::{HouseKeeping, Meta, ScannedImage, ScannedImageFilterData};
 use crate::filters::psf::PSF;
 use csv::ReaderBuilder;
 use dotthz::{DotthzFile, DotthzMetaData};
@@ -388,7 +388,7 @@ pub fn update_meta_data_of_thz_file(
 // Function to save the data and metadata to an HDF5 file / dotTHz file
 pub fn save_to_thz(
     file_path: &PathBuf,
-    scan: &ScannedImage,
+    scan: &ScannedImageFilterData,
     metadata: &DotthzMetaData,
 ) -> Result<(), Box<dyn Error>> {
     // Create a new DotthzFile for writing
@@ -401,7 +401,7 @@ pub fn save_to_thz(
     file.add_group(group_name, metadata)?;
 
     // Save raw data
-    file.add_dataset(group_name, "dataset", scan.raw_data.view())?;
+    file.add_dataset(group_name, "dataset", scan.data.view())?;
 
     // Save time data
     file.add_dataset(group_name, "time", scan.time.view())?;
@@ -429,7 +429,7 @@ pub fn save_to_thz(
 /// - The time or data datasets are missing or misformatted.
 pub fn open_from_thz(
     file_path: &PathBuf,
-    scan: &mut ScannedImage,
+    scan: &mut ScannedImageFilterData,
     metadata: &mut DotthzMetaData,
 ) -> Result<(), Box<dyn Error>> {
     // Open the HDF5 file for reading
@@ -460,7 +460,7 @@ pub fn open_from_thz(
                     if let Ok(arr3) = arr.into_dimensionality::<ndarray::Ix3>() {
                         // check dimensions to make sure
                         if arr3.shape().len() == 3 {
-                            scan.raw_data = arr3;
+                            scan.data = arr3;
                         }
                     }
                 }
@@ -479,33 +479,27 @@ pub fn open_from_thz(
         }
     }
 
-    scan.raw_img = Array2::zeros((scan.width, scan.height));
+    scan.img = Array2::zeros((scan.width, scan.height));
 
     for x in 0..scan.width {
         for y in 0..scan.height {
             // subtract bias
-            let offset = scan.raw_data[[x, y, 0]];
-            scan.raw_data
+            let offset = scan.data[[x, y, 0]];
+            scan.data
                 .index_axis_mut(Axis(0), x)
                 .index_axis_mut(Axis(0), y)
                 .mapv_inplace(|p| p - offset);
 
             // calculate the intensity by summing the squares
             let sig_squared_sum = scan
-                .raw_data
+                .data
                 .index_axis(Axis(0), x)
                 .index_axis(Axis(0), y)
                 .mapv(|xi| xi * xi)
                 .sum();
-            scan.raw_img[[x, y]] = sig_squared_sum;
+            scan.img[[x, y]] = sig_squared_sum;
         }
     }
-
-    scan.scaled_data = scan.raw_data.clone();
-
-    scan.filtered_time = scan.time.clone();
-    scan.filtered_data = scan.scaled_data.clone();
-    scan.filtered_img = scan.raw_img.clone();
 
     scan.dx = metadata.md.get("dx [mm]").unwrap().parse::<f32>().ok();
     scan.dy = metadata.md.get("dy [mm]").unwrap().parse::<f32>().ok();
@@ -517,14 +511,14 @@ pub fn open_from_thz(
     let c2r = real_planner.plan_fft_inverse(n);
     let spectrum = r2c.make_output_vec();
     let freq = (0..spectrum.len()).map(|i| i as f32 / rng).collect();
-    scan.frequencies = freq;
-    scan.filtered_frequencies = scan.frequencies.clone();
+    scan.frequency = freq;
 
     scan.r2c = Some(r2c);
     scan.c2r = Some(c2r);
 
-    scan.filtered_c2r = scan.c2r.clone();
-    scan.filtered_r2c = scan.r2c.clone();
+    scan.phases = Array3::zeros((scan.width, scan.height, scan.frequency.len()));
+    scan.amplitudes = Array3::zeros((scan.width, scan.height, scan.frequency.len()));
+    scan.fft = Array3::zeros((scan.width, scan.height, scan.frequency.len()));
 
     Ok(())
 }

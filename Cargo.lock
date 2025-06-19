@@ -6790,6 +6790,7 @@ dependencies = [
  "csv",
  "ctor",
  "dotthz",
+ "downcast-rs 2.0.1",
  "egui-file-dialog",
  "egui-phosphor",
  "egui-theme-switch",
