@@ -29,6 +29,9 @@ jobs:
           sudo apt-get install libudev-dev
           sudo apt-get install -y cmake
 
+      - name: Install ALSA development libraries
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
       - name: Build
         run: cargo build --all --all-features
 
