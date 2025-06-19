@@ -137,6 +137,8 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
     let mut selected_pixel = SelectedPixel::default();
     let mut meta_data = DotthzMetaData::default();
 
+    let mut reset_filters = false;
+
     let mut update = UpdateType::None;
     loop {
         if let Ok(config_command) = thread_communication.config_rx.recv() {
@@ -202,6 +204,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                 }
                 ConfigCommand::OpenFile(selected_file_path) => {
                     update = UpdateType::Filter(1);
+                    reset_filters = true;
                     if let Some(file_ending) = selected_file_path.extension() {
                         match file_ending.to_str().unwrap() {
                             "thz" => {
@@ -477,6 +480,36 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                     filters.filters.iter_mut().find(|(id, _)| *id == uuid)
                                 {
                                     filter_from_registry.copy_static_fields_from(filter.as_ref());
+                                    if reset_filters {
+                                        if let Ok(mut filter_data) =
+                                            thread_communication.filter_data_lock.write()
+                                        {
+                                            if let Ok(filter_chain) =
+                                                thread_communication.filter_chain_lock.read()
+                                            {
+                                                if let Ok(filter_uuid_to_index) =
+                                                    thread_communication
+                                                        .filter_uuid_to_index_lock
+                                                        .read()
+                                                {
+                                                    for (i, filter_id) in filter_chain
+                                                        .iter()
+                                                        .enumerate()
+                                                        .skip(start_idx)
+                                                    {
+                                                        let input_index = *filter_uuid_to_index
+                                                            .get(&filter_chain[i - 1])
+                                                            .unwrap();
+                                                        filter_from_registry.reset(
+                                                            &filter_data[input_index].time,
+                                                            filter_data[input_index].data.shape(),
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        reset_filters = false;
+                                    }
                                 } else {
                                     log::warn!("Filter with uuid {} not found in registry", uuid);
                                 }

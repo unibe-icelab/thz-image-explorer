@@ -29,6 +29,10 @@ impl Filter for TiltCompensation {
         }
     }
 
+    fn reset(&mut self, _time: &Array1<f32>, _shape: &[usize]) {
+        // NOOP
+    }
+
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Tilt Compensation".to_string(),

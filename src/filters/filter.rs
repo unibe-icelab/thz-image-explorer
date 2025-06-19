@@ -5,13 +5,13 @@
 use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::data_container::ScannedImageFilterData;
 use crate::gui::application::GuiSettingsContainer;
-// this dependency is required by the `register_filter` macro
 use crate::gui::toggle_widget::toggle;
 use bevy_egui::egui;
 use chrono::Utc;
-#[allow(unused_imports)]
+#[allow(unused_imports)] // this dependency is required by the `register_filter` macro
 use ctor::ctor;
 use downcast_rs::Downcast;
+use ndarray::{Array1};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -59,6 +59,10 @@ pub trait Filter: Send + Sync + Debug + CloneBoxedFilter + CopyStaticFieldsTrait
     fn new() -> Self
     where
         Self: Sized;
+
+    /// Resets the filter to its initial state, allowing it to be reused.
+    fn reset(&mut self, time: &Array1<f32>, shape: &[usize]);
+
     /// Returns the filter configuration, including name and domain.
     fn config(&self) -> FilterConfig;
 

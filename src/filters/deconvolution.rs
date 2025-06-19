@@ -362,6 +362,10 @@ impl Filter for Deconvolution {
         Deconvolution { n_iterations: 500 }
     }
 
+    fn reset(&mut self, _time: &Array1<f32>, _shape: &[usize]) {
+        // NOOP
+    }
+
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Deconvolution".to_string(),

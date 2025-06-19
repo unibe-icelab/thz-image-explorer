@@ -8,7 +8,7 @@ use bevy_egui::egui::{DragValue, Stroke, Vec2};
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use filter_macros::{register_filter, CopyStaticFields};
-use ndarray::s;
+use ndarray::{s, Array1};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
@@ -39,6 +39,11 @@ impl Filter for TimeDomainBandPassAfterFFT {
             signal_axis: vec![],
             input_signal_axis: vec![],
         }
+    }
+
+    fn reset(&mut self, time: &Array1<f32>, _shape: &[usize]) {
+        self.low = *time.first().unwrap_or(&0.0) as f64;
+        self.high = *time.last().unwrap_or(&0.0) as f64;
     }
 
     fn config(&self) -> FilterConfig {

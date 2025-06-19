@@ -39,6 +39,10 @@ impl Filter for FrequencyDomainBandPass {
         }
     }
 
+    fn reset(&mut self, _time: &Array1<f32>, _shape: &[usize]) {
+        // NOOP
+    }
+
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Frequency Band Pass".to_string(),
