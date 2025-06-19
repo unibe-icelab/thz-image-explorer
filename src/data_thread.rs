@@ -16,7 +16,7 @@ use csv::ReaderBuilder;
 use dotthz::DotthzMetaData;
 use image::RgbaImage;
 use ndarray::parallel::prelude::*;
-use ndarray::{Array3, Axis};
+use ndarray::{Array2, Array3, Axis};
 use realfft::RealFftPlanner;
 use std::path::Path;
 use std::time::Instant;
@@ -71,8 +71,15 @@ fn update_intensity_image(
     scan: &ScannedImageFilterData,
     thread_communication: &ThreadCommunication,
 ) {
-    if let Ok(mut write_guard) = thread_communication.img_lock.write() {
-        *write_guard = scan.img.clone();
+
+    if scan.img.shape()[0] == 0 || scan.img.shape()[1] == 0 {
+        if let Ok(mut write_guard) = thread_communication.img_lock.write() {
+            *write_guard = Array2::zeros((1,1));
+        }
+    } else {
+        if let Ok(mut write_guard) = thread_communication.img_lock.write() {
+            *write_guard = scan.img.clone();
+        }
     }
     // is this really required?
     if let Ok(mut write_guard) = thread_communication.filtered_data_lock.write() {
@@ -366,6 +373,14 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                         let input_index = *filter_uuid_to_index
                                             .get(&filter_chain[i - 1])
                                             .unwrap();
+
+                                        if filter_data[input_index].time.is_empty() {
+                                            log::warn!(
+                                                "Input data for filter {} is empty, skipping filter application",
+                                                filter_id
+                                            );
+                                            continue;
+                                        }
 
                                         let start = Instant::now();
                                         match filter_id.as_str() {
