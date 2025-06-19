@@ -163,15 +163,15 @@ impl Filter for FrequencyDomainBandPass {
     ) -> egui::Response {
         let mut final_response = ui.allocate_response(Vec2::ZERO, egui::Sense::hover());
 
-        let zoom_factor = 5.0;
-        let scroll_factor = 0.01;
+        let zoom_factor = 0.5;
+        let scroll_factor = 0.005;
 
         // Create frequency spectrum visualization
         let mut spectrum_vals: Vec<[f64; 2]> = Vec::new();
         for (i, freq) in self.freq_axis.iter().enumerate() {
             if i < self.signal_axis.len() {
                 let amplitude = self.signal_axis[i];
-                spectrum_vals.push([*freq as f64, amplitude as f64]);
+                spectrum_vals.push([self.low + *freq as f64, amplitude as f64]);
             }
         }
 

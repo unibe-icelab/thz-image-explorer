@@ -310,8 +310,20 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     println!("update filters");
                     update = UpdateType::Filter(1);
                 }
-                ConfigCommand::UpdateSelectedFilters(indices) => {
-                    update = UpdateType::Filter(indices.into_iter().min().unwrap_or(1));
+                ConfigCommand::UpdateFilter(uuid) => {
+                    if let Ok(filter_uuid_to_index) =
+                        thread_communication.filter_uuid_to_index_lock.read()
+                    {
+                        if let Some(&idx) = filter_uuid_to_index.get(&uuid) {
+                            update = UpdateType::Filter(idx);
+                        } else {
+                            log::warn!("Filter uuid {} not found in filter_uuid_to_index", uuid);
+                            update = UpdateType::None;
+                        }
+                    } else {
+                        log::error!("Could not acquire filter_uuid_to_index_lock");
+                        update = UpdateType::None;
+                    }
                 }
             }
 
@@ -358,14 +370,14 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                         let start = Instant::now();
                                         match filter_id.as_str() {
                                             "fft" => {
-                                                println!("Performing FFT");
-                                                println!("{} -> {}", input_index, output_index);
+                                                // println!("Performing FFT");
+                                                // println!("{} -> {}", input_index, output_index);
                                                 filter_data[output_index] =
                                                     fft(&filter_data[input_index], &config);
                                             }
                                             "ifft" => {
-                                                println!("Performing iFFT");
-                                                println!("{} -> {}", input_index, output_index);
+                                                // println!("Performing iFFT");
+                                                // println!("{} -> {}", input_index, output_index);
                                                 filter_data[output_index] =
                                                     ifft(&filter_data[input_index], &config);
                                             }
@@ -373,21 +385,44 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                                 if let Some((_, filter)) =
                                                     filters.iter_mut().find(|(id, _)| id == uuid)
                                                 {
-                                                    println!(
-                                                        "Applying filter: {}",
-                                                        filter.config().name
-                                                    );
-                                                    println!("{} -> {}", input_index, output_index);
-                                                    if let Some(progress) = thread_communication
-                                                        .progress_lock
-                                                        .get_mut(uuid)
-                                                    {
-                                                        filter_data[output_index] = filter.filter(
-                                                            &filter_data[input_index],
-                                                            &mut thread_communication.gui_settings,
-                                                            progress,
-                                                            &thread_communication.abort_flag,
-                                                        );
+                                                    // println!(
+                                                    //     "Applying filter: {}",
+                                                    //     filter.config().name
+                                                    // );
+                                                    // println!("{} -> {}", input_index, output_index);
+                                                    if let Ok(actives) = thread_communication.filters_active_lock.read() {
+                                                        if let Some (active) = actives.get(uuid) {
+                                                            if *active {
+                                                                if let Some(progress) = thread_communication
+                                                                    .progress_lock
+                                                                    .get_mut(uuid)
+                                                                {
+                                                                    filter_data[output_index] = filter.filter(
+                                                                        &filter_data[input_index],
+                                                                        &mut thread_communication.gui_settings,
+                                                                        progress,
+                                                                        &thread_communication.abort_flag,
+                                                                    );
+                                                                }
+
+                                                                if let Ok(mut computation_time) = thread_communication
+                                                                    .filter_computation_time_lock
+                                                                    .write()
+                                                                {
+                                                                    match filter_id.as_str() {
+                                                                        "fft" => {}
+                                                                        "ifft" => {}
+                                                                        uuid => {
+                                                                            computation_time.insert(uuid.to_string(), start.elapsed());
+                                                                        }
+                                                                    }
+                                                                }
+
+                                                            } else {
+                                                                filter_data[output_index] =
+                                                                    filter_data[input_index].clone();
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
@@ -428,17 +463,8 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                                 filter_data[output_index].frequency.len(),
                                             ));
                                         }
-
-                                        println!(
-                                            "finished applying filter {}. This took {:?}",
-                                            i,
-                                            start.elapsed()
-                                        );
                                     }
                                 }
-
-                                println!("finished applying filters");
-                                println!("updating intensity image...");
 
                                 // update intensity image
                                 if let Some(filtered) = filter_data.last_mut() {
@@ -483,7 +509,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             }
                         }
                     }
-                    println!("updating plots...");
 
                     // add selected pixel and avg data to the data lock for the plot
                     if let Ok(mut data) = thread_communication.data_lock.write() {
@@ -568,12 +593,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             }
                         }
                     }
-
-                    println!(
-                        "updated filters starting with {}. This took {:?}",
-                        start_idx,
-                        start.elapsed()
-                    );
                 }
                 UpdateType::Image => {
                     // update intensity image

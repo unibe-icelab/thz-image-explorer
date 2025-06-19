@@ -27,6 +27,7 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread;
+use std::time::Duration;
 
 mod cancellable_loops;
 mod config;
@@ -92,6 +93,8 @@ fn main() {
     let mut filter_uuid_to_index = HashMap::new();
     filter_uuid_to_index.insert("initial".to_string(), 0);
 
+    let mut filter_computation_time = HashMap::new();
+    
     let mut fft_index = 0;
     let mut ifft_index = 0;
 
@@ -151,6 +154,7 @@ fn main() {
         for (uuid, _) in filters.filters.iter_mut() {
             filter_data.push(ScannedImageFilterData::default());
             filters_active.insert(uuid.clone(), true);
+            filter_computation_time.insert(uuid.clone(), Duration::from_millis(0));
         }
     }
 
@@ -187,6 +191,8 @@ fn main() {
         crossbeam_channel::unbounded();
     let abort_flag = Arc::new(AtomicBool::new(false));
 
+    let filter_computation_time_lock = Arc::new(RwLock::new(filter_computation_time));
+
     let thread_communication = ThreadCommunication {
         abort_flag: abort_flag.clone(),
         md_lock: md_lock.clone(),
@@ -200,6 +206,7 @@ fn main() {
         progress_lock: progress_lock.clone(),
         fft_index,
         ifft_index,
+        filter_computation_time_lock: filter_computation_time_lock.clone(),
         filter_chain_lock: filter_chain_lock.clone(),
         filter_uuid_to_index_lock: filter_uuid_to_index_lock.clone(),
         filter_data_lock: filter_data_lock.clone(),

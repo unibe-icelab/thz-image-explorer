@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 
 /// Enum representing the various commands sent to the configuration thread.
 ///
@@ -67,8 +68,8 @@ pub enum ConfigCommand {
     /// Update All Custom Filters
     UpdateFilters,
 
-    /// Update Specific Custom Filters by indices.
-    UpdateSelectedFilters(Vec<usize>),
+    /// Update Specific Custom Filter by UUID.
+    UpdateFilter(String),
 }
 
 /// A container for storing configuration settings related to FFT and filtering processes.
@@ -152,6 +153,8 @@ pub struct ThreadCommunication {
     pub fft_index: usize,
 
     pub ifft_index: usize,
+
+    pub filter_computation_time_lock: Arc<RwLock<HashMap<String, Duration>>>,
 
     pub filter_data_lock: Arc<RwLock<Vec<ScannedImageFilterData>>>,
 

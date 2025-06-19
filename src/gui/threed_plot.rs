@@ -105,7 +105,7 @@ pub(crate) fn instance_from_data(
     mut dataset: Array3<f32>,
     opacity_threshold: f32,
 ) -> (Vec<InstanceData>, f32, f32, f32) {
-    let timer = Instant::now();
+    //let timer = Instant::now();
 
     let grid_width = dataset.shape()[0];
     let grid_height = dataset.shape()[1];
@@ -134,8 +134,8 @@ pub(crate) fn instance_from_data(
             }
         });
 
-    println!("calculating envelope: {:?}", timer.elapsed());
-    let timer = Instant::now();
+    // println!("calculating envelope: {:?}", timer.elapsed());
+    // let timer = Instant::now();
 
     // Step 2: Normalize (min-max normalization along z)
     dataset
@@ -154,8 +154,8 @@ pub(crate) fn instance_from_data(
             }
         });
 
-    println!("normalizing: {:?}", timer.elapsed());
-    let timer = Instant::now();
+    // println!("normalizing: {:?}", timer.elapsed());
+    // let timer = Instant::now();
 
     let total_instances = grid_width * grid_height * grid_depth;
     let mut instances = Vec::with_capacity(total_instances);
@@ -193,8 +193,8 @@ pub(crate) fn instance_from_data(
             }
         }
     }
-    println!("instances amount: {}", instances.len());
-    println!("pushing instances: {:?}", timer.elapsed());
+    // println!("instances amount: {}", instances.len());
+    // println!("pushing instances: {:?}", timer.elapsed());
 
     (instances, cube_width, cube_height, cube_depth)
 }
