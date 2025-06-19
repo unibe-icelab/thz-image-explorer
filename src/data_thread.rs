@@ -350,13 +350,31 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     // Get the filter chain and uuid->index map
                     if reset_filters {
                         if let Ok(mut filters) = FILTER_REGISTRY.lock() {
-                            if let Ok(filter_chain) = thread_communication.filter_chain_lock.read() {
-                                if let Ok(filter_uuid_to_index) = thread_communication.filter_uuid_to_index_lock.read() {
-                                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                            if let Ok(filter_chain) = thread_communication.filter_chain_lock.read()
+                            {
+                                if let Ok(filter_uuid_to_index) =
+                                    thread_communication.filter_uuid_to_index_lock.read()
+                                {
+                                    if let Ok(mut filter_data) =
+                                        thread_communication.filter_data_lock.write()
+                                    {
                                         for (i, uuid) in filter_chain.iter().enumerate() {
-                                            let input_index = if i == 0 { 0 } else { *filter_uuid_to_index.get(&filter_chain[i - 1]).unwrap() };
-                                            if let Some((_, filter)) = filters.filters.iter_mut().find(|(id, _)| *id == uuid) {
-                                                filter.reset(&filter_data[input_index].time, filter_data[input_index].data.shape());
+                                            let input_index = if i == 0 {
+                                                0
+                                            } else {
+                                                *filter_uuid_to_index
+                                                    .get(&filter_chain[i - 1])
+                                                    .unwrap()
+                                            };
+                                            if let Some((_, filter)) = filters
+                                                .filters
+                                                .iter_mut()
+                                                .find(|(id, _)| *id == uuid)
+                                            {
+                                                filter.reset(
+                                                    &filter_data[input_index].time,
+                                                    filter_data[input_index].data.shape(),
+                                                );
                                             }
                                         }
                                     }
@@ -430,43 +448,54 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                                     //     filter.config().name
                                                     // );
                                                     // println!("{} -> {}", input_index, output_index);
-                                                    if let Ok(actives) = thread_communication
-                                                        .filters_active_lock
-                                                        .read()
+                                                    let active = if let Ok(actives) =
+                                                        thread_communication
+                                                            .filters_active_lock
+                                                            .read()
                                                     {
                                                         if let Some(active) = actives.get(uuid) {
-                                                            if *active {
-                                                                if let Some(progress) =
-                                                                    thread_communication
-                                                                        .progress_lock
-                                                                        .get_mut(uuid)
-                                                                {
-                                                                    filter_data[output_index] = filter.filter(
-                                                                        &filter_data[input_index],
-                                                                        &mut thread_communication.gui_settings,
-                                                                        progress,
-                                                                        &thread_communication.abort_flag,
+                                                            *active
+                                                        } else {
+                                                            false
+                                                        }
+                                                    } else {
+                                                        false
+                                                    };
+                                                    if active {
+                                                        if let Some(progress) = thread_communication
+                                                            .progress_lock
+                                                            .get_mut(uuid)
+                                                        {
+                                                            filter_data[output_index] = filter
+                                                                .filter(
+                                                                    &filter_data[input_index],
+                                                                    &mut thread_communication
+                                                                        .gui_settings,
+                                                                    progress,
+                                                                    &thread_communication
+                                                                        .abort_flag,
+                                                                );
+                                                        }
+
+                                                        if let Ok(mut computation_time) =
+                                                            thread_communication
+                                                                .filter_computation_time_lock
+                                                                .write()
+                                                        {
+                                                            match filter_id.as_str() {
+                                                                "fft" => {}
+                                                                "ifft" => {}
+                                                                uuid => {
+                                                                    computation_time.insert(
+                                                                        uuid.to_string(),
+                                                                        start.elapsed(),
                                                                     );
                                                                 }
-
-                                                                if let Ok(mut computation_time) = thread_communication
-                                                                    .filter_computation_time_lock
-                                                                    .write()
-                                                                {
-                                                                    match filter_id.as_str() {
-                                                                        "fft" => {}
-                                                                        "ifft" => {}
-                                                                        uuid => {
-                                                                            computation_time.insert(uuid.to_string(), start.elapsed());
-                                                                        }
-                                                                    }
-                                                                }
-                                                            } else {
-                                                                filter_data[output_index] =
-                                                                    filter_data[input_index]
-                                                                        .clone();
                                                             }
                                                         }
+                                                    } else {
+                                                        filter_data[output_index] =
+                                                            filter_data[input_index].clone();
                                                     }
                                                 }
                                             }

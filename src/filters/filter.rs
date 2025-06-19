@@ -11,7 +11,7 @@ use chrono::Utc;
 #[allow(unused_imports)] // this dependency is required by the `register_filter` macro
 use ctor::ctor;
 use downcast_rs::Downcast;
-use ndarray::{Array1};
+use ndarray::Array1;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -359,21 +359,24 @@ pub fn draw_filters(
             }
 
             // check progressbar
-            if Utc::now().timestamp_millis()
-                - thread_communication.gui_settings.last_progress_bar_update
-                > 100
+            if let Some(mut update) = thread_communication
+                .gui_settings
+                .last_progress_bar_update
+                .get_mut(uuid)
             {
-                if let Some(progress) = thread_communication.progress_lock.get(uuid) {
-                    thread_communication.gui_settings.last_progress_bar_update =
-                        Utc::now().timestamp_millis();
-                    if let Ok(progress) = progress.read() {
-                        if let Some(progress_entry) = thread_communication
-                            .gui_settings
-                            .progress_bars
-                            .get_mut(uuid)
-                        {
-                            *progress_entry = *progress;
-                            thread_communication.gui_settings.filter_ui_active = progress.is_none();
+                if Utc::now().timestamp_millis() - *update > 100 {
+                    if let Some(progress) = thread_communication.progress_lock.get(uuid) {
+                        *update = Utc::now().timestamp_millis();
+                        if let Ok(progress) = progress.read() {
+                            if let Some(progress_entry) = thread_communication
+                                .gui_settings
+                                .progress_bars
+                                .get_mut(uuid)
+                            {
+                                *progress_entry = *progress;
+                                thread_communication.gui_settings.filter_ui_active =
+                                    progress.is_none();
+                            }
                         }
                     }
                 }
@@ -403,10 +406,7 @@ pub fn draw_filters(
                         {
                             if let Some(t) = filter_computation_time.get(uuid) {
                                 if idx < filter_computation_time.len() {
-                                    ui.label(format!(
-                                        "{:.2} ms",
-                                        t.as_millis()
-                                    ));
+                                    ui.label(format!("{:.2} ms", t.as_millis()));
                                 } else {
                                     ui.label("N/A ms");
                                 }

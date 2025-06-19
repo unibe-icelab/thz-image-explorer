@@ -253,7 +253,6 @@ impl Filter for TimeDomainBandPassBeforeFFT {
 
         // scroll through time axis
         if plot_response.response.hovered() {
-
             let width = self.high - self.low;
             let first = *self.time_axis.first().unwrap_or(&1000.0) as f64;
             let last = *self.time_axis.last().unwrap_or(&1050.0) as f64;

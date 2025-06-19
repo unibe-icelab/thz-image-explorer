@@ -8,6 +8,8 @@ use crate::gui::threed_plot::{
     animate, set_enable_camera_controls_system, setup, update_instance_buffer_system,
     CameraInputAllowed, OpacityThreshold, SceneVisibility,
 };
+use bevy::app::AppExit;
+use bevy::ecs::event::EventReader;
 use bevy::prelude::*;
 use bevy::render::render_resource::WgpuFeatures;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
@@ -28,8 +30,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
-use bevy::app::AppExit;
-use bevy::ecs::event::EventReader;
 
 mod cancellable_loops;
 mod config;
@@ -61,13 +61,15 @@ fn setup_fonts(mut contexts: EguiContexts) {
     contexts.ctx_mut().set_visuals(Visuals::dark());
 }
 
-
 fn autosave_on_exit(
     mut exit_events: EventReader<AppExit>,
     thread_communication: Res<ThreadCommunication>,
 ) {
     if exit_events.read().next().is_some() {
-        let _ = thread_communication.gui_settings.save(&APP_INFO, "config/gui");
+        let _ = thread_communication
+            .gui_settings
+            .save(&APP_INFO, "config/gui");
+        println!("GUI settings saved to {:?}", APP_INFO);
     }
 }
 
@@ -106,7 +108,7 @@ fn main() {
     filter_uuid_to_index.insert("initial".to_string(), 0);
 
     let mut filter_computation_time = HashMap::new();
-    
+
     let mut fft_index = 0;
     let mut ifft_index = 0;
 
@@ -163,9 +165,14 @@ fn main() {
 
     // populate with standard / empty values
     if let Ok(mut filters) = FILTER_REGISTRY.lock() {
-        for (uuid, _) in filters.filters.iter_mut() {
+        for (uuid, filter) in filters.filters.iter_mut() {
             filter_data.push(ScannedImageFilterData::default());
-            filters_active.insert(uuid.clone(), true);
+            // disable deconvolution filters by default
+            if filter.config().name.contains("Deconvolution") {
+                filters_active.insert(uuid.clone(), false);
+            } else {
+                filters_active.insert(uuid.clone(), true);
+            }
             filter_computation_time.insert(uuid.clone(), Duration::from_millis(0));
         }
     }
@@ -197,6 +204,9 @@ fn main() {
         for (uuid, _) in filters.filters.iter_mut() {
             progress_lock.insert(uuid.clone(), Arc::new(RwLock::new(None)));
             gui_settings.progress_bars.insert(uuid.clone(), None);
+            gui_settings
+                .last_progress_bar_update
+                .insert(uuid.clone(), 0);
         }
     }
     let (config_tx, config_rx): (Sender<ConfigCommand>, Receiver<ConfigCommand>) =
@@ -275,7 +285,7 @@ fn main() {
         .add_systems(Startup, spawn_data_thread)
         .add_systems(Startup, setup_fonts)
         .add_systems(Update, update_gui)
-        .add_systems(Update, autosave_on_exit)
+        .add_systems(Last, autosave_on_exit)
         // .add_systems(Update, animate)
         .add_systems(Update, set_enable_camera_controls_system)
         .run();

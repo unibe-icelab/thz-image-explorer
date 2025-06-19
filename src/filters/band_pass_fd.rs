@@ -338,7 +338,6 @@ impl Filter for FrequencyDomainBandPass {
 
         // Mouse wheel controls
         if plot_response.response.hovered() {
-
             // Keyboard controls
             let max_freq = *self.freq_axis.last().unwrap_or(&10.0) as f64;
             if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && self.high < max_freq {
