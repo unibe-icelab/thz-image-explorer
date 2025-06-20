@@ -63,9 +63,6 @@ impl Filter for TimeDomainBandPassAfterFFT {
         progress_lock: &mut Arc<RwLock<Option<f32>>>,
         _abort_flag: &Arc<AtomicBool>,
     ) -> ScannedImageFilterData {
-        if let Ok(mut p) = progress_lock.write() {
-            *p = Some(0.0);
-        }
 
         let mut output_data = input_data.clone();
         let shape = output_data.data.dim();
@@ -111,10 +108,6 @@ impl Filter for TimeDomainBandPassAfterFFT {
                     &(self.window_width as f32),
                     &(self.window_width as f32),
                 );
-            }
-
-            if let Ok(mut p) = progress_lock.write() {
-                *p = Some((i as f32) / (shape.0 as f32));
             }
         }
 

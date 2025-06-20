@@ -340,42 +340,68 @@ pub static FILTER_REGISTRY: Lazy<Mutex<FilterRegistry>> = Lazy::new(|| {
 static FILTER_INSTANCE_UUIDS: Lazy<Mutex<HashMap<String, String>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
+
 pub fn draw_filters(
     ui: &mut egui::Ui,
     thread_communication: &mut ThreadCommunication,
     domain: FilterDomain,
     right_panel_width: f32,
 ) {
-    // draw time domain filter after FFT
+    let now = Utc::now().timestamp_millis();
+
     if let Ok(mut filters) = FILTER_REGISTRY.lock() {
-        // Collect UUIDs and indices first to avoid double mutable borrow
         let filter_entries: Vec<(String, usize)> =
             filters.filters.keys().cloned().zip(0..).collect();
 
+        // 1. Check if any filter is busy for more than 0.5s
+        let mut busy_long_enough = false;
+        for (uuid, _) in &filter_entries {
+            if let Some(Some(_)) = thread_communication.gui_settings.progress_bars.get(uuid) {
+                if let Some(start) = thread_communication.gui_settings.progress_start_time.get(uuid) {
+                    if now - *start > 500 {
+                        busy_long_enough = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 2. Update progress and draw UI
         for (idx, (uuid, _)) in filter_entries.iter().enumerate() {
             let filter = filters.filters.get_mut(uuid).unwrap();
             if filter.config().domain != domain {
                 continue;
             }
 
-            // check progressbar
+            // Update progress bar value and start time for this filter
             if let Some(mut update) = thread_communication
                 .gui_settings
                 .last_progress_bar_update
                 .get_mut(uuid)
             {
-                if Utc::now().timestamp_millis() - *update > 100 {
+                if now - *update > 100 {
                     if let Some(progress) = thread_communication.progress_lock.get(uuid) {
-                        *update = Utc::now().timestamp_millis();
+                        *update = now;
                         if let Ok(progress) = progress.read() {
                             if let Some(progress_entry) = thread_communication
                                 .gui_settings
                                 .progress_bars
                                 .get_mut(uuid)
                             {
+                                let was_none = progress_entry.is_none();
                                 *progress_entry = *progress;
-                                thread_communication.gui_settings.filter_ui_active =
-                                    progress.is_none();
+                                if progress.is_some() && was_none {
+                                    thread_communication
+                                        .gui_settings
+                                        .progress_start_time
+                                        .insert(uuid.clone(), now);
+                                }
+                                if progress.is_none() {
+                                    thread_communication
+                                        .gui_settings
+                                        .progress_start_time
+                                        .remove(uuid);
+                                }
                             }
                         }
                     }
@@ -384,22 +410,55 @@ pub fn draw_filters(
 
             let mut filter_is_active = true;
 
-            // call filter update
             ui.vertical(|ui| {
-                if !thread_communication.gui_settings.filter_ui_active {
-                    ui.disable();
-                }
-
                 ui.separator();
                 ui.horizontal(|ui| {
                     ui.heading(filter.config().clone().name);
 
-                    // make space for the toggle switch
-                    ui.add_space(
-                        ui.available_width() - ui.spacing().interact_size.y * 2.0 - 15.0 - 50.0,
-                    );
+                    // Progress bar, abort button, and toggle are always enabled
+                    if let Some(progress) =
+                        thread_communication.gui_settings.progress_bars.get(uuid)
+                    {
+                        if let Some(p) = progress {
+                            if *p >= 0.0 {
+                                ui.add_space(
+                                    ui.available_width()
+                                        - ui.spacing().interact_size.y * 2.0
+                                        - 15.0
+                                        - 50.0
+                                        - 55.0,
+                                );
+                                ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
 
-                    if let Ok(mut filters_active) = thread_communication.filters_active_lock.write()
+                                if ui
+                                    .button(format!("{}", egui_phosphor::regular::X_SQUARE))
+                                    .on_hover_text("Abort the current calculation")
+                                    .clicked()
+                                {
+                                    thread_communication.abort_flag.store(true, Relaxed);
+                                }
+                                ui.label(format!("{} %", (p * 100.0) as u8));
+                            }
+                        } else {
+                            ui.add_space(
+                                ui.available_width()
+                                    - ui.spacing().interact_size.y * 2.0
+                                    - 15.0
+                                    - 50.0
+                                    - 55.0,
+                            );
+                            ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
+                        }
+                    } else {
+                        ui.add_space(
+                            ui.available_width() - ui.spacing().interact_size.y * 2.0 - 15.0 - 50.0,
+                        );
+                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
+                    }
+
+                    // Enable only the toggle and computation time label
+                    if let Ok(mut filters_active) =
+                        thread_communication.filters_active_lock.write()
                     {
                         if let Ok(filter_computation_time) =
                             thread_communication.filter_computation_time_lock.read()
@@ -422,30 +481,28 @@ pub fn draw_filters(
                         }
                     }
                 });
-                if !filter_is_active {
-                    ui.disable();
-                }
 
-                if filter
-                    .ui(ui, thread_communication, right_panel_width)
-                    .changed()
-                {
-                    // current filter has been changed, let's request an update
-                    thread_communication
-                        .config_tx
-                        .send(ConfigCommand::UpdateFilter(uuid.clone()))
-                        .unwrap();
-                }
+                // Only enable the filter config UI if not busy for >0.5s and filter is active
+                ui.add_enabled_ui(!busy_long_enough && filter_is_active, |ui| {
+                    if filter
+                        .ui(ui, thread_communication, right_panel_width)
+                        .changed()
+                    {
+                        thread_communication
+                            .config_tx
+                            .send(ConfigCommand::UpdateFilter(uuid.clone()))
+                            .unwrap();
+                    }
+                });
             });
 
-            // draw progress bar
+            // Draw progress bar below (optional)
             if let Some(progress) = thread_communication.gui_settings.progress_bars.get(uuid) {
                 if let Some(p) = progress {
                     if *p > 0.0 {
                         ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
                         ui.horizontal(|ui| {
                             ui.add(
-                                // TODO: fix the width!
                                 egui::ProgressBar::new(*p)
                                     .text(format!("{} %", (p * 100.0) as u8))
                                     .desired_width(right_panel_width - 50.0),

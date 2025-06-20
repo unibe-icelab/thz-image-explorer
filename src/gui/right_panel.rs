@@ -76,9 +76,6 @@ pub fn right_panel(
                         ui.style_mut().spacing.slider_width = 320.0;
 
                         ui.vertical(|ui| {
-                            if !thread_communication.gui_settings.filter_ui_active {
-                                ui.disable();
-                            }
                             if ui
                                 .add(egui::Slider::new(
                                     &mut thread_communication.gui_settings.down_scaling,
@@ -149,9 +146,9 @@ pub fn right_panel(
 
                 egui::ScrollArea::vertical().max_height(ui.available_height() - 200.0).show(ui, |ui| {
 
-                    if !thread_communication.gui_settings.filter_ui_active {
-                        ui.disable();
-                    }
+                    // if !thread_communication.gui_settings.filter_ui_active {
+                    //     ui.disable();
+                    // }
 
                     // todo: fix this with right_panel_width or similar
                     ui.style_mut().spacing.slider_width = 320.0;
