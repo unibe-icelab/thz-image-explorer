@@ -2,7 +2,7 @@
 //! Filters can be applied to processed data (`ScannedImage`) and customized through settings.
 //! It also implements a global, thread-safe registry for managing filters dynamically.
 
-use crate::config::{ConfigCommand, ThreadCommunication};
+use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
 use crate::data_container::ScannedImageFilterData;
 use crate::gui::application::GuiSettingsContainer;
 use crate::gui::toggle_widget::toggle;
@@ -363,22 +363,6 @@ pub fn draw_filters(
                 {
                     if now - *start > 500 {
                         busy_long_enough = true;
-
-                        // TODO check if we can improve this!!!
-
-                        log::info!("Clearing all config commands from the queue since this one takes so long and enter the latest one back again");
-                        let mut r = None;
-                        while !thread_communication.config_rx.is_empty() {
-                            r = thread_communication.config_rx.recv().ok();
-                        }
-
-                        if let Some(r) = r {
-                            thread_communication
-                                .config_tx
-                                .send(r)
-                                .expect("Failed to send config task");
-                        }
-
                         break;
                     }
                 }
@@ -506,10 +490,10 @@ pub fn draw_filters(
                         .ui(ui, thread_communication, right_panel_width)
                         .changed()
                     {
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::UpdateFilter(uuid.clone()))
-                            .unwrap();
+                        send_latest_config(
+                            &thread_communication,
+                            ConfigCommand::UpdateFilter(uuid.clone()),
+                        );
                     }
                 });
             });

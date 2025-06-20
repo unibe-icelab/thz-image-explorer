@@ -8,7 +8,7 @@ use crate::gui::matrix_plot::SelectedPixel;
 use crate::math_tools::FftWindowType;
 use bevy::prelude::Resource;
 use bevy_voxel_plot::InstanceData;
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, TrySendError};
 use dotthz::DotthzMetaData;
 use ndarray::{Array1, Array2, Array3};
 use std::collections::HashMap;
@@ -16,6 +16,18 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
+
+pub fn send_latest_config(thread_communication: &ThreadCommunication, cmd: ConfigCommand) {
+    match thread_communication.config_tx.try_send(cmd.clone()) {
+        Ok(_) => {}
+        Err(TrySendError::Full(_)) => {
+            // Remove the old command and send the new one
+            let _ = thread_communication.config_rx.recv();
+            let _ = thread_communication.config_tx.try_send(cmd);
+        }
+        Err(_) => {}
+    }
+}
 
 /// Enum representing the various commands sent to the configuration thread.
 ///

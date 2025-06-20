@@ -210,7 +210,7 @@ fn main() {
         }
     }
     let (config_tx, config_rx): (Sender<ConfigCommand>, Receiver<ConfigCommand>) =
-        crossbeam_channel::unbounded();
+        crossbeam_channel::bounded(1);
     let abort_flag = Arc::new(AtomicBool::new(false));
 
     let filter_computation_time_lock = Arc::new(RwLock::new(filter_computation_time));

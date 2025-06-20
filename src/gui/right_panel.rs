@@ -1,4 +1,4 @@
-use crate::config::{ConfigCommand, ThreadCommunication};
+use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
 use crate::filters::filter::{draw_filters, FilterDomain};
 use crate::gui::application::THzImageExplorer;
 use crate::gui::settings_window::settings_window;
@@ -48,12 +48,9 @@ pub fn right_panel(
                             .add(toggle(&mut thread_communication.gui_settings.log_plot))
                             .changed()
                         {
-                            thread_communication
-                                .config_tx
-                                .send(ConfigCommand::SetFFTLogPlot(
-                                    thread_communication.gui_settings.log_plot,
-                                ))
-                                .expect("unable to send config");
+                            send_latest_config(thread_communication, ConfigCommand::SetFFTLogPlot(
+                                thread_communication.gui_settings.log_plot,
+                            ));
                         }
                         ui.end_row();
 
@@ -62,12 +59,9 @@ pub fn right_panel(
                             .add(toggle(&mut thread_communication.gui_settings.normalize_fft))
                             .changed()
                         {
-                            thread_communication
-                                .config_tx
-                                .send(ConfigCommand::SetFFTNormalization(
-                                    thread_communication.gui_settings.normalize_fft,
-                                ))
-                                .expect("unable to send config");
+                            send_latest_config(thread_communication, ConfigCommand::SetFFTNormalization(
+                                thread_communication.gui_settings.normalize_fft,
+                            ));
                         }
 
                         ui.end_row();
@@ -126,20 +120,14 @@ pub fn right_panel(
                                 {
                                     *write_guard = explorer.pixel_selected.clone();
                                 }
-                                thread_communication
-                                    .config_tx
-                                    .send(ConfigCommand::SetDownScaling)
-                                    .expect("unable to send config");
+                                send_latest_config(thread_communication, ConfigCommand::SetDownScaling);
                             }
                         });
                     });
 
                 ui.add_space(10.0);
                 if ui.button("Calculate All Filters").clicked() {
-                    thread_communication
-                        .config_tx
-                        .send(ConfigCommand::UpdateFilters)
-                        .expect("unable to send config");
+                    send_latest_config(thread_communication, ConfigCommand::UpdateFilters);
                 }
                 ui.add_space(10.0);
                 ui.separator();
@@ -211,13 +199,7 @@ pub fn right_panel(
                                         });
                                 });
                             if fft_window_type_old != explorer.fft_window_type {
-                                println!("changing type");
-                                thread_communication
-                                    .config_tx
-                                    .send(ConfigCommand::SetFftWindowType(
-                                        explorer.fft_window_type.clone(),
-                                    ))
-                                    .unwrap();
+                                send_latest_config(thread_communication, ConfigCommand::SetFftWindowType(explorer.fft_window_type.clone()));
                             }
 
                             ui.add_space(5.0);
@@ -324,14 +306,8 @@ pub fn right_panel(
                                     .changed();
 
                                 if slider_changed.inner || val1_changed || val2_changed {
-                                    thread_communication
-                                        .config_tx
-                                        .send(ConfigCommand::SetFFTWindowLow(explorer.fft_bounds[0]))
-                                        .unwrap();
-                                    thread_communication
-                                        .config_tx
-                                        .send(ConfigCommand::SetFFTWindowHigh(explorer.fft_bounds[1]))
-                                        .unwrap();
+                                    send_latest_config(thread_communication, ConfigCommand::SetFFTWindowLow(explorer.fft_bounds[0]));
+                                    send_latest_config(thread_communication, ConfigCommand::SetFFTWindowHigh(explorer.fft_bounds[1]));
                                 }
                             });
                         });

@@ -1,4 +1,4 @@
-use crate::config::{ConfigCommand, ThreadCommunication};
+use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
 use crate::gui::application::{FileDialogState, THzImageExplorer};
 use crate::gui::gauge_widget::gauge;
 use crate::gui::matrix_plot::{make_dummy, plot_matrix, ImageState, ROI};
@@ -237,10 +237,11 @@ pub fn left_panel(
                                     item.file_name().unwrap().to_str().unwrap().to_string();
                                 thread_communication.gui_settings.selected_path =
                                     item.to_path_buf();
-                                thread_communication
-                                    .config_tx
-                                    .send(ConfigCommand::OpenFile(item.to_path_buf()))
-                                    .expect("unable to send open file cmd");
+
+                                send_latest_config(
+                                    thread_communication,
+                                    ConfigCommand::OpenFile(item.to_path_buf()),
+                                );
                             }
                         }
                     });
@@ -255,10 +256,10 @@ pub fn left_panel(
                         explorer.selected_file_name =
                             item.file_name().unwrap().to_str().unwrap().to_string();
                         thread_communication.gui_settings.selected_path = item.to_path_buf();
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::OpenFile(item.to_path_buf()))
-                            .expect("unable to send open file cmd");
+                        send_latest_config(
+                            thread_communication,
+                            ConfigCommand::OpenFile(item.to_path_buf()),
+                        );
                         explorer.scroll_to_selection = true;
                     }
                     if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) && selected_index > 0 {
@@ -266,10 +267,11 @@ pub fn left_panel(
                         explorer.selected_file_name =
                             item.file_name().unwrap().to_str().unwrap().to_string();
                         thread_communication.gui_settings.selected_path = item.to_path_buf();
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::OpenFile(item.to_path_buf()))
-                            .expect("unable to send open file cmd");
+
+                        send_latest_config(
+                            thread_communication,
+                            ConfigCommand::OpenFile(item.to_path_buf()),
+                        );
                         explorer.scroll_to_selection = true;
                     }
                 }
@@ -288,10 +290,7 @@ pub fn left_panel(
                     explorer.scroll_to_selection = true;
                     explorer.file_dialog.config_mut().initial_directory = path.clone();
                     thread_communication.gui_settings.selected_path = path.clone();
-                    thread_communication
-                        .config_tx
-                        .send(ConfigCommand::OpenFile(path))
-                        .expect("unable to send open file cmd");
+                    send_latest_config(thread_communication, ConfigCommand::OpenFile(path));
                     repaint = true;
                 }
             });
@@ -311,10 +310,10 @@ pub fn left_panel(
                         .picked()
                     {
                         explorer.file_dialog_state = FileDialogState::None;
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::OpenFile(path.to_path_buf()))
-                            .expect("unable to send open file cmd");
+                        send_latest_config(
+                            thread_communication,
+                            ConfigCommand::OpenFile(path.to_path_buf()),
+                        );
                     }
                     if let Some(path) = explorer.file_dialog.take_picked() {
                         explorer.other_files = find_files_with_same_extension(&path).unwrap();
@@ -434,12 +433,10 @@ pub fn left_panel(
                 image_state,
             );
             if pixel_clicked {
-                thread_communication
-                    .config_tx
-                    .send(ConfigCommand::SetSelectedPixel(
-                        explorer.pixel_selected.clone(),
-                    ))
-                    .unwrap();
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::SetSelectedPixel(explorer.pixel_selected.clone()),
+                );
                 if let Ok(mut write_guard) = thread_communication.pixel_lock.write() {
                     *write_guard = explorer.pixel_selected.clone();
                 }
@@ -476,12 +473,12 @@ pub fn left_panel(
                         *md = meta_data.clone();
                     }
 
-                    thread_communication
-                        .config_tx
-                        .send(ConfigCommand::UpdateMetaData(
+                    send_latest_config(
+                        thread_communication,
+                        ConfigCommand::UpdateMetaData(
                             thread_communication.gui_settings.selected_path.clone(),
-                        ))
-                        .expect("unable to send save file cmd");
+                        ),
+                    );
                 }
             }
 
@@ -524,12 +521,13 @@ pub fn left_panel(
                             if let Ok(mut md) = thread_communication.md_lock.write() {
                                 *md = meta_data.clone();
                             }
-                            thread_communication
-                                .config_tx
-                                .send(ConfigCommand::UpdateMetaData(
+
+                            send_latest_config(
+                                thread_communication,
+                                ConfigCommand::UpdateMetaData(
                                     thread_communication.gui_settings.selected_path.clone(),
-                                ))
-                                .expect("unable to send save file cmd");
+                                ),
+                            );
                         }
                     });
             });
@@ -550,12 +548,12 @@ pub fn left_panel(
                     .clicked()
                 {
                     if thread_communication.gui_settings.meta_data_edit {
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::UpdateMetaData(
+                        send_latest_config(
+                            thread_communication,
+                            ConfigCommand::UpdateMetaData(
                                 thread_communication.gui_settings.selected_path.clone(),
-                            ))
-                            .expect("unable to send save file cmd");
+                            ),
+                        );
                     }
                     thread_communication.gui_settings.meta_data_edit =
                         !thread_communication.gui_settings.meta_data_edit;
@@ -571,12 +569,12 @@ pub fn left_panel(
                     {
                         thread_communication.gui_settings.meta_data_edit = false;
                         thread_communication.gui_settings.meta_data_unlocked = false;
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::LoadMetaData(
+                        send_latest_config(
+                            thread_communication,
+                            ConfigCommand::LoadMetaData(
                                 thread_communication.gui_settings.selected_path.clone(),
-                            ))
-                            .expect("unable to send open file cmd");
+                            ),
+                        );
                     }
                 }
             });

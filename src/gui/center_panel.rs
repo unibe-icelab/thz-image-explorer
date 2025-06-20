@@ -1,4 +1,4 @@
-use crate::config::{ConfigCommand, ThreadCommunication};
+use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
 use crate::gui::application::{THzImageExplorer, Tab};
 use crate::gui::threed_plot::{three_dimensional_plot_ui, CameraInputAllowed, OpacityThreshold};
 use crate::gui::toggle_widget::toggle;
@@ -411,12 +411,12 @@ pub fn pulse_tab(
                 }
                 thread_communication.gui_settings.frequency_resolution =
                     thread_communication.gui_settings.frequency_resolution_temp;
-                thread_communication
-                    .config_tx
-                    .send(ConfigCommand::SetFFTResolution(
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::SetFFTResolution(
                         thread_communication.gui_settings.frequency_resolution,
-                    ))
-                    .expect("unable to send config");
+                    ),
+                );
             }
             ui.add_space(50.0);
             ui.label("FFT");
@@ -714,7 +714,7 @@ pub fn center_panel(
 ) {
     egui::CentralPanel::default().show(ctx, |ui| {
         let window_height = ui.available_height();
-        let height = ui.available_size().y * 0.45;
+        let height = ui.available_size().y * 0.45 - 10.0;
         let spacing = (ui.available_size().y - 2.0 * height) / 3.0 - 10.0;
         let width = ui.available_size().x - 40.0 - *left_panel_width - *right_panel_width;
         ui.horizontal(|ui| {
