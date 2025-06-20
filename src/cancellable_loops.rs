@@ -54,8 +54,7 @@ where
     R: Send + Sync + Clone + 'static,
 {
     let abort = Arc::new(abort_flag);
-    iter
-        .into_par_iter()
+    iter.into_par_iter()
         .filter_map(|item| {
             if abort.load(Ordering::Relaxed) {
                 None

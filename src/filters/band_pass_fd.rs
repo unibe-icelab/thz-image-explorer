@@ -1,3 +1,4 @@
+use crate::cancellable_loops::par_for_each_cancellable;
 use crate::config::ThreadCommunication;
 use crate::data_container::ScannedImageFilterData;
 use crate::filters::filter::{CopyStaticFieldsTrait, Filter, FilterConfig, FilterDomain};
@@ -11,8 +12,7 @@ use filter_macros::{register_filter, CopyStaticFields};
 use ndarray::{s, Array1};
 use num_traits::Float;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
-use std::sync::{Arc, RwLock, Mutex};
-use crate::cancellable_loops::par_for_each_cancellable;
+use std::sync::{Arc, Mutex, RwLock};
 
 #[register_filter]
 #[derive(Clone, Debug, CopyStaticFields)]
@@ -58,7 +58,6 @@ impl Filter for FrequencyDomainBandPass {
         progress_lock: &mut Arc<RwLock<Option<f32>>>,
         abort_flag: &Arc<AtomicBool>,
     ) -> ScannedImageFilterData {
-
         let mut output_data = input_data.clone();
         let shape = output_data.fft.dim();
         let h = shape.0;

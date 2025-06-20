@@ -266,7 +266,7 @@ impl FilterRegistry {
     /// # Notes
     /// - This method is strictly for mutable access to the filters.
     /// - For immutable access during iteration, use the [`IntoIterator`] implementation for `&FilterRegistry`.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item=&mut Box<dyn Filter>> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Box<dyn Filter>> {
         self.filters.values_mut()
     }
 }
@@ -340,7 +340,6 @@ pub static FILTER_REGISTRY: Lazy<Mutex<FilterRegistry>> = Lazy::new(|| {
 static FILTER_INSTANCE_UUIDS: Lazy<Mutex<HashMap<String, String>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
-
 pub fn draw_filters(
     ui: &mut egui::Ui,
     thread_communication: &mut ThreadCommunication,
@@ -357,7 +356,11 @@ pub fn draw_filters(
         let mut busy_long_enough = false;
         for (uuid, _) in &filter_entries {
             if let Some(Some(_)) = thread_communication.gui_settings.progress_bars.get(uuid) {
-                if let Some(start) = thread_communication.gui_settings.progress_start_time.get(uuid) {
+                if let Some(start) = thread_communication
+                    .gui_settings
+                    .progress_start_time
+                    .get(uuid)
+                {
                     if now - *start > 500 {
                         busy_long_enough = true;
 
@@ -370,7 +373,10 @@ pub fn draw_filters(
                         }
 
                         if let Some(r) = r {
-                            thread_communication.config_tx.send(r).expect("Failed to send config task");
+                            thread_communication
+                                .config_tx
+                                .send(r)
+                                .expect("Failed to send config task");
                         }
 
                         break;
@@ -470,8 +476,7 @@ pub fn draw_filters(
                     }
 
                     // Enable only the toggle and computation time label
-                    if let Ok(mut filters_active) =
-                        thread_communication.filters_active_lock.write()
+                    if let Ok(mut filters_active) = thread_communication.filters_active_lock.write()
                     {
                         if let Ok(filter_computation_time) =
                             thread_communication.filter_computation_time_lock.read()

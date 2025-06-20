@@ -148,7 +148,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
 
     let mut update = UpdateType::None;
     loop {
-
         if thread_communication.abort_flag.load(Ordering::Relaxed) {
             log::info!("Aborting main thread loop, clearing all config commands from the queue");
             while !thread_communication.config_rx.is_empty() {

@@ -63,7 +63,6 @@ impl Filter for TimeDomainBandPassBeforeFFT {
         progress_lock: &mut Arc<RwLock<Option<f32>>>,
         _abort_flag: &Arc<AtomicBool>,
     ) -> ScannedImageFilterData {
-
         let mut output_data = input_data.clone();
         let shape = output_data.data.dim();
 

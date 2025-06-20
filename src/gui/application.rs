@@ -177,7 +177,7 @@ impl GuiSettingsContainer {
             opacity_threshold: 0.1,
             last_progress_bar_update: HashMap::new(),
             progress_bars: HashMap::new(),
-            progress_start_time : HashMap::new(),
+            progress_start_time: HashMap::new(),
             filter_ui_active: true,
             theme_preference: ThemePreference::System,
             beam_shape: vec![],
