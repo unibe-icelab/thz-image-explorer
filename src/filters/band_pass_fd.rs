@@ -11,7 +11,7 @@ use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use filter_macros::{register_filter, CopyStaticFields};
 use ndarray::{s, Array1};
 use num_traits::Float;
-use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, RwLock};
 
 #[register_filter]

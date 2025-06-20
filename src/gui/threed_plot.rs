@@ -10,7 +10,6 @@ use bevy_voxel_plot::{InstanceData, InstanceMaterialData};
 use ndarray::{Array1, Array3, ArrayView1, Axis};
 use rayon::prelude::*;
 use std::f32::consts::TAU;
-use std::time::Instant;
 
 #[derive(Resource)]
 pub struct OpacityThreshold(pub f32);

@@ -393,7 +393,7 @@ pub fn draw_filters(
             }
 
             // Update progress bar value and start time for this filter
-            if let Some(mut update) = thread_communication
+            if let Some(update) = thread_communication
                 .gui_settings
                 .last_progress_bar_update
                 .get_mut(uuid)

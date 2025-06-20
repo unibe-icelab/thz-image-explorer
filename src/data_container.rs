@@ -7,31 +7,6 @@ use realfft::{ComplexToReal, RealToComplex};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-/// Represents the metadata associated with an image or scan.
-///
-/// # Fields
-/// - `timestamp`: The time at which the data was recorded, represented as a floating-point value.
-/// - `width`: Width of the scanned image in pixels.
-/// - `height`: Height of the scanned image in pixels.
-/// - `dx`: The horizontal resolution or spacing between data points.
-/// - `x_min`: The minimum value of the x-axis in the scan.
-/// - `x_max`: The maximum value of the x-axis in the scan.
-/// - `dy`: The vertical resolution or spacing between data points.
-/// - `y_min`: The minimum value of the y-axis in the scan.
-/// - `y_max`: The maximum value of the y-axis in the scan.
-#[derive(Clone, Default, Serialize, Deserialize)]
-pub struct Meta {
-    pub timestamp: f64,
-    pub width: usize,
-    pub height: usize,
-    pub dx: f32,
-    pub x_min: f32,
-    pub x_max: f32,
-    pub dy: f32,
-    pub y_min: f32,
-    pub y_max: f32,
-}
-
 /// Represents housekeeping data associated with a scan or experiment.
 ///
 /// # Fields

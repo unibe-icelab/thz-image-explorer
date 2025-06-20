@@ -3,16 +3,14 @@
 //! FFT operations for signal processing.
 
 use crate::config::{ConfigCommand, ConfigContainer, ThreadCommunication};
-use crate::data_container::{DataPoint, ScannedImage, ScannedImageFilterData};
+use crate::data_container::ScannedImageFilterData;
 use crate::filters::filter::{Filter, FILTER_REGISTRY};
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::io::{
-    load_meta_data_of_thz_file, open_from_npz, open_from_thz, open_json, save_to_thz,
-    update_meta_data_of_thz_file,
+    load_meta_data_of_thz_file, open_from_thz, save_to_thz, update_meta_data_of_thz_file,
 };
 use crate::math_tools::{fft, ifft};
 use bevy_egui::egui::ColorImage;
-use csv::ReaderBuilder;
 use dotthz::DotthzMetaData;
 use image::RgbaImage;
 use ndarray::parallel::prelude::*;
@@ -139,7 +137,6 @@ enum FileType {
 /// * `thread_communication` - A channel-based communication structure between threads.
 pub fn main_thread(mut thread_communication: ThreadCommunication) {
     // reads data from mutex, samples and saves if needed
-    let mut data = DataPoint::default();
     let mut config = ConfigContainer::default();
     let mut selected_pixel = SelectedPixel::default();
     let mut meta_data = DotthzMetaData::default();
@@ -185,9 +182,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         if os_path != "thz" {
                             path.set_extension("thz");
                             // save full file, not just metadata, since the dotTHz file does not exist yet.
-                            if let Ok(mut filter_data) =
-                                thread_communication.filter_data_lock.write()
-                            {
+                            if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
                                 if let Some(input) = filter_data.first() {
                                     if let Ok(md) = thread_communication.md_lock.read() {
                                         match save_to_thz(&path, &input, &md) {
@@ -273,7 +268,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         path.set_extension("thz");
                     }
 
-                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                    if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
                         // note, we save the input data, not the filtered data
                         if let Some(input) = filter_data.first() {
                             if let Ok(md) = thread_communication.md_lock.read() {
@@ -367,8 +362,8 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 if let Ok(filter_uuid_to_index) =
                                     thread_communication.filter_uuid_to_index_lock.read()
                                 {
-                                    if let Ok(mut filter_data) =
-                                        thread_communication.filter_data_lock.write()
+                                    if let Ok(filter_data) =
+                                        thread_communication.filter_data_lock.read()
                                     {
                                         for (i, uuid) in filter_chain.iter().enumerate() {
                                             let input_index = if i == 0 {
@@ -597,7 +592,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
 
                     // updating back the static fields
                     if let Ok(mut filters) = FILTER_REGISTRY.lock() {
-                        if let Some(mut filters_cloned) = filters_cloned {
+                        if let Some(filters_cloned) = filters_cloned {
                             for (uuid, filter) in filters_cloned.iter() {
                                 if let Some((_, filter_from_registry)) =
                                     filters.filters.iter_mut().find(|(id, _)| *id == uuid)
