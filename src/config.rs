@@ -21,6 +21,8 @@ use std::time::{Duration, Instant};
 ///
 /// These commands are used to control various aspects of the application processing,
 /// such as opening files, setting FFT parameters, updating filtering windows, etc.
+
+#[derive(Clone, Debug)]
 pub enum ConfigCommand {
     /// Command to open a specified file.
     /// The file is identified using a `PathBuf`, and its type is determined based on its extension.

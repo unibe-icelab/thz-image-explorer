@@ -10,7 +10,6 @@ where
 {
     for item in iter {
         if abort_flag.load(Ordering::Relaxed) {
-            abort_flag.store(false, Ordering::Relaxed);
             break;
         }
         func(item);
@@ -31,14 +30,13 @@ where
     iter.into_par_iter()
         .try_for_each(|item| {
             if abort.load(Ordering::Relaxed) {
-                abort.store(false, Ordering::Relaxed);
-                Err(()) // cancel
+                Err(())
             } else {
                 func(item);
                 Ok(())
             }
         })
-        .ok(); // suppress error — just treat as cancel
+        .ok();
 }
 
 #[allow(dead_code)]
@@ -56,8 +54,7 @@ where
     R: Send + Sync + Clone + 'static,
 {
     let abort = Arc::new(abort_flag);
-
-    let r = iter
+    iter
         .into_par_iter()
         .filter_map(|item| {
             if abort.load(Ordering::Relaxed) {
@@ -66,7 +63,5 @@ where
                 func(item)
             }
         })
-        .reduce(|| init.clone(), reducer);
-    abort_flag.store(false, Ordering::Relaxed);
-    r
+        .reduce(|| init.clone(), reducer)
 }

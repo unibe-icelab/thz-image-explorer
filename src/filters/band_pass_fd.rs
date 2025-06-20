@@ -11,7 +11,8 @@ use filter_macros::{register_filter, CopyStaticFields};
 use ndarray::{s, Array1};
 use num_traits::Float;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
+use crate::cancellable_loops::par_for_each_cancellable;
 
 #[register_filter]
 #[derive(Clone, Debug, CopyStaticFields)]
@@ -57,9 +58,6 @@ impl Filter for FrequencyDomainBandPass {
         progress_lock: &mut Arc<RwLock<Option<f32>>>,
         abort_flag: &Arc<AtomicBool>,
     ) -> ScannedImageFilterData {
-        if let Ok(mut p) = progress_lock.write() {
-            *p = Some(0.0);
-        }
 
         let mut output_data = input_data.clone();
         let shape = output_data.fft.dim();
@@ -103,23 +101,24 @@ impl Filter for FrequencyDomainBandPass {
             &(self.window_width as f32),
         );
 
-        // Apply window to each pixel's spectrum
-        for i in 0..h {
-            if abort_flag.load(Relaxed) {
-                break;
-            }
+        // Wrap arrays in Mutex for thread-safe mutation
+        let fft = Mutex::new(&mut output_data.fft);
+        let amplitudes = Mutex::new(&mut output_data.amplitudes);
+
+        par_for_each_cancellable(0..h, abort_flag, |i| {
             for j in 0..w {
-                let mut spectrum = output_data.fft.slice_mut(s![i, j, ..]);
-                let mut amplitudes = output_data.amplitudes.slice_mut(s![i, j, ..]);
+                let mut fft_guard = fft.lock().unwrap();
+                let mut spectrum = fft_guard.slice_mut(s![i, j, ..]);
+
+                let mut amp_guard = amplitudes.lock().unwrap();
+                let mut amplitudes_slice = amp_guard.slice_mut(s![i, j, ..]);
+
                 for k in 0..freq_window.len() {
                     spectrum[k] = spectrum[k] * freq_window[k];
-                    amplitudes[k] = amplitudes[k] * freq_window[k];
+                    amplitudes_slice[k] = amplitudes_slice[k] * freq_window[k];
                 }
             }
-            if let Ok(mut p) = progress_lock.write() {
-                *p = Some((i as f32) / (h as f32));
-            }
-        }
+        });
 
         // Visualization for selected pixel
         let pixel = output_data.pixel_selected;

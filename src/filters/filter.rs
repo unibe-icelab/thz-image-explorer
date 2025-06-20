@@ -266,7 +266,7 @@ impl FilterRegistry {
     /// # Notes
     /// - This method is strictly for mutable access to the filters.
     /// - For immutable access during iteration, use the [`IntoIterator`] implementation for `&FilterRegistry`.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Box<dyn Filter>> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item=&mut Box<dyn Filter>> {
         self.filters.values_mut()
     }
 }
@@ -360,6 +360,19 @@ pub fn draw_filters(
                 if let Some(start) = thread_communication.gui_settings.progress_start_time.get(uuid) {
                     if now - *start > 500 {
                         busy_long_enough = true;
+
+                        // TODO check if we can improve this!!!
+
+                        log::info!("Clearing all config commands from the queue since this one takes so long and enter the latest one back again");
+                        let mut r = None;
+                        while !thread_communication.config_rx.is_empty() {
+                            r = thread_communication.config_rx.recv().ok();
+                        }
+
+                        if let Some(r) = r {
+                            thread_communication.config_tx.send(r).expect("Failed to send config task");
+                        }
+
                         break;
                     }
                 }

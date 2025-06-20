@@ -19,6 +19,7 @@ use ndarray::parallel::prelude::*;
 use ndarray::{Array2, Array3, Axis};
 use realfft::RealFftPlanner;
 use std::path::Path;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 pub enum UpdateType {
@@ -147,6 +148,18 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
 
     let mut update = UpdateType::None;
     loop {
+
+        if thread_communication.abort_flag.load(Ordering::Relaxed) {
+            log::info!("Aborting main thread loop, clearing all config commands from the queue");
+            while !thread_communication.config_rx.is_empty() {
+                let r = thread_communication.config_rx.recv();
+                dbg!(&r);
+            }
+            thread_communication
+                .abort_flag
+                .store(false, Ordering::Relaxed);
+        }
+
         if let Ok(config_command) = thread_communication.config_rx.recv() {
             match config_command {
                 ConfigCommand::LoadMetaData(path) => {
@@ -400,6 +413,9 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 .collect::<Vec<(String, Box<dyn Filter>)>>(),
                         );
                     }
+
+                    let mut run_deconvolution = true;
+
                     if let Some(ref mut filters) = filters_cloned {
                         if let Ok(filter_chain) = thread_communication.filter_chain_lock.read() {
                             if let Ok(mut filter_data) =
@@ -461,7 +477,19 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                                     } else {
                                                         false
                                                     };
-                                                    if active {
+
+                                                    let deconvolution = filter
+                                                        .config()
+                                                        .name
+                                                        .contains("Deconvolution");
+
+                                                    if !deconvolution {
+                                                        // If we update a different filter, lets not update the deconvolution filter
+                                                        run_deconvolution = false;
+                                                    }
+                                                    if active
+                                                        && !(deconvolution && !run_deconvolution)
+                                                    {
                                                         if let Some(progress) = thread_communication
                                                             .progress_lock
                                                             .get_mut(uuid)

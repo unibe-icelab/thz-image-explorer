@@ -15,7 +15,7 @@ use std::fmt::{Display, Formatter};
 ///
 /// These window functions can be applied to signals for spectral analysis.
 /// The type determines the nature of the windowing used during FFT computation.
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum FftWindowType {
     /// Adapted Blackman window with only the beginning and ending being altered.
     AdaptedBlackman,
