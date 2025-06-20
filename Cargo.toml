@@ -82,6 +82,9 @@ downcast-rs = "2.0.1"
 default = ["self_update"]
 self_update = ["dep:self_update", "tempfile", "reqwest", "semver"]
 
+[package.metadata]
+msrv = "1.87"
+
 [package.metadata.bundle]
 name = "THz Image Explorer"
 identifier = "ch.unibe.thzimageexplorer"
