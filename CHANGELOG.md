@@ -8,6 +8,8 @@ All notable changes to the `THz Image Explorer` project will be documented in th
 * Implemented 3D voxel plot
 * Implemented filter trait
 * Implemented tilt compensation filter
+* Implemented PSF deconvolution filter
+* Implemented Band Pass Filters
 * ...
 
 # 0.2.2
