@@ -18,7 +18,7 @@ use rayon::prelude::*;
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::time::Instant;
 
-use crate::cancellable_loops::par_for_each_cancellable_reduce;
+use cancellable_loops::par_for_each_cancellable_reduce;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 

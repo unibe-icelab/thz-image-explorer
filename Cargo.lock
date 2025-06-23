@@ -1767,6 +1767,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "cancellable_loops"
+version = "0.1.0"
+dependencies = [
+ "rayon",
+]
+
+[[package]]
 name = "cargo-platform"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6806,6 +6813,7 @@ dependencies = [
  "bevy_egui",
  "bevy_panorbit_camera",
  "bevy_voxel_plot",
+ "cancellable_loops",
  "chrono",
  "crossbeam-channel",
  "csv",

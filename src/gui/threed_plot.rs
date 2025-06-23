@@ -363,13 +363,7 @@ pub fn three_dimensional_plot_ui(
             }
 
             if ui.button("Export to VTU").clicked() {
-                if let Err(err) = export_to_vtk(
-                    &instances,
-                    cube_width,
-                    cube_height,
-                    cube_depth,
-                    "voxel_plot.vtu",
-                ) {
+                if let Err(err) = export_to_vtk(&instances, "voxel_plot.vtu") {
                     eprintln!("Failed to export VTU: {}", err);
                 } else {
                     println!("Successfully exported to voxel_plot.vtk");

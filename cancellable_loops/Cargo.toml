@@ -1,0 +1,10 @@
+[package]
+name = "cancellable_loops"
+version = "0.1.0"
+edition = "2024"
+description = "Utilities for creating cancellable sequential and parallel loops"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/cancellable_loops"
+
+[dependencies]
+rayon = "1.7"

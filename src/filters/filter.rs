@@ -1,5 +1,5 @@
 //! This module provides the `Filter` trait and related structures for managing filters and their configuration.
-//! Filters can be applied to processed data (`ScannedImage`) and customized through settings.
+//! Filters can be applied to processed data (`ScannedImageFilterData`) and customized through settings.
 //! It also implements a global, thread-safe registry for managing filters dynamically.
 
 use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
@@ -29,20 +29,38 @@ downcast_rs::impl_downcast!(CopyStaticFieldsTrait);
 ///
 /// Filters must implement:
 /// - A `new` function to initialize a filter with default parameters.
-/// - A `filter` function to apply the filter to a `ScannedImage`.
+/// - A `reset` function that is called during the initialization of the filter (when loading a new file).
 /// - A `config` function to provide metadata and parameters for the filter.
+/// - A `filter` function to apply the filter to a `ScannedImageFilterData`.
+/// - A `ui` function to render the filter in the UI.
+///
+/// Different applications can be found in the `src/filters` directory.
 ///
 /// **Example**:
 /// ```rust
-/// use crate::filters::filter::{Filter, ScannedImage, GuiSettingsContainer};
+/// use crate::filters::filter::{Filter, ScannedImageFilterData, GuiSettingsContainer};
 ///
+/// #[register_filter]
+/// #[derive(Clone, Debug, CopyStaticFields)]
 /// struct ExampleFilter;
 ///
 /// impl Filter for ExampleFilter {
 ///     fn new() -> Self { ExampleFilter }
 ///
-///     fn filter(&self, scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer) {
-///         // Apply filter logic here
+///     fn reset(&mut self, time: &Array1<f32>, shape: &[usize]) {
+///         // Reset logic here
+///     }
+///
+///     fn filter(
+///         &mut self,
+///         input_data: &ScannedImageFilterData,
+///         gui_settings: &mut GuiSettingsContainer,
+///         progress_lock: &mut Arc<RwLock<Option<f32>>>,
+///         abort_flag: &Arc<AtomicBool>,
+///     ) -> ScannedImageFilterData {
+///            // Apply filter logic here
+///             input_data.clone() // Placeholder, replace with actual filtering logic
+///         }
 ///     }
 ///
 ///     fn config(&self) -> FilterConfig {
@@ -52,7 +70,15 @@ downcast_rs::impl_downcast!(CopyStaticFieldsTrait);
 ///             parameters: vec![]
 ///         }
 ///     }
-/// }
+///
+///     fn ui(
+///         &mut self,
+///         ui: &mut egui::Ui,
+///         thread_communication: &mut ThreadCommunication,
+///         panel_width: f32,
+///     ) -> egui::Response {
+///        // Render filter configuration UI here
+///     }
 /// ```
 pub trait Filter: Send + Sync + Debug + CloneBoxedFilter + CopyStaticFieldsTrait {
     /// Creates a new instance of the filter with default parameters.
@@ -63,15 +89,63 @@ pub trait Filter: Send + Sync + Debug + CloneBoxedFilter + CopyStaticFieldsTrait
     /// Resets the filter to its initial state, allowing it to be reused.
     fn reset(&mut self, time: &Array1<f32>, shape: &[usize]);
 
-    /// Returns the filter configuration, including name and domain.
+    /// Returns the filter configuration, including name, description and domain.
     fn config(&self) -> FilterConfig;
 
     /// Applies the filter to the given `ScannedImage`.
     ///
     /// # Arguments
     ///
-    /// - `filter_data`: A mutable reference to the image to be processed.
+    /// - `input_data`: A reference to the `ScannedImageFilterData` to be processed.
     /// - `gui_settings`: Mutable reference to GUI settings associated with the filter.
+    /// - `progress_lock`: A mutable reference to `Arc<RwLock<Option<f32>>>` for the progress bar (Optional, only recommended for filters that take a long time to run).
+    /// - `abort_flag`: A reference to an `Arc<AtomicBool>` to abort the filter calculation (Optional, only recommended for filters that take a long time to run).
+    ///
+    /// # Returns
+    /// A new `ScannedImageFilterData` containing the filtered data.
+    ///
+    /// To use progress_lock and abort_flag, the filter must be long-running and cancellable loops must be used.
+    /// For example:
+    /// ```rust
+    ///     use cancellable_loops::{par_for_each_cancellable_reduce};
+
+    ///     par_for_each_cancellable_reduce(
+    ///             gui_settings
+    ///                 your_iterator.iter()
+    ///                 .enumerate()
+    ///                 .par_bridge(),
+    ///             &abort_flag,
+    ///             |(i, _)| {
+    ///                 // Filter logic here
+    ///                Some(ScannedImageFilterData::default()) // Replace with actual filtering logic
+    ///            },
+    ///            |a, b| {
+    ///                // Combine results here
+    ///               a + b // Replace with actual combination logic
+    ///            },
+    ///           ScannedImageFilterData::default(), // Initial value
+    ///       );
+    /// ```
+    ///
+    /// or
+    ///
+    /// ```rust
+    ///     use cancellable_loops::{par_for_each_cancellable};
+    ///    par_for_each_cancellable(
+    ///           your_iterator.iter()
+    ///           .par_bridge(),
+    ///          &abort_flag,
+    ///          |(i, _)| {
+    ///               // Filter logic here
+    ///              // Use progress_lock to update progress
+    ///               if let Ok(mut progress) = progress_lock.write() {
+    ///                 *progress = Some(i as f32 / gui_settings.psf.filters.len() as f32);
+    ///               }
+    ///               // Return filtered data
+    ///               ScannedImageFilterData::default() // Replace with actual filtering logic
+    ///           },
+    ///           );
+    /// ```
     fn filter(
         &mut self,
         input_data: &ScannedImageFilterData,
@@ -81,36 +155,45 @@ pub trait Filter: Send + Sync + Debug + CloneBoxedFilter + CopyStaticFieldsTrait
     ) -> ScannedImageFilterData;
 
     /// Renders the filter configuration in the GUI.
-    /// make sure to return the `egui::Reponse` of the GUI elements. This way, the application
+    /// make sure to return the `egui::Response` of the GUI elements. This way, the application
     /// can detect if any GUI element has been changed and will request a calculation update.
     ///
     /// # Example:
     ///
     /// ```rust
-    /// fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut ThreadCommunication) -> egui::Response {
-    ///     let mut final_response = ui.allocate_response(egui::Vec2::ZERO, egui::Sense::hover());
+    /// fn ui(
+    ///         &mut self,
+    ///         ui: &mut Ui,
+    ///         _thread_communication: &mut ThreadCommunication,
+    ///         _panel_width: f32,
+    ///     ) -> egui::Response {
+    ///         let mut final_response = ui.allocate_response(egui::Vec2::ZERO, egui::Sense::hover());
     ///
-    ///     let response_x = ui.horizontal(|ui| {
-    ///         ui.label("Tilt X: ");
-    ///         ui.add(egui::Slider::new(&mut self.tilt_x, -15.0..=15.0).suffix(" deg"))
-    ///     }).inner; // Get the slider's response
+    ///         let response_x = ui
+    ///             .horizontal(|ui| {
+    ///                ui.label("Tilt X: ");
+    ///                 ui.add(egui::Slider::new(&mut self.tilt_x, -15.0..=15.0).suffix(" deg"))
+    ///             })
+    ///             .inner; // Get the slider's response
     ///
-    ///     let response_y = ui.horizontal(|ui| {
-    ///         ui.label("Tilt Y: ");
-    ///         ui.add(egui::Slider::new(&mut self.tilt_y, -15.0..=15.0).suffix(" deg"))
-    ///     }).inner; // Get the slider's response
+    ///         let response_y = ui
+    ///             .horizontal(|ui| {
+    ///                 ui.label("Tilt Y: ");
+    ///                 ui.add(egui::Slider::new(&mut self.tilt_y, -15.0..=15.0).suffix(" deg"))
+    ///             })
+    ///             .inner; // Get the slider's response
     ///
-    ///     // Merge responses to track interactivity
-    ///     final_response |= response_x.clone();
-    ///     final_response |= response_y.clone();
+    ///         // Merge responses to track interactivity
+    ///         final_response |= response_x.clone();
+    ///         final_response |= response_y.clone();
     ///
-    ///     // Only mark changed if any slider was changed (not just hovered)
-    ///     if response_x.changed() || response_y.changed() {
-    ///         final_response.mark_changed();
+    ///         // Only mark changed if any slider was changed (not just hovered)
+    ///         if response_x.changed() || response_y.changed() {
+    ///            final_response.mark_changed();
+    ///         }
+    ///
+    ///         final_response
     ///     }
-    ///
-    ///     final_response
-    /// }
     /// ```
     ///
     fn ui(
@@ -121,10 +204,14 @@ pub trait Filter: Send + Sync + Debug + CloneBoxedFilter + CopyStaticFieldsTrait
     ) -> egui::Response;
 }
 
-/// The `FilterDomain` enum specifies whether a filter operates in the time or frequency domain.
+/// The `FilterDomain` enum specifies the domain and execution order of filters.
 ///
-/// - `Time`: The filter processes data in the time domain.
-/// - `Frequency`: The filter processes data in the frequency domain.
+/// # Variants
+/// - `TimeBeforeFFTPrioFirst`: Time-domain filters that should run first before FFT.
+/// - `TimeBeforeFFT`: Standard time-domain filters that run before FFT.
+/// - `Frequency`: Filters that operate in the frequency domain.
+/// - `TimeAfterFFT`: Standard time-domain filters that run after FFT.
+/// - `TimeAfterFFTPrioLast`: Time-domain filters that should run last after FFT.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FilterDomain {
     TimeBeforeFFTPrioFirst,
@@ -136,22 +223,22 @@ pub enum FilterDomain {
 
 /// A structure representing the configuration and metadata of a filter.
 ///
-/// This includes:
-/// - The filter's name.
-/// - The domain (time or frequency).
-/// - A list of configurable parameters.
-///
-/// **Fields**:
+/// # Fields
 /// - `name`: A human-readable name for the filter.
+/// - `description`: A detailed description of what the filter does.
+/// - `hyperlink`: Optional DOI or reference link with label.
 /// - `domain`: The working domain, represented as a `FilterDomain`.
 #[derive(Debug, Clone)]
 pub struct FilterConfig {
     pub name: String,
     pub description: String,
-    pub hyperlink: Option<(Option<String>, String)>,
+    pub hyperlink: Option<(Option<String>, String)>, // (optional_label, url)
     pub domain: FilterDomain,
 }
 
+/// A trait to allow cloning of boxed filters.
+/// This is necessary because `Box<dyn Filter>` cannot be cloned directly.
+///
 pub trait CloneBoxedFilter {
     fn clone_box(&self) -> Box<dyn Filter>;
 }
@@ -342,6 +429,19 @@ pub static FILTER_REGISTRY: Lazy<Mutex<FilterRegistry>> = Lazy::new(|| {
 static FILTER_INSTANCE_UUIDS: Lazy<Mutex<HashMap<String, String>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
+/// Draws all filters of a specific domain in the UI panel.
+///
+/// This function:
+/// 1. Renders each filter's header with name, info button, progress indicators, and toggle
+/// 2. Shows filter-specific UI controls when the filter is active
+/// 3. Displays progress bars for long-running filter operations
+/// 4. Handles user interactions including toggling filters and aborting calculations
+///
+/// # Arguments
+/// - `ui`: The egui UI context to draw into
+/// - `thread_communication`: Communication channel for thread coordination
+/// - `domain`: Which domain of filters to render (Time/Frequency)
+/// - `right_panel_width`: The width of the panel for layout calculations
 pub fn draw_filters(
     ui: &mut egui::Ui,
     thread_communication: &mut ThreadCommunication,

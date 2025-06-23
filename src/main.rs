@@ -31,7 +31,6 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 
-mod cancellable_loops;
 mod config;
 mod data_container;
 mod data_thread;

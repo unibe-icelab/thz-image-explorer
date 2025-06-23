@@ -1,6 +1,21 @@
+//! Mathematical tools for terahertz time-domain spectroscopy signal processing.
+//!
 //! This module provides various windowing functions for signal processing, including Blackman, Hanning, Hamming,
-//! Flat Top windows, and an adapted Blackman window implementation. Additionally, it includes a utility for
-//! unwrapping phase ranges in periodic signals.
+//! and Flat Top windows. It features specialized implementations like the adapted Blackman window that selectively
+//! applies windowing to signal edges. Additionally, it includes utilities for spectral analysis, such as
+//! Fast Fourier Transform (FFT) operations and phase unwrapping for periodic signals.
+//!
+//! # Signal Processing Functions
+//!
+//! * **Windowing Functions**: Used to reduce spectral leakage during FFT operations by tapering
+//!   signal edges. Various window types offer different trade-offs between spectral resolution
+//!   and amplitude accuracy.
+//!
+//! * **FFT Operations**: Parallel implementations of forward and inverse FFT operations
+//!   with support for different windowing methods and automatic phase unwrapping.
+//!
+//! * **Phase Unwrapping**: Tools to remove 2π discontinuities in phase data, producing
+//!   continuous phase information across the spectrum.
 
 use crate::config::ConfigContainer;
 use crate::data_container::ScannedImageFilterData;
@@ -223,6 +238,24 @@ pub fn numpy_unwrap(x: &[f32], period: Option<f32>) -> Vec<f32> {
     unwrapped
 }
 
+/// Performs Fast Fourier Transform (FFT) on time-domain data.
+///
+/// This function applies the selected windowing function to the time-domain data before
+/// transforming it to the frequency domain. It processes the data in parallel across
+/// spatial dimensions using Rayon's parallel iterator capabilities.
+///
+/// The function:
+/// 1. Applies the configured window function to the time-domain data
+/// 2. Performs the forward FFT transformation
+/// 3. Calculates amplitude and phase information from the complex spectrum
+/// 4. Unwraps the phase data to remove 2π discontinuities
+///
+/// # Arguments
+/// * `output` - The data container holding time-domain data to transform
+/// * `config` - Configuration settings including window type and parameters
+///
+/// # Returns
+/// A new `ScannedImageFilterData` instance with the FFT results
 pub fn fft(output: &ScannedImageFilterData, config: &ConfigContainer) -> ScannedImageFilterData {
     let mut output = output.clone();
     if let Some(r2c) = &output.r2c {
@@ -248,6 +281,7 @@ pub fn fft(output: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
                         .zip(output_amplitude_columns.axis_iter_mut(Axis(0)))
                         .zip(output_fft_columns.axis_iter_mut(Axis(0)))
                     {
+                        // Apply the selected window function to the time domain data
                         match config.fft_window_type {
                             FftWindowType::AdaptedBlackman => {
                                 apply_adapted_blackman_window(
@@ -292,6 +326,24 @@ pub fn fft(output: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
     output
 }
 
+/// Performs Inverse Fast Fourier Transform (IFFT) on frequency-domain data.
+///
+/// This function transforms frequency-domain data back to the time domain using
+/// parallel processing. It operates on the complex spectral data stored in the FFT
+/// field of the input container.
+///
+/// The function:
+/// 1. Retrieves the complex spectrum for each pixel
+/// 2. Performs the inverse FFT operation
+/// 3. Normalizes the resulting time-domain signal
+/// 4. Updates the time-domain data field in the container
+///
+/// # Arguments
+/// * `output` - The data container holding frequency-domain data to transform
+/// * `_config` - Configuration settings (unused in this function)
+///
+/// # Returns
+/// A new `ScannedImageFilterData` instance with the IFFT results
 pub fn ifft(output: &ScannedImageFilterData, _config: &ConfigContainer) -> ScannedImageFilterData {
     let mut output = output.clone();
     if let Some(c2r) = &output.c2r {

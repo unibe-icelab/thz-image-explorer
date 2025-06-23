@@ -10,13 +10,10 @@ use crate::io::{
     load_meta_data_of_thz_file, open_from_thz, save_to_thz, update_meta_data_of_thz_file,
 };
 use crate::math_tools::{fft, ifft};
-use bevy_egui::egui::ColorImage;
 use dotthz::DotthzMetaData;
-use image::RgbaImage;
 use ndarray::parallel::prelude::*;
 use ndarray::{Array2, Array3, Axis};
 use realfft::RealFftPlanner;
-use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
@@ -25,38 +22,6 @@ pub enum UpdateType {
     Filter(usize),
     Image,
     Plot,
-}
-
-/// Saves an image to a given file location.
-///
-/// The image is saved as PNG in the specified directory.
-/// Currently, the function does not support saving large images.
-///
-/// # Arguments
-/// * `img` - The `ColorImage` object to be saved.
-/// * `file_path` - The directory path where the image will be saved.
-#[allow(dead_code)]
-fn save_image(img: &ColorImage, file_path: &Path) {
-    let height = img.height();
-    let width = img.width();
-    let mut raw: Vec<u8> = vec![];
-    for p in img.pixels.clone().iter() {
-        raw.push(p.r());
-        raw.push(p.g());
-        raw.push(p.b());
-        raw.push(p.a());
-    }
-    let img_to_save = RgbaImage::from_raw(width as u32, height as u32, raw)
-        .expect("container should have the right size for the image dimensions");
-    let mut image_path = file_path.to_path_buf();
-    image_path.push("image.png");
-    match img_to_save.save(image_path) {
-        Ok(_) => {}
-        Err(err) => {
-            log::error!("error in saving image: {err:?}");
-        }
-    }
-    //TODO: implement large image saving
 }
 
 /// Updates the intensity image lock with the filtered image from the scan.

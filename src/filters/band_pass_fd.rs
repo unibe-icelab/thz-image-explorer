@@ -1,4 +1,9 @@
-use crate::cancellable_loops::par_for_each_cancellable;
+//! Frequency domain bandpass filter implementation that operates on FFT data.
+//!
+//! This filter allows users to isolate specific frequency ranges by applying
+//! an adaptive window function, effectively removing spectral components outside
+//! the specified band while maintaining smooth transitions at the cutoffs.
+
 use crate::config::ThreadCommunication;
 use crate::data_container::ScannedImageFilterData;
 use crate::filters::filter::{CopyStaticFieldsTrait, Filter, FilterConfig, FilterDomain};
@@ -6,6 +11,7 @@ use crate::gui::application::GuiSettingsContainer;
 use crate::math_tools::apply_adapted_blackman_window;
 use bevy_egui::egui::{self, Ui};
 use bevy_egui::egui::{DragValue, Stroke, Vec2};
+use cancellable_loops::par_for_each_cancellable;
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use filter_macros::{register_filter, CopyStaticFields};
@@ -14,19 +20,30 @@ use num_traits::Float;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, RwLock};
 
+/// Frequency domain bandpass filter that operates on FFT data.
+///
+/// This filter allows selecting a specific frequency band in the spectrum,
+/// zeroing out components outside this band and smoothing the edges
+/// with a Blackman window to reduce spectral artifacts.
 #[register_filter]
 #[derive(Clone, Debug, CopyStaticFields)]
 pub struct FrequencyDomainBandPass {
-    pub low: f64,  // Low cutoff frequency
-    pub high: f64, // High cutoff frequency
+    /// Lower bound of the frequency window (low cutoff in frequency units)
+    pub low: f64,
+    /// Upper bound of the frequency window (high cutoff in frequency units)
+    pub high: f64,
+    /// Width parameter for the adaptive Blackman window applied at the edges
     pub window_width: f64,
+    /// Frequency axis data for visualization in the UI
     #[static_field]
     freq_axis: Vec<f32>,
+    /// Signal spectrum values for the currently selected pixel (after filtering)
     #[static_field]
     signal_axis: Vec<f32>,
 }
 
 impl Filter for FrequencyDomainBandPass {
+    /// Creates a new instance of the frequency domain bandpass filter with default values
     fn new() -> Self
     where
         Self: Sized,
@@ -40,10 +57,16 @@ impl Filter for FrequencyDomainBandPass {
         }
     }
 
+    /// No special reset operation needed for this filter
+    ///
+    /// # Arguments
+    /// * `_time` - The time axis array (unused in this implementation)
+    /// * `_shape` - The shape of the data array (unused in this implementation)
     fn reset(&mut self, _time: &Array1<f32>, _shape: &[usize]) {
         // NOOP
     }
 
+    /// Returns the filter's configuration and metadata
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Frequency Band Pass".to_string(),
@@ -53,6 +76,19 @@ impl Filter for FrequencyDomainBandPass {
         }
     }
 
+    /// Applies the frequency domain bandpass filter to the input data
+    ///
+    /// This function:
+    /// 1. Extracts the frequency band defined by the cutoff frequencies
+    /// 2. Applies a Blackman window to smooth transitions at band edges
+    /// 3. Zero-pads the result to maintain the original frequency domain size
+    /// 4. Updates visualization data for the UI
+    ///
+    /// # Arguments
+    /// * `input_data` - The input data to filter
+    /// * `_gui_settings` - Container for GUI settings (unused in this implementation)
+    /// * `progress_lock` - Shared lock for reporting progress
+    /// * `abort_flag` - Flag that can be used to abort processing
     fn filter(
         &mut self,
         input_data: &ScannedImageFilterData,
@@ -68,12 +104,14 @@ impl Filter for FrequencyDomainBandPass {
         // Store the frequency axis for UI visualization
         self.freq_axis = output_data.frequency.to_vec();
 
+        // Ensure cutoff frequencies are within the valid range
         let safe_low = self.low.max(0.0) as f32;
         let safe_high = self
             .high
             .min(output_data.frequency.last().copied().unwrap_or(10.0) as f64)
             as f32;
 
+        // Find indices corresponding to the frequency cutoffs
         let lower = output_data
             .frequency
             .iter()
@@ -86,14 +124,14 @@ impl Filter for FrequencyDomainBandPass {
             .map(|i| i + 1) // rposition is inclusive, so add 1 for slicing
             .unwrap_or(output_data.frequency.len());
 
-        // Slice and convert to owned arrays
+        // Extract the frequency band of interest
         output_data.fft = input_data.fft.slice(s![.., .., lower..upper]).to_owned();
         output_data.amplitudes = input_data
             .amplitudes
             .slice(s![.., .., lower..upper])
             .to_owned();
 
-        // Create and apply window
+        // Create and apply window function to smooth transitions
         let mut freq_window = Array1::<f32>::ones(upper - lower);
         apply_adapted_blackman_window(
             &mut freq_window.view_mut(),
@@ -102,10 +140,11 @@ impl Filter for FrequencyDomainBandPass {
             &(self.window_width as f32),
         );
 
-        // Wrap arrays in Mutex for thread-safe mutation
+        // Wrap arrays in Mutex for thread-safe parallel processing
         let fft = Mutex::new(&mut output_data.fft);
         let amplitudes = Mutex::new(&mut output_data.amplitudes);
 
+        // Apply window to all pixels in parallel with cancellation support
         par_for_each_cancellable(0..h, abort_flag, |i| {
             for j in 0..w {
                 let mut fft_guard = fft.lock().unwrap();
@@ -114,6 +153,7 @@ impl Filter for FrequencyDomainBandPass {
                 let mut amp_guard = amplitudes.lock().unwrap();
                 let mut amplitudes_slice = amp_guard.slice_mut(s![i, j, ..]);
 
+                // Apply window to both complex and amplitude data
                 for k in 0..freq_window.len() {
                     spectrum[k] = spectrum[k] * freq_window[k];
                     amplitudes_slice[k] = amplitudes_slice[k] * freq_window[k];
@@ -121,7 +161,7 @@ impl Filter for FrequencyDomainBandPass {
             }
         });
 
-        // Visualization for selected pixel
+        // Extract spectrum for the selected pixel (for visualization)
         let pixel = output_data.pixel_selected;
         if pixel[0] < h && pixel[1] < w {
             let spectrum = output_data.fft.slice(s![pixel[0], pixel[1], ..]);
@@ -136,6 +176,7 @@ impl Filter for FrequencyDomainBandPass {
         let mut padded_fft = ndarray::Array3::zeros((h, w, original_freq_len));
         let mut padded_amplitudes = ndarray::Array3::zeros((h, w, original_freq_len));
 
+        // Copy the filtered data to the appropriate position in the padded arrays
         for i in 0..h {
             for j in 0..w {
                 let n_data = output_data.fft.shape()[2];
@@ -152,6 +193,7 @@ impl Filter for FrequencyDomainBandPass {
         output_data.fft = padded_fft;
         output_data.amplitudes = padded_amplitudes;
 
+        // Clear progress indicator when complete
         if let Ok(mut p) = progress_lock.write() {
             *p = None;
         }
@@ -159,6 +201,18 @@ impl Filter for FrequencyDomainBandPass {
         output_data
     }
 
+    /// Renders the filter's UI controls and visualization
+    ///
+    /// The UI includes:
+    /// - A plot showing the frequency spectrum and filter window
+    /// - A double-slider for adjusting the frequency band cutoffs
+    /// - Numeric input fields for precise cutoff values
+    /// - Interactive controls for keyboard and mouse navigation
+    ///
+    /// # Arguments
+    /// * `ui` - The egui UI context to render into
+    /// * `_thread_communication` - Communication channel with processing threads (unused here)
+    /// * `panel_width` - Width of the panel in pixels, used for layout calculations
     fn ui(
         &mut self,
         ui: &mut Ui,
@@ -167,6 +221,7 @@ impl Filter for FrequencyDomainBandPass {
     ) -> egui::Response {
         let mut final_response = ui.allocate_response(Vec2::ZERO, egui::Sense::hover());
 
+        // Constants for UI interaction sensitivity
         let zoom_factor = 0.5;
         let scroll_factor = 0.005;
 
@@ -179,10 +234,10 @@ impl Filter for FrequencyDomainBandPass {
             }
         }
 
-        // Calculate max for scaling
+        // Calculate max amplitude for scaling
         let max = spectrum_vals.iter().fold(0.0, |acc, &[_, y]| acc.max(y));
 
-        // Create filter visualization
+        // Create filter band visualization (rectangular shape)
         let mut filter_vals: Vec<[f64; 2]> = Vec::new();
         for freq in self.freq_axis.iter() {
             let amplitude = if *freq as f64 >= self.low && *freq as f64 <= self.high {
@@ -193,7 +248,7 @@ impl Filter for FrequencyDomainBandPass {
             filter_vals.push([*freq as f64, amplitude]);
         }
 
-        // Generate the frequency window for visualization
+        // Generate the frequency window for visualization (Blackman shape)
         let mut freq_window = ndarray::Array1::<f32>::zeros(self.freq_axis.len());
         let safe_low = self.low.max(0.0) as f32;
         let safe_high =
@@ -207,8 +262,7 @@ impl Filter for FrequencyDomainBandPass {
             &(safe_high + self.window_width as f32),
         );
 
-        // Scale the window to the max amplitude
-        let max = spectrum_vals.iter().fold(0.0, |acc, &[_, y]| acc.max(y));
+        // Scale the window to match the max amplitude for visualization
         let window_line: Vec<[f64; 2]> = self
             .freq_axis
             .iter()
@@ -216,7 +270,7 @@ impl Filter for FrequencyDomainBandPass {
             .map(|(&f, &w)| [f as f64, w as f64 * max])
             .collect();
 
-        // Frequency domain plot
+        // Create and configure the frequency domain plot
         let freq_plot = Plot::new("Frequency Domain")
             .allow_drag(false)
             .allow_zoom(false)
@@ -227,6 +281,7 @@ impl Filter for FrequencyDomainBandPass {
             .height(100.0)
             .width(panel_width * 0.9);
 
+        // Render the plot with spectrum, filter shape and cutoff lines
         let ui_response = ui.vertical_centered(|ui| {
             freq_plot.show(ui, |plot_ui| {
                 // Plot the spectrum
@@ -237,7 +292,7 @@ impl Filter for FrequencyDomainBandPass {
                         .name("Spectrum"),
                 );
 
-                // Plot the filter shape
+                // Plot the rectangular filter shape
                 plot_ui.line(
                     Line::new(PlotPoints::from(filter_vals))
                         .color(egui::Color32::BLUE)
@@ -257,6 +312,7 @@ impl Filter for FrequencyDomainBandPass {
                         .name("High Cutoff"),
                 );
 
+                // Plot the actual window function shape
                 plot_ui.line(
                     Line::new(PlotPoints::from(window_line))
                         .style(LineStyle::Solid)
@@ -266,21 +322,24 @@ impl Filter for FrequencyDomainBandPass {
             })
         });
 
+        // Add tooltip with usage instructions
         ui_response.response.on_hover_text(
             "Frequency domain bandpass filter. Adjust the sliders to set cutoff frequencies.",
         );
         let plot_response = ui_response.inner;
 
-        // Frequency sliders
+        // Add the double slider for adjusting frequency cutoffs
         let slider_changed = ui.horizontal(|ui| {
             let right_offset = 0.09 * panel_width;
             let left_offset = 0.01 * panel_width;
             ui.add_space(left_offset);
 
+            // Get current slider values and range limits
             let mut freq_lower_bound = self.low;
             let mut freq_upper_bound = self.high;
             let max_freq = *self.freq_axis.last().unwrap_or(&10.0) as f64;
 
+            // Add the double slider with proper configuration
             let slider = ui
                 .add(
                     DoubleSlider::new(&mut freq_lower_bound, &mut freq_upper_bound, 0.0..=max_freq)
@@ -295,17 +354,20 @@ impl Filter for FrequencyDomainBandPass {
                 );
 
             let slider_changed = slider.changed();
+
+            // Reset to default values on double-click
             if slider.double_clicked() {
                 freq_lower_bound = 0.5;
                 freq_upper_bound = max_freq * 0.5;
             }
 
+            // Update filter parameters with slider values
             self.low = freq_lower_bound;
             self.high = freq_upper_bound;
             slider_changed
         });
 
-        // Numeric input for precise values
+        // Add numeric input fields for precise cutoff control
         ui.horizontal(|ui| {
             ui.label("Low cutoff:");
             let val1_changed = ui
@@ -327,6 +389,7 @@ impl Filter for FrequencyDomainBandPass {
                 )
                 .changed();
 
+            // Ensure cutoffs don't overlap
             if slider_changed.inner || val1_changed || val2_changed {
                 if self.low == self.high {
                     self.low = self.low.max(0.1);
@@ -336,9 +399,9 @@ impl Filter for FrequencyDomainBandPass {
             }
         });
 
-        // Mouse wheel controls
+        // Implement keyboard and scroll navigation for the frequency band
         if plot_response.response.hovered() {
-            // Keyboard controls
+            // Arrow key navigation
             let max_freq = *self.freq_axis.last().unwrap_or(&10.0) as f64;
             if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && self.high < max_freq {
                 self.low += 0.1;
@@ -352,10 +415,12 @@ impl Filter for FrequencyDomainBandPass {
                 final_response.mark_changed();
             }
 
+            // Mouse scroll for panning
             let scroll_delta = ui.ctx().input(|i| i.smooth_scroll_delta);
             self.high += scroll_delta.x as f64 * scroll_factor as f64;
             self.low += scroll_delta.x as f64 * scroll_factor as f64;
 
+            // Mouse zoom for adjusting band width
             let zoom_delta = ui.ctx().input(|i| i.zoom_delta() - 1.0);
             self.high += zoom_delta as f64 * zoom_factor as f64 * 0.1;
             self.low -= zoom_delta as f64 * zoom_factor as f64 * 0.1;
@@ -365,11 +430,11 @@ impl Filter for FrequencyDomainBandPass {
             }
         }
 
-        // Combine responses
+        // Combine responses for UI interactions
         final_response |= plot_response.response.clone();
         final_response |= slider_changed.response.clone();
 
-        // Mark changed if interaction happened
+        // Mark the response as changed if any interaction occurred
         if plot_response.response.changed() || slider_changed.inner {
             final_response.mark_changed();
         }

@@ -61,13 +61,32 @@ pub fn settings_window(
                         explorer.file_dialog_state = FileDialogState::OpenPSF;
                         explorer.file_dialog.pick_file();
                     }
-                    if ui
-                        .selectable_label(false, format!("{}", egui_phosphor::regular::INFO))
-                        .clicked()
-                    {
-                        // TODO: add description of PSF format
-                        // @Arnaud
+                    // Create a unique ID for this filter's info popup
+                    let popup_id = ui.make_persistent_id(format!("PSF info_popup"));
+
+                    // Show info icon and handle clicks
+                    let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
+                    if info_button.clicked() {
+                        ui.memory_mut(|mem| mem.toggle_popup(popup_id));
                     }
+
+                    egui::popup_below_widget(
+                        ui,
+                        popup_id,
+                        &info_button,
+                        egui::popup::PopupCloseBehavior::CloseOnClickOutside, // Add the missing parameter
+                        |ui: &mut egui::Ui| {
+                            // Set max width for the popup
+                            ui.set_max_width(100.0);
+
+                            // Add description text
+
+                            // TODO: add description of PSF format
+                            // @Arnaud
+
+                            ui.label("... info about psf ...");
+                        },
+                    );
 
                     // TODO: maybe change this check here...
                     if thread_communication.gui_settings.psf.popt_x.is_empty() {
@@ -87,17 +106,7 @@ pub fn settings_window(
                     ui.end_row();
                 });
 
-            let signal_plot = Plot::new("signal")
-                // .height(height)
-                // .width(width)
-                // .y_axis_formatter(s_fmt)
-                // .x_axis_formatter(t_fmt)
-                // .label_formatter(label_fmt)
-                // .coordinates_formatter(Corner::LeftTop, position_fmt)
-                // .include_x(&self.tera_flash_conf.t_begin + &self.tera_flash_conf.range)
-                // .include_x(self.tera_flash_conf.t_begin)
-                // .min_size(vec2(50.0, 100.0))
-              ;
+            let signal_plot = Plot::new("signal");
 
             // Assuming `beam_x` is of type `Array2<f64>`
             let beam_x_array = thread_communication.gui_settings.clone().psf.popt_x;

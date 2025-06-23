@@ -4,6 +4,7 @@
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/filter_macros/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/cancellable_loops/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/filter_macros/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
