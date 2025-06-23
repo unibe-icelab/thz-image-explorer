@@ -36,6 +36,9 @@ downcast_rs::impl_downcast!(CopyStaticFieldsTrait);
 ///
 /// Different applications can be found in the `src/filters` directory.
 ///
+/// To implement a new filter, you must create a struct that implements the `Filter` trait. The struct needs to derive `Clone`, `Debug`, and `CopyStaticFields` traits and be registered using the `register_filter` macro. The file also need sto be added in the `src/filters/mod.rs` file to be included in the filter registry.
+/// For simple filters, this will automatically integrate the filter in the data processing pipeline and the GUI. For more complex filters, further adaptations in other files might be necessary (e.g. the deconvolution filter required the loading of the PSF in the settings window).
+///
 /// **Example**:
 /// ```rust
 /// use crate::filters::filter::{Filter, ScannedImageFilterData, GuiSettingsContainer};
@@ -104,7 +107,7 @@ pub trait Filter: Send + Sync + Debug + CloneBoxedFilter + CopyStaticFieldsTrait
     /// # Returns
     /// A new `ScannedImageFilterData` containing the filtered data.
     ///
-    /// To use progress_lock and abort_flag, the filter must be long-running and cancellable loops must be used.
+    /// To use progress_lock and abort_flag, the filter must be long-running and cancellable loops must be used. (For details, see the `cancellable_loops` crate in this project).
     /// For example:
     /// ```rust
     ///     use cancellable_loops::{par_for_each_cancellable_reduce};
