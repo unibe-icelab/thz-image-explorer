@@ -114,7 +114,7 @@ pub(crate) fn instance_from_data(
     let cube_width = 1.0 / 4.0;
     let cube_height = 1.0 / 4.0;
     let c = 300_000_000.0;
-    let cube_depth = cube_width / (time_span * c / 1.0e9 * 2.0);
+    let cube_depth = cube_width / (time_span * c / 1.0e9 * 1.0);
 
     // Precompute kernel once
     let kernel = gaussian_kernel1d(3.0, 9);
