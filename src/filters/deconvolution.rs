@@ -465,8 +465,8 @@ impl Filter for Deconvolution {
                     2.5,
                 );
 
-                let dx = output_data.dx.unwrap() as f32;
-                let dy = output_data.dy.unwrap() as f32;
+                let dx = input_data.dx.unwrap() as f32;
+                let dy = input_data.dy.unwrap() as f32;
 
                 let range_max_x = (range_max_x / dx).floor() * dx + dx;
                 let range_max_y = (range_max_y / dy).floor() * dy + dy;
@@ -495,7 +495,7 @@ impl Filter for Deconvolution {
 
                 // Filter scan data in-place
                 let mut filtered_data =
-                    self.filter_scan(&output_data, &gui_settings.psf.filters.row(i).to_owned());
+                    self.filter_scan(&input_data, &gui_settings.psf.filters.row(i).to_owned());
 
                 // Compute filtered image
                 let filtered_image = filtered_data.mapv(|x| x * x).sum_axis(Axis(2));
