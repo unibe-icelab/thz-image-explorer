@@ -181,6 +181,16 @@ pub fn pulse_tab(
 
         ui.add_space(spacing);
 
+        // First, get the current value of min_fft_signals
+        let fft_signals = [&explorer.data.signal_1_fft];
+        let mut min_fft_signals = fft_signals
+            .iter()
+            .flat_map(|v| v.iter().copied())
+            .map(|x| x)
+            .fold(f32::MAX, |a, b| a.min(b));
+
+        let floor_value = min_fft_signals / 5.0;
+
         let signal_1_fft: Vec<[f64; 2]> = explorer
             .data
             .frequencies
@@ -188,14 +198,14 @@ pub fn pulse_tab(
             .zip(explorer.data.signal_1_fft.iter())
             .map(|(x, y)| {
                 let fft = if thread_communication.gui_settings.log_plot {
-                    20.0 * (*y + 1e-10).log(10.0)
+                    if *y < floor_value {
+                        20.0 * (floor_value).log10()
+                    } else {
+                        20.0 * (*y).log10()
+                    }
                 } else {
                     *y
                 };
-                // TODO: is this needed?
-                // if fft < 0.0 {
-                //     fft = 0.0;
-                // }
                 [*x as f64, fft as f64]
             })
             .collect();
@@ -206,14 +216,14 @@ pub fn pulse_tab(
             .zip(explorer.data.filtered_signal_1_fft.iter())
             .map(|(x, y)| {
                 let fft = if thread_communication.gui_settings.log_plot {
-                    20.0 * (*y + 1e-10).log(10.0)
+                    if *y < floor_value {
+                        20.0 * (floor_value).log10()
+                    } else {
+                        20.0 * (*y).log10()
+                    }
                 } else {
                     *y
                 };
-                // TODO: is this needed?
-                // if fft < 0.0 {
-                //     fft = 0.0;
-                // }
                 [*x as f64, fft as f64]
             })
             .collect();
@@ -224,14 +234,14 @@ pub fn pulse_tab(
             .zip(explorer.data.avg_signal_1_fft.iter())
             .map(|(x, y)| {
                 let fft = if thread_communication.gui_settings.log_plot {
-                    20.0 * (*y + 1e-10).log(10.0)
+                    if *y < floor_value {
+                        20.0 * (floor_value).log10()
+                    } else {
+                        20.0 * (*y).log10()
+                    }
                 } else {
                     *y
                 };
-                // TODO: is this needed?
-                // if fft < 0.0 {
-                //     fft = 0.0;
-                // }
                 [*x as f64, fft as f64]
             })
             .collect();

@@ -593,6 +593,13 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                     .index_axis(Axis(0), selected_pixel.x)
                                     .index_axis(Axis(0), selected_pixel.y)
                                     .to_vec();
+                            }
+
+                            // raw trace
+                            // frequency domain
+                            if let Some(raw) =
+                                filter_data.iter().nth(thread_communication.fft_index + 1)
+                            {
                                 // frequency domain
                                 data.frequencies = raw.frequency.to_vec();
                                 data.signal_1_fft = raw
@@ -694,12 +701,32 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             // raw trace
                             // time domain
                             if let Some(raw) = filter_data.first() {
+
+                                if raw.data.dim().0 <= selected_pixel.x
+                                    || raw.data.dim().1 <= selected_pixel.y
+                                {
+                                    log::warn!(
+                                        "selected pixel ({}, {}) is out of bounds for raw data with shape {:?}",
+                                        selected_pixel.x,
+                                        selected_pixel.y,
+                                        raw.data.shape()
+                                        );
+                                    continue;
+                                }
+
                                 data.time = raw.time.to_vec();
                                 data.signal_1 = raw
                                     .data
                                     .index_axis(Axis(0), selected_pixel.x)
                                     .index_axis(Axis(0), selected_pixel.y)
                                     .to_vec();
+                            }
+
+                            // raw trace
+                            // frequency domain
+                            if let Some(raw) =
+                                filter_data.iter().nth(thread_communication.fft_index + 1)
+                            {
                                 // frequency domain
                                 data.frequencies = raw.frequency.to_vec();
                                 data.signal_1_fft = raw
