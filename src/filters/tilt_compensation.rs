@@ -36,6 +36,9 @@ impl Filter for TiltCompensation {
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Tilt Compensation".to_string(),
+            description: "Compensate any misalignment of the sample along x and y axis."
+                .to_string(),
+            hyperlink: None,
             domain: FilterDomain::TimeBeforeFFTPrioFirst,
         }
     }

@@ -147,6 +147,8 @@ pub enum FilterDomain {
 #[derive(Debug, Clone)]
 pub struct FilterConfig {
     pub name: String,
+    pub description: String,
+    pub hyperlink: Option<(Option<String>, String)>,
     pub domain: FilterDomain,
 }
 
@@ -416,8 +418,45 @@ pub fn draw_filters(
             ui.vertical(|ui| {
                 ui.separator();
                 ui.horizontal(|ui| {
-                    ui.heading(filter.config().clone().name);
+                    ui.horizontal(|ui| {
+                        ui.heading(filter.config().clone().name);
+                        ui.add_space(5.0); // Add a small gap between heading and icon
 
+                        // Create a unique ID for this filter's info popup
+                        let popup_id = ui.make_persistent_id(format!("info_popup_{}", uuid));
+
+                        // Show info icon and handle clicks
+                        let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
+                        if info_button.clicked() {
+                            ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                        }
+
+                        egui::popup_below_widget(
+                            ui,
+                            popup_id,
+                            &info_button,
+                            egui::popup::PopupCloseBehavior::CloseOnClickOutside, // Add the missing parameter
+                            |ui: &mut egui::Ui| {
+                                // Set max width for the popup
+                                ui.set_max_width(right_panel_width * 0.8);
+
+                                // Add description text
+                                ui.label(filter.config().clone().description);
+                                ui.add_space(5.0);
+
+                                // Add DOI hyperlink if present in the filter config
+                                if let Some((hyperlink_label, hyperlink)) =
+                                    filter.config().clone().hyperlink
+                                {
+                                    let hyperlink_label =
+                                        hyperlink_label.unwrap_or(hyperlink.clone());
+                                    ui.horizontal(|ui| {
+                                        ui.hyperlink_to(hyperlink_label, hyperlink);
+                                    });
+                                }
+                            },
+                        );
+                    });
                     // Progress bar, abort button, and toggle are always enabled
                     if let Some(progress) =
                         thread_communication.gui_settings.progress_bars.get(uuid)

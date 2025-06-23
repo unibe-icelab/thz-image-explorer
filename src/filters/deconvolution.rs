@@ -369,6 +369,8 @@ impl Filter for Deconvolution {
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Deconvolution".to_string(),
+            description: "Frequency-dependent deconvolution for enhanced THz-TDS scans, accounting for beam width variations in time traces.\n\nCitation: A. Demion, L. L. Stöckli, N. Thomas and S. Zahno, \"Frequency-Dependent Deconvolution for Enhanced THz-TDS Scans: Accounting for Beam Width Variations in Time Traces,\" in IEEE Transactions on Terahertz Science and Technology, vol. 15, no. 3, pp. 505-513, May 2025".to_string(),
+            hyperlink: Some((Some("TTHZ.2025.3546756".to_string()),"https://doi.org/10.1109/TTHZ.2025.3546756".to_string())),
             domain: FilterDomain::TimeAfterFFTPrioLast,
         }
     }

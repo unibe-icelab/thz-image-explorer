@@ -47,6 +47,8 @@ impl Filter for FrequencyDomainBandPass {
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Frequency Band Pass".to_string(),
+            description: "Band Pass Filter in Frequency Domain.".to_string(),
+            hyperlink: None,
             domain: FilterDomain::Frequency,
         }
     }

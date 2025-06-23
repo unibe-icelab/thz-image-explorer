@@ -11,6 +11,7 @@
 
 use crate::data_container::ScannedImageFilterData;
 use crate::filters::psf::PSF;
+use bevy_voxel_plot::InstanceData;
 use csv::ReaderBuilder;
 use dotthz::{DotthzFile, DotthzMetaData};
 use glob::glob;
@@ -21,16 +22,14 @@ use std::error::Error;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use bevy_voxel_plot::InstanceData;
+use vtkio::model::{Attributes, ByteOrder, Cells, Piece};
+use vtkio::xml::AttributeData;
 use vtkio::{
     model::{
-        Attribute, CellType, DataArray, DataSet, UnstructuredGridPiece, Version,
-        VertexNumbers, Vtk,
+        Attribute, CellType, DataArray, DataSet, UnstructuredGridPiece, Version, VertexNumbers, Vtk,
     },
     IOBuffer,
 };
-use vtkio::model::{Attributes, ByteOrder, Cells, Piece};
-use vtkio::xml::AttributeData;
 
 use std::iter;
 
@@ -39,7 +38,7 @@ pub fn export_to_vtk(
     cube_width: f32,
     cube_height: f32,
     cube_depth: f32,
-    filename: &str
+    filename: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Create points for each voxel center
     let mut points_vec = Vec::new();

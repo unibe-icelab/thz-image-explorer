@@ -1,4 +1,5 @@
 use crate::config::ThreadCommunication;
+use crate::io::export_to_vtk;
 use bevy::render::camera::{ImageRenderTarget, RenderTarget};
 use bevy::render::view::RenderLayers;
 use bevy::window::PrimaryWindow;
@@ -10,7 +11,6 @@ use bevy_voxel_plot::{InstanceData, InstanceMaterialData};
 use ndarray::{Array1, Array3, ArrayView1, Axis};
 use rayon::prelude::*;
 use std::f32::consts::TAU;
-use crate::io::export_to_vtk;
 
 #[derive(Resource)]
 pub struct OpacityThreshold(pub f32);

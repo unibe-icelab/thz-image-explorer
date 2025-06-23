@@ -52,6 +52,8 @@ impl Filter for TimeDomainBandPassAfterFFT {
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Time Band Pass".to_string(),
+            description: "Band-Pass Filter in Time Domain after the iFFT.".to_string(),
+            hyperlink: None,
             domain: FilterDomain::TimeAfterFFT,
         }
     }
