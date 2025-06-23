@@ -42,7 +42,12 @@ It can be compiled and run on all platforms.
 
 ## PSF file generation:
 
-Use `python generate_psf.py --path_x your/double/knife_edge/measurements/x.thz --path_y your/double/knife_edge/measurements/y.thz` to generate a `psf.npz` file that can be loaded in the settings of THz-image-explorer to remove the PSF blur.
+Use 
+
+```shell
+python generate_psf.py --path_x your/double/knife_edge/measurements/x.thz --path_y your/double/knife_edge/measurements/y.thz
+```
+to generate a `psf.npz` file that can be loaded in the settings of THz-image-explorer to remove the PSF blur.
 
 Tested on:
 
