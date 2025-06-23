@@ -21,6 +21,101 @@ use std::error::Error;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use bevy_voxel_plot::InstanceData;
+use vtkio::{
+    model::{
+        Attribute, CellType, DataArray, DataSet, UnstructuredGridPiece, Version,
+        VertexNumbers, Vtk,
+    },
+    IOBuffer,
+};
+use vtkio::model::{Attributes, ByteOrder, Cells, Piece};
+use vtkio::xml::AttributeData;
+
+use std::iter;
+
+pub fn export_to_vtk(
+    instances: &[InstanceData],
+    cube_width: f32,
+    cube_height: f32,
+    cube_depth: f32,
+    filename: &str
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Create points for each voxel center
+    let mut points_vec = Vec::new();
+    let mut colors_vec = Vec::new();
+    let mut opacities_vec = Vec::new();
+
+    for instance in instances {
+        let pos = instance.pos_scale;
+        points_vec.push(pos[0] as f64);
+        points_vec.push(pos[1] as f64);
+        points_vec.push(pos[2] as f64);
+
+        colors_vec.push(instance.color[0] as f64);
+        colors_vec.push(instance.color[1] as f64);
+        colors_vec.push(instance.color[2] as f64);
+
+        opacities_vec.push(instance.color[3] as f64);
+    }
+
+    // Create points IOBuffer
+    let points_buffer = IOBuffer::from(points_vec);
+
+    // Create cell data
+    let connectivity_vec = (0..instances.len() as u64).collect::<Vec<_>>();
+    let offsets_vec = (1..=instances.len() as u64).collect::<Vec<_>>();
+    let types_vec = vec![CellType::Vertex; instances.len()];
+
+    // Create vertex numbers using the XML variant
+    let vertex_numbers = VertexNumbers::XML {
+        connectivity: connectivity_vec,
+        offsets: offsets_vec,
+    };
+
+    // Create the cells structure
+    let cells = Cells {
+        cell_verts: vertex_numbers,
+        types: types_vec,
+    };
+
+    // Create RGB and opacity attributes
+    let colors_buffer = IOBuffer::from(colors_vec);
+    let colors_array = DataArray::vectors("RGB").with_data(colors_buffer);
+
+    let opacities_buffer = IOBuffer::from(opacities_vec);
+    let opacity_array = DataArray::scalars("Opacity", 1).with_data(opacities_buffer);
+
+    // Create piece data with attributes
+    let mut piece_data = Attributes::new();
+    piece_data.point.push(Attribute::DataArray(colors_array));
+    piece_data.point.push(Attribute::DataArray(opacity_array));
+
+    // Create unstructured grid piece
+    let piece = UnstructuredGridPiece {
+        points: points_buffer,
+        cells,
+        data: piece_data,
+    };
+
+    // Create VTK file
+    let vtk = Vtk {
+        version: Version::default(),
+        title: "Voxel Plot".to_string(),
+        byte_order: ByteOrder::BigEndian,
+        data: DataSet::UnstructuredGrid {
+            meta: Default::default(),
+            pieces: vec![Piece::Inline(Box::new(piece))],
+        },
+        file_path: None,
+    };
+
+    // Write to file
+    let mut file = std::fs::File::create(filename)?;
+    vtk.write_xml(&mut file)?;
+
+    Ok(())
+}
 
 /// Loads a Point Spread Function (PSF) from a `.npz` file.
 ///

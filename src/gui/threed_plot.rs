@@ -10,6 +10,7 @@ use bevy_voxel_plot::{InstanceData, InstanceMaterialData};
 use ndarray::{Array1, Array3, ArrayView1, Axis};
 use rayon::prelude::*;
 use std::f32::consts::TAU;
+use crate::io::export_to_vtk;
 
 #[derive(Resource)]
 pub struct OpacityThreshold(pub f32);
@@ -358,6 +359,20 @@ pub fn three_dimensional_plot_ui(
                         .retain(|instance| instance.color[3] >= opacity_threshold.0);
                 } else {
                     println!("No existing entity found to update.");
+                }
+            }
+
+            if ui.button("Export to VTU").clicked() {
+                if let Err(err) = export_to_vtk(
+                    &instances,
+                    cube_width,
+                    cube_height,
+                    cube_depth,
+                    "voxel_plot.vtu",
+                ) {
+                    eprintln!("Failed to export VTU: {}", err);
+                } else {
+                    println!("Successfully exported to voxel_plot.vtk");
                 }
             }
 
