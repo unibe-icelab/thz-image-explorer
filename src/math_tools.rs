@@ -256,8 +256,8 @@ pub fn numpy_unwrap(x: &[f32], period: Option<f32>) -> Vec<f32> {
 ///
 /// # Returns
 /// A new `ScannedImageFilterData` instance with the FFT results
-pub fn fft(output: &ScannedImageFilterData, config: &ConfigContainer) -> ScannedImageFilterData {
-    let mut output = output.clone();
+pub fn fft(input: &ScannedImageFilterData, config: &ConfigContainer) -> ScannedImageFilterData {
+    let mut output = input.clone();
     if let Some(r2c) = &output.r2c {
         (
             output.data.axis_iter_mut(Axis(0)),
@@ -340,12 +340,61 @@ pub fn fft(output: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
 ///
 /// # Arguments
 /// * `output` - The data container holding frequency-domain data to transform
-/// * `_config` - Configuration settings (unused in this function)
+/// * `config` - Configuration settings (unused in this function)
 ///
 /// # Returns
 /// A new `ScannedImageFilterData` instance with the IFFT results
-pub fn ifft(output: &ScannedImageFilterData, _config: &ConfigContainer) -> ScannedImageFilterData {
-    let mut output = output.clone();
+pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> ScannedImageFilterData {
+    let mut output = input.clone();
+
+    output.avg_fft = output
+        .fft
+        .mean_axis(Axis(0))
+        .expect("Axis 2 mean failed")
+        .mean_axis(Axis(0))
+        .expect("Axis 1 mean failed");
+
+    output.avg_signal_fft = output
+        .amplitudes
+        .mean_axis(Axis(0))
+        .expect("Axis 2 mean failed")
+        .mean_axis(Axis(0))
+        .expect("Axis 1 mean failed");
+
+    output.avg_phase_fft = output
+        .phases
+        .mean_axis(Axis(0))
+        .expect("Axis 2 mean failed")
+        .mean_axis(Axis(0))
+        .expect("Axis 1 mean failed");
+
+    if config.avg_in_fourier_space {
+        println!("[FFT] Performing IFFT on average amplitude and phase data");
+        // Reconstruct complex spectrum from average amplitude and phase
+        if let Some(c2r) = &output.c2r {
+            // Create a complex spectrum from the averaged amplitude and phase
+            let mut spectrum = vec![Complex32::new(0.0, 0.0); output.frequency.len()];
+
+            for (i, (&amp, &phase)) in output.avg_signal_fft.iter()
+                .zip(output.avg_phase_fft.iter())
+                .enumerate() {
+                // Convert from polar form (amplitude, phase) to complex
+                spectrum[i] = Complex32::from_polar(amp, phase);
+            }
+
+            let mut real_output = vec![0.0; output.time.len()];
+
+            // Perform inverse FFT on the reconstructed spectrum
+            c2r.process(&mut spectrum, &mut real_output).unwrap();
+
+            // Normalize the result
+            let length = real_output.len();
+            let normalized: Vec<f32> = real_output.iter().map(|&v| v / length as f32).collect();
+
+            // Store the result in output.avg_data
+            output.avg_data = Array1::from_vec(normalized);
+        }
+    }
     if let Some(c2r) = &output.c2r {
         (
             output.fft.axis_iter(Axis(0)),

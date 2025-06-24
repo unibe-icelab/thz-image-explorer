@@ -65,6 +65,17 @@ pub fn right_panel(
                         }
 
                         ui.end_row();
+                        ui.label("Average in frequency domain: ");
+                        if ui
+                            .add(toggle(&mut thread_communication.gui_settings.avg_in_fourier_space))
+                            .changed()
+                        {
+                            send_latest_config(thread_communication, ConfigCommand::SetAvgInFourierSpace(
+                                thread_communication.gui_settings.avg_in_fourier_space,
+                            ));
+                        }
+
+                        ui.end_row();
                         ui.label("Down scaling:");
 
                         ui.style_mut().spacing.slider_width = 320.0;

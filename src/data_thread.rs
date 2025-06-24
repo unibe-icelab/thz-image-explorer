@@ -265,6 +265,10 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     config.normalize_fft = normalization;
                     update = UpdateType::Plot;
                 }
+                ConfigCommand::SetAvgInFourierSpace(avg_in_fourier_space) => {
+                    config.avg_in_fourier_space = avg_in_fourier_space;
+                    update = UpdateType::Filter(thread_communication.fft_index);
+                }
                 ConfigCommand::SetFFTResolution(df) => {
                     config.fft_df = df;
                     update = UpdateType::Plot;
@@ -637,27 +641,19 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                     .to_vec();
 
                                 // averaged
-                                data.avg_signal_1 = filtered
-                                    .data
-                                    .mean_axis(Axis(0))
-                                    .expect("Axis 2 mean failed")
-                                    .mean_axis(Axis(0))
-                                    .expect("Axis 1 mean failed")
-                                    .to_vec();
-                                data.avg_signal_1_fft = filtered
-                                    .amplitudes
-                                    .mean_axis(Axis(0))
-                                    .expect("Axis 2 mean failed")
-                                    .mean_axis(Axis(0))
-                                    .expect("Axis 1 mean failed")
-                                    .to_vec();
-                                data.avg_phase_fft = filtered
-                                    .phases
-                                    .mean_axis(Axis(0))
-                                    .expect("Axis 2 mean failed")
-                                    .mean_axis(Axis(0))
-                                    .expect("Axis 1 mean failed")
-                                    .to_vec();
+                                if !config.avg_in_fourier_space {
+                                    data.avg_signal_1 = filtered
+                                        .data
+                                        .mean_axis(Axis(0))
+                                        .expect("Axis 2 mean failed")
+                                        .mean_axis(Axis(0))
+                                        .expect("Axis 1 mean failed")
+                                        .to_vec();
+                                } else {
+                                    data.avg_signal_1 = filtered.avg_data.to_vec();
+                                }
+                                data.avg_signal_1_fft = filtered.avg_signal_fft.to_vec();
+                                data.avg_phase_fft = filtered.avg_phase_fft.to_vec();
                             }
                         }
                     }
@@ -702,7 +698,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             // raw trace
                             // time domain
                             if let Some(raw) = filter_data.first() {
-
                                 if raw.data.dim().0 <= selected_pixel.x
                                     || raw.data.dim().1 <= selected_pixel.y
                                 {
@@ -764,27 +759,19 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                     .to_vec();
 
                                 // averaged
-                                data.avg_signal_1 = filtered
-                                    .data
-                                    .mean_axis(Axis(0))
-                                    .expect("Axis 2 mean failed")
-                                    .mean_axis(Axis(0))
-                                    .expect("Axis 1 mean failed")
-                                    .to_vec();
-                                data.avg_signal_1_fft = filtered
-                                    .amplitudes
-                                    .mean_axis(Axis(0))
-                                    .expect("Axis 2 mean failed")
-                                    .mean_axis(Axis(0))
-                                    .expect("Axis 1 mean failed")
-                                    .to_vec();
-                                data.avg_phase_fft = filtered
-                                    .phases
-                                    .mean_axis(Axis(0))
-                                    .expect("Axis 2 mean failed")
-                                    .mean_axis(Axis(0))
-                                    .expect("Axis 1 mean failed")
-                                    .to_vec();
+                                if !config.avg_in_fourier_space {
+                                    data.avg_signal_1 = filtered
+                                        .data
+                                        .mean_axis(Axis(0))
+                                        .expect("Axis 2 mean failed")
+                                        .mean_axis(Axis(0))
+                                        .expect("Axis 1 mean failed")
+                                        .to_vec();
+                                } else {
+                                    data.avg_signal_1 = filtered.avg_data.to_vec();
+                                }
+                                data.avg_signal_1_fft = filtered.avg_signal_fft.to_vec();
+                                data.avg_phase_fft = filtered.avg_phase_fft.to_vec();
                             }
                         }
                     }

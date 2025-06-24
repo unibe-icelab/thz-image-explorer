@@ -113,8 +113,12 @@ pub struct ScannedImageFilterData {
     pub time: Array1<f32>,
     pub img: Array2<f32>,
     pub data: Array3<f32>,
+    pub avg_data: Array1<f32>,
     pub frequency: Array1<f32>,
     pub fft: Array3<Complex32>,
     pub amplitudes: Array3<f32>,
     pub phases: Array3<f32>,
+    pub avg_fft: Array1<Complex32>,
+    pub avg_signal_fft: Array1<f32>,
+    pub avg_phase_fft: Array1<f32>,
 }

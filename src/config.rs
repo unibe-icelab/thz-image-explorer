@@ -85,6 +85,10 @@ pub enum ConfigCommand {
     /// A `true` value enables normalization, while `false` disables it.
     SetFFTNormalization(bool),
 
+    /// Command to enable or disable averaging in frequency domain.
+    /// A `true` value enables averaging in frequency domain, while `false` enables averaging in time domain.
+    SetAvgInFourierSpace(bool),
+
     /// Command to set the FFT frequency resolution.
     /// The resolution is specified as a `f32` value in Hz.
     SetFFTResolution(f32),
@@ -129,6 +133,9 @@ pub struct ConfigContainer {
     /// Flag indicating whether to normalize the FFT results.
     pub normalize_fft: bool,
 
+    /// Flag indicating whether to average in frequency domain or not.
+    pub avg_in_fourier_space: bool,
+
     /// The frequency resolution (distance between frequency bins) for the FFT.
     pub fft_df: f32,
 }
@@ -143,6 +150,7 @@ impl Default for ConfigContainer {
     /// - `fft_window_type`: `FftWindowType::AdaptedBlackman`
     /// - `fft_log_plot`: `false`
     /// - `normalize_fft`: `false`
+    /// - `avg_in_fourier_space`: `true`
     /// - `fft_df`: `1.0`
     fn default() -> Self {
         ConfigContainer {
@@ -150,6 +158,7 @@ impl Default for ConfigContainer {
             fft_window_type: FftWindowType::AdaptedBlackman,
             fft_log_plot: false,
             normalize_fft: false,
+            avg_in_fourier_space: true,
             fft_df: 1.0,
         }
     }
