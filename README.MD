@@ -50,10 +50,11 @@ It can be compiled and run on all platforms.
 
 ## PSF file generation:
 
-Use
+You need to performa knife-edge scan and create a `.thz` file with all entries. An example can be found in the `sample_directory/example_beam_width/` directories.
+Then, use the following command (replace the paths with your own):
 
 ```shell
-python generate_psf.py --path_x your/double/knife_edge/measurements/x.thz --path_y your/double/knife_edge/measurements/y.thz
+python generate_psf.py --path_x sample_directory/example_beam_width/measurement_1_x_autofocus/data/1750085285.8557956_data.thz --path_y sample_directory/example_beam_width/measurement_1_y_autofocus/data/1750163177.929295_data.thz
 ```
 
 to generate a `psf.npz` file that can be loaded in the settings of THz-image-explorer to remove the PSF blur.

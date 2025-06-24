@@ -288,7 +288,8 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     //     scan.scaling = *scaling as usize;
                     //     scan.rescale()
                     // }
-                    println!("new pixel: {:} {:}", selected_pixel.x, selected_pixel.y);
+
+                    // TODO how do we update the traces in the filter panel??
                     update = UpdateType::Plot;
                 }
                 ConfigCommand::UpdateFilters => {
@@ -787,7 +788,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             }
                         }
                     }
-                    println!("updated plot. This took {:?}", start.elapsed());
+                    // println!("updated plot. This took {:?}", start.elapsed());
                 }
                 UpdateType::None => {
                     // do nothing

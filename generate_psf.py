@@ -143,7 +143,7 @@ data = {
     '[y_0, w_y]': popt_ys  # ndarray: fitted y parameters, shape (n_filters, 2)
 }
 
-np.savez(os.path.join(script_path, "npz/psf.npz"), **data)
+np.savez(os.path.join(script_path, "sample_directory/psf.npz"), **data)
 
 plt.plot(filt_freqs, w_xs, 'C0')
 plt.plot(filt_freqs, w_ys, 'C3')
