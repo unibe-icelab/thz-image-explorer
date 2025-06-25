@@ -19,21 +19,22 @@
 //!
 //! ```
 //! use std::sync::atomic::{AtomicBool, Ordering};
+//! use std::sync::Arc;
 //! use std::thread;
 //! use std::time::Duration;
 //! use cancellable_loops::for_each_cancellable;
 //!
-//! let abort_flag = AtomicBool::new(false);
-//! let abort_handle = &abort_flag;
+//! let abort_flag = Arc::new(AtomicBool::new(false));
+//! let abort_handle = Arc::clone(&abort_flag);
 //!
 //! // In another thread, set the abort flag after some time
 //! let handle = thread::spawn(move || {
 //!     thread::sleep(Duration::from_millis(10));
-//!     abort_flag.store(true, Ordering::Relaxed);
+//!     abort_handle.store(true, Ordering::Relaxed);
 //! });
 //!
 //! // This loop will exit early when the abort flag is set
-//! for_each_cancellable(0..1000, abort_handle, |i| {
+//! for_each_cancellable(0..1000, &abort_flag, |i| {
 //!     println!("Processing {}", i);
 //!     thread::sleep(Duration::from_millis(1));
 //! });
@@ -71,7 +72,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 ///     sum += i;
 ///     
 ///     // Simulate a condition to abort after reaching 15
-///     if sum > 15 {
+///     if sum >= 15 {
 ///         abort_flag.store(true, Ordering::Relaxed);
 ///     }
 /// });
@@ -111,7 +112,8 @@ where
 /// use std::sync::{Arc, Mutex};
 /// use cancellable_loops::par_for_each_cancellable;
 ///
-/// let abort_flag = AtomicBool::new(false);
+/// let abort_flag = Arc::new(AtomicBool::new(false));
+/// let abort_flag_clone = Arc::clone(&abort_flag);
 /// let counter = Arc::new(Mutex::new(0));
 /// let counter_clone = counter.clone();
 ///
@@ -125,7 +127,7 @@ where
 ///     
 ///     // Cancel after processing at least 10 items
 ///     if *count >= 10 {
-///         abort_flag.store(true, Ordering::Relaxed);
+///         abort_flag_clone.store(true, Ordering::Relaxed);
 ///     }
 /// });
 ///
