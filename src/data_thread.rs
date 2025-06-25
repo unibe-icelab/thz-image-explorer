@@ -9,7 +9,7 @@ use crate::gui::matrix_plot::SelectedPixel;
 use crate::io::{
     load_meta_data_of_thz_file, open_from_thz, save_to_thz, update_meta_data_of_thz_file,
 };
-use crate::math_tools::{fft, ifft};
+use crate::math_tools::{average_polygon_roi, fft, ifft};
 use dotthz::DotthzMetaData;
 use ndarray::parallel::prelude::*;
 use ndarray::{Array2, Array3, Axis};
@@ -141,6 +141,17 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         log::error!("failed loading meta-data {:?}: not a dotTHz file", path)
                     }
                     continue;
+                }
+                ConfigCommand::UpdateROIS(rois) => {
+                    update = UpdateType::Filter(1);
+                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                        if let Some(input) = filter_data.first_mut() {
+                            input.rois.clear();
+                            for roi in rois.iter() {
+                                input.rois.insert(roi.0.clone(), roi.1.clone());
+                            }
+                        }
+                    }
                 }
                 ConfigCommand::UpdateMetaData(mut path) => {
                     // THz Image Explorer always saves thz files
@@ -655,6 +666,41 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 }
                                 data.avg_signal_fft = filtered.avg_signal_fft.to_vec();
                                 data.avg_phase_fft = filtered.avg_phase_fft.to_vec();
+
+                                // Update ROIs data using average_polygon_roi
+                                if !filtered.rois.is_empty() {
+                                    // Clear existing ROI data
+                                    data.roi_signal.clear();
+                                    data.roi_signal_fft.clear();
+                                    data.roi_phase.clear();
+
+                                    // Process each ROI
+                                    for (roi_name, polygon) in &filtered.rois {
+                                        // Time domain ROI averaging
+                                        let roi_signal =
+                                            average_polygon_roi(&filtered.data, polygon);
+                                        data.roi_signal
+                                            .insert(roi_name.clone(), roi_signal.to_vec());
+
+                                        // Frequency domain ROI averaging (amplitudes)
+                                        let roi_signal_fft =
+                                            average_polygon_roi(&filtered.amplitudes, polygon);
+                                        data.roi_signal_fft
+                                            .insert(roi_name.clone(), roi_signal_fft.to_vec());
+
+                                        // Frequency domain ROI averaging (phases)
+                                        let roi_phase =
+                                            average_polygon_roi(&filtered.phases, polygon);
+                                        data.roi_phase.insert(roi_name.clone(), roi_phase.to_vec());
+                                    }
+
+                                    if config.avg_in_fourier_space {
+                                        for (roi_name, roi_array) in &filtered.roi_data {
+                                            data.roi_signal
+                                                .insert(roi_name.clone(), roi_array.to_vec());
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

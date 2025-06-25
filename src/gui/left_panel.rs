@@ -479,6 +479,28 @@ pub fn left_panel(
                             thread_communication.gui_settings.selected_path.clone(),
                         ),
                     );
+
+                    let roi_updates: Vec<(String, Vec<(usize, usize)>)> = explorer
+                        .pixel_selected
+                        .rois
+                        .iter()
+                        .filter(|roi| roi.closed)
+                        .map(|roi| {
+                            let integer_polygon: Vec<(usize, usize)> = roi
+                                .polygon
+                                .iter()
+                                .map(|&[x, y]| (x as usize, y as usize))
+                                .collect();
+
+                            (roi.name.clone(), integer_polygon)
+                        })
+                        .collect();
+
+                    // Send ROI update command
+                    send_latest_config(
+                        thread_communication,
+                        ConfigCommand::UpdateROIS(roi_updates),
+                    );
                 }
             }
 
@@ -527,6 +549,27 @@ pub fn left_panel(
                                 ConfigCommand::UpdateMetaData(
                                     thread_communication.gui_settings.selected_path.clone(),
                                 ),
+                            );
+
+                            let roi_updates: Vec<(String, Vec<(usize, usize)>)> = explorer
+                                .pixel_selected
+                                .rois
+                                .iter()
+                                .filter(|roi| roi.closed)
+                                .map(|roi| {
+                                    let integer_polygon: Vec<(usize, usize)> = roi
+                                        .polygon
+                                        .iter()
+                                        .map(|&[x, y]| (x as usize, y as usize))
+                                        .collect();
+
+                                    (roi.name.clone(), integer_polygon)
+                                })
+                                .collect();
+
+                            send_latest_config(
+                                thread_communication,
+                                ConfigCommand::UpdateROIS(roi_updates),
                             );
                         }
                     });
@@ -636,7 +679,7 @@ pub fn left_panel(
                         ui.end_row()
                     }
 
-                    for attr in attributes_to_delete {
+                    for attr in attributes_to_delete.iter() {
                         if attr.contains("ROI") {
                             if let Some(labels_string) = meta_data.md.get_mut("ROI Labels") {
                                 let mut labels = labels_string.split(",").collect::<Vec<&str>>();
@@ -669,9 +712,31 @@ pub fn left_panel(
                                 }
                             }
                         }
-                        meta_data.md.swap_remove(&attr);
+                        meta_data.md.swap_remove(attr);
                     }
 
+                    if attributes_to_delete.iter().any(|attr| attr.contains("ROI")) {
+                        let roi_updates: Vec<(String, Vec<(usize, usize)>)> = explorer
+                            .pixel_selected
+                            .rois
+                            .iter()
+                            .filter(|roi| roi.closed)
+                            .map(|roi| {
+                                let integer_polygon: Vec<(usize, usize)> = roi
+                                    .polygon
+                                    .iter()
+                                    .map(|&[x, y]| (x as usize, y as usize))
+                                    .collect();
+
+                                (roi.name.clone(), integer_polygon)
+                            })
+                            .collect();
+
+                        send_latest_config(
+                            thread_communication,
+                            ConfigCommand::UpdateROIS(roi_updates),
+                        );
+                    }
                     ui.label("User:");
                     if thread_communication.gui_settings.meta_data_edit {
                         ui.add(

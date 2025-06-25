@@ -112,6 +112,8 @@ pub enum ConfigCommand {
     /// Command to update a specific custom filter identified by its UUID.
     /// This allows for selective recalculation when only one filter changes.
     UpdateFilter(String),
+
+    UpdateROIS(Vec<(String, Vec<(usize, usize)>)>),
 }
 
 /// A container for storing configuration settings related to FFT and filtering processes.

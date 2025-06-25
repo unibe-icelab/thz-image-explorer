@@ -5,6 +5,7 @@ use ndarray::{Array1, Array2, Array3};
 use realfft::num_complex::Complex32;
 use realfft::{ComplexToReal, RealToComplex};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Represents housekeeping data associated with a scan or experiment.
@@ -67,6 +68,7 @@ pub struct DataPoint {
     pub signal: Vec<f32>,
     pub filtered_signal: Vec<f32>,
     pub avg_signal: Vec<f32>,
+    pub roi_signal: HashMap<String, Vec<f32>>,
     pub frequencies: Vec<f32>,
     pub filtered_frequencies: Vec<f32>,
     pub signal_fft: Vec<f32>,
@@ -75,6 +77,8 @@ pub struct DataPoint {
     pub filtered_phase_fft: Vec<f32>,
     pub avg_signal_fft: Vec<f32>,
     pub avg_phase_fft: Vec<f32>,
+    pub roi_signal_fft: HashMap<String, Vec<f32>>,
+    pub roi_phase: HashMap<String, Vec<f32>>,
 }
 
 /// Represents a multi-dimensional dataset for spectroscopic imaging with both time and frequency domain data.
@@ -110,10 +114,12 @@ pub struct ScannedImageFilterData {
     pub pixel_selected: [usize; 2],
     pub r2c: Option<Arc<dyn RealToComplex<f32>>>,
     pub c2r: Option<Arc<dyn ComplexToReal<f32>>>,
+    pub rois: HashMap<String, Vec<(usize, usize)>>,
     pub time: Array1<f32>,
     pub img: Array2<f32>,
     pub data: Array3<f32>,
     pub avg_data: Array1<f32>,
+    pub roi_data: HashMap<String, Array1<f32>>,
     pub frequency: Array1<f32>,
     pub fft: Array3<Complex32>,
     pub amplitudes: Array3<f32>,
@@ -121,4 +127,6 @@ pub struct ScannedImageFilterData {
     pub avg_fft: Array1<Complex32>,
     pub avg_signal_fft: Array1<f32>,
     pub avg_phase_fft: Array1<f32>,
+    pub roi_signal_fft: HashMap<String, Array1<f32>>,
+    pub roi_phase_fft: HashMap<String, Array1<f32>>,
 }

@@ -7,9 +7,20 @@ use bevy::prelude::*;
 use bevy_egui::egui::epaint;
 use bevy_egui::egui::{self, Checkbox, DragValue, Stroke, Ui};
 use bevy_voxel_plot::InstanceMaterialData;
-use egui_plot::{GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
+use egui_plot::{GridMark, Legend, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 use ndarray::Array2;
 use std::ops::RangeInclusive;
+
+const ROI_COLORS: [egui::Color32; 8] = [
+    egui::Color32::from_rgb(0, 255, 128),   // Mint green
+    egui::Color32::from_rgb(128, 0, 128),   // Purple
+    egui::Color32::from_rgb(0, 200, 200),   // Cyan
+    egui::Color32::from_rgb(255, 0, 255),   // Magenta
+    egui::Color32::from_rgb(255, 128, 0),   // Orange
+    egui::Color32::from_rgb(128, 64, 0),    // Brown
+    egui::Color32::from_rgb(255, 128, 192), // Pink
+    egui::Color32::from_rgb(128, 255, 0),   // Lime
+];
 
 pub fn pulse_tab(
     ui: &mut Ui,
@@ -21,77 +32,74 @@ pub fn pulse_tab(
     thread_communication: &mut ThreadCommunication,
 ) {
     ui.vertical(|ui| {
-        ui.horizontal(|ui| {
-            ui.add_space(50.0);
-            ui.add(Checkbox::new(
-                &mut thread_communication.gui_settings.signal_1_visible,
-                "",
-            ));
-            ui.colored_label(egui::Color32::RED, "— ");
-            ui.label("Signal 1");
-            ui.add_space(50.0);
-            ui.add(Checkbox::new(
-                &mut thread_communication.gui_settings.filtered_signal_1_visible,
-                "",
-            ));
-            ui.colored_label(egui::Color32::BLUE, "— ");
-            ui.label("Filtered Signal 1");
-            ui.add_space(50.0);
-            ui.add(Checkbox::new(
-                &mut thread_communication.gui_settings.avg_signal_1_visible,
-                "",
-            ));
-            ui.colored_label(egui::Color32::YELLOW, "--- ");
-            ui.label("Averaged Signal 1");
-        });
-
         if let Ok(read_guard) = thread_communication.data_lock.read() {
             explorer.data = read_guard.clone();
-            // self.data.time = linspace::<f64>(self.tera_flash_conf.t_begin as f64,
-            //                                  (self.tera_flash_conf.t_begin + self.tera_flash_conf.range) as f64, NUM_PULSE_LINES).collect();
         }
 
         let mut signal_1: Vec<[f64; 2]> = Vec::new();
         let mut filtered_signal_1: Vec<[f64; 2]> = Vec::new();
         let mut avg_signal_1: Vec<[f64; 2]> = Vec::new();
 
-        let mut axis_display_offset_signal_1 = f64::NEG_INFINITY;
-        let mut axis_display_offset_filtered_signal_1 = f64::NEG_INFINITY;
-        let mut axis_display_offset_avg_signal_1 = f64::NEG_INFINITY;
+        let axis_display_offset_signal_1 = explorer
+            .data
+            .signal
+            .iter()
+            .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
+            .abs();
 
-        if thread_communication.gui_settings.signal_1_visible {
-            axis_display_offset_signal_1 = explorer
-                .data
-                .signal
+        let axis_display_offset_filtered_signal_1 = explorer
+            .data
+            .filtered_signal
+            .iter()
+            .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
+            .abs();
+
+        let axis_display_offset_avg_signal_1 = explorer
+            .data
+            .avg_signal
+            .iter()
+            .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
+            .abs();
+
+        // Create a vector of [ROI name, plot points] pairs
+        let mut roi_plots = Vec::new();
+
+        // Find minimum values for each ROI signal to calculate offsets
+        let mut roi_min_values = Vec::new();
+        for (_, roi_data) in &explorer.data.roi_signal {
+            let min_value = roi_data
                 .iter()
                 .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
                 .abs();
-        }
-        if thread_communication.gui_settings.filtered_signal_1_visible {
-            axis_display_offset_filtered_signal_1 = explorer
-                .data
-                .filtered_signal
-                .iter()
-                .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
-                .abs();
-        }
-        if thread_communication.gui_settings.avg_signal_1_visible {
-            axis_display_offset_avg_signal_1 = explorer
-                .data
-                .avg_signal
-                .iter()
-                .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
-                .abs();
+            roi_min_values.push(min_value);
         }
 
+        // Get the maximum offset value from all signals including ROIs
         let axis_display_offset = [
             axis_display_offset_signal_1,
             axis_display_offset_filtered_signal_1,
             axis_display_offset_avg_signal_1,
         ]
         .iter()
+        .chain(roi_min_values.iter())
         .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi))
             * 1.05;
+
+        // Generate plot points for each ROI
+        for (roi_name, roi_data) in &explorer.data.roi_signal {
+            let mut roi_plot_points = Vec::new();
+
+            for i in 0..explorer.data.time.len().min(roi_data.len()) {
+                roi_plot_points.push([
+                    explorer.data.time[i] as f64,
+                    roi_data[i] as f64 + axis_display_offset,
+                ]);
+            }
+
+            if !roi_plot_points.is_empty() {
+                roi_plots.push((roi_name.clone(), roi_plot_points));
+            }
+        }
 
         for i in 0..explorer.data.time.len() {
             signal_1.push([
@@ -112,12 +120,7 @@ pub fn pulse_tab(
             ]);
         }
 
-        for i in 0..explorer
-            .data
-            .time
-            .len()
-            .min(explorer.data.avg_signal.len())
-        {
+        for i in 0..explorer.data.time.len().min(explorer.data.avg_signal.len()) {
             avg_signal_1.push([
                 explorer.data.time[i] as f64,
                 explorer.data.avg_signal[i] as f64 + axis_display_offset,
@@ -147,34 +150,44 @@ pub fn pulse_tab(
             //.coordinates_formatter(Corner::LeftTop, position_fmt)
             //.include_x(&self.tera_flash_conf.t_begin + &self.tera_flash_conf.range)
             //.include_x(self.tera_flash_conf.t_begin)
-            .min_size(vec2(50.0, 100.0));
+            .min_size(vec2(50.0, 100.0))
+            .legend(Legend::default());
 
         signal_plot.show(ui, |signal_plot_ui| {
-            if thread_communication.gui_settings.signal_1_visible {
+            signal_plot_ui.line(
+                Line::new(PlotPoints::from(signal_1))
+                    .color(egui::Color32::RED)
+                    .style(LineStyle::Solid)
+                    .width(2.0)
+                    .name("signal"),
+            );
+
+            signal_plot_ui.line(
+                Line::new(PlotPoints::from(filtered_signal_1))
+                    .color(egui::Color32::BLUE)
+                    .style(LineStyle::Solid)
+                    .width(2.0)
+                    .name("filtered signal"),
+            );
+
+            signal_plot_ui.line(
+                Line::new(PlotPoints::from(avg_signal_1))
+                    .color(egui::Color32::YELLOW)
+                    .style(LineStyle::Solid)
+                    .width(2.0)
+                    .name("avg signal"),
+            );
+
+            // Plot each ROI with its own color
+            for (i, (roi_name, roi_points)) in roi_plots.iter().enumerate() {
+                let color_idx = i % ROI_COLORS.len();
+
                 signal_plot_ui.line(
-                    Line::new(PlotPoints::from(signal_1))
-                        .color(egui::Color32::RED)
+                    Line::new(PlotPoints::from(roi_points.clone()))
+                        .color(ROI_COLORS[color_idx])
                         .style(LineStyle::Solid)
                         .width(2.0)
-                        .name("signal 1"),
-                );
-            }
-            if thread_communication.gui_settings.filtered_signal_1_visible {
-                signal_plot_ui.line(
-                    Line::new(PlotPoints::from(filtered_signal_1))
-                        .color(egui::Color32::BLUE)
-                        .style(LineStyle::Solid)
-                        .width(2.0)
-                        .name("filtered signal 1"),
-                );
-            }
-            if thread_communication.gui_settings.avg_signal_1_visible {
-                signal_plot_ui.line(
-                    Line::new(PlotPoints::from(avg_signal_1))
-                        .color(egui::Color32::YELLOW)
-                        .style(LineStyle::Dashed { length: 10.0 })
-                        .width(2.0)
-                        .name("ref 1"),
+                        .name(roi_name),
                 );
             }
         });
@@ -267,6 +280,46 @@ pub fn pulse_tab(
             .map(|(x, y)| [*x as f64, *y as f64])
             .collect();
 
+        // Create a vector of [ROI name, amplitude plot points, phase plot points] tuples
+        let mut roi_fft_plots = Vec::new();
+
+        // Generate FFT plot points for each ROI
+        for (roi_name, _) in &explorer.data.roi_signal {
+            if let (Some(roi_signal_fft), Some(roi_phase_fft)) = (
+                explorer.data.roi_signal_fft.get(roi_name),
+                explorer.data.roi_phase.get(roi_name),
+            ) {
+                let roi_amplitude_plot: Vec<[f64; 2]> = explorer
+                    .data
+                    .frequencies
+                    .iter()
+                    .zip(roi_signal_fft.iter())
+                    .map(|(x, y)| {
+                        let fft = if thread_communication.gui_settings.log_plot {
+                            if *y < floor_value {
+                                20.0 * (floor_value).log10()
+                            } else {
+                                20.0 * (*y).log10()
+                            }
+                        } else {
+                            *y
+                        };
+                        [*x as f64, fft as f64]
+                    })
+                    .collect();
+
+                let roi_phase_plot: Vec<[f64; 2]> = explorer
+                    .data
+                    .frequencies
+                    .iter()
+                    .zip(roi_phase_fft.iter())
+                    .map(|(x, y)| [*x as f64, *y as f64])
+                    .collect();
+
+                roi_fft_plots.push((roi_name.clone(), roi_amplitude_plot, roi_phase_plot));
+            }
+        }
+
         let fft_signals = [&signal_1_fft];
 
         let mut max_fft_signals = fft_signals
@@ -320,7 +373,8 @@ pub fn pulse_tab(
             .y_axis_formatter(a_fmt)
             .x_axis_formatter(f_fmt)
             .include_x(0.0)
-            .include_x(10.0);
+            .include_x(10.0)
+            .legend(Legend::default());
 
         if !thread_communication.gui_settings.phases_visible {
             // fft_plot = fft_plot.include_y(-100.0);
@@ -328,62 +382,58 @@ pub fn pulse_tab(
         };
 
         fft_plot.show(ui, |fft_plot_ui| {
-            if thread_communication.gui_settings.signal_1_visible {
-                if !thread_communication.gui_settings.phases_visible {
-                    fft_plot_ui.line(
-                        Line::new(PlotPoints::from(signal_1_fft))
-                            .color(egui::Color32::RED)
-                            .style(LineStyle::Solid)
-                            .width(2.0)
-                            .name("amplitude 1"),
-                    );
-                } else {
-                    fft_plot_ui.line(
-                        Line::new(PlotPoints::from(phase_1_fft))
-                            .color(egui::Color32::RED)
-                            .style(LineStyle::Solid)
-                            .width(2.0)
-                            .name("phase 1"),
-                    );
-                }
+            if !thread_communication.gui_settings.phases_visible {
+                fft_plot_ui.line(
+                    Line::new(PlotPoints::from(signal_1_fft))
+                        .color(egui::Color32::RED)
+                        .style(LineStyle::Solid)
+                        .width(2.0)
+                        .name("amplitude"),
+                );
+            } else {
+                fft_plot_ui.line(
+                    Line::new(PlotPoints::from(phase_1_fft))
+                        .color(egui::Color32::RED)
+                        .style(LineStyle::Solid)
+                        .width(2.0)
+                        .name("phase"),
+                );
             }
-            if thread_communication.gui_settings.filtered_signal_1_visible {
-                if !thread_communication.gui_settings.phases_visible {
-                    fft_plot_ui.line(
-                        Line::new(PlotPoints::from(filtered_signal_1_fft))
-                            .color(egui::Color32::BLUE)
-                            .style(LineStyle::Dashed { length: 10.0 })
-                            .width(2.0)
-                            .name("filtered amplitude 1"),
-                    )
-                } else {
-                    fft_plot_ui.line(
-                        Line::new(PlotPoints::from(filtered_phase_1_fft))
-                            .color(egui::Color32::BLUE)
-                            .style(LineStyle::Dashed { length: 10.0 })
-                            .width(2.0)
-                            .name("filtered phase 1"),
-                    );
-                }
+
+            if !thread_communication.gui_settings.phases_visible {
+                fft_plot_ui.line(
+                    Line::new(PlotPoints::from(filtered_signal_1_fft))
+                        .color(egui::Color32::BLUE)
+                        .style(LineStyle::Dashed { length: 10.0 })
+                        .width(2.0)
+                        .name("filtered amplitude"),
+                )
+            } else {
+                fft_plot_ui.line(
+                    Line::new(PlotPoints::from(filtered_phase_1_fft))
+                        .color(egui::Color32::BLUE)
+                        .style(LineStyle::Dashed { length: 10.0 })
+                        .width(2.0)
+                        .name("filtered phase"),
+                );
             }
-            if thread_communication.gui_settings.avg_signal_1_visible {
-                if !thread_communication.gui_settings.phases_visible {
-                    fft_plot_ui.line(
-                        Line::new(PlotPoints::from(avg_signal_1_fft))
-                            .color(egui::Color32::YELLOW)
-                            .style(LineStyle::Dashed { length: 10.0 })
-                            .width(2.0)
-                            .name("avg amplitude 1"),
-                    )
-                } else {
-                    fft_plot_ui.line(
-                        Line::new(PlotPoints::from(avg_phase_1_fft))
-                            .color(egui::Color32::YELLOW)
-                            .style(LineStyle::Dashed { length: 10.0 })
-                            .width(2.0)
-                            .name("avg phase 1"),
-                    );
-                }
+
+            if !thread_communication.gui_settings.phases_visible {
+                fft_plot_ui.line(
+                    Line::new(PlotPoints::from(avg_signal_1_fft))
+                        .color(egui::Color32::YELLOW)
+                        .style(LineStyle::Dashed { length: 10.0 })
+                        .width(2.0)
+                        .name("avg amplitude"),
+                )
+            } else {
+                fft_plot_ui.line(
+                    Line::new(PlotPoints::from(avg_phase_1_fft))
+                        .color(egui::Color32::YELLOW)
+                        .style(LineStyle::Dashed { length: 10.0 })
+                        .width(2.0)
+                        .name("avg phase"),
+                );
             }
 
             if thread_communication.gui_settings.water_lines_visible {
@@ -393,6 +443,29 @@ pub fn pulse_tab(
                             .stroke(Stroke::new(1.0, egui::Color32::BLUE))
                             .width(2.0)
                             .name("water vapour"),
+                    );
+                }
+            }
+
+            // Plot each ROI FFT with its own color
+            for (i, (roi_name, roi_amplitude, roi_phase)) in roi_fft_plots.iter().enumerate() {
+                let color_idx = i % ROI_COLORS.len();
+
+                if !thread_communication.gui_settings.phases_visible {
+                    fft_plot_ui.line(
+                        Line::new(PlotPoints::from(roi_amplitude.clone()))
+                            .color(ROI_COLORS[color_idx])
+                            .style(LineStyle::Solid)
+                            .width(2.0)
+                            .name(roi_name),
+                    );
+                } else {
+                    fft_plot_ui.line(
+                        Line::new(PlotPoints::from(roi_phase.clone()))
+                            .color(ROI_COLORS[color_idx])
+                            .style(LineStyle::Solid)
+                            .width(2.0)
+                            .name(roi_name),
                     );
                 }
             }
@@ -725,7 +798,7 @@ pub fn center_panel(
 ) {
     egui::CentralPanel::default().show(ctx, |ui| {
         let window_height = ui.available_height();
-        let height = ui.available_size().y * 0.45 - 10.0;
+        let height = ui.available_size().y * 0.45;
         let spacing = (ui.available_size().y - 2.0 * height) / 3.0 - 10.0;
         let width = ui.available_size().x - 40.0 - *left_panel_width - *right_panel_width;
         ui.horizontal(|ui| {

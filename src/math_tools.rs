@@ -19,10 +19,11 @@
 
 use crate::config::ConfigContainer;
 use crate::data_container::ScannedImageFilterData;
-use ndarray::{Array1, ArrayViewMut, Axis, Ix1, Zip};
+use ndarray::{Array1, Array3, ArrayViewMut, Axis, Ix1, Zip};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use realfft::num_complex::Complex32;
+use std::cmp::{max, min};
 use std::f32::consts::PI;
 use std::fmt::{Display, Formatter};
 
@@ -375,9 +376,12 @@ pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
             // Create a complex spectrum from the averaged amplitude and phase
             let mut spectrum = vec![Complex32::new(0.0, 0.0); output.frequency.len()];
 
-            for (i, (&amp, &phase)) in output.avg_signal_fft.iter()
+            for (i, (&amp, &phase)) in output
+                .avg_signal_fft
+                .iter()
                 .zip(output.avg_phase_fft.iter())
-                .enumerate() {
+                .enumerate()
+            {
                 // Convert from polar form (amplitude, phase) to complex
                 spectrum[i] = Complex32::from_polar(amp, phase);
             }
@@ -395,6 +399,71 @@ pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
             output.avg_data = Array1::from_vec(normalized);
         }
     }
+
+    // Process all ROIs after handling the average signal
+    for (roi_name, polygon) in &input.rois {
+        // Time domain ROI processing (direct spatial averaging)
+        if !config.avg_in_fourier_space {
+            let roi_signal = average_polygon_roi(&input.data, polygon);
+            output.roi_data.insert(roi_name.clone(), roi_signal);
+        }
+
+        // Frequency domain processing (for visualization)
+        let roi_signal_fft = average_polygon_roi(&input.amplitudes, polygon);
+        let roi_phase_fft = average_polygon_roi(&input.phases, polygon);
+
+        // Store frequency domain results
+        output
+            .roi_signal_fft
+            .insert(roi_name.clone(), roi_signal_fft.clone());
+        output
+            .roi_phase_fft
+            .insert(roi_name.clone(), roi_phase_fft.clone());
+
+        // In the ifft method where ROIs are processed:
+        if config.avg_in_fourier_space {
+            if let Some(c2r) = &output.c2r {
+                // Create a complex spectrum from ROI amplitude and phase
+                let mut spectrum = vec![Complex32::new(0.0, 0.0); input.frequency.len()];
+
+                for (i, (&amp, &phase)) in
+                    roi_signal_fft.iter().zip(roi_phase_fft.iter()).enumerate()
+                {
+                    // Convert from polar form (amplitude, phase) to complex
+                    spectrum[i] = Complex32::from_polar(amp, phase);
+                }
+
+                // Enforce constraints for realfft compatibility:
+                // 1. First element must have zero imaginary part
+                if !spectrum.is_empty() {
+                    spectrum[0] = Complex32::new(spectrum[0].re, 0.0);
+                }
+
+                let mut real_output = vec![0.0; input.time.len()];
+
+                // Error handling instead of unwrap
+                match c2r.process(&mut spectrum, &mut real_output) {
+                    Ok(_) => {
+                        // Normalize the result
+                        let length = real_output.len();
+                        let normalized: Vec<f32> =
+                            real_output.iter().map(|&v| v / length as f32).collect();
+
+                        // Store the reconstructed time domain signal
+                        let roi_signal = Array1::from_vec(normalized);
+                        output.roi_data.insert(roi_name.clone(), roi_signal);
+                    }
+                    Err(e) => {
+                        println!("IFFT error for ROI {}: {}", roi_name, e);
+                        // Fall back to time-domain averaging if IFFT fails
+                        let roi_signal = average_polygon_roi(&input.data, polygon);
+                        output.roi_data.insert(roi_name.clone(), roi_signal);
+                    }
+                }
+            }
+        }
+    }
+
     if let Some(c2r) = &output.c2r {
         (
             output.fft.axis_iter(Axis(0)),
@@ -421,4 +490,81 @@ pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
             });
     }
     output
+}
+
+/// Check if a point is inside a polygon using the ray casting algorithm
+fn point_in_polygon(x: usize, y: usize, polygon: &[(usize, usize)]) -> bool {
+    let mut inside = false;
+    let mut j = polygon.len() - 1;
+
+    for i in 0..polygon.len() {
+        let (xi, yi) = polygon[i];
+        let (xj, yj) = polygon[j];
+
+        let intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+
+        if intersect {
+            inside = !inside;
+        }
+
+        j = i;
+    }
+    inside
+}
+
+/// Average values in a 3D array within a polygon-defined ROI
+///
+/// * `data` - 3D array with dimensions [z, y, x]
+/// * `polygon` - Vector of (x, y) coordinates defining the ROI boundary
+///
+/// Returns a 1D array with averages along the z-axis for the polygon region
+pub fn average_polygon_roi(data: &Array3<f32>, polygon: &[(usize, usize)]) -> Array1<f32> {
+    let x_size = data.shape()[0];
+    let y_size = data.shape()[1];
+    let z_size = data.shape()[2];
+
+    // Create output array
+    let mut result = Array1::zeros(z_size);
+    let mut pixel_counts = vec![0; z_size];
+
+    // Find bounding box of polygon to reduce computation
+    let mut x_min = usize::MAX;
+    let mut y_min = usize::MAX;
+    let mut x_max = 0;
+    let mut y_max = 0;
+
+    for &(x, y) in polygon {
+        x_min = min(x_min, x);
+        y_min = min(y_min, y);
+        x_max = max(x_max, x);
+        y_max = max(y_max, y);
+    }
+
+    // Clamp to array bounds
+    x_min = min(x_min, x_size - 1);
+    y_min = min(y_min, y_size - 1);
+    x_max = min(x_max, x_size - 1);
+    y_max = min(y_max, y_size - 1);
+
+    // For each pixel in the bounding box
+    for y in y_min..=y_max {
+        for x in x_min..=x_max {
+            // Check if the pixel is inside the polygon
+            if point_in_polygon(x, y, polygon) {
+                // Add the value to the average for each z-slice
+                for z in 0..z_size {
+                    result[z] += data[[x, y, z]];
+                    pixel_counts[z] += 1;
+                }
+            }
+        }
+    }
+
+    // Calculate average for each z-slice
+    for z in 0..z_size {
+        if pixel_counts[z] > 0 {
+            result[z] /= pixel_counts[z] as f32;
+        }
+    }
+    result
 }

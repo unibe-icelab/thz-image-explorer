@@ -454,7 +454,6 @@ pub fn plot_matrix(
                     roi.name = format!("ROI {}", explorer.pixel_selected.rois.len() + 1);
                     explorer.pixel_selected.rois.push(roi);
                 }
-                dbg!(&explorer.pixel_selected.rois.len());
 
                 if let Some(current_roi) = explorer.pixel_selected.rois.last_mut() {
                     if current_roi.polygon.is_empty() {
