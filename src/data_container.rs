@@ -52,28 +52,28 @@ impl Default for HouseKeeping {
 /// # Fields
 /// - `hk`: Associated housekeeping metadata.
 /// - `time`: Time axis data.
-/// - `signal_1`: Primary signal data.
-/// - `filtered_signal_1`: Filtered signal data.
-/// - `avg_signal_1`: Averaged signal data.
+/// - `signal`: Primary signal data.
+/// - `filtered_signal`: Filtered signal data.
+/// - `avg_signal`: Averaged signal data.
 /// - `frequencies`: Frequency axis data.
-/// - `signal_1_fft`, `phase_1_fft`: Raw FFT and phase data for `signal_1`.
-/// - `filtered_signal_1_fft`, `filtered_phase_fft`: FFT and phase data for the filtered signal.
-/// - `avg_signal_1_fft`, `avg_phase_fft`: Averaged FFT and phase data.
+/// - `signal_fft`, `phase_fft`: Raw FFT and phase data for `signal`.
+/// - `filtered_signal_fft`, `filtered_phase_fft`: FFT and phase data for the filtered signal.
+/// - `avg_signal_fft`, `avg_phase_fft`: Averaged FFT and phase data.
 #[derive(Clone, Default, Debug)]
 pub struct DataPoint {
     pub hk: HouseKeeping,
     pub time: Vec<f32>,
     pub filtered_time: Vec<f32>,
-    pub signal_1: Vec<f32>,
-    pub filtered_signal_1: Vec<f32>,
-    pub avg_signal_1: Vec<f32>,
+    pub signal: Vec<f32>,
+    pub filtered_signal: Vec<f32>,
+    pub avg_signal: Vec<f32>,
     pub frequencies: Vec<f32>,
     pub filtered_frequencies: Vec<f32>,
-    pub signal_1_fft: Vec<f32>,
-    pub phase_1_fft: Vec<f32>,
-    pub filtered_signal_1_fft: Vec<f32>,
+    pub signal_fft: Vec<f32>,
+    pub phase_fft: Vec<f32>,
+    pub filtered_signal_fft: Vec<f32>,
     pub filtered_phase_fft: Vec<f32>,
-    pub avg_signal_1_fft: Vec<f32>,
+    pub avg_signal_fft: Vec<f32>,
     pub avg_phase_fft: Vec<f32>,
 }
 

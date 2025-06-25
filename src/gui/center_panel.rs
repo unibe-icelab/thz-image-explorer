@@ -62,7 +62,7 @@ pub fn pulse_tab(
         if thread_communication.gui_settings.signal_1_visible {
             axis_display_offset_signal_1 = explorer
                 .data
-                .signal_1
+                .signal
                 .iter()
                 .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
                 .abs();
@@ -70,7 +70,7 @@ pub fn pulse_tab(
         if thread_communication.gui_settings.filtered_signal_1_visible {
             axis_display_offset_filtered_signal_1 = explorer
                 .data
-                .filtered_signal_1
+                .filtered_signal
                 .iter()
                 .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
                 .abs();
@@ -78,7 +78,7 @@ pub fn pulse_tab(
         if thread_communication.gui_settings.avg_signal_1_visible {
             axis_display_offset_avg_signal_1 = explorer
                 .data
-                .avg_signal_1
+                .avg_signal
                 .iter()
                 .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
                 .abs();
@@ -96,7 +96,7 @@ pub fn pulse_tab(
         for i in 0..explorer.data.time.len() {
             signal_1.push([
                 explorer.data.time[i] as f64,
-                explorer.data.signal_1[i] as f64 + axis_display_offset,
+                explorer.data.signal[i] as f64 + axis_display_offset,
             ]);
         }
 
@@ -104,11 +104,11 @@ pub fn pulse_tab(
             .data
             .filtered_time
             .len()
-            .min(explorer.data.filtered_signal_1.len())
+            .min(explorer.data.filtered_signal.len())
         {
             filtered_signal_1.push([
                 explorer.data.filtered_time[i] as f64,
-                explorer.data.filtered_signal_1[i] as f64 + axis_display_offset,
+                explorer.data.filtered_signal[i] as f64 + axis_display_offset,
             ]);
         }
 
@@ -116,11 +116,11 @@ pub fn pulse_tab(
             .data
             .time
             .len()
-            .min(explorer.data.avg_signal_1.len())
+            .min(explorer.data.avg_signal.len())
         {
             avg_signal_1.push([
                 explorer.data.time[i] as f64,
-                explorer.data.avg_signal_1[i] as f64 + axis_display_offset,
+                explorer.data.avg_signal[i] as f64 + axis_display_offset,
             ]);
         }
 
@@ -182,7 +182,7 @@ pub fn pulse_tab(
         ui.add_space(spacing);
 
         // First, get the current value of min_fft_signals
-        let fft_signals = [&explorer.data.signal_1_fft];
+        let fft_signals = [&explorer.data.signal_fft];
         let min_fft_signals = fft_signals
             .iter()
             .flat_map(|v| v.iter().copied())
@@ -195,7 +195,7 @@ pub fn pulse_tab(
             .data
             .frequencies
             .iter()
-            .zip(explorer.data.signal_1_fft.iter())
+            .zip(explorer.data.signal_fft.iter())
             .map(|(x, y)| {
                 let fft = if thread_communication.gui_settings.log_plot {
                     if *y < floor_value {
@@ -213,7 +213,7 @@ pub fn pulse_tab(
             .data
             .filtered_frequencies
             .iter()
-            .zip(explorer.data.filtered_signal_1_fft.iter())
+            .zip(explorer.data.filtered_signal_fft.iter())
             .map(|(x, y)| {
                 let fft = if thread_communication.gui_settings.log_plot {
                     if *y < floor_value {
@@ -231,7 +231,7 @@ pub fn pulse_tab(
             .data
             .frequencies
             .iter()
-            .zip(explorer.data.avg_signal_1_fft.iter())
+            .zip(explorer.data.avg_signal_fft.iter())
             .map(|(x, y)| {
                 let fft = if thread_communication.gui_settings.log_plot {
                     if *y < floor_value {
@@ -249,7 +249,7 @@ pub fn pulse_tab(
             .data
             .frequencies
             .iter()
-            .zip(explorer.data.phase_1_fft.iter())
+            .zip(explorer.data.phase_fft.iter())
             .map(|(x, y)| [*x as f64, *y as f64])
             .collect();
         let filtered_phase_1_fft: Vec<[f64; 2]> = explorer
@@ -451,9 +451,9 @@ pub fn pulse_tab(
             ui.add_space(ui.available_size().x - 400.0 - right_panel_width);
 
             // dynamic range:
-            let length = explorer.data.signal_1_fft.len();
-            let dr1 = if !explorer.data.signal_1_fft.is_empty() {
-                explorer.data.signal_1_fft[length - 100..length]
+            let length = explorer.data.signal_fft.len();
+            let dr1 = if !explorer.data.signal_fft.is_empty() {
+                explorer.data.signal_fft[length - 100..length]
                     .iter()
                     .sum::<f32>()
                     / 100.0
@@ -469,8 +469,8 @@ pub fn pulse_tab(
 
             // peak to peak
             let ptp1 = if let (Some(min), Some(max)) = (
-                explorer.data.signal_1.iter().cloned().reduce(f32::min),
-                explorer.data.signal_1.iter().cloned().reduce(f32::max),
+                explorer.data.signal.iter().cloned().reduce(f32::min),
+                explorer.data.signal.iter().cloned().reduce(f32::max),
             ) {
                 max - min
             } else {

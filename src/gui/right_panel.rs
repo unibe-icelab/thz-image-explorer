@@ -178,7 +178,7 @@ pub fn right_panel(
                                 data.time = (0..=((1050.0 - 1000.0) / 0.25) as usize)
                                     .map(|i| 1000.0 + i as f32 * 0.25)
                                     .collect();
-                                data.signal_1 = vec![1.0; data.time.len()];
+                                data.signal = vec![1.0; data.time.len()];
                             }
 
                             let mut window_vals: Vec<[f64; 2]> = Vec::new();

@@ -594,7 +594,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                     continue;
                                 }
                                 data.time = raw.time.to_vec();
-                                data.signal_1 = raw
+                                data.signal = raw
                                     .data
                                     .index_axis(Axis(0), selected_pixel.x)
                                     .index_axis(Axis(0), selected_pixel.y)
@@ -608,12 +608,12 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             {
                                 // frequency domain
                                 data.frequencies = raw.frequency.to_vec();
-                                data.signal_1_fft = raw
+                                data.signal_fft = raw
                                     .amplitudes
                                     .index_axis(Axis(0), selected_pixel.x)
                                     .index_axis(Axis(0), selected_pixel.y)
                                     .to_vec();
-                                data.phase_1_fft = raw
+                                data.phase_fft = raw
                                     .phases
                                     .index_axis(Axis(0), selected_pixel.x)
                                     .index_axis(Axis(0), selected_pixel.y)
@@ -623,14 +623,14 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             // filtered trace
                             if let Some(filtered) = filter_data.last() {
                                 data.filtered_time = filtered.time.to_vec();
-                                data.filtered_signal_1 = filtered
+                                data.filtered_signal = filtered
                                     .data
                                     .index_axis(Axis(0), selected_pixel.x)
                                     .index_axis(Axis(0), selected_pixel.y)
                                     .to_vec();
                                 // frequency domain
                                 data.filtered_frequencies = filtered.frequency.to_vec();
-                                data.filtered_signal_1_fft = filtered
+                                data.filtered_signal_fft = filtered
                                     .amplitudes
                                     .index_axis(Axis(0), selected_pixel.x)
                                     .index_axis(Axis(0), selected_pixel.y)
@@ -643,7 +643,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
 
                                 // averaged
                                 if !config.avg_in_fourier_space {
-                                    data.avg_signal_1 = filtered
+                                    data.avg_signal = filtered
                                         .data
                                         .mean_axis(Axis(0))
                                         .expect("Axis 2 mean failed")
@@ -651,9 +651,9 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                         .expect("Axis 1 mean failed")
                                         .to_vec();
                                 } else {
-                                    data.avg_signal_1 = filtered.avg_data.to_vec();
+                                    data.avg_signal = filtered.avg_data.to_vec();
                                 }
-                                data.avg_signal_1_fft = filtered.avg_signal_fft.to_vec();
+                                data.avg_signal_fft = filtered.avg_signal_fft.to_vec();
                                 data.avg_phase_fft = filtered.avg_phase_fft.to_vec();
                             }
                         }
@@ -712,7 +712,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 }
 
                                 data.time = raw.time.to_vec();
-                                data.signal_1 = raw
+                                data.signal = raw
                                     .data
                                     .index_axis(Axis(0), selected_pixel.x)
                                     .index_axis(Axis(0), selected_pixel.y)
@@ -726,12 +726,12 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             {
                                 // frequency domain
                                 data.frequencies = raw.frequency.to_vec();
-                                data.signal_1_fft = raw
+                                data.signal_fft = raw
                                     .amplitudes
                                     .index_axis(Axis(0), selected_pixel.x)
                                     .index_axis(Axis(0), selected_pixel.y)
                                     .to_vec();
-                                data.phase_1_fft = raw
+                                data.phase_fft = raw
                                     .phases
                                     .index_axis(Axis(0), selected_pixel.x)
                                     .index_axis(Axis(0), selected_pixel.y)
@@ -741,14 +741,14 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             // filtered trace
                             if let Some(filtered) = filter_data.last() {
                                 data.filtered_time = filtered.time.to_vec();
-                                data.filtered_signal_1 = filtered
+                                data.filtered_signal = filtered
                                     .data
                                     .index_axis(Axis(0), selected_pixel.x)
                                     .index_axis(Axis(0), selected_pixel.y)
                                     .to_vec();
                                 // frequency domain
                                 data.filtered_frequencies = filtered.frequency.to_vec();
-                                data.filtered_signal_1_fft = filtered
+                                data.filtered_signal_fft = filtered
                                     .amplitudes
                                     .index_axis(Axis(0), selected_pixel.x)
                                     .index_axis(Axis(0), selected_pixel.y)
@@ -761,7 +761,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
 
                                 // averaged
                                 if !config.avg_in_fourier_space {
-                                    data.avg_signal_1 = filtered
+                                    data.avg_signal = filtered
                                         .data
                                         .mean_axis(Axis(0))
                                         .expect("Axis 2 mean failed")
@@ -769,9 +769,9 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                         .expect("Axis 1 mean failed")
                                         .to_vec();
                                 } else {
-                                    data.avg_signal_1 = filtered.avg_data.to_vec();
+                                    data.avg_signal = filtered.avg_data.to_vec();
                                 }
-                                data.avg_signal_1_fft = filtered.avg_signal_fft.to_vec();
+                                data.avg_signal_fft = filtered.avg_signal_fft.to_vec();
                                 data.avg_phase_fft = filtered.avg_phase_fft.to_vec();
                             }
                         }
