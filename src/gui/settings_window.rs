@@ -77,14 +77,31 @@ pub fn settings_window(
                         egui::popup::PopupCloseBehavior::CloseOnClickOutside, // Add the missing parameter
                         |ui: &mut egui::Ui| {
                             // Set max width for the popup
-                            ui.set_max_width(100.0);
+                            ui.set_max_width(400.0);
 
                             // Add description text
 
-                            // TODO: add description of PSF format
-                            // @Arnaud
+                            // The PSF format is an npz file containing the following data structure:
+                            // - 'low_cut': float, low cut-off frequency
+                            // - 'high_cut': float, high cut-off frequency
+                            // - 'start_freq': float, start frequency for filters
+                            // - 'end_freq': float, end frequency for filters
+                            // - 'n_filters': int, number of filters
+                            // - 'filters': ndarray, filter coefficients, shape (n_filters, len(times_psf) // 5)
+                            // - 'filt_freqs': ndarray, filter frequencies, shape (n_filters,)
+                            // - '[x_0, w_x]': ndarray, fitted x parameters, shape (n_filters, 2)
+                            // - '[y_0, w_y]': ndarray, fitted y parameters, shape (n_filters, 2)
 
-                            ui.label("... info about psf ...");
+                            ui.label("The PSF format is an npz file containing:");
+                            ui.label("- 'low_cut': float, low cut-off frequency");
+                            ui.label("- 'high_cut': float, high cut-off frequency");
+                            ui.label("- 'start_freq': float, start frequency for filters");
+                            ui.label("- 'end_freq': float, end frequency for filters");
+                            ui.label("- 'n_filters': int, number of filters");
+                            ui.label("- 'filters': ndarray, filter coefficients, shape (n_filters, len(times_psf) // 5)");
+                            ui.label("- 'filt_freqs': ndarray, filter frequencies, shape (n_filters,)");
+                            ui.label("- '[x_0, w_x]': ndarray, fitted x parameters, shape (n_filters, 2)");
+                            ui.label("- '[y_0, w_y]': ndarray, fitted y parameters, shape (n_filters, 2)");
                         },
                     );
 
