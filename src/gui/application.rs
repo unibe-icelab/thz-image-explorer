@@ -41,6 +41,7 @@ pub enum FileDialogState {
     /// File dialog is set to open a PSF file.
     OpenPSF,
     /// File dialog is set to save a file.
+    #[allow(dead_code)]
     Save,
     /// File dialog is not active.
     None,
@@ -322,7 +323,7 @@ impl THzImageExplorer {
             water_vapour_lines.push(line.trim().parse().unwrap());
         }
 
-        let mut file_dialog = FileDialog::default()
+        let file_dialog = FileDialog::default()
             //.initial_directory(PathBuf::from("/path/to/app"))
             .default_file_name("measurement.thz")
             .default_size([600.0, 400.0])

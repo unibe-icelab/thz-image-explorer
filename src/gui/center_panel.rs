@@ -183,7 +183,7 @@ pub fn pulse_tab(
 
         // First, get the current value of min_fft_signals
         let fft_signals = [&explorer.data.signal_1_fft];
-        let mut min_fft_signals = fft_signals
+        let min_fft_signals = fft_signals
             .iter()
             .flat_map(|v| v.iter().copied())
             .map(|x| x)
@@ -481,14 +481,15 @@ pub fn pulse_tab(
     });
 }
 
+#[allow(dead_code)]
 pub fn refractive_index_tab(
-    ui: &mut Ui,
-    height: f32,
-    width: f32,
-    spacing: f32,
-    right_panel_width: f32,
-    explorer: &mut THzImageExplorer,
-    thread_communication: &mut ThreadCommunication,
+    _ui: &mut Ui,
+    _height: f32,
+    _width: f32,
+    _spacing: f32,
+    _right_panel_width: f32,
+    _explorer: &mut THzImageExplorer,
+    _thread_communication: &mut ThreadCommunication,
 ) {
     // ui.vertical(|ui| {
     //     // Signal selection controls

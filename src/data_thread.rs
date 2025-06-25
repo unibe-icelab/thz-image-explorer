@@ -20,6 +20,7 @@ use std::time::Instant;
 pub enum UpdateType {
     None,
     Filter(usize),
+    #[allow(dead_code)]
     Image,
     Plot,
 }
@@ -278,7 +279,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     update = UpdateType::Filter(thread_communication.fft_index);
                 }
                 ConfigCommand::SetDownScaling => {
-                    if let Ok(scaling) = thread_communication.scaling_lock.read() {
+                    if let Ok(_scaling) = thread_communication.scaling_lock.read() {
                         //scan.scaling = *scaling as usize;
                         // scan.rescale()
                     }
@@ -691,7 +692,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                 }
                 UpdateType::Plot => {
                     // add selected pixel and avg data to the data lock for the plot
-                    let start = Instant::now();
+                    let _start = Instant::now();
 
                     if let Ok(mut data) = thread_communication.data_lock.write() {
                         if let Ok(filter_data) = thread_communication.filter_data_lock.read() {

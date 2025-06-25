@@ -1,7 +1,6 @@
 use interp1d::Interp1d;
-use ndarray::{Array1, Array2, Zip};
+use ndarray::{Array1, Array2};
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 
 /// Represents a Point Spread Function (PSF) used in spectroscopy and imaging analysis.
 ///

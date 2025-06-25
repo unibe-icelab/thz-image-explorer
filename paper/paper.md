@@ -1,5 +1,5 @@
 ---
-title: 'THz Image Explorer - A Cross-Platform Open-Source THz Image Analysis Tool'
+title: "THz Image Explorer - A Cross-Platform Open-Source THz Image Analysis Tool"
 tags:
   - THz
   - Rust
@@ -25,8 +25,8 @@ affiliations:
     ror: 03r5zec51
 date: 23 January 2025
 bibliography: paper.bib
-
 ---
+
 
 # Introduction
 
@@ -200,22 +200,46 @@ gestures on the trackpad/mouse wheel. The user can step through the time domain 
 
 ### Deconvolution
 
-cite Arnaud's paper
+The deconvolution filter is an implementation of the Frequency-dependent Richardson-Lucy algorithm described in [@demion_frequency-dependent_2025].
 
-Single dollars ($) are required for inline mathematics e.g. $f(x) = e^{\pi/x}$
+The Richardson-Lucy algorithm is defined as
 
-Double dollars make self-standing equations:
+$$
+\hat u_\xi^{(t)} = \hat u_\xi^{(t-1)} \cdot \frac{d_\xi}{\hat u_\xi^{(t-1)} * P_\xi} * P_\xi^{*},
+$$
+where $d$ is the observed scan composed of pixels, $\hat u$ is the reconstructed image, $P_\xi$ is the Point Spread Function (PSF) around the frequency $\xi$, and $P_\xi^{*}(x,y)=P_\xi(-x,-y)$ is the flipped PSF.
 
-$$\Theta(x) = \left\{\begin{array}{l}
-0\textrm{ if } x < 0\cr
-1\textrm{ else}
-\end{array}\right.$$
+In order to process the different frequency regions of the time traces, Linear phase FIR filters are designed such that,
+$$
+\begin{aligned}
+\mathbf s_i & = \sum_{\xi=0}^{M-1} \mathbf s _{i\xi}\\
+& =\sum_{\xi=0}^{M-1} \mathbf b _\xi * \mathbf s _{i},
+\end{aligned}
+$$
+where $\mathbf{b}_\xi$ and $\mathbf{s}_i$ are respectively the FIR filters and the time traces. $\xi=0,\dots, M-1$ is the index of the filter determining its center frequency and $\mathbf{s}_{i\xi}$ is the filtered time trace.
 
-You can also use plain \LaTeX for equations
-\begin{equation}\label{eq:fourier}
-\hat f(\omega) = \int_{-\infty}^{\infty} f(x) e^{i\omega x} dx
-\end{equation}
-and refer to \autoref{eq:fourier} from text.
+Assuming that the PSF does not induce phase modifications on the underlying signal, an estimation $\mathbf{\hat s}_i^\prime$ of the underlying terahertz traces $\mathbf{s}_i^\prime$ for each pixel $i$ with intensity $\hat u_i = \sum_\xi \hat u_{i\xi}$ can be computed with,
+$$
+\begin{aligned}
+\mathbf{\hat s}_i^\prime & = \sum_{\xi=0}^{M-1} \mathbf{\hat s}_{i\xi}^\prime,\\
+& = \sum_{\xi=0}^{M-1} g_{i\xi} \cdot \mathbf b_\xi * \mathbf s_{i},\\
+& = \sum_{\xi=0}^{M-1} g_{i\xi} \cdot \mathbf s_{i\xi},
+\end{aligned}
+$$
+where $g_{i\xi}$ is a gain factor for the frequency range $\xi$ at the pixel $i$.
+
+The estimation of the underlying filtered intensity can be written,
+$$
+\begin{aligned}
+\hat u_{i\xi} & = | \mathbf {\hat s}_{i\xi}^\prime |^2,\\
+& =  | g_{i\xi} \cdot \mathbf s_{i\xi} |^2 = g_{i\xi}^2 \cdot | \mathbf s_{i\xi} |^2,\\
+& = g_{i\xi}^2 \cdot d_{i\xi}.
+\end{aligned}
+$$
+Therefore, the gains can be computed with the output $\hat u_{i\xi}$ of the deconvolution algorithm applied on the filtered data using the frequency range dependent PSFs,
+$$
+g_{i\xi} = \sqrt{\frac{\hat u_{i\xi}}{d_{i\xi}}}.
+$$
 
 ### Custom Filters
 

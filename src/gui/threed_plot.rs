@@ -307,6 +307,7 @@ pub fn setup(
 }
 
 // Animate the camera's position
+#[allow(dead_code)]
 pub fn animate(
     time: Res<Time>,
     mut pan_orbit_query: Query<&mut PanOrbitCamera>,
