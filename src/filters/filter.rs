@@ -63,7 +63,6 @@ downcast_rs::impl_downcast!(CopyStaticFieldsTrait);
 ///     ) -> ScannedImageFilterData {
 ///            // Apply filter logic here
 ///             input_data.clone() // Placeholder, replace with actual filtering logic
-///         }
 ///     }
 ///
 ///     fn config(&self) -> FilterConfig {
@@ -82,6 +81,7 @@ downcast_rs::impl_downcast!(CopyStaticFieldsTrait);
 ///     ) -> egui::Response {
 ///        // Render filter configuration UI here
 ///     }
+/// }
 /// ```
 pub trait Filter: Send + Sync + Debug + CloneBoxedFilter + CopyStaticFieldsTrait {
     /// Creates a new instance of the filter with default parameters.

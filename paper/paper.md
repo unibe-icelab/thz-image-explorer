@@ -27,7 +27,6 @@ date: 23 January 2025
 bibliography: paper.bib
 ---
 
-
 # Introduction
 
 THz time-domain spectroscopy (TDS) is a fast-growing field with applications to perform non-destructive studies of
@@ -58,7 +57,7 @@ the code.
 Solutions published by the scientific community are not available on all platforms, are only applicable on single pixel
 measurements and/or not focused on an interactive workflow [@peretti_thz-tds_2019; @loaiza_thztools_2024].
 With this application, we provide a performant solution written in Rust, that allows an interactive analysis of 2D THz
-scans.
+scans with multiple filters and a 3D viewer.
 This work is open-source and pre-built bundles are available for Linux, macOS and Windows, making it available to the
 entire scientific community.
 
@@ -69,17 +68,17 @@ The application is multithreaded with two main threads:
 - GUI thread
 - Data thread
 
-The GUI uses [egui](https://www.egui.rs), an immediate-mode GUI library for rust with the native
-back-end [glow](https://crates.io/crates/glow) based on openGL [@shreiner_opengl_2009].
+The GUI uses [egui](https://www.egui.rs), an immediate-mode GUI library for rust and [bevy](https://bevy.org), a game
+engine used for rendering.
 
 The GUI thread handles all the user input and displaying of plots and other window elements. The configuration values
 set in the GUI are sent to the Data thread
-via multiple-producer-single-consumer (MPSC) channels.
+via multiple-producer-multi-consumer (MPMC) channels.
 The Data thread then handles the computation of the applied filters.
 The output of the computation is then shared via mutexes with the GUI thread.
 The entire thread communication is handled with the `ThreadCommunication` and `ThreadCommunication` structs. To
 extend the communication for additional data-types, these two structs need to be extended with `Arc<RwLock<T>>` or
-`mpsc::Sender<T>`/`mpsc::Receiver<T>`.
+`crossbeam_channel::Sender<T>`/`crossbeam_channel::Receiver<T>`.
 
 # Installation
 
@@ -117,7 +116,7 @@ With default settings `cmake` is required to build HDF5 from source, which is re
 dotTHz standard. If HDF5 is already installed on the
 system, the user can change remove the `hdf5-sys-static` feature from the `dotthz` dependency in the `Cargo.toml` file.
 
-On Linux, the following dependencies need to be installed first as a requirement for `egui`:
+On Linux, the following dependencies need to be installed first as a requirement for `egui` and `bevy`:
 
 - `libclang-dev`
 - `libgtk-3-dev`
@@ -126,6 +125,7 @@ On Linux, the following dependencies need to be installed first as a requirement
 - `libxcb-xfixes0-dev`
 - `libxkbcommon-dev`
 - `libssl-dev`
+- `libasound2-dev`
 
 On Linux you need to first run:
 
@@ -153,28 +153,36 @@ settings window.
 # Usage
 
 The window is structured with the time domain trace and frequency domain spectrum for the selected pixel (default is
-0,0) at the center.
+0,0) in the center panel. A different tab showing the refractive index and absorption coefficient can be selected, as
+well as a tab containing a 3D viewer.
 The left side-panel contains the intensity plot of the 2D scan along with the meta-data, which can be edited. The right
 side-panel contains the possible filters with configuration settings.
 A pixel can be (de-)selected by clicking inside the intensity plot. By holding the Shift key and selecting pixels, a
 region of interest (ROI) can be selected. This ROI is a convex polygon, which is closed if the last corner is selected
 reasonably close to the first one (< 5 % of width/height of the image). This ROI can then be saved in the meta-data of
-the dotTHz file for future analysis. The displayed averaged trace in the central panel also corresponds to the pixels
-inside the ROI.
+the dotTHz file for future analysis. The full averaged scan as well as the averages of all selected ROIs can be
+displayed in the center plot.
 
 A sample scan is available in the `sample_data` directory.
 
 ## IO
 
-THz Image Explorer is able to load scans saved as `.npy` files and scans in the `.thz` (dotTHz) format,
-which are based on the HDF5 standard.
+THz Image Explorer is able to load scans in the `.thz` (dotTHz) format, which are based on the HDF5 standard.
 This allows the files to also contain meta-data, which will also be displayed by the THz Image Explorer. The meta-data
 is shown in the file opening dialog, allowing to easily
 browse through directories containing multiple scans and is also displayed upon opening a scan.
 
+The 3D structure can be exported as a `.vtu` file for further analysis (e.g.
+with [ParaView](https://www.paraview.org) ).
+
 ## Filters
 
-### FFT Window
+### Time Domain Before FFT
+
+Before applying the Fast-Fourier-Transform (FFT), a tilt-compensation can be applied to the time domain trace to compensate any misalignment's along the $x$ axis and/or $y$ axis.
+Additionally, a simple band-pass filter can be applied to exclude secondary peaks.
+
+### FFT
 
 To reduce artefacts in the frequency domain, a window is multiplied to the time domain before applying the
 Fast-Fourier-Transform (FFT). By default, the adapted Blackman
@@ -192,22 +200,27 @@ The windows are defined in `math_tools.rs`.
 
 A simple band-pass filter can be applied in fourier space to only display certain frequency bands.
 
-### Time Domain Slice
+### Inverse FFT
 
+### Time Domain After FFT
+
+After converting back to the time domain, another band-pass filter can be applied to the time traces.
 By selecting a slice in the time domain, it is possible to scan through the $z$-axis of the scan and analysing
 sub-surface layers [@koch-dandolo_reflection_2015]. The double-slider can be controlled with zoom and scroll/pan
-gestures on the trackpad/mouse wheel. The user can step through the time domain using the left/right arrow keys.
+gestures on the trackpad/mouse wheel. The user can step through the time domain using the left/right arrow keys, when hovered above the filter UI.
 
 ### Deconvolution
 
-The deconvolution filter is an implementation of the Frequency-dependent Richardson-Lucy algorithm described in [@demion_frequency-dependent_2025].
+The deconvolution filter is an implementation of the Frequency-dependent Richardson-Lucy algorithm described
+in [@demion_frequency-dependent_2025].
 
 The Richardson-Lucy algorithm is defined as
 
 $$
 \hat u_\xi^{(t)} = \hat u_\xi^{(t-1)} \cdot \frac{d_\xi}{\hat u_\xi^{(t-1)} * P_\xi} * P_\xi^{*},
 $$
-where $d$ is the observed scan composed of pixels, $\hat u$ is the reconstructed image, $P_\xi$ is the Point Spread Function (PSF) around the frequency $\xi$, and $P_\xi^{*}(x,y)=P_\xi(-x,-y)$ is the flipped PSF.
+where $d$ is the observed scan composed of pixels, $\hat u$ is the reconstructed image, $P_\xi$ is the Point Spread
+Function (PSF) around the frequency $\xi$, and $P_\xi^{*}(x,y)=P_\xi(-x,-y)$ is the flipped PSF.
 
 In order to process the different frequency regions of the time traces, Linear phase FIR filters are designed such that,
 $$
@@ -216,9 +229,12 @@ $$
 & =\sum_{\xi=0}^{M-1} \mathbf b _\xi * \mathbf s _{i},
 \end{aligned}
 $$
-where $\mathbf{b}_\xi$ and $\mathbf{s}_i$ are respectively the FIR filters and the time traces. $\xi=0,\dots, M-1$ is the index of the filter determining its center frequency and $\mathbf{s}_{i\xi}$ is the filtered time trace.
+where $\mathbf{b}_\xi$ and $\mathbf{s}_i$ are respectively the FIR filters and the time traces. $\xi=0,\dots, M-1$ is
+the index of the filter determining its center frequency and $\mathbf{s}_{i\xi}$ is the filtered time trace.
 
-Assuming that the PSF does not induce phase modifications on the underlying signal, an estimation $\mathbf{\hat s}_i^\prime$ of the underlying terahertz traces $\mathbf{s}_i^\prime$ for each pixel $i$ with intensity $\hat u_i = \sum_\xi \hat u_{i\xi}$ can be computed with,
+Assuming that the PSF does not induce phase modifications on the underlying signal, an
+estimation $\mathbf{\hat s}_i^\prime$ of the underlying terahertz traces $\mathbf{s}_i^\prime$ for each pixel $i$ with
+intensity $\hat u_i = \sum_\xi \hat u_{i\xi}$ can be computed with,
 $$
 \begin{aligned}
 \mathbf{\hat s}_i^\prime & = \sum_{\xi=0}^{M-1} \mathbf{\hat s}_{i\xi}^\prime,\\
@@ -232,101 +248,76 @@ The estimation of the underlying filtered intensity can be written,
 $$
 \begin{aligned}
 \hat u_{i\xi} & = | \mathbf {\hat s}_{i\xi}^\prime |^2,\\
-& =  | g_{i\xi} \cdot \mathbf s_{i\xi} |^2 = g_{i\xi}^2 \cdot | \mathbf s_{i\xi} |^2,\\
+& = | g_{i\xi} \cdot \mathbf s_{i\xi} |^2 = g_{i\xi}^2 \cdot | \mathbf s_{i\xi} |^2,\\
 & = g_{i\xi}^2 \cdot d_{i\xi}.
 \end{aligned}
 $$
-Therefore, the gains can be computed with the output $\hat u_{i\xi}$ of the deconvolution algorithm applied on the filtered data using the frequency range dependent PSFs,
+Therefore, the gains can be computed with the output $\hat u_{i\xi}$ of the deconvolution algorithm applied on the
+filtered data using the frequency range dependent PSFs,
 $$
 g_{i\xi} = \sqrt{\frac{\hat u_{i\xi}}{d_{i\xi}}}.
 $$
 
 ### Custom Filters
 
-The code-base can easily be extended with custom filters. The individual filter parameters will be wrapped in
-`ParameterKind` structs to define how they should be displayed in the GUI. Each filter can be set to either be applied
-in the time or frequency domain with the `FilterDomain` enum.
+The code-base can easily be extended with custom filters. The user needs to create a custom file in the `src/filters`
+directory with a struct that implements the `Filter` trait. The file needs to be attached to the `mod.rs` file in the
+`src/filters` directory, so that it is included in the compilation.
+By defining the `config()` function, the user can supply a name, description and specify in which domain the filter
+operates (time or frequency).
+The math of the filter needs to be placed in the `filter()` function and the user interface in the `ui()` function using
+`egui` syntax.
+`Clone`, `Debug` and `CopyStaticFields` need to be derived.
+Additionally, the `#[register_filter]` procedural macro
+needs to added to the custom filter struct to automatically add it to the application and the user does not need to
+adapt any other files.
 
 ```rust
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FilterDomain {
-    Time,
-    Frequency,
-}
+use crate::filters::filter::{Filter, GuiSettingsContainer, ScannedImageFilterData};
 
-#[derive(Debug, Clone)]
-pub enum ParameterKind {
-    Int(isize),
-    UInt(usize),
-    Float(f64),
-    Boolean(bool),
-    Slider {
-        value: f64,
-        show_in_plot: bool,
-        min: f64,
-        max: f64,
-    },
-    DoubleSlider {
-        values: [f64; 2],
-        show_in_plot: bool,
-        minimum_separation: f64,
-        inverted: bool,
-        min: f64,
-        max: f64,
-    },
-}
-```
-
-The user needs to create a custom file in the `src/filters`
-directory with a struct that implements the `Filter` trait. Additionally, the `#[register_filter]` procedural macro
-needs to added to the custom filter struct to automatically add it to the application.
-
-```rust
-use crate::data_container::ScannedImage;
-use crate::filters::filter::{Filter, FilterConfig,
-                             FilterDomain, FilterParameter,
-                             ParameterKind};
-use filter_macros::register_filter;
-
-#[derive(Debug)]
 #[register_filter]
-pub struct CustomFilter {
-    pub param1: f32,
-    pub param2: f32,
-    pub param3: usize,
-}
+#[derive(Clone, Debug, CopyStaticFields)]
+struct ExampleFilter;
 
-impl Filter for CustomFilter {
-    fn filter(&self, _scan: &mut ScannedImage,
-              _gui_settings: &mut GuiSettingsContainer) {
-        todo!();
-        // Implement your filter algorithm here
+impl Filter for ExampleFilter {
+    fn new() -> Self { ExampleFilter }
+
+    fn reset(&mut self, time: &Array1<f32>, shape: &[usize]) {
+        // Reset logic here
     }
+
+    fn filter(
+        &mut self,
+        input_data: &ScannedImageFilterData,
+        gui_settings: &mut GuiSettingsContainer,
+        progress_lock: &mut Arc<RwLock<Option<f32>>>,
+        abort_flag: &Arc<AtomicBool>,
+    ) -> ScannedImageFilterData {
+        // Apply filter logic here
+        input_data.clone() // Placeholder, replace with actual filtering logic
+    }
+
 
     fn config(&self) -> FilterConfig {
         FilterConfig {
-            name: "Custom Filter".to_string(),
-            domain: FilterDomain::Frequency,
-            parameters: vec![
-                FilterParameter {
-                    name: "Parameter 1".to_string(),
-                    kind: ParameterKind::Float(self.param1),
-                },
-                FilterParameter {
-                    name: "Parameter 2".to_string(),
-                    kind: ParameterKind::Float(self.param2),
-                },
-                FilterParameter {
-                    name: "Parameter 3".to_string(),
-                    kind: ParameterKind::UInt(self.param3),
-                },
-            ],
+            name: "Example Filter".to_string(),
+            domain: FilterDomain::Time,
+            parameters: vec![]
         }
+    }
+
+    fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        thread_communication: &mut ThreadCommunication,
+        panel_width: f32,
+    ) -> egui::Response {
+        // Render filter configuration UI here
     }
 }
 ```
 
-To implement more complex methods, further adaptations are required, but the code structure has been set up with
+To implement more complex methods, further adaptations might be required, but the code structure has been set up with
 modularity and simplicity in mind.
 
 # Summary
