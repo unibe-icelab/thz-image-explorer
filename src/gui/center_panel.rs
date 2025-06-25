@@ -554,7 +554,6 @@ pub fn pulse_tab(
     });
 }
 
-#[allow(dead_code)]
 pub fn refractive_index_tab(
     _ui: &mut Ui,
     _height: f32,

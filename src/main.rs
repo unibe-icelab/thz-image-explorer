@@ -5,8 +5,8 @@ use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::SelectedPixel;
 use crate::gui::threed_plot::{
-    set_enable_camera_controls_system, setup, update_instance_buffer_system, CameraInputAllowed,
-    OpacityThreshold, SceneVisibility,
+    animate, set_enable_camera_controls_system, setup, update_instance_buffer_system,
+    CameraInputAllowed, OpacityThreshold, SceneVisibility,
 };
 use bevy::app::AppExit;
 use bevy::ecs::event::EventReader;
