@@ -1,4 +1,4 @@
-from thz_signal.signal import *
+from thz_deconvolution import *
 import argparse
 import numpy as np
 import os
@@ -47,7 +47,7 @@ y_path = args.path_y
 print()
 print("* Loading knife edge measurements")
 
-x_psf_lr, y_psf_lr, np_psf_t_x_lr, np_psf_t_y_lr, times_psf = load_double_knife_edge_meas(x_path, y_path, trim=False, ratio=1.0, plot=show)
+x_psf_lr, y_psf_lr, np_psf_t_x_lr, np_psf_t_y_lr, times_psf = load_knife_edge_meas(x_path, y_path)
 
 
 x_psf_lr = np.split(x_psf_lr, 2)
@@ -144,6 +144,8 @@ data = {
 }
 
 np.savez(os.path.join(script_path, "sample_directory/psf.npz"), **data)
+print()
+print("* Data saved to sample_directory/psf.npz")
 
 plt.plot(filt_freqs, w_xs, 'C0')
 plt.plot(filt_freqs, w_ys, 'C3')
