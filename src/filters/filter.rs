@@ -68,8 +68,9 @@ downcast_rs::impl_downcast!(CopyStaticFieldsTrait);
 ///     fn config(&self) -> FilterConfig {
 ///         FilterConfig {
 ///             name: "Example Filter".to_string(),
-///             domain: FilterDomain::Time,
-///             parameters: vec![]
+///             description: "Description of the example filter.".to_string(),
+///             hyperlink: None, // Optional DOI or reference link
+///             domain: FilterDomain::TimeBeforeFFT, // Specify the domain of the filter
 ///         }
 ///     }
 ///

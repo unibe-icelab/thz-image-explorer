@@ -5,7 +5,7 @@
 use crate::config::{ConfigCommand, ConfigContainer, ThreadCommunication};
 use crate::data_container::ScannedImageFilterData;
 use crate::filters::filter::{Filter, FILTER_REGISTRY};
-use crate::gui::matrix_plot::SelectedPixel;
+use crate::gui::matrix_plot::{SelectedPixel, ROI};
 use crate::io::{
     load_meta_data_of_thz_file, open_from_thz, save_to_thz, update_meta_data_of_thz_file,
 };
@@ -109,6 +109,9 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
 
     let mut reset_filters = false;
 
+    let mut sample_roi = "".to_string();
+    let mut reference_roi = "".to_string();
+
     let mut update = UpdateType::None;
     loop {
         if thread_communication.abort_flag.load(Ordering::Relaxed) {
@@ -141,17 +144,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         log::error!("failed loading meta-data {:?}: not a dotTHz file", path)
                     }
                     continue;
-                }
-                ConfigCommand::UpdateROIS(rois) => {
-                    update = UpdateType::Filter(1);
-                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
-                        if let Some(input) = filter_data.first_mut() {
-                            input.rois.clear();
-                            for roi in rois.iter() {
-                                input.rois.insert(roi.0.clone(), roi.1.clone());
-                            }
-                        }
-                    }
                 }
                 ConfigCommand::UpdateMetaData(mut path) => {
                     // THz Image Explorer always saves thz files
@@ -210,10 +202,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                             Ok(_) => {
                                                 log::info!("opened {:?}", selected_file_path);
                                                 // Copy the first entry into all others
-                                                let first = input.clone();
-                                                for entry in filter_data.iter_mut().skip(1) {
-                                                    *entry = first.clone();
-                                                }
                                             }
                                             Err(err) => {
                                                 log::error!(
@@ -223,8 +211,69 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                                 )
                                             }
                                         };
+
+                                        if let Some(labels) = meta_data.md.get("ROI Labels") {
+                                            let roi_labels: Vec<&str> = labels.split(',').collect();
+                                            for (i, label) in roi_labels.iter().enumerate() {
+                                                if let Some(roi_data) =
+                                                    meta_data.md.get(&format!("ROI {}", i))
+                                                {
+                                                    // Ensure we are correctly extracting coordinates
+                                                    let polygon = roi_data
+                                                        .split("],") // Split by "]," to separate coordinate pairs
+                                                        .filter_map(|point| {
+                                                            let cleaned = point.trim_matches(|c| {
+                                                                c == '[' || c == ']'
+                                                            });
+                                                            let values: Vec<f64> = cleaned
+                                                                .split(',')
+                                                                .filter_map(|v| {
+                                                                    v.trim().parse::<f64>().ok()
+                                                                })
+                                                                .collect();
+
+                                                            if values.len() == 2 {
+                                                                Some([values[0], values[1]])
+                                                            } else {
+                                                                None
+                                                            }
+                                                        })
+                                                        .collect::<Vec<[f64; 2]>>();
+
+                                                    if !polygon.is_empty() {
+                                                        if let Ok(mut data) =
+                                                            thread_communication.data_lock.write()
+                                                        {
+                                                            data.rois.push(ROI {
+                                                                polygon: polygon.clone(),
+                                                                closed: true,
+                                                                name: label.to_string(),
+                                                            });
+                                                            input.rois.insert(
+                                                                label.to_string(),
+                                                                polygon
+                                                                    .iter()
+                                                                    .map(|v| {
+                                                                        (
+                                                                            v[0] as usize,
+                                                                            v[1] as usize,
+                                                                        )
+                                                                    })
+                                                                    .collect(),
+                                                            );
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
                                         if let Ok(mut md) = thread_communication.md_lock.write() {
                                             *md = meta_data.clone();
+                                        }
+
+                                        let first = input.clone();
+                                        for entry in filter_data.iter_mut().skip(1) {
+                                            *entry = first.clone();
                                         }
                                     }
                                 }
@@ -326,6 +375,43 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         log::error!("Could not acquire filter_uuid_to_index_lock");
                         update = UpdateType::None;
                     }
+                }
+                ConfigCommand::UpdateMaterialCalculation => {
+                    update = UpdateType::Plot;
+                }
+                ConfigCommand::AddROI(roi) => {
+                    if let Ok(mut data) = thread_communication.data_lock.write() {
+                        data.rois.push(roi.clone());
+                    }
+                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                        if let Some(input) = filter_data.first_mut() {
+                            input.rois.insert(
+                                roi.name,
+                                roi.polygon
+                                    .iter()
+                                    .map(|v| (v[0] as usize, v[1] as usize))
+                                    .collect(),
+                            );
+                        }
+                    }
+                }
+                ConfigCommand::DeleteROI(name) => {
+                    if let Ok(mut data) = thread_communication.data_lock.write() {
+                        data.rois.retain(|roi| roi.name != name);
+                    }
+                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                        if let Some(input) = filter_data.first_mut() {
+                            input.rois.remove(&name);
+                        }
+                    }
+                }
+                ConfigCommand::SetSample(name) => {
+                    update = UpdateType::Plot;
+                    sample_roi = name;
+                }
+                ConfigCommand::SetReference(name) => {
+                    update = UpdateType::Plot;
+                    reference_roi = name;
                 }
             }
 
@@ -704,6 +790,129 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             }
                         }
                     }
+                    if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
+                        if let Some(filtered) = filter_data.last() {
+                            // Check if we have at least two ROIs (sample and reference)
+                            if filtered.rois.len() < 2 {
+                                log::warn!("Material calculation requires at least two ROIs (sample and reference)");
+                                continue;
+                            }
+                            
+                            // Get sample thickness from GUI settings (in meters)
+                            let sample_thickness = 1.0 / 1e3; // explorer.data.sample_thickness;
+
+                            // Calculate material properties for each frequency
+                            let frequencies = filtered.frequency.clone();
+                            let mut refractive_index = Vec::with_capacity(frequencies.len());
+                            let mut absorption_coeff = Vec::with_capacity(frequencies.len());
+                            let mut extinction_coeff = Vec::with_capacity(frequencies.len());
+
+                            // Get ROI data
+                            if let Some(reference_roi) = filtered.rois.get(&reference_roi) {
+                                // Get sample and reference ROIs
+                                let reference_amplitude =
+                                    average_polygon_roi(&filtered.amplitudes, reference_roi);
+                                let reference_phase =
+                                    average_polygon_roi(&filtered.phases, reference_roi);
+
+                                // Speed of light in vacuum (m/s)
+                                let c = 2.99792458e8_f32;
+
+                                if &sample_roi == "Selected Pixel" {
+                                    let sample_amplitude = filtered.amplitudes
+                                        .index_axis(Axis(0), selected_pixel.x)
+                                        .index_axis(Axis(0), selected_pixel.y)
+                                        .to_vec();
+                                    let sample_phase = filtered.phases
+                                        .index_axis(Axis(0), selected_pixel.x)
+                                        .index_axis(Axis(0), selected_pixel.y)
+                                        .to_vec();
+                                    // Calculate for each frequency point
+                                    for i in 0..frequencies.len() {
+                                        // Convert frequency to Hz (from THz)
+                                        let frequency_hz = frequencies[i] * 1.0e12;
+
+                                        // Phase difference (may need unwrapping for discontinuities)
+                                        let phase_diff = sample_phase[i] - reference_phase[i];
+
+                                        // Refractive index: n = 1 + (c * Δφ) / (2π * f * d)
+                                        let n = 1.0
+                                            + (c * phase_diff)
+                                                / (2.0
+                                                    * std::f32::consts::PI
+                                                    * frequency_hz
+                                                    * sample_thickness);
+
+                                        // Absorption coefficient: α = -2 * ln(|T|) / d
+                                        // where |T| = |E_sample| / |E_reference|
+                                        let amplitude_ratio =
+                                            sample_amplitude[i] / reference_amplitude[i];
+                                        let alpha = -2.0 * amplitude_ratio.ln() / sample_thickness;
+
+                                        // Extinction coefficient: κ = α * c / (4π * f)
+                                        let kappa =
+                                            alpha * c / (4.0 * std::f32::consts::PI * frequency_hz);
+
+                                        refractive_index.push(n);
+                                        absorption_coeff.push(alpha);
+                                        extinction_coeff.push(kappa);
+                                    }
+
+                                    // Store the calculated data
+                                    if let Ok(mut data) = thread_communication.data_lock.write() {
+                                        data.refractive_index = refractive_index;
+                                        data.absorption_coefficient = absorption_coeff;
+                                        data.extinction_coefficient = extinction_coeff;
+                                    }
+                                } else if let Some(sample_roi) = filtered.rois.get(&sample_roi) {
+                                    let sample_phase =
+                                        average_polygon_roi(&filtered.phases, sample_roi);
+                                    let sample_amplitude =
+                                        average_polygon_roi(&filtered.amplitudes, sample_roi);
+
+                                    // Calculate for each frequency point
+                                    for i in 0..frequencies.len() {
+                                        // Convert frequency to Hz (from THz)
+                                        let frequency_hz = frequencies[i] * 1.0e12;
+
+                                        // Phase difference (may need unwrapping for discontinuities)
+                                        let phase_diff = sample_phase[i] - reference_phase[i];
+
+                                        // Refractive index: n = 1 + (c * Δφ) / (2π * f * d)
+                                        let n = 1.0
+                                            + (c * phase_diff)
+                                                / (2.0
+                                                    * std::f32::consts::PI
+                                                    * frequency_hz
+                                                    * sample_thickness);
+
+                                        // Absorption coefficient: α = -2 * ln(|T|) / d
+                                        // where |T| = |E_sample| / |E_reference|
+                                        let amplitude_ratio =
+                                            sample_amplitude[i] / reference_amplitude[i];
+                                        let alpha = -2.0 * amplitude_ratio.ln() / sample_thickness;
+
+                                        // Extinction coefficient: κ = α * c / (4π * f)
+                                        let kappa =
+                                            alpha * c / (4.0 * std::f32::consts::PI * frequency_hz);
+
+                                        refractive_index.push(n);
+                                        absorption_coeff.push(alpha);
+                                        extinction_coeff.push(kappa);
+                                    }
+
+                                    // Store the calculated data
+                                    if let Ok(mut data) = thread_communication.data_lock.write() {
+                                        data.refractive_index = refractive_index;
+                                        data.absorption_coefficient = absorption_coeff;
+                                        data.extinction_coefficient = extinction_coeff;
+                                    }
+                                };
+                            }
+                        } else {
+                            log::warn!("No filtered data available for material calculation");
+                        }
+                    }
                 }
                 UpdateType::Image => {
                     // update intensity image
@@ -819,6 +1028,130 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 data.avg_signal_fft = filtered.avg_signal_fft.to_vec();
                                 data.avg_phase_fft = filtered.avg_phase_fft.to_vec();
                             }
+                        }
+                    }
+
+                    if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
+                        if let Some(filtered) = filter_data.last() {
+                            // Check if we have at least two ROIs (sample and reference)
+                            if filtered.rois.len() < 2 {
+                                log::warn!("Material calculation requires at least two ROIs (sample and reference)");
+                                continue;
+                            }
+                            
+                            // Get sample thickness from GUI settings (in meters)
+                            let sample_thickness = 1.0 / 1e3; // explorer.data.sample_thickness;
+
+                            // Calculate material properties for each frequency
+                            let frequencies = filtered.frequency.clone();
+                            let mut refractive_index = Vec::with_capacity(frequencies.len());
+                            let mut absorption_coeff = Vec::with_capacity(frequencies.len());
+                            let mut extinction_coeff = Vec::with_capacity(frequencies.len());
+
+                            // Get ROI data
+                            if let Some(reference_roi) = filtered.rois.get(&reference_roi) {
+                                // Get sample and reference ROIs
+                                let reference_amplitude =
+                                    average_polygon_roi(&filtered.amplitudes, reference_roi);
+                                let reference_phase =
+                                    average_polygon_roi(&filtered.phases, reference_roi);
+
+                                // Speed of light in vacuum (m/s)
+                                let c = 2.99792458e8_f32;
+
+                                if &sample_roi == "Selected Pixel" {
+                                    let sample_amplitude = filtered.amplitudes
+                                        .index_axis(Axis(0), selected_pixel.x)
+                                        .index_axis(Axis(0), selected_pixel.y)
+                                        .to_vec();
+                                    let sample_phase = filtered.phases
+                                        .index_axis(Axis(0), selected_pixel.x)
+                                        .index_axis(Axis(0), selected_pixel.y)
+                                        .to_vec();
+                                    // Calculate for each frequency point
+                                    for i in 0..frequencies.len() {
+                                        // Convert frequency to Hz (from THz)
+                                        let frequency_hz = frequencies[i] * 1.0e12;
+
+                                        // Phase difference (may need unwrapping for discontinuities)
+                                        let phase_diff = sample_phase[i] - reference_phase[i];
+
+                                        // Refractive index: n = 1 + (c * Δφ) / (2π * f * d)
+                                        let n = 1.0
+                                            + (c * phase_diff)
+                                            / (2.0
+                                            * std::f32::consts::PI
+                                            * frequency_hz
+                                            * sample_thickness);
+
+                                        // Absorption coefficient: α = -2 * ln(|T|) / d
+                                        // where |T| = |E_sample| / |E_reference|
+                                        let amplitude_ratio =
+                                            sample_amplitude[i] / reference_amplitude[i];
+                                        let alpha = -2.0 * amplitude_ratio.ln() / sample_thickness;
+
+                                        // Extinction coefficient: κ = α * c / (4π * f)
+                                        let kappa =
+                                            alpha * c / (4.0 * std::f32::consts::PI * frequency_hz);
+
+                                        refractive_index.push(n);
+                                        absorption_coeff.push(alpha);
+                                        extinction_coeff.push(kappa);
+                                    }
+
+                                    // Store the calculated data
+                                    if let Ok(mut data) = thread_communication.data_lock.write() {
+                                        data.refractive_index = refractive_index;
+                                        data.absorption_coefficient = absorption_coeff;
+                                        data.extinction_coefficient = extinction_coeff;
+                                    }
+                                } else if let Some(sample_roi) = filtered.rois.get(&sample_roi) {
+                                    let sample_phase =
+                                        average_polygon_roi(&filtered.phases, sample_roi);
+                                    let sample_amplitude =
+                                        average_polygon_roi(&filtered.amplitudes, sample_roi);
+
+                                    // Calculate for each frequency point
+                                    for i in 0..frequencies.len() {
+                                        // Convert frequency to Hz (from THz)
+                                        let frequency_hz = frequencies[i] * 1.0e12;
+
+                                        // Phase difference (may need unwrapping for discontinuities)
+                                        let phase_diff = sample_phase[i] - reference_phase[i];
+
+                                        // Refractive index: n = 1 + (c * Δφ) / (2π * f * d)
+                                        let n = 1.0
+                                            + (c * phase_diff)
+                                            / (2.0
+                                            * std::f32::consts::PI
+                                            * frequency_hz
+                                            * sample_thickness);
+
+                                        // Absorption coefficient: α = -2 * ln(|T|) / d
+                                        // where |T| = |E_sample| / |E_reference|
+                                        let amplitude_ratio =
+                                            sample_amplitude[i] / reference_amplitude[i];
+                                        let alpha = -2.0 * amplitude_ratio.ln() / sample_thickness;
+
+                                        // Extinction coefficient: κ = α * c / (4π * f)
+                                        let kappa =
+                                            alpha * c / (4.0 * std::f32::consts::PI * frequency_hz);
+
+                                        refractive_index.push(n);
+                                        absorption_coeff.push(alpha);
+                                        extinction_coeff.push(kappa);
+                                    }
+
+                                    // Store the calculated data
+                                    if let Ok(mut data) = thread_communication.data_lock.write() {
+                                        data.refractive_index = refractive_index;
+                                        data.absorption_coefficient = absorption_coeff;
+                                        data.extinction_coefficient = extinction_coeff;
+                                    }
+                                };
+                            }
+                        } else {
+                            log::warn!("No filtered data available for material calculation");
                         }
                     }
                     // println!("updated plot. This took {:?}", start.elapsed());

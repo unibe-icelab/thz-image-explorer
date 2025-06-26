@@ -106,6 +106,8 @@ impl Tab {
 /// - `psf`: The point spread function represented as a 2D array.
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Resource)]
 pub struct GuiSettingsContainer {
+    pub reference_index: usize,
+    pub sample_index: usize,
     pub selected_path: PathBuf,
     pub log_plot: bool,
     pub down_scaling: usize,
@@ -150,6 +152,8 @@ impl GuiSettingsContainer {
     /// - Default file paths set to the user's home directory or `/`.
     pub fn new() -> GuiSettingsContainer {
         GuiSettingsContainer {
+            reference_index: 0,
+            sample_index: 0,
             selected_path: home_dir().unwrap_or_else(|| PathBuf::from("/")),
             log_plot: true,
             down_scaling: 1,

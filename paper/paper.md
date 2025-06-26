@@ -23,7 +23,7 @@ affiliations:
   - name: University of Applied Sciences and Arts Western Switzerland Valais, HES-SO Valais-Wallis, Sion, Switzerland
     index: 2
     ror: 03r5zec51
-date: 23 January 2025
+date: 26 June 2025
 bibliography: paper.bib
 ---
 
@@ -58,7 +58,7 @@ Solutions published by the scientific community are not available on all platfor
 measurements and/or not focused on an interactive workflow [@peretti_thz-tds_2019; @loaiza_thztools_2024].
 With this application, we provide a performant solution written in Rust, that allows an interactive analysis of 2D THz
 scans with multiple filters and a 3D viewer.
-This work is open-source and pre-built bundles are available for Linux, macOS and Windows, making it available to the
+This work is open-source and pre-built bundles are available for Linux, macOS and Windows, thus available to the
 entire scientific community.
 
 # Structure
@@ -76,7 +76,7 @@ set in the GUI are sent to the Data thread
 via multiple-producer-multi-consumer (MPMC) channels.
 The Data thread then handles the computation of the applied filters.
 The output of the computation is then shared via mutexes with the GUI thread.
-The entire thread communication is handled with the `ThreadCommunication` and `ThreadCommunication` structs. To
+The entire thread communication is handled with the `ThreadCommunication` struct. To
 extend the communication for additional data-types, these two structs need to be extended with `Arc<RwLock<T>>` or
 `crossbeam_channel::Sender<T>`/`crossbeam_channel::Receiver<T>`.
 
@@ -154,14 +154,12 @@ settings window.
 
 The window is structured with the time domain trace and frequency domain spectrum for the selected pixel (default is
 0,0) in the center panel. A different tab showing the refractive index and absorption coefficient can be selected, as
-well as a tab containing a 3D viewer.
+well as a tab containing an interactive 3D viewer.
 The left side-panel contains the intensity plot of the 2D scan along with the meta-data, which can be edited. The right
 side-panel contains the possible filters with configuration settings.
-A pixel can be (de-)selected by clicking inside the intensity plot. By holding the Shift key and selecting pixels, a
-region of interest (ROI) can be selected. This ROI is a convex polygon, which is closed if the last corner is selected
-reasonably close to the first one (< 5 % of width/height of the image). This ROI can then be saved in the meta-data of
-the dotTHz file for future analysis. The full averaged scan as well as the averages of all selected ROIs can be
-displayed in the center plot.
+A pixel can be (de-)selected by clicking inside the intensity plot.
+For large scans, it is recommend to down-scale the image. This will average the pixel values in a $2 \times 2$
+(or $4 \times 4$ and so on) pixel block, depending on the down-scaling factor.
 
 A sample scan is available in the `sample_data` directory.
 
@@ -170,16 +168,45 @@ A sample scan is available in the `sample_data` directory.
 THz Image Explorer is able to load scans in the `.thz` (dotTHz) format, which are based on the HDF5 standard.
 This allows the files to also contain meta-data, which will also be displayed by the THz Image Explorer. The meta-data
 is shown in the file opening dialog, allowing to easily
-browse through directories containing multiple scans and is also displayed upon opening a scan.
+browse through directories containing multiple scans and is also displayed upon opening a
+scan.[10.1007%2Fs10762-019-00578-0-citation.ris](../../../Downloads/10.1007%252Fs10762-019-00578-0-citation.ris)
 
 The 3D structure can be exported as a `.vtu` file for further analysis (e.g.
 with [ParaView](https://www.paraview.org) ).
 
-## Filters
+A reference file can be loaded, which is used to compute the refractive index and absorption coefficient. If such a file
+is loaded, the dataset named "reference" is used as the reference, if no such dataset label is found, then the first
+entry will be used.
+
+## Regions of Interest (ROI)
+
+By holding the Shift key and selecting pixels, a
+region of interest (ROI) can be selected. This ROI is a convex polygon, which is closed if the last corner is selected
+reasonably close to the first one (< 5 % of width/height of the image). This ROI can then be saved in the meta-data of
+the dotTHz file for future analysis. The full averaged scan as well as the averages of all selected ROIs can be
+displayed in the center plot.
+
+## Refractive Index and Absorption Coefficient
+
+The refractive index and absorption coefficient can be computed from the frequency domain spectrum using the
+Kramers-Kronig relations [@Jepsen2019]. The refractive index and absorption coefficient
+are computed from the complex refractive index $n$ as follows:
+The refractive index and absorption coefficient are computed for the selected source and selected reference. The user
+can select a pixel or a ROI in the 2D plot to display the refractive index and absorption
+coefficient for that pixel in the center plot.
+
+## Interactive 3D Viewer
+
+The application maps the gaussian envelope of the intensity along the $z$-axis
+to opacity in an interactive voxel plot. The opacity threshold can be adjusted to improve performance and reduce nosie.
+The 3D viewer is implemented using the `bevy` game engine.
+
+## Filtering pipeline
 
 ### Time Domain Before FFT
 
-Before applying the Fast-Fourier-Transform (FFT), a tilt-compensation can be applied to the time domain trace to compensate any misalignment's along the $x$ axis and/or $y$ axis.
+Before applying the Fast-Fourier-Transform (FFT), a tilt-compensation can be applied to the time domain trace to
+compensate any misalignment's along the $x$ axis and/or $y$ axis.
 Additionally, a simple band-pass filter can be applied to exclude secondary peaks.
 
 ### FFT
@@ -194,7 +221,7 @@ window is applied, but the user can also select other windows:
 - Hamming
 - FlatTop
 
-The windows are defined in `math_tools.rs`.
+These windows are defined in `math_tools.rs`.
 
 ### Frequency Band Pass Filter
 
@@ -202,12 +229,15 @@ A simple band-pass filter can be applied in fourier space to only display certai
 
 ### Inverse FFT
 
+The inverse FFT is applied to convert the frequency domain back to the time domain.
+
 ### Time Domain After FFT
 
 After converting back to the time domain, another band-pass filter can be applied to the time traces.
 By selecting a slice in the time domain, it is possible to scan through the $z$-axis of the scan and analysing
 sub-surface layers [@koch-dandolo_reflection_2015]. The double-slider can be controlled with zoom and scroll/pan
-gestures on the trackpad/mouse wheel. The user can step through the time domain using the left/right arrow keys, when hovered above the filter UI.
+gestures on the trackpad/mouse wheel. The user can step through the time domain using the left/right arrow keys, when
+hovered above the filter UI.
 
 ### Deconvolution
 
@@ -272,6 +302,11 @@ Additionally, the `#[register_filter]` procedural macro
 needs to added to the custom filter struct to automatically add it to the application and the user does not need to
 adapt any other files.
 
+Loops that require a lot of computation can be parallelized using the `rayon` crate, which is already included in the
+project dependencies. It is recommended to use the  `cancellable_loops` crate to allow the user to abort long
+running computations. This crate provides a convenient way to check for an abort flag and handle progress updates in the
+GUI.
+
 ```rust
 use crate::filters::filter::{Filter, GuiSettingsContainer, ScannedImageFilterData};
 
@@ -301,8 +336,9 @@ impl Filter for ExampleFilter {
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Example Filter".to_string(),
-            domain: FilterDomain::Time,
-            parameters: vec![]
+            description: "Description of the example filter.".to_string(),
+            hyperlink: None, // Optional DOI or reference link
+            domain: FilterDomain::TimeBeforeFFT, // Specify the domain of the filter
         }
     }
 

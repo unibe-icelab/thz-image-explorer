@@ -404,7 +404,7 @@ pub fn pulse_tab(
                 fft_plot_ui.line(
                     Line::new(PlotPoints::from(filtered_signal_1_fft))
                         .color(egui::Color32::BLUE)
-                        .style(LineStyle::Dashed { length: 10.0 })
+                        .style(LineStyle::Solid)
                         .width(2.0)
                         .name("filtered amplitude"),
                 )
@@ -412,7 +412,7 @@ pub fn pulse_tab(
                 fft_plot_ui.line(
                     Line::new(PlotPoints::from(filtered_phase_1_fft))
                         .color(egui::Color32::BLUE)
-                        .style(LineStyle::Dashed { length: 10.0 })
+                        .style(LineStyle::Solid)
                         .width(2.0)
                         .name("filtered phase"),
                 );
@@ -422,7 +422,7 @@ pub fn pulse_tab(
                 fft_plot_ui.line(
                     Line::new(PlotPoints::from(avg_signal_1_fft))
                         .color(egui::Color32::YELLOW)
-                        .style(LineStyle::Dashed { length: 10.0 })
+                        .style(LineStyle::Solid)
                         .width(2.0)
                         .name("avg amplitude"),
                 )
@@ -430,7 +430,7 @@ pub fn pulse_tab(
                 fft_plot_ui.line(
                     Line::new(PlotPoints::from(avg_phase_1_fft))
                         .color(egui::Color32::YELLOW)
-                        .style(LineStyle::Dashed { length: 10.0 })
+                        .style(LineStyle::Solid)
                         .width(2.0)
                         .name("avg phase"),
                 );
@@ -555,231 +555,242 @@ pub fn pulse_tab(
 }
 
 pub fn refractive_index_tab(
-    _ui: &mut Ui,
-    _height: f32,
-    _width: f32,
-    _spacing: f32,
-    _right_panel_width: f32,
-    _explorer: &mut THzImageExplorer,
-    _thread_communication: &mut ThreadCommunication,
+    ui: &mut Ui,
+    height: f32,
+    width: f32,
+    spacing: f32,
+    right_panel_width: f32,
+    explorer: &mut THzImageExplorer,
+    thread_communication: &mut ThreadCommunication,
 ) {
-    // ui.vertical(|ui| {
-    //     // Signal selection controls
-    //     ui.horizontal(|ui| {
-    //         ui.label("Reference:");
-    //         egui::ComboBox::from_id_source("reference_selection")
-    //             .selected_text(format!("Reference {}", thread_communication.gui_settings.reference_index + 1))
-    //             .width(120.0)
-    //             .show_ui(ui, |ui| {
-    //                 for i in 0..explorer.data.available_references.len() {
-    //                     if ui.selectable_label(
-    //                         thread_communication.gui_settings.reference_index == i,
-    //                         format!("Reference {}", i + 1),
-    //                     ).clicked() {
-    //                         thread_communication.gui_settings.reference_index = i;
-    //                         thread_communication.config_tx
-    //                             .send(ConfigCommand::UpdateMaterialCalculation)
-    //                             .unwrap();
-    //                     }
-    //                 }
-    //             });
-    //
-    //         ui.add_space(20.0);
-    //
-    //         ui.label("Sample:");
-    //         egui::ComboBox::from_id_source("sample_selection")
-    //             .selected_text(format!("Sample {}", thread_communication.gui_settings.sample_index + 1))
-    //             .width(120.0)
-    //             .show_ui(ui, |ui| {
-    //                 for i in 0..explorer.data.available_samples.len() {
-    //                     if ui.selectable_label(
-    //                         thread_communication.gui_settings.sample_index == i,
-    //                         format!("Sample {}", i + 1),
-    //                     ).clicked() {
-    //                         thread_communication.gui_settings.sample_index = i;
-    //                         thread_communication.config_tx
-    //                             .send(ConfigCommand::UpdateMaterialCalculation)
-    //                             .unwrap();
-    //                     }
-    //                 }
-    //             });
-    //     });
-    //
-    //     // Visibility toggles
-    //     ui.horizontal(|ui| {
-    //         ui.add_space(50.0);
-    //         ui.add(Checkbox::new(
-    //             &mut thread_communication.gui_settings.refractive_index_visible,
-    //             "",
-    //         ));
-    //         ui.colored_label(egui::Color32::RED, "— ");
-    //         ui.label("Refractive Index (n)");
-    //
-    //         ui.add_space(50.0);
-    //         ui.add(Checkbox::new(
-    //             &mut thread_communication.gui_settings.extinction_coefficient_visible,
-    //             "",
-    //         ));
-    //         ui.colored_label(egui::Color32::BLUE, "— ");
-    //         ui.label("Extinction Coefficient (k)");
-    //
-    //         ui.add_space(50.0);
-    //         ui.add(Checkbox::new(
-    //             &mut thread_communication.gui_settings.absorption_visible,
-    //             "",
-    //         ));
-    //         ui.colored_label(egui::Color32::GREEN, "— ");
-    //         ui.label("Absorption (α)");
-    //     });
-    //
-    //     if let Ok(read_guard) = thread_communication.data_lock.read() {
-    //         explorer.data = read_guard.clone();
-    //     }
-    //
-    //     // Refractive index plot data
-    //     let refractive_index: Vec<[f64; 2]> = explorer
-    //         .data
-    //         .frequencies
-    //         .iter()
-    //         .zip(explorer.data.refractive_index.iter())
-    //         .map(|(x, y)| [*x as f64, *y as f64])
-    //         .collect();
-    //
-    //     let extinction_coefficient: Vec<[f64; 2]> = explorer
-    //         .data
-    //         .frequencies
-    //         .iter()
-    //         .zip(explorer.data.extinction_coefficient.iter())
-    //         .map(|(x, y)| [*x as f64, *y as f64])
-    //         .collect();
-    //
-    //     let absorption: Vec<[f64; 2]> = explorer
-    //         .data
-    //         .frequencies
-    //         .iter()
-    //         .zip(explorer.data.absorption.iter())
-    //         .map(|(x, y)| [*x as f64, *y as f64])
-    //         .collect();
-    //
-    //     // Format functions for the plots
-    //     let f_fmt = |x: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} THz", x.value);
-    //     let n_fmt = |y: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2}", y.value);
-    //     let label_fmt = |s: &str, val: &PlotPoint| {
-    //         format!("{}\n{:4.2} THz\n{:4.2}", s, val.x, val.y)
-    //     };
-    //
-    //     // Refractive index plot
-    //     let n_plot = Plot::new("refractive_index")
-    //         .height(height)
-    //         .width(width)
-    //         .y_axis_formatter(n_fmt)
-    //         .x_axis_formatter(f_fmt)
-    //         .label_formatter(label_fmt)
-    //         .include_x(0.0)
-    //         .include_x(explorer.data.frequencies.last().unwrap_or(&10.0) * 1.05);
-    //
-    //     n_plot.show(ui, |plot_ui| {
-    //         if thread_communication.gui_settings.refractive_index_visible {
-    //             plot_ui.line(
-    //                 Line::new(PlotPoints::from(refractive_index))
-    //                     .color(egui::Color32::RED)
-    //                     .style(LineStyle::Solid)
-    //                     .width(2.0)
-    //                     .name("Refractive Index (n)"),
-    //             );
-    //         }
-    //
-    //         if thread_communication.gui_settings.extinction_coefficient_visible {
-    //             plot_ui.line(
-    //                 Line::new(PlotPoints::from(extinction_coefficient))
-    //                     .color(egui::Color32::BLUE)
-    //                     .style(LineStyle::Solid)
-    //                     .width(2.0)
-    //                     .name("Extinction Coefficient (k)"),
-    //             );
-    //         }
-    //     });
-    //
-    //     ui.add_space(spacing);
-    //
-    //     // Absorption plot
-    //     let a_fmt = |y: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} cm⁻¹", y.value);
-    //     let a_label_fmt = |s: &str, val: &PlotPoint| {
-    //         format!("{}\n{:4.2} THz\n{:4.2} cm⁻¹", s, val.x, val.y)
-    //     };
-    //
-    //     let absorption_plot = Plot::new("absorption")
-    //         .height(height)
-    //         .width(width)
-    //         .y_axis_formatter(a_fmt)
-    //         .x_axis_formatter(f_fmt)
-    //         .label_formatter(a_label_fmt)
-    //         .include_x(0.0)
-    //         .include_x(explorer.data.frequencies.last().unwrap_or(&10.0) * 1.05);
-    //
-    //     absorption_plot.show(ui, |plot_ui| {
-    //         if thread_communication.gui_settings.absorption_visible {
-    //             plot_ui.line(
-    //                 Line::new(PlotPoints::from(absorption))
-    //                     .color(egui::Color32::GREEN)
-    //                     .style(LineStyle::Solid)
-    //                     .width(2.0)
-    //                     .name("Absorption (α)"),
-    //             );
-    //         }
-    //
-    //         if thread_communication.gui_settings.water_lines_visible {
-    //             for line in explorer.water_vapour_lines.iter() {
-    //                 plot_ui.vline(
-    //                     VLine::new(*line)
-    //                         .stroke(Stroke::new(1.0, egui::Color32::BLUE))
-    //                         .width(2.0)
-    //                         .name("water vapour"),
-    //                 );
-    //             }
-    //         }
-    //     });
-    //
-    //     // Bottom controls
-    //     ui.add_space(5.0);
-    //     ui.horizontal(|ui| {
-    //         ui.label("Sample Thickness:");
-    //         if ui
-    //             .add(
-    //                 DragValue::new(&mut thread_communication.gui_settings.sample_thickness)
-    //                     .min_decimals(2)
-    //                     .max_decimals(2)
-    //                     .suffix(" mm"),
-    //             )
-    //             .changed()
-    //         {
-    //             thread_communication.config_tx
-    //                 .send(ConfigCommand::UpdateMaterialCalculation)
-    //                 .unwrap();
-    //         }
-    //
-    //         ui.add_space(50.0);
-    //         ui.add(Checkbox::new(
-    //             &mut thread_communication.gui_settings.water_lines_visible,
-    //             "",
-    //         ));
-    //         ui.colored_label(egui::Color32::BLUE, "— ");
-    //         ui.label("Water Lines");
-    //
-    //         ui.add_space(ui.available_size().x - 400.0 - right_panel_width);
-    //
-    //         // Display material statistics if available
-    //         if let Some(max_n) = explorer.data.refractive_index.iter().cloned().reduce(f32::max) {
-    //             ui.label(format!("Max n: {:.2}", max_n));
-    //         }
-    //
-    //         ui.add_space(50.0);
-    //
-    //         if let Some(max_alpha) = explorer.data.absorption.iter().cloned().reduce(f32::max) {
-    //             ui.label(format!("Max α: {:.2} cm⁻¹", max_alpha));
-    //         }
-    //     });
-    // });
+    if let Ok(data) = thread_communication.data_lock.read() {
+        if data.rois.len() > 0 {
+            explorer.data.available_references = data.rois.iter().map(|v| v.name.clone()).collect();
+            explorer.data.available_samples = data.rois.iter().map(|v| v.name.clone()).collect();
+            explorer.data.available_samples.push("Selected Pixel".to_string());
+        } else {
+            // If no ROIs are available, use the default references and samples
+            explorer.data.available_references = vec!["Default Reference".to_string()];
+            explorer.data.available_samples = vec!["Selected Pixel".to_string()];
+        }
+    }
+    ui.vertical(|ui| {
+        // Signal selection controls
+        ui.horizontal(|ui| {
+            ui.label("Reference:");
+            egui::ComboBox::from_id_salt("reference_selection")
+                .selected_text(
+                    explorer.data.available_references
+                        [thread_communication.gui_settings.reference_index]
+                        .clone(),
+                )
+                .width(120.0)
+                .show_ui(ui, |ui| {
+                    for i in 0..explorer.data.available_references.len() {
+                        if ui
+                            .selectable_label(
+                                thread_communication.gui_settings.reference_index == i,
+                                explorer.data.available_references[i].clone(),  
+                            )
+                            .clicked()
+                        {
+                            thread_communication.gui_settings.reference_index = i;
+                            thread_communication
+                                .config_tx
+                                .send(ConfigCommand::SetReference(
+                                    explorer.data.available_references[i].clone(), 
+                                ))
+                                .unwrap();
+                        }
+                    }
+                });
+
+            ui.add_space(20.0);
+
+            ui.label("Sample:");
+            egui::ComboBox::from_id_salt("sample_selection")
+                .selected_text(
+                    explorer.data.available_samples[thread_communication.gui_settings.sample_index]
+                        .clone(),
+                )
+                .width(120.0)
+                .show_ui(ui, |ui| {
+                    for i in 0..explorer.data.available_samples.len() {
+                        if ui
+                            .selectable_label(
+                                thread_communication.gui_settings.sample_index == i,
+                                explorer.data.available_samples[i].clone(),  
+                            )
+                            .clicked()
+                        {
+                            thread_communication.gui_settings.sample_index = i;
+                            thread_communication
+                                .config_tx
+                                .send(ConfigCommand::SetSample(
+                                    explorer.data.available_samples[i].clone(), 
+                                ))
+                                .unwrap();
+                        }
+                    }
+                });
+        });
+
+        if let Ok(read_guard) = thread_communication.data_lock.read() {
+            explorer.data = read_guard.clone();
+        }
+
+        // Refractive index plot data
+        let refractive_index: Vec<[f64; 2]> = explorer
+            .data
+            .frequencies
+            .iter()
+            .zip(explorer.data.refractive_index.iter())
+            .map(|(x, y)| [*x as f64, *y as f64])
+            .filter(|point| !point[1].is_infinite()) // Filter out infinite values
+            .collect();
+
+        let extinction_coefficient: Vec<[f64; 2]> = explorer
+            .data
+            .frequencies
+            .iter()
+            .zip(explorer.data.extinction_coefficient.iter())
+            .map(|(x, y)| [*x as f64, *y as f64])
+            .filter(|point| !point[1].is_infinite()) // Filter out infinite values
+            .collect();
+
+        let absorption: Vec<[f64; 2]> = explorer
+            .data
+            .frequencies
+            .iter()
+            .zip(explorer.data.absorption_coefficient.iter())
+            .map(|(x, y)| [*x as f64, *y as f64])
+            .filter(|point| !point[1].is_infinite()) // Filter out infinite values
+            .collect();
+
+        // Format functions for the plots
+        let f_fmt = |x: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} THz", x.value);
+        let n_fmt = |y: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2}", y.value);
+        let label_fmt =
+            |s: &str, val: &PlotPoint| format!("{}\n{:4.2} THz\n{:4.2}", s, val.x, val.y);
+
+        // Refractive index plot
+        let n_plot = Plot::new("refractive_index")
+            .height(height)
+            .width(width)
+            .y_axis_formatter(n_fmt)
+            .x_axis_formatter(f_fmt)
+            .label_formatter(label_fmt)
+            .include_x(0.0)
+            .include_x(explorer.data.frequencies.last().unwrap_or(&10.0) * 1.05)
+            .legend(Legend::default());
+
+        n_plot.show(ui, |plot_ui| {
+            plot_ui.line(
+                Line::new(PlotPoints::from(refractive_index))
+                    .color(egui::Color32::RED)
+                    .style(LineStyle::Solid)
+                    .width(2.0)
+                    .name("Refractive Index (n)"),
+            );
+        });
+
+        ui.add_space(spacing);
+
+        // Absorption plot
+        let a_fmt = |y: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} cm⁻¹", y.value);
+        let a_label_fmt =
+            |s: &str, val: &PlotPoint| format!("{}\n{:4.2} THz\n{:4.2} cm⁻¹", s, val.x, val.y);
+
+        let absorption_plot = Plot::new("absorption")
+            .height(height)
+            .width(width)
+            .y_axis_formatter(a_fmt)
+            .x_axis_formatter(f_fmt)
+            .label_formatter(a_label_fmt)
+            .legend(Legend::default());
+
+        absorption_plot.show(ui, |plot_ui| {
+            plot_ui.line(
+                Line::new(PlotPoints::from(absorption))
+                    .color(egui::Color32::GREEN)
+                    .style(LineStyle::Solid)
+                    .width(2.0)
+                    .name("Absorption (α)"),
+            );
+
+            plot_ui.line(
+                Line::new(PlotPoints::from(extinction_coefficient))
+                    .color(egui::Color32::BLUE)
+                    .style(LineStyle::Solid)
+                    .width(2.0)
+                    .name("Extinction Coefficient (k)"),
+            );
+
+            if thread_communication.gui_settings.water_lines_visible {
+                for line in explorer.water_vapour_lines.iter() {
+                    plot_ui.vline(
+                        VLine::new(*line)
+                            .stroke(Stroke::new(1.0, egui::Color32::BLUE))
+                            .width(2.0)
+                            .name("water vapour"),
+                    );
+                }
+            }
+        });
+
+        // Bottom controls
+        ui.add_space(5.0);
+        ui.horizontal(|ui| {
+            ui.label("Sample Thickness:");
+            if ui
+                .add(
+                    DragValue::new(&mut explorer.data.sample_thickness)
+                        .min_decimals(2)
+                        .max_decimals(2)
+                        .suffix(" mm"),
+                )
+                .changed()
+            {
+                thread_communication
+                    .config_tx
+                    .send(ConfigCommand::UpdateMaterialCalculation)
+                    .unwrap();
+            }
+
+            ui.add_space(50.0);
+            ui.add(Checkbox::new(
+                &mut thread_communication.gui_settings.water_lines_visible,
+                "",
+            ));
+            ui.colored_label(egui::Color32::BLUE, "— ");
+            ui.label("Water Lines");
+
+            ui.add_space(ui.available_size().x - 400.0 - right_panel_width);
+
+            // Display material statistics if available
+            if let Some(max_n) = explorer
+                .data
+                .refractive_index
+                .iter()
+                .cloned()
+                .reduce(f32::max)
+            {
+                ui.label(format!("Max n: {:.2}", max_n));
+            }
+
+            ui.add_space(50.0);
+
+            if let Some(max_alpha) = explorer
+                .data
+                .absorption_coefficient
+                .iter()
+                .cloned()
+                .reduce(f32::max)
+            {
+                ui.label(format!("Max α: {:.2} cm⁻¹", max_alpha));
+            }
+        });
+    });
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -814,6 +825,10 @@ pub fn center_panel(
                 .clicked()
             {
                 thread_communication.gui_settings.tab = Tab::RefractiveIndex;
+                thread_communication
+                    .config_tx
+                    .send(ConfigCommand::UpdateMaterialCalculation)
+                    .unwrap();
             }
             if ui
                 .selectable_label(tabs[2], Tab::ThreeD.to_string())

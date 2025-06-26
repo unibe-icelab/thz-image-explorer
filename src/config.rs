@@ -9,7 +9,7 @@
 
 use crate::data_container::{DataPoint, ScannedImageFilterData};
 use crate::gui::application::GuiSettingsContainer;
-use crate::gui::matrix_plot::SelectedPixel;
+use crate::gui::matrix_plot::{SelectedPixel, ROI};
 use crate::math_tools::FftWindowType;
 use bevy::prelude::Resource;
 use bevy_voxel_plot::InstanceData;
@@ -113,7 +113,15 @@ pub enum ConfigCommand {
     /// This allows for selective recalculation when only one filter changes.
     UpdateFilter(String),
 
-    UpdateROIS(Vec<(String, Vec<(usize, usize)>)>),
+    UpdateMaterialCalculation,
+
+    AddROI(ROI),
+
+    DeleteROI(String),
+
+    SetReference(String),
+
+    SetSample(String),
 }
 
 /// A container for storing configuration settings related to FFT and filtering processes.

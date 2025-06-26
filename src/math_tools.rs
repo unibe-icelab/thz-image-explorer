@@ -370,7 +370,7 @@ pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
         .expect("Axis 1 mean failed");
 
     if config.avg_in_fourier_space {
-        println!("[FFT] Performing IFFT on average amplitude and phase data");
+        // println!("[FFT] Performing IFFT on average amplitude and phase data");
         // Reconstruct complex spectrum from average amplitude and phase
         if let Some(c2r) = &output.c2r {
             // Create a complex spectrum from the averaged amplitude and phase

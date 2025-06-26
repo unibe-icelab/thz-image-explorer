@@ -1,6 +1,7 @@
 //! This module defines data structures and functionality for managing meta-information, housekeeping data,
 //! scanned images, and related operations for image and signal processing tasks.
 
+use crate::gui::matrix_plot::ROI;
 use ndarray::{Array1, Array2, Array3};
 use realfft::num_complex::Complex32;
 use realfft::{ComplexToReal, RealToComplex};
@@ -63,6 +64,9 @@ impl Default for HouseKeeping {
 #[derive(Clone, Default, Debug)]
 pub struct DataPoint {
     pub hk: HouseKeeping,
+    pub available_references: Vec<String>,
+    pub available_samples: Vec<String>,
+    pub sample_thickness: f32,
     pub time: Vec<f32>,
     pub filtered_time: Vec<f32>,
     pub signal: Vec<f32>,
@@ -71,6 +75,9 @@ pub struct DataPoint {
     pub roi_signal: HashMap<String, Vec<f32>>,
     pub frequencies: Vec<f32>,
     pub filtered_frequencies: Vec<f32>,
+    pub absorption_coefficient: Vec<f32>,
+    pub refractive_index: Vec<f32>,
+    pub extinction_coefficient: Vec<f32>,
     pub signal_fft: Vec<f32>,
     pub phase_fft: Vec<f32>,
     pub filtered_signal_fft: Vec<f32>,
@@ -79,6 +86,7 @@ pub struct DataPoint {
     pub avg_phase_fft: Vec<f32>,
     pub roi_signal_fft: HashMap<String, Vec<f32>>,
     pub roi_phase: HashMap<String, Vec<f32>>,
+    pub rois: Vec<ROI>,
 }
 
 /// Represents a multi-dimensional dataset for spectroscopic imaging with both time and frequency domain data.

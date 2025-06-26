@@ -38,7 +38,7 @@ pub struct SelectedPixel {
     pub x: usize,
     pub y: usize,
     pub id: String,
-    pub rois: Vec<ROI>, // Store multiple ROIs
+    pub open_roi: Option<ROI>,
 }
 
 impl Default for SelectedPixel {
@@ -49,7 +49,7 @@ impl Default for SelectedPixel {
             x: 0,
             y: 0,
             id: "0000-0000".to_string(),
-            rois: vec![ROI::default()],
+            open_roi: None,
         }
     }
 }
@@ -293,6 +293,7 @@ pub fn plot_matrix(
     plot_height: &f64,
     explorer: &mut THzImageExplorer,
     state: &mut ImageState,
+    rois: &[ROI],
 ) -> bool {
     let mut pixel_clicked = false;
     let max = data
@@ -397,32 +398,32 @@ pub fn plot_matrix(
             }
 
             // Draw all ROIs
-            for roi in explorer.pixel_selected.rois.iter() {
+            if let Some(roi) = &explorer.pixel_selected.open_roi {
                 let line = Line::new(PlotPoints::from(roi.polygon.clone()))
                     .color(Color32::WHITE)
                     .width(2.0);
                 plot_ui.line(line);
+            }
 
-                if roi.closed {
-                    let screen_points: Vec<[f64; 2]> = roi
-                        .polygon
-                        .iter()
-                        .map(|p| {
-                            let _point = plot_ui
-                                .transform()
-                                .position_from_point(&PlotPoint::new(p[0], p[1]));
-                            [p[0], p[1]]
-                        })
-                        .collect();
-                    plot_ui.polygon(
-                        Polygon::new(PlotPoints::from(screen_points))
-                            .fill_color(Color32::WHITE.gamma_multiply(0.5))
-                            .highlight(false)
-                            .style(LineStyle::Solid)
-                            .width(2.0)
-                            .name(roi.name.clone()),
-                    );
-                }
+            for roi in rois.iter() {
+                let screen_points: Vec<[f64; 2]> = roi
+                    .polygon
+                    .iter()
+                    .map(|p| {
+                        let _point = plot_ui
+                            .transform()
+                            .position_from_point(&PlotPoint::new(p[0], p[1]));
+                        [p[0], p[1]]
+                    })
+                    .collect();
+                plot_ui.polygon(
+                    Polygon::new(PlotPoints::from(screen_points))
+                        .fill_color(Color32::WHITE.gamma_multiply(0.5))
+                        .highlight(false)
+                        .style(LineStyle::Solid)
+                        .width(2.0)
+                        .name(roi.name.clone()),
+                );
             }
 
             // Track pointer position
@@ -438,24 +439,21 @@ pub fn plot_matrix(
         if plot_response.response.clicked() {
             let modifiers = ui.input(|i| i.modifiers);
             if modifiers.shift {
-                dbg!(&explorer.pixel_selected.rois.len());
                 // Handle multiple polygon ROIs
                 let plot_x = explorer.val.x;
                 let plot_y = explorer.val.y;
                 let _pixel_x = plot_x.floor() as usize;
                 let _pixel_y = height - 1 - plot_y.floor() as usize;
 
-                if (!explorer.pixel_selected.rois.is_empty()
-                    && explorer.pixel_selected.rois.last().unwrap().closed)
-                    || explorer.pixel_selected.rois.is_empty()
-                {
+                if explorer.pixel_selected.open_roi.is_none() {
                     // If last ROI is closed, start a new one
                     let mut roi = ROI::default();
-                    roi.name = format!("ROI {}", explorer.pixel_selected.rois.len() + 1);
-                    explorer.pixel_selected.rois.push(roi);
+                    roi.name = format!("ROI {}", rois.len() + 1);
+                    roi.polygon.push([plot_x, plot_y]);
+                    explorer.pixel_selected.open_roi = Some(roi);
                 }
 
-                if let Some(current_roi) = explorer.pixel_selected.rois.last_mut() {
+                if let Some(current_roi) = &mut explorer.pixel_selected.open_roi {
                     if current_roi.polygon.is_empty() {
                         current_roi.polygon.push([plot_x, plot_y]);
                     } else {
