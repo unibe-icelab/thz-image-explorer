@@ -77,15 +77,18 @@ fn main() {
     let mut gui_settings = GuiSettingsContainer::new();
     let prefs_key = "config/gui";
     let load_result = GuiSettingsContainer::load(&APP_INFO, prefs_key);
-    if load_result.is_ok() {
-        gui_settings = load_result.unwrap();
-    } else {
-        // save default settings
-        match gui_settings.save(&APP_INFO, prefs_key) {
-            Ok(_) => {}
-            Err(err) => {
-                log::error!("error in saving gui_settings send: {err:?}");
+    match load_result {
+        Ok(settings) => {
+            gui_settings = settings;
+        }
+        Err(err) => {
+            match gui_settings.save(&APP_INFO, prefs_key) {
+                Ok(_) => {}
+                Err(err) => {
+                    log::error!("error in saving gui_settings send: {err:?}");
+                }
             }
+            log::error!("error in loading gui_settings: {err:?}");
         }
     }
 

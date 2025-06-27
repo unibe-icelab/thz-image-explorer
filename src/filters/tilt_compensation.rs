@@ -121,6 +121,11 @@ impl Filter for TiltCompensation {
             // Get the original time array
             let original_time = input_data.time.clone();
 
+            if original_time.is_empty() {
+                log::warn!("scan time is empty, cannot update voxel plot instances");
+                return output_data;
+            }
+
             // Get boundary values for time extension
             let first_value = *original_time.first().unwrap();
             let last_value = *original_time.last().unwrap();

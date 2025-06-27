@@ -68,7 +68,8 @@ fn update_intensity_image(
             log::warn!("scan time is empty, cannot update voxel plot instances");
             return;
         }
-
+        
+        // save because we checked above
         let time_span = scan.time.last().unwrap() - scan.time.first().unwrap();
         let (instances, cube_width, cube_height, cube_depth) =
             crate::gui::threed_plot::instance_from_data(
