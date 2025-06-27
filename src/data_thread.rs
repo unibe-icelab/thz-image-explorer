@@ -459,7 +459,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         // note, we save the input data, not the filtered data
                         if let Some(input) = filter_data.first() {
                             if let Ok(mut md) = thread_communication.md_lock.write() {
-
                                 if !input.rois.is_empty() {
                                     update_metadata_rois(&mut md, input);
                                 }

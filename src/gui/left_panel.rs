@@ -540,12 +540,7 @@ pub fn left_panel(
                             ),
                         );
                     }
-                    if ui
-                        .button(egui::RichText::new(
-                            "Cancel",
-                        ))
-                        .clicked()
-                    {
+                    if ui.button(egui::RichText::new("Cancel")).clicked() {
                         thread_communication.gui_settings.meta_data_edit = false;
                         thread_communication.gui_settings.meta_data_unlocked = false;
                     }

@@ -521,7 +521,7 @@ pub fn pulse_tab(
             ui.colored_label(egui::Color32::BLUE, "— ");
             ui.label("Water Lines");
 
-            ui.add_space(ui.available_size().x - 400.0 - right_panel_width);
+            ui.add_space(ui.available_size().x - 250.0 - right_panel_width);
 
             // dynamic range:
             let length = explorer.data.signal_fft.len();
@@ -534,7 +534,7 @@ pub fn pulse_tab(
                 0.0
             };
             ui.label(format!(
-                "DR: CH1 {:.1} dB",
+                "DR: {:.1} dB",
                 20.0 * (dr1.abs() + 1e-10).log(10.0) - max_fft_signals as f32,
             ));
 
@@ -549,7 +549,7 @@ pub fn pulse_tab(
             } else {
                 0.0
             };
-            ui.label(format!("ptp: CH1 {:.1} nA", ptp1));
+            ui.label(format!("ptp: {:.1} nA", ptp1));
         });
     });
 }
@@ -567,7 +567,10 @@ pub fn refractive_index_tab(
         if data.rois.len() > 0 {
             explorer.data.available_references = data.rois.iter().map(|v| v.name.clone()).collect();
             explorer.data.available_samples = data.rois.iter().map(|v| v.name.clone()).collect();
-            explorer.data.available_samples.push("Selected Pixel".to_string());
+            explorer
+                .data
+                .available_samples
+                .push("Selected Pixel".to_string());
         } else {
             // If no ROIs are available, use the default references and samples
             explorer.data.available_references = vec!["Default Reference".to_string()];
@@ -590,7 +593,7 @@ pub fn refractive_index_tab(
                         if ui
                             .selectable_label(
                                 thread_communication.gui_settings.reference_index == i,
-                                explorer.data.available_references[i].clone(),  
+                                explorer.data.available_references[i].clone(),
                             )
                             .clicked()
                         {
@@ -598,7 +601,7 @@ pub fn refractive_index_tab(
                             thread_communication
                                 .config_tx
                                 .send(ConfigCommand::SetReference(
-                                    explorer.data.available_references[i].clone(), 
+                                    explorer.data.available_references[i].clone(),
                                 ))
                                 .unwrap();
                         }
@@ -619,7 +622,7 @@ pub fn refractive_index_tab(
                         if ui
                             .selectable_label(
                                 thread_communication.gui_settings.sample_index == i,
-                                explorer.data.available_samples[i].clone(),  
+                                explorer.data.available_samples[i].clone(),
                             )
                             .clicked()
                         {
@@ -627,13 +630,15 @@ pub fn refractive_index_tab(
                             thread_communication
                                 .config_tx
                                 .send(ConfigCommand::SetSample(
-                                    explorer.data.available_samples[i].clone(), 
+                                    explorer.data.available_samples[i].clone(),
                                 ))
                                 .unwrap();
                         }
                     }
                 });
         });
+
+        ui.add_space(spacing / 2.0);
 
         if let Ok(read_guard) = thread_communication.data_lock.read() {
             explorer.data = read_guard.clone();
@@ -757,7 +762,7 @@ pub fn refractive_index_tab(
                     .unwrap();
             }
 
-            ui.add_space(50.0);
+            ui.add_space(30.0);
             ui.add(Checkbox::new(
                 &mut thread_communication.gui_settings.water_lines_visible,
                 "",
@@ -778,7 +783,7 @@ pub fn refractive_index_tab(
                 ui.label(format!("Max n: {:.2}", max_n));
             }
 
-            ui.add_space(50.0);
+            ui.add_space(30.0);
 
             if let Some(max_alpha) = explorer
                 .data
@@ -790,6 +795,7 @@ pub fn refractive_index_tab(
                 ui.label(format!("Max α: {:.2} cm⁻¹", max_alpha));
             }
         });
+        ui.add_space(5.0);
     });
 }
 
@@ -854,7 +860,7 @@ pub fn center_panel(
                 ),
                 Tab::RefractiveIndex => refractive_index_tab(
                     ui,
-                    height,
+                    height * 0.95,
                     width,
                     spacing,
                     *right_panel_width,
