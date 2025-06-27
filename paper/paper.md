@@ -17,7 +17,7 @@ authors:
     orcid: 0000-0002-0146-0071
     affiliation: "1"
 affiliations:
-  - name: University of Bern, Bern, Switzerland
+  - name: Space Research & Planetary Sciences Division, University of Bern, Bern, Switzerland
     index: 1
     ror: 02k7v4d05
   - name: University of Applied Sciences and Arts Western Switzerland Valais, HES-SO Valais-Wallis, Sion, Switzerland
@@ -79,6 +79,10 @@ The output of the computation is then shared via mutexes with the GUI thread.
 The entire thread communication is handled with the `ThreadCommunication` struct. To
 extend the communication for additional data-types, these two structs need to be extended with `Arc<RwLock<T>>` or
 `crossbeam_channel::Sender<T>`/`crossbeam_channel::Receiver<T>`.
+
+The structure of the software architecture is shown in figure \ref{fig:software_architecture}.
+![Software Architecture.\label{fig:software_architecture}](software_architecture.png){#id .class width=80%}
+
 
 # Installation
 
@@ -169,7 +173,7 @@ THz Image Explorer is able to load scans in the `.thz` (dotTHz) format, which ar
 This allows the files to also contain meta-data, which will also be displayed by the THz Image Explorer. The meta-data
 is shown in the file opening dialog, allowing to easily
 browse through directories containing multiple scans and is also displayed upon opening a
-scan.[10.1007%2Fs10762-019-00578-0-citation.ris](../../../Downloads/10.1007%252Fs10762-019-00578-0-citation.ris)
+scan.
 
 The 3D structure can be exported as a `.vtu` file for further analysis (e.g.
 with [ParaView](https://www.paraview.org) ).
@@ -202,6 +206,10 @@ to opacity in an interactive voxel plot. The opacity threshold can be adjusted t
 The 3D viewer is implemented using the `bevy` game engine.
 
 ## Filtering pipeline
+
+The filtering process is a simple linear pipeline, where the output of one filter is the input of the next filter. The structure is shown in figure \ref{fig:filtering_pipeline}.
+![Filtering Pipeline.\label{fig:filtering_pipeline}](filtering_pipeline.png){#id .class width=80%}
+
 
 ### Time Domain Before FFT
 

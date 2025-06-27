@@ -94,7 +94,7 @@ icon = ["./icons/install.png"]
 copyright = "Copyright (c) 2025, University of Bern, Space Research & Planetary Sciences, Linus Leo Stöckli."
 category = "Developer Tool"
 short_description = "Explorer Software for THz time domain images."
-long_description = "THz Image Explorer is an application for THz time-domain images, developed by the Planetary Imaging Group of the Space Science and Planetology Division at the University of Bern, Switzerland."
+long_description = "THz Image Explorer is an application for THz time-domain image analysis, developed by the Planetary Imaging Group of the Space Science and Planetology Division at the University of Bern, Switzerland."
 license = "GPL-3.0"
 osx_minimum_system_version = "10.12"
 osx_url_schemes = ["ch.unibe.thzimageexplorer"]
@@ -115,4 +115,4 @@ opt-level = 3
 
 [workspace]
 resolver = "2"
-members = ["cancellable_loops"]
+members = ["cancellable_loops", "filter_macros"]

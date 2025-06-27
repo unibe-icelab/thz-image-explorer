@@ -18,7 +18,7 @@ use semver::Version;
 use std::path::Path;
 use std::{env, fs, io};
 
-const REPO_OWNER: &str = "hacknus";
+const REPO_OWNER: &str = "unibe-icelab";
 const REPO_NAME: &str = "thz-image-explorer";
 const MACOS_APP_NAME: &str = "THz Image Explorer.app";
 

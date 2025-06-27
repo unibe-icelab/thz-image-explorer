@@ -390,25 +390,6 @@ pub fn left_panel(
                 if let Ok(mut write_guard) = thread_communication.pixel_lock.write() {
                     *write_guard = explorer.pixel_selected.clone();
                 }
-                let mut md_update_requested = false;
-
-                // for (roi_i, roi) in explorer.pixel_selected.open_roi.iter_mut().enumerate() {
-                //     if roi.closed {
-                //         let formatted = roi
-                //             .polygon
-                //             .iter()
-                //             .map(|&[x, y]| format!("[{:.2},{:.2}]", x, y))
-                //             .collect::<Vec<String>>()
-                //             .join(",");
-                //         meta_data.md.insert(format!("ROI {}", roi_i), formatted);
-                //         md_update_requested = true;
-                //
-                //         if let Some(labels) = meta_data.md.get_mut("ROI Labels") {
-                //             // Append new ROI label
-                //             labels.push_str(&roi.name.clone());
-                //         }
-                //     }
-                // }
 
                 // Check if any ROI was just closed and send AddROI command
                 if let Some(roi) = &explorer.pixel_selected.open_roi {
@@ -419,50 +400,6 @@ pub fn left_panel(
                         );
                         explorer.pixel_selected.open_roi = None;
                     }
-                }
-
-                if md_update_requested {
-                    let labels = explorer
-                        .pixel_selected
-                        .open_roi
-                        .iter()
-                        .map(|l| l.name.clone())
-                        .collect::<Vec<String>>()
-                        .join(",");
-                    meta_data.md.insert("ROI Labels".to_string(), labels);
-
-                    if let Ok(mut md) = thread_communication.md_lock.write() {
-                        *md = meta_data.clone();
-                    }
-
-                    send_latest_config(
-                        thread_communication,
-                        ConfigCommand::UpdateMetaData(
-                            thread_communication.gui_settings.selected_path.clone(),
-                        ),
-                    );
-
-                    // let roi_updates: Vec<(String, Vec<(usize, usize)>)> = explorer
-                    //     .pixel_selected
-                    //     .open_roi
-                    //     .iter()
-                    //     .filter(|roi| roi.closed)
-                    //     .map(|roi| {
-                    //         let integer_polygon: Vec<(usize, usize)> = roi
-                    //             .polygon
-                    //             .iter()
-                    //             .map(|&[x, y]| (x as usize, y as usize))
-                    //             .collect();
-                    // 
-                    //         (roi.name.clone(), integer_polygon)
-                    //     })
-                    //     .collect();
-
-                    // // Send ROI update command
-                    // send_latest_config(
-                    //     thread_communication,
-                    //     ConfigCommand::UpdateROIS(roi_updates),
-                    // );
                 }
             }
 
@@ -479,9 +416,26 @@ pub fn left_panel(
                 egui::Grid::new("rois polygons")
                     .striped(true)
                     .show(ui, |ui| {
-                        let mut changed = false;
-                        for roi in explorer.pixel_selected.open_roi.iter_mut() {
-                            changed |= ui.add(egui::TextEdit::singleline(&mut roi.name)).changed();
+                        for roi in data.rois.iter_mut() {
+                            let mut changed = false;
+                            if ui
+                                .selectable_label(
+                                    false,
+                                    egui::RichText::new(format!(
+                                        "{}",
+                                        egui_phosphor::regular::TRASH
+                                    )),
+                                )
+                                .clicked()
+                            {
+                                send_latest_config(
+                                    thread_communication,
+                                    ConfigCommand::DeleteROI(roi.name.clone()),
+                                );
+                            }
+
+                            let old_name = roi.name.clone();
+                            changed = ui.add(egui::TextEdit::singleline(&mut roi.name)).changed();
                             let points = roi
                                 .polygon
                                 .iter()
@@ -490,51 +444,57 @@ pub fn left_panel(
                                 .join(",");
                             ui.label(points);
                             ui.end_row();
+
+                            if changed {
+                                send_latest_config(
+                                    thread_communication,
+                                    ConfigCommand::UpdateROI(old_name.clone(), roi.clone()),
+                                );
+                            }
                         }
-                        if changed {
-                            let labels = explorer
-                                .pixel_selected
-                                .open_roi
+
+                        if let Some(roi) = &mut explorer.pixel_selected.open_roi {
+                            let mut delete_roi = false;
+                            if ui
+                                .selectable_label(
+                                    false,
+                                    egui::RichText::new(format!(
+                                        "{}",
+                                        egui_phosphor::regular::TRASH
+                                    )),
+                                )
+                                .clicked()
+                            {
+                                delete_roi = true;
+                            }
+                            ui.add(egui::TextEdit::singleline(&mut roi.name));
+                            let points = roi
+                                .polygon
                                 .iter()
-                                .map(|l| l.name.clone())
+                                .map(|&[x, y]| format!("[{:.2},{:.2}]", x, y))
                                 .collect::<Vec<String>>()
                                 .join(",");
-                            meta_data.md.insert("ROI Labels".to_string(), labels);
-
-                            if let Ok(mut md) = thread_communication.md_lock.write() {
-                                *md = meta_data.clone();
+                            ui.label(points);
+                            ui.end_row();
+                            if delete_roi {
+                                explorer.pixel_selected.open_roi = None;
                             }
-
-                            send_latest_config(
-                                thread_communication,
-                                ConfigCommand::UpdateMetaData(
-                                    thread_communication.gui_settings.selected_path.clone(),
-                                ),
-                            );
-
-                            // let roi_updates: Vec<(String, Vec<(usize, usize)>)> = explorer
-                            //     .pixel_selected
-                            //     .open_roi
-                            //     .iter()
-                            //     .filter(|roi| roi.closed)
-                            //     .map(|roi| {
-                            //         let integer_polygon: Vec<(usize, usize)> = roi
-                            //             .polygon
-                            //             .iter()
-                            //             .map(|&[x, y]| (x as usize, y as usize))
-                            //             .collect();
-                            // 
-                            //         (roi.name.clone(), integer_polygon)
-                            //     })
-                            //     .collect();
-                            //
-                            // send_latest_config(
-                            //     thread_communication,
-                            //     ConfigCommand::UpdateROIS(roi_updates),
-                            // );
                         }
                     });
             });
+
+            if ui
+                .button("Save ROIs")
+                .on_hover_text("Save current ROIs to file")
+                .clicked()
+            {
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::SaveROIs(
+                        thread_communication.gui_settings.selected_path.clone(),
+                    ),
+                );
+            }
 
             ui.separator();
             ui.heading("Meta Data");
@@ -579,6 +539,15 @@ pub fn left_panel(
                                 thread_communication.gui_settings.selected_path.clone(),
                             ),
                         );
+                    }
+                    if ui
+                        .button(egui::RichText::new(
+                            "Cancel",
+                        ))
+                        .clicked()
+                    {
+                        thread_communication.gui_settings.meta_data_edit = false;
+                        thread_communication.gui_settings.meta_data_unlocked = false;
                     }
                 }
             });
@@ -641,49 +610,7 @@ pub fn left_panel(
                     }
 
                     for attr in attributes_to_delete.iter() {
-                        // if attr.contains("ROI") {
-                        //     if let Some(labels_string) = meta_data.md.get_mut("ROI Labels") {
-                        //         let mut labels = labels_string.split(",").collect::<Vec<&str>>();
-                        //         if let Some(index) = attr
-                        //             .strip_prefix("ROI ")
-                        //             .and_then(|num| num.parse::<usize>().ok())
-                        //         {
-                        //             dbg!(index);
-                        //             explorer.pixel_selected.open_roi.remove(index);
-                        //             if explorer.pixel_selected.open_roi.is_empty() {
-                        //                 let mut roi = ROI::default();
-                        //                 roi.name = format!(
-                        //                     "ROI {}",
-                        //                     explorer.pixel_selected.open_roi.len() + 1
-                        //                 );
-                        //                 explorer.pixel_selected.open_roi.push(roi);
-                        //             }
-                        //             labels.remove(index);
-                        //             *labels_string = labels.join(",");
-                        //         } else {
-                        //             if attr == "ROI Labels" {
-                        //                 for roi_i in 0..explorer.pixel_selected.open_roi.len() {
-                        //                     meta_data.md.swap_remove(&format!("ROI {roi_i}"));
-                        //                 }
-                        //                 explorer.pixel_selected.open_roi.clear();
-                        //                 let mut roi = ROI::default();
-                        //                 roi.name = "ROI 0".to_string();
-                        //                 explorer.pixel_selected.open_roi.push(roi);
-                        //             }
-                        //         }
-                        //     }
-                        // }
                         meta_data.md.swap_remove(attr);
-                    }
-
-                    if attributes_to_delete.iter().any(|attr| attr.contains("ROI")) {
-                        // If deleting a specific ROI
-                        for attr in &attributes_to_delete {
-                            send_latest_config(
-                                thread_communication,
-                                ConfigCommand::DeleteROI(attr.clone()),
-                            );
-                        }
                     }
 
                     ui.label("User:");

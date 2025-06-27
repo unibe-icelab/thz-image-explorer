@@ -71,6 +71,8 @@ pub enum ConfigCommand {
     /// The file is identified using a `PathBuf`.
     UpdateMetaData(PathBuf),
 
+    SaveROIs(PathBuf),
+
     /// Command to set the lower bound of the FFT window.
     SetFFTWindowLow(f32),
 
@@ -116,6 +118,8 @@ pub enum ConfigCommand {
     UpdateMaterialCalculation,
 
     AddROI(ROI),
+
+    UpdateROI(String, ROI),
 
     DeleteROI(String),
 

@@ -387,10 +387,16 @@ pub fn save_to_thz(
     file.add_group(group_name, metadata)?;
 
     // Save raw data
-    file.add_dataset(group_name, "dataset", scan.data.view())?;
+    if let Some(ds) = metadata.ds_description.iter().position(|d| d == "time") {
+        let name = format!("ds{}", ds + 1);
+        file.add_dataset(group_name, name.as_str(), scan.time.view())?;
+    }
 
     // Save time data
-    file.add_dataset(group_name, "time", scan.time.view())?;
+    if let Some(ds) = metadata.ds_description.iter().position(|d| d == "dataset") {
+        let name = format!("ds{}", ds + 1);
+        file.add_dataset(group_name, name.as_str(), scan.data.view())?;
+    }
 
     Ok(())
 }
@@ -433,15 +439,16 @@ pub fn open_from_thz(
         *metadata = file.get_meta_data(group_name)?;
 
         // Read datasets and populate DataContainer fields, skipping any that are missing
-        if let Some(ds1) = metadata.ds_description.iter().position(|d| d == "time") {
-            if let Some(ds) = group.datasets().unwrap().get(ds1) {
+        if let Some(ds) = metadata.ds_description.iter().position(|d| d == "time") {
+            if let Ok(ds) = group.dataset(format!("ds{}", ds + 1).as_str()) {
                 if let Ok(arr) = ds.read_1d() {
                     scan.time = arr;
                 }
             }
         }
-        if let Some(ds2) = metadata.ds_description.iter().position(|d| d == "dataset") {
-            if let Some(ds) = group.datasets().unwrap().get(ds2) {
+
+        if let Some(ds) = metadata.ds_description.iter().position(|d| d == "dataset") {
+            if let Ok(ds) = group.dataset(format!("ds{}", ds + 1).as_str()) {
                 if let Ok(arr) = ds.read_dyn::<f32>() {
                     if let Ok(arr3) = arr.into_dimensionality::<ndarray::Ix3>() {
                         // check dimensions to make sure
@@ -452,6 +459,10 @@ pub fn open_from_thz(
                 }
             }
         }
+    }
+
+    if scan.data.is_empty() {
+        return Err("No 2D scan data found in the THz file".into());
     }
     if let Some(w) = metadata.md.get("width") {
         if let Ok(width) = w.parse::<usize>() {
@@ -487,8 +498,13 @@ pub fn open_from_thz(
         }
     }
 
-    scan.dx = metadata.md.get("dx [mm]").unwrap().parse::<f32>().ok();
-    scan.dy = metadata.md.get("dy [mm]").unwrap().parse::<f32>().ok();
+    if let Some(dx) = metadata.md.get("dx [mm]") {
+        scan.dx = dx.parse::<f32>().ok();
+    }
+
+    if let Some(dy) = metadata.md.get("dy [mm]") {
+        scan.dy = dy.parse::<f32>().ok();
+    }
 
     let n = scan.time.len();
     let rng = scan.time[n - 1] - scan.time[0];

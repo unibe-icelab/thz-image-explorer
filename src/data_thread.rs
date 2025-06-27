@@ -83,15 +83,39 @@ fn update_intensity_image(
     }
 }
 
-/// Enum representing supported file types for reading data.
-///
-/// - `Npy`: Represents `.npy` files.
-/// - `Npz`: Represents `.npz` files.
-#[derive(Clone, PartialEq)]
-#[allow(dead_code)]
-enum FileType {
-    Npy,
-    Npz,
+fn update_metadata_rois(md: &mut DotthzMetaData, input: &ScannedImageFilterData) {
+    // Remove all old ROI {number} entries
+    let mut keys_to_remove = vec![];
+    for key in md.md.keys() {
+        if key.starts_with("ROI ") && key[4..].chars().all(|c| c.is_digit(10)) {
+            keys_to_remove.push(key.clone());
+        }
+    }
+    for key in keys_to_remove {
+        md.md.swap_remove(&key);
+    }
+
+    // Insert new ROI Labels and ROI {number} entries
+    if !input.rois.is_empty() {
+        let mut roi_labels = String::new();
+        for (i, (label, coords)) in input.rois.iter().enumerate() {
+            if i > 0 {
+                roi_labels.push(',');
+            }
+            roi_labels.push_str(label);
+            md.md.insert(
+                format!("ROI {}", i),
+                coords
+                    .iter()
+                    .map(|(x, y)| format!("[{},{}]", x, y))
+                    .collect::<Vec<String>>()
+                    .join(","),
+            );
+        }
+        md.md.insert("ROI Labels".to_string(), roi_labels);
+    } else {
+        md.md.swap_remove("ROI Labels");
+    }
 }
 
 /// Handles communication on the main thread.
@@ -128,27 +152,156 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
         if let Ok(config_command) = thread_communication.config_rx.recv() {
             match config_command {
                 ConfigCommand::LoadMetaData(path) => {
-                    if path.extension().unwrap() == "thz" {
-                        match load_meta_data_of_thz_file(&path, &mut meta_data) {
-                            Ok(_) => {
-                                if let Ok(mut md) = thread_communication.md_lock.write() {
-                                    *md = meta_data.clone();
+                    if let Some(os_path) = path.extension() {
+                        if os_path != "thz" || os_path != "thzimg" || os_path != "thzswp" {
+                            match load_meta_data_of_thz_file(&path, &mut meta_data) {
+                                Ok(_) => {
+                                    if let Ok(mut filter_data) =
+                                        thread_communication.filter_data_lock.write()
+                                    {
+                                        if let Some(input) = filter_data.first_mut() {
+                                            if let Ok(mut data) =
+                                                thread_communication.data_lock.write()
+                                            {
+                                                data.rois.clear();
+                                            }
+
+                                            if let Some(labels) = meta_data.md.get("ROI Labels") {
+                                                let roi_labels: Vec<&str> =
+                                                    labels.split(',').collect();
+                                                for (i, label) in roi_labels.iter().enumerate() {
+                                                    if let Some(roi_data) =
+                                                        meta_data.md.get(&format!("ROI {}", i))
+                                                    {
+                                                        // Ensure we are correctly extracting coordinates
+                                                        let polygon = roi_data
+                                                            .split("],") // Split by "]," to separate coordinate pairs
+                                                            .filter_map(|point| {
+                                                                let cleaned =
+                                                                    point.trim_matches(|c| {
+                                                                        c == '[' || c == ']'
+                                                                    });
+                                                                let values: Vec<f64> = cleaned
+                                                                    .split(',')
+                                                                    .filter_map(|v| {
+                                                                        v.trim().parse::<f64>().ok()
+                                                                    })
+                                                                    .collect();
+
+                                                                if values.len() == 2 {
+                                                                    Some([values[0], values[1]])
+                                                                } else {
+                                                                    None
+                                                                }
+                                                            })
+                                                            .collect::<Vec<[f64; 2]>>();
+
+                                                        if !polygon.is_empty() {
+                                                            if let Ok(mut data) =
+                                                                thread_communication
+                                                                    .data_lock
+                                                                    .write()
+                                                            {
+                                                                data.rois.push(ROI {
+                                                                    polygon: polygon.clone(),
+                                                                    closed: true,
+                                                                    name: label.to_string(),
+                                                                });
+                                                                input.rois.insert(
+                                                                    label.to_string(),
+                                                                    polygon
+                                                                        .iter()
+                                                                        .map(|v| {
+                                                                            (
+                                                                                v[0] as usize,
+                                                                                v[1] as usize,
+                                                                            )
+                                                                        })
+                                                                        .collect(),
+                                                                );
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if let Ok(mut md) = thread_communication.md_lock.write() {
+                                        *md = meta_data.clone();
+                                    }
+
+                                    log::info!("loaded meta-data from {:?}", path);
                                 }
-                                log::info!("loaded meta-data from {:?}", path);
+                                Err(err) => {
+                                    log::error!("failed loading meta-data {:?}: {:?}", path, err)
+                                }
                             }
-                            Err(err) => {
-                                log::error!("failed loading meta-data {:?}: {:?}", path, err)
-                            }
+                        } else {
+                            log::error!("failed loading meta-data {:?}: not a dotTHz file", path)
                         }
                     } else {
-                        log::error!("failed loading meta-data {:?}: not a dotTHz file", path)
+                        log::error!("failed to get extension for {:?}", path)
+                    }
+                    continue;
+                }
+                ConfigCommand::SaveROIs(mut path) => {
+                    // THz Image Explorer always saves thz files
+                    if let Some(os_path) = path.extension() {
+                        if os_path != "thz" || os_path != "thzimg" || os_path != "thzswp" {
+                            path.set_extension("thz");
+                            // save full file, not just metadata, since the dotTHz file does not exist yet.
+                            if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
+                                if let Some(input) = filter_data.first() {
+                                    if let Ok(mut md) = thread_communication.md_lock.write() {
+                                        // add ROIs to metadata
+
+                                        if !input.rois.is_empty() {
+                                            update_metadata_rois(&mut md, input);
+                                        }
+
+                                        match save_to_thz(&path, &input, &md) {
+                                            Ok(_) => {
+                                                log::info!("saved {:?}", path);
+                                            }
+                                            Err(err) => {
+                                                log::error!("failed saving {:?}: {:?}", path, err)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
+                                if let Ok(mut md) = thread_communication.md_lock.write() {
+                                    if let Some(input) = filter_data.first() {
+                                        // add ROIs to metadata
+                                        if !input.rois.is_empty() {
+                                            update_metadata_rois(&mut md, input);
+                                        }
+                                        match update_meta_data_of_thz_file(&path, &md) {
+                                            Ok(_) => {
+                                                log::info!("updated meta-data in {:?}", path);
+                                            }
+                                            Err(err) => {
+                                                log::error!(
+                                                    "failed updating meta-data {:?}: {:?}",
+                                                    path,
+                                                    err
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     continue;
                 }
                 ConfigCommand::UpdateMetaData(mut path) => {
                     // THz Image Explorer always saves thz files
                     if let Some(os_path) = path.extension() {
-                        if os_path != "thz" {
+                        if os_path != "thz" || os_path != "thzimg" || os_path != "thzswp" {
                             path.set_extension("thz");
                             // save full file, not just metadata, since the dotTHz file does not exist yet.
                             if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
@@ -211,6 +364,11 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                                 )
                                             }
                                         };
+
+                                        if let Ok(mut data) = thread_communication.data_lock.write()
+                                        {
+                                            data.rois.clear();
+                                        }
 
                                         if let Some(labels) = meta_data.md.get("ROI Labels") {
                                             let roi_labels: Vec<&str> = labels.split(',').collect();
@@ -290,14 +448,22 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                 }
                 ConfigCommand::SaveFile(mut path) => {
                     // THz Image Explorer always saves thz files
-                    if path.extension().unwrap() != "thz" {
-                        path.set_extension("thz");
+                    if let Some(os_path) = path.extension() {
+                        if os_path != "thz" || os_path != "thzimg" || os_path != "thzswp" {
+                            path.set_extension("thz");
+                            path.set_extension("thz");
+                        }
                     }
 
                     if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
                         // note, we save the input data, not the filtered data
                         if let Some(input) = filter_data.first() {
-                            if let Ok(md) = thread_communication.md_lock.read() {
+                            if let Ok(mut md) = thread_communication.md_lock.write() {
+
+                                if !input.rois.is_empty() {
+                                    update_metadata_rois(&mut md, input);
+                                }
+
                                 match save_to_thz(&path, &input, &md) {
                                     Ok(_) => {
                                         log::info!("saved {:?}", path);
@@ -380,6 +546,32 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     update = UpdateType::Plot;
                 }
                 ConfigCommand::AddROI(roi) => {
+                    update = UpdateType::Filter(1);
+                    if let Ok(mut data) = thread_communication.data_lock.write() {
+                        data.rois.push(roi.clone());
+                    }
+                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                        if let Some(input) = filter_data.first_mut() {
+                            input.rois.insert(
+                                roi.name,
+                                roi.polygon
+                                    .iter()
+                                    .map(|v| (v[0] as usize, v[1] as usize))
+                                    .collect(),
+                            );
+                        }
+                    }
+                }
+                ConfigCommand::UpdateROI(old_name, roi) => {
+                    update = UpdateType::Filter(1);
+                    if let Ok(mut data) = thread_communication.data_lock.write() {
+                        data.rois.retain(|roi| roi.name != old_name);
+                    }
+                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                        if let Some(input) = filter_data.first_mut() {
+                            input.rois.remove(&old_name);
+                        }
+                    }
                     if let Ok(mut data) = thread_communication.data_lock.write() {
                         data.rois.push(roi.clone());
                     }
@@ -396,6 +588,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     }
                 }
                 ConfigCommand::DeleteROI(name) => {
+                    update = UpdateType::Plot;
                     if let Ok(mut data) = thread_communication.data_lock.write() {
                         data.rois.retain(|roi| roi.name != name);
                     }
@@ -797,8 +990,9 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 log::warn!("Material calculation requires at least two ROIs (sample and reference)");
                                 continue;
                             }
-                            
+
                             // Get sample thickness from GUI settings (in meters)
+                            // TODO!
                             let sample_thickness = 1.0 / 1e3; // explorer.data.sample_thickness;
 
                             // Calculate material properties for each frequency
@@ -819,11 +1013,13 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 let c = 2.99792458e8_f32;
 
                                 if &sample_roi == "Selected Pixel" {
-                                    let sample_amplitude = filtered.amplitudes
+                                    let sample_amplitude = filtered
+                                        .amplitudes
                                         .index_axis(Axis(0), selected_pixel.x)
                                         .index_axis(Axis(0), selected_pixel.y)
                                         .to_vec();
-                                    let sample_phase = filtered.phases
+                                    let sample_phase = filtered
+                                        .phases
                                         .index_axis(Axis(0), selected_pixel.x)
                                         .index_axis(Axis(0), selected_pixel.y)
                                         .to_vec();
@@ -913,10 +1109,10 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             log::warn!("No filtered data available for material calculation");
                         }
                     }
+                    // TODO: request repaint
                 }
                 UpdateType::Image => {
                     // update intensity image
-                    let start = Instant::now();
                     if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
                         if let Some(filtered) = filter_data.last_mut() {
                             (
@@ -943,7 +1139,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             update_intensity_image(&filtered, &thread_communication);
                         }
                     }
-                    println!("updated image. This took {:?}", start.elapsed());
+                    // TODO: request repaint
                 }
                 UpdateType::Plot => {
                     // add selected pixel and avg data to the data lock for the plot
@@ -1038,7 +1234,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 log::warn!("Material calculation requires at least two ROIs (sample and reference)");
                                 continue;
                             }
-                            
+
                             // Get sample thickness from GUI settings (in meters)
                             let sample_thickness = 1.0 / 1e3; // explorer.data.sample_thickness;
 
@@ -1060,11 +1256,13 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 let c = 2.99792458e8_f32;
 
                                 if &sample_roi == "Selected Pixel" {
-                                    let sample_amplitude = filtered.amplitudes
+                                    let sample_amplitude = filtered
+                                        .amplitudes
                                         .index_axis(Axis(0), selected_pixel.x)
                                         .index_axis(Axis(0), selected_pixel.y)
                                         .to_vec();
-                                    let sample_phase = filtered.phases
+                                    let sample_phase = filtered
+                                        .phases
                                         .index_axis(Axis(0), selected_pixel.x)
                                         .index_axis(Axis(0), selected_pixel.y)
                                         .to_vec();
@@ -1079,10 +1277,10 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                         // Refractive index: n = 1 + (c * Δφ) / (2π * f * d)
                                         let n = 1.0
                                             + (c * phase_diff)
-                                            / (2.0
-                                            * std::f32::consts::PI
-                                            * frequency_hz
-                                            * sample_thickness);
+                                                / (2.0
+                                                    * std::f32::consts::PI
+                                                    * frequency_hz
+                                                    * sample_thickness);
 
                                         // Absorption coefficient: α = -2 * ln(|T|) / d
                                         // where |T| = |E_sample| / |E_reference|
@@ -1122,10 +1320,10 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                         // Refractive index: n = 1 + (c * Δφ) / (2π * f * d)
                                         let n = 1.0
                                             + (c * phase_diff)
-                                            / (2.0
-                                            * std::f32::consts::PI
-                                            * frequency_hz
-                                            * sample_thickness);
+                                                / (2.0
+                                                    * std::f32::consts::PI
+                                                    * frequency_hz
+                                                    * sample_thickness);
 
                                         // Absorption coefficient: α = -2 * ln(|T|) / d
                                         // where |T| = |E_sample| / |E_reference|
@@ -1154,7 +1352,8 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             log::warn!("No filtered data available for material calculation");
                         }
                     }
-                    // println!("updated plot. This took {:?}", start.elapsed());
+                    // println!("updated plot.This took {: ?}", start.elapsed());
+                    // TODO: request repaint
                 }
                 UpdateType::None => {
                     // do nothing
