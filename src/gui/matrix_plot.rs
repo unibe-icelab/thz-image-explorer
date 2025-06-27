@@ -285,6 +285,40 @@ fn colorbar_with_midpoint_slider(
     });
 }
 
+fn point_in_polygon(point: (f64, f64), polygon: &[[f64; 2]]) -> bool {
+    let (x, y) = point;
+    let mut inside = false;
+    let n = polygon.len();
+    if n < 3 {
+        return false;
+    }
+    let mut j = n - 1;
+    for i in 0..n {
+        let xi = polygon[i][0];
+        let yi = polygon[i][1];
+        let xj = polygon[j][0];
+        let yj = polygon[j][1];
+        if ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi + f64::EPSILON) + xi) {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
+}
+
+fn polygon_centroid(polygon: &[[f64; 2]]) -> Option<(f64, f64)> {
+    let n = polygon.len();
+    if n == 0 {
+        return None;
+    }
+    let (mut x_sum, mut y_sum) = (0.0, 0.0);
+    for point in polygon {
+        x_sum += point[0];
+        y_sum += point[1];
+    }
+    Some((x_sum / n as f64, y_sum / n as f64))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn plot_matrix(
     ui: &mut egui::Ui,
@@ -385,6 +419,8 @@ pub fn plot_matrix(
             .set_margin_fraction(Vec2 { x: 0.0, y: 0.0 })
             .allow_drag(false);
 
+        let mut hovered_roi_idx: Option<usize> = None;
+
         let plot_response = plot.show(ui, |plot_ui| {
             plot_ui.image(im);
 
@@ -405,25 +441,44 @@ pub fn plot_matrix(
                 plot_ui.line(line);
             }
 
-            for roi in rois.iter() {
-                let screen_points: Vec<[f64; 2]> = roi
-                    .polygon
-                    .iter()
-                    .map(|p| {
-                        let _point = plot_ui
-                            .transform()
-                            .position_from_point(&PlotPoint::new(p[0], p[1]));
-                        [p[0], p[1]]
-                    })
-                    .collect();
+            let pointer = plot_ui.pointer_coordinate();
+
+            for (i, roi) in rois.iter().enumerate() {
+                // Check if mouse is close to any point in the ROI polygon
+                let is_hovered = if let Some(pos) = pointer {
+                    point_in_polygon((pos.x, pos.y), &roi.polygon)
+                } else {
+                    false
+                };
+
+                let line_width = if is_hovered { 4.0 } else { 2.0 };
+                let color = if is_hovered {
+                    Color32::YELLOW
+                } else {
+                    Color32::WHITE
+                };
+
+                let screen_points: Vec<[f64; 2]> = roi.polygon.clone();
                 plot_ui.polygon(
-                    Polygon::new(PlotPoints::from(screen_points))
-                        .fill_color(Color32::WHITE.gamma_multiply(0.5))
+                    Polygon::new(PlotPoints::from(screen_points.clone()))
+                        .fill_color(Color32::TRANSPARENT)
                         .highlight(false)
                         .style(LineStyle::Solid)
-                        .width(2.0)
+                        .stroke(Stroke::new(line_width, color))
                         .name(roi.name.clone()),
                 );
+
+                if is_hovered {
+                    hovered_roi_idx = Some(i);
+                }
+            }
+
+            // Draw open ROI if any
+            if let Some(roi) = &explorer.pixel_selected.open_roi {
+                let line = Line::new(PlotPoints::from(roi.polygon.clone()))
+                    .color(Color32::WHITE)
+                    .width(2.0);
+                plot_ui.line(line);
             }
 
             // Track pointer position
@@ -435,6 +490,26 @@ pub fn plot_matrix(
                 }
             }
         });
+
+        if let Some(i) = hovered_roi_idx {
+            if let Some((cx, cy)) = polygon_centroid(&rois[i].polygon) {
+                let plot_transform = plot_response.transform;
+                let screen_pos = plot_transform.position_from_point(&PlotPoint::new(cx, cy));
+                let layer_id = egui::LayerId::new(
+                    egui::Order::Foreground,
+                    egui::Id::new(format!("roi_tooltip_layer_{i}").as_str()),
+                );
+                egui::show_tooltip_at(
+                    ui.ctx(),
+                    layer_id,
+                    egui::Id::new(format!("roi_tooltip_{i}").as_str()),
+                    screen_pos,
+                    |ui| {
+                        ui.label(&rois[i].name);
+                    },
+                );
+            }
+        }
 
         if plot_response.response.clicked() {
             let modifiers = ui.input(|i| i.modifiers);

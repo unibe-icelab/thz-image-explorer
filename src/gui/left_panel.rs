@@ -417,7 +417,6 @@ pub fn left_panel(
                     .striped(true)
                     .show(ui, |ui| {
                         for roi in data.rois.iter_mut() {
-                            let mut changed = false;
                             if ui
                                 .selectable_label(
                                     false,
@@ -435,7 +434,8 @@ pub fn left_panel(
                             }
 
                             let old_name = roi.name.clone();
-                            changed = ui.add(egui::TextEdit::singleline(&mut roi.name)).changed();
+                            let changed =
+                                ui.add(egui::TextEdit::singleline(&mut roi.name)).changed();
                             let points = roi
                                 .polygon
                                 .iter()
