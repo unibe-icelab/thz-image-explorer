@@ -115,16 +115,22 @@ pub enum ConfigCommand {
     /// This allows for selective recalculation when only one filter changes.
     UpdateFilter(String),
 
+    /// Calls an update of the material calculation process. (refractive index, etc.)
     UpdateMaterialCalculation,
 
+    /// Command to add a new Region of Interest (ROI) to the processing pipeline.
     AddROI(ROI),
 
+    /// Command to update an existing Region of Interest (ROI) identified by its name.
     UpdateROI(String, ROI),
-
+    
+    /// Command to delete a specific Region of Interest (ROI) identified by its name.
     DeleteROI(String),
-
+    
+    /// Command to set the reference data for processing.
     SetReference(String),
 
+    /// Command to set the sample data for processing.
     SetSample(String),
 }
 
@@ -159,8 +165,6 @@ impl Default for ConfigContainer {
     ///
     /// The defaults are:
     /// - `fft_window`: `[1.0, 7.0]`
-    /// - `fft_filter`: `[0.0, 10.0]`
-    /// - `time_window`: `[1000.0, 1050.0]`
     /// - `fft_window_type`: `FftWindowType::AdaptedBlackman`
     /// - `fft_log_plot`: `false`
     /// - `normalize_fft`: `false`
