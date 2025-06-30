@@ -180,7 +180,14 @@ fn fft2d(
     // FFT on rows
     // Perform FFT on each row of the matrix
     for mut row in matrix.outer_iter_mut() {
-        fft_cols.process(row.as_slice_mut().unwrap());
+        match row.as_slice_mut() {
+            Some(slice) => {
+                fft_cols.process(slice);
+            }
+            None => {
+                panic!("Row is not contiguous, cannot process FFT");
+            }
+        }
     }
 
     // Perform FFT on each column of the matrix
@@ -592,8 +599,10 @@ impl Filter for Deconvolution {
                     2.5,
                 );
 
-                let dx = input_data.dx.unwrap() as f32;
-                let dy = input_data.dy.unwrap() as f32;
+                let (dx, dy) = match (input_data.dx, input_data.dy) {
+                    (Some(dx_val), Some(dy_val)) => (dx_val as f32, dy_val as f32),
+                    _ => panic!("dx or dy is missing in input_data"),
+                };
 
                 let range_max_x = (range_max_x / dx).floor() * dx + dx;
                 let range_max_y = (range_max_y / dy).floor() * dy + dy;
@@ -607,16 +616,18 @@ impl Filter for Deconvolution {
                     .map(|i| i as f32 * dy)
                     .collect();
 
-                let gaussian_x = gaussian(
-                    &arr1(&x),
-                    &gui_settings.psf.popt_x.row(i).as_slice().unwrap(),
-                )
-                .to_vec();
-                let gaussian_y = gaussian(
-                    &arr1(&y),
-                    &gui_settings.psf.popt_y.row(i).as_slice().unwrap(),
-                )
-                .to_vec();
+                let popt_x_view = gui_settings.psf.popt_x.row(i);
+                let popt_x_row = popt_x_view
+                    .as_slice()
+                    .unwrap_or_else(|| panic!("popt_x row {i} is not contiguous"));
+
+                let popt_y_view = gui_settings.psf.popt_y.row(i);
+                let popt_y_row = popt_y_view
+                    .as_slice()
+                    .unwrap_or_else(|| panic!("popt_y row {i} is not contiguous"));
+
+                let gaussian_x = gaussian(&arr1(&x), popt_x_row).to_vec();
+                let gaussian_y = gaussian(&arr1(&y), popt_y_row).to_vec();
 
                 let psf_2d = create_psf_2d(gaussian_x, gaussian_y, x, y, dx, dy);
 
