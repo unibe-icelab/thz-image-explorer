@@ -567,7 +567,15 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                         if let Ok(mut data) = thread_communication.data_lock.write()
                                         {
                                             data.rois.clear();
+                                            data.roi_signal.clear();
+                                            data.roi_signal_fft.clear();
+                                            data.roi_phase.clear();
                                         }
+
+                                        input.rois.clear();
+                                        input.roi_data.clear();
+                                        input.roi_signal_fft.clear();
+                                        input.roi_phase_fft.clear();
 
                                         if let Some(labels) = meta_data.md.get("ROI Labels") {
                                             let roi_labels: Vec<&str> = labels.split(',').collect();
