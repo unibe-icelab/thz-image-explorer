@@ -285,11 +285,11 @@ pub fn convolve2d(
 
     // Perform FFT on both padded arrays
     if let Err(e) = fft2d(&mut a_padded, &*fft_cols, &*fft_rows, false) {
-        eprintln!("fft2d on a_padded failed: {}", e);
+        log::error!("fft2d on a_padded failed: {}", e);
         return Err(e);
     }
     if let Err(e) = fft2d(&mut b_padded, &*fft_cols, &*fft_rows, false) {
-        eprintln!("fft2d on b_padded failed: {}", e);
+        log::error!("fft2d on b_padded failed: {}", e);
         return Err(e);
     }
 
@@ -298,7 +298,7 @@ pub fn convolve2d(
 
     // Perform inverse FFT to transform back to the spatial domain
     if let Err(e) = fft2d(&mut result_freq, &*ifft_cols, &*ifft_rows, true) {
-        eprintln!("fft2d on result_freq failed: {}", e);
+        log::error!("fft2d on result_freq failed: {}", e);
         return Err(e);
     }
 
@@ -550,7 +550,7 @@ impl Filter for Deconvolution {
         }
 
         // Log the start of the deconvolution process and initialize the output data array
-        println!("Starting deconvolution filter...");
+        log::info!("Starting deconvolution filter...");
         output_data.data = Array3::zeros((
             output_data.data.dim().0,
             output_data.data.dim().1,
@@ -739,8 +739,8 @@ impl Filter for Deconvolution {
         // Calculate and log the total processing time
         let duration = start.elapsed();
 
-        println!("\nDeconvolution filter completed.");
-        println!("Processing time: {:?}", duration);
+        log::info!("\nDeconvolution filter completed.");
+        log::info!("Processing time: {:?}", duration);
 
         output_data.img = output_data.data.mapv(|x| x * x).sum_axis(Axis(2));
 
