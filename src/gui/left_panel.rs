@@ -324,7 +324,21 @@ pub fn left_panel(
                         thread_communication.gui_settings.selected_path = path;
                     }
                 }
-                FileDialogState::OpenRef => {}
+                FileDialogState::OpenRef => {
+                    if let Some(path) = explorer
+                        .file_dialog
+                        .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                            explorer.information_panel.ui(ui, dia);
+                        })
+                        .picked()
+                    {
+                        explorer.file_dialog_state = FileDialogState::None;
+                        send_latest_config(
+                            thread_communication,
+                            ConfigCommand::OpenRef(path.to_path_buf()),
+                        );
+                    }
+                }
                 FileDialogState::OpenPSF => {
                     if let Some(path) = explorer
                         .file_dialog

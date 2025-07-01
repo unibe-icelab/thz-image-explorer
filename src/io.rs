@@ -16,7 +16,7 @@ use crate::data_container::ScannedImageFilterData;
 use crate::filters::psf::PSF;
 use bevy_voxel_plot::InstanceData;
 use dotthz::{DotthzFile, DotthzMetaData};
-use ndarray::{Array0, Array2, Array3, Axis, Ix0, Ix1, Ix2, OwnedRepr};
+use ndarray::{Array0, Array1, Array2, Array3, Axis, Ix0, Ix1, Ix2, OwnedRepr};
 use ndarray_npy::NpzReader;
 use realfft::RealFftPlanner;
 use std::error::Error;
@@ -401,6 +401,45 @@ pub fn save_to_thz(
     Ok(())
 }
 
+pub fn open_pulse_from_thz(
+    file_path: &PathBuf,
+    metadata: &mut DotthzMetaData,
+) -> Result<(Array1<f32>, Array1<f32>), Box<dyn Error>> {
+    // Open the HDF5 file for reading
+    let file = DotthzFile::open(file_path)?;
+
+    let mut time = Array1::<f32>::zeros(0);
+    let mut signal = Array1::<f32>::zeros(0);
+
+    if let Some(group_name) = file.get_group_names()?.first() {
+        if file.get_groups()?.len() > 1 {
+            log::info!("found more than one group, opening only the first");
+        }
+        // For TeraFlash measurements we always just get the first entry
+        let group = file.get_group(group_name)?;
+
+        // get the metadata
+        *metadata = file.get_meta_data(group_name)?;
+
+        if let Ok(datasets) = group.datasets() {
+            log::info!(
+                "Found {} datasets in group: {}, taking first one",
+                datasets.len(),
+                group_name
+            );
+
+            if let Some(dataset) = datasets.first() {
+                if let Ok(arr) = dataset.read_2d::<f32>() {
+                    time = arr.column(0).to_owned();
+                    signal = arr.column(1).to_owned();
+                }
+            }
+        } else {
+            log::warn!("No datasets found in group: {}", group_name);
+        }
+    }
+    Ok((time, signal))
+}
 /// Opens and reads data from an HDF5 `.thz` file, populating the scan data and metadata.
 ///
 /// This function loads time and raw data arrays from HDF5 files containing spectroscopic information.
@@ -419,7 +458,7 @@ pub fn save_to_thz(
 /// Will return an error if:
 /// - The `.thz` file cannot be found or opened.
 /// - The time or data datasets are missing or misformatted.
-pub fn open_from_thz(
+pub fn open_scan_from_thz(
     file_path: &PathBuf,
     scan: &mut ScannedImageFilterData,
     metadata: &mut DotthzMetaData,

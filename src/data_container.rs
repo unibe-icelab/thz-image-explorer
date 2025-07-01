@@ -142,6 +142,8 @@ pub struct ScannedImageFilterData {
     pub data: Array3<f32>,
     /// Averaged time-domain data across all pixels.
     pub avg_data: Array1<f32>,
+    /// Additional datasets for specific references or samples.
+    pub datasets: HashMap<String, Array1<f32>>,
     /// ROI-averaged time-domain data.
     pub roi_data: HashMap<String, Array1<f32>>,
     /// Frequency axis data for the scan.

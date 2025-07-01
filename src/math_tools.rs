@@ -19,7 +19,7 @@
 
 use crate::config::ConfigContainer;
 use crate::data_container::ScannedImageFilterData;
-use ndarray::{Array1, Array3, ArrayViewMut, Axis, Ix1, Zip};
+use ndarray::{Array1, Array3, ArrayView1, ArrayViewMut, Axis, Ix1, Zip};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use realfft::num_complex::Complex32;
@@ -567,4 +567,45 @@ pub fn average_polygon_roi(data: &Array3<f32>, polygon: &[(usize, usize)]) -> Ar
         }
     }
     result
+}
+
+const C: f32 = 2.99792458e8_f32;
+
+pub fn calculate_optical_properties(
+    sample_amplitude: ArrayView1<f32>,
+    sample_phase: ArrayView1<f32>,
+    reference_amplitude: ArrayView1<f32>,
+    reference_phase: ArrayView1<f32>,
+    frequencies: ArrayView1<f32>,
+    sample_thickness: f32,
+) -> (Array1<f32>, Array1<f32>, Array1<f32>) {
+    let mut refractive_index = Array1::zeros(frequencies.len());
+    let mut absorption_coeff = Array1::zeros(frequencies.len());
+    let mut extinction_coeff = Array1::zeros(frequencies.len());
+
+    // Calculate for each frequency point
+    for i in 0..frequencies.len() {
+        // Convert frequency to Hz (from THz)
+        let frequency_hz = frequencies[i] * 1.0e12;
+
+        // Phase difference (may need unwrapping for discontinuities)
+        let phase_diff = sample_phase[i] - reference_phase[i];
+
+        // Refractive index: n = 1 + (c * Δφ) / (2π * f * d)
+        let n = 1.0 + (C * phase_diff) / (2.0 * PI * frequency_hz * sample_thickness);
+
+        // Absorption coefficient: α = -2 * ln(|T|) / d
+        // where |T| = |E_sample| / |E_reference|
+        let amplitude_ratio = sample_amplitude[i] / reference_amplitude[i];
+        let alpha = -2.0 * amplitude_ratio.ln() / sample_thickness;
+
+        // Extinction coefficient: κ = α * c / (4π * f)
+        let kappa = alpha * C / (4.0 * PI * frequency_hz);
+
+        refractive_index[i] = n;
+        absorption_coeff[i] = alpha;
+        extinction_coeff[i] = kappa;
+    }
+
+    (refractive_index, absorption_coeff, extinction_coeff)
 }

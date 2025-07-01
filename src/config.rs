@@ -59,6 +59,10 @@ pub enum ConfigCommand {
     /// The file is identified using a `PathBuf`, and its type is determined based on its extension.
     OpenFile(PathBuf),
 
+    /// Command to open a specified reference file.
+    /// The file is identified using a `PathBuf`, and its type is determined based on its extension.
+    OpenRef(PathBuf),
+
     /// Command to save data to a specified file.
     /// The file is identified using a `PathBuf`, and its type is determined based on its extension.
     SaveFile(PathBuf),
@@ -123,10 +127,10 @@ pub enum ConfigCommand {
 
     /// Command to update an existing Region of Interest (ROI) identified by its name.
     UpdateROI(String, ROI),
-    
+
     /// Command to delete a specific Region of Interest (ROI) identified by its name.
     DeleteROI(String),
-    
+
     /// Command to set the reference data for processing.
     SetReference(String),
 
