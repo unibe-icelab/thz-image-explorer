@@ -7,8 +7,7 @@
 use crate::config::ThreadCommunication;
 use crate::data_container::ScannedImageFilterData;
 use crate::filters::filter::{CopyStaticFieldsTrait, Filter, FilterConfig, FilterDomain};
-use crate::filters::psf::create_psf_2d;
-use crate::filters::psf::gaussian;
+use crate::filters::psf::{create_psf_2d, gaussian};
 use crate::gui::application::GuiSettingsContainer;
 use bevy_egui::egui::{self, Ui};
 use filter_macros::{register_filter, CopyStaticFields};
@@ -16,6 +15,7 @@ use ndarray::{arr1, s, Array1, Array2, Array3, Axis, Zip};
 use num_complex::Complex32;
 use rayon::prelude::*;
 use rustfft::{num_complex::Complex, FftPlanner};
+use std::error::Error;
 use std::time::Instant;
 
 use cancellable_loops::par_for_each_cancellable_reduce;
@@ -174,7 +174,7 @@ fn fft2d(
     fft_cols: &dyn rustfft::Fft<f32>,
     fft_rows: &dyn rustfft::Fft<f32>,
     inverse: bool,
-) {
+) -> Result<(), Box<dyn Error>> {
     let (rows, cols) = matrix.dim();
 
     // FFT on rows
@@ -185,7 +185,7 @@ fn fft2d(
                 fft_cols.process(slice);
             }
             None => {
-                panic!("Row is not contiguous, cannot process FFT");
+                return Err("Row is not contiguous, cannot process FFT".into());
             }
         }
     }
@@ -209,6 +209,7 @@ fn fft2d(
         let scale = (rows * cols) as f32;
         matrix.mapv_inplace(|v| v / scale);
     }
+    Ok(())
 }
 
 /// Direct 2D Convolution for small kernels
@@ -264,14 +265,14 @@ pub fn convolve2d(
     ifft_cols: &dyn rustfft::Fft<f32>,
     fft_rows: &dyn rustfft::Fft<f32>,
     ifft_rows: &dyn rustfft::Fft<f32>,
-) -> Array2<f32> {
+) -> Result<Array2<f32>, Box<dyn std::error::Error>> {
     let (a_rows, a_cols) = a.dim();
     let (b_rows, b_cols) = b.dim();
 
     // If the kernel is small, we use direct convolution for efficiency
     const THRESHOLD: usize = 256;
     if b_rows * b_cols <= THRESHOLD {
-        return direct_convolve2d(a, b);
+        return Ok(direct_convolve2d(a, b));
     }
 
     // Calculate the next power of two for padding dimensions
@@ -283,14 +284,23 @@ pub fn convolve2d(
     let mut b_padded = pad_array(b, (padded_rows, padded_cols));
 
     // Perform FFT on both padded arrays
-    fft2d(&mut a_padded, &*fft_cols, &*fft_rows, false);
-    fft2d(&mut b_padded, &*fft_cols, &*fft_rows, false);
+    if let Err(e) = fft2d(&mut a_padded, &*fft_cols, &*fft_rows, false) {
+        eprintln!("fft2d on a_padded failed: {}", e);
+        return Err(e);
+    }
+    if let Err(e) = fft2d(&mut b_padded, &*fft_cols, &*fft_rows, false) {
+        eprintln!("fft2d on b_padded failed: {}", e);
+        return Err(e);
+    }
 
     // Multiply the two arrays in the frequency domain
     let mut result_freq = multiply_freq_domain(&a_padded, &b_padded);
 
     // Perform inverse FFT to transform back to the spatial domain
-    fft2d(&mut result_freq, &*ifft_cols, &*ifft_rows, true);
+    if let Err(e) = fft2d(&mut result_freq, &*ifft_cols, &*ifft_rows, true) {
+        eprintln!("fft2d on result_freq failed: {}", e);
+        return Err(e);
+    }
 
     // Crop the central part of the result to match the original input size
     let start_row = (b_rows - 1) / 2;
@@ -308,7 +318,7 @@ pub fn convolve2d(
         .and(result_view)
         .for_each(|r, &c| *r = c.re);
 
-    result
+    Ok(result)
 }
 
 impl Deconvolution {
@@ -390,7 +400,7 @@ impl Deconvolution {
         image: &Array2<f32>,
         psf: &Array2<f32>,
         n_iterations: usize,
-    ) -> Array2<f32> {
+    ) -> Result<Array2<f32>, Box<dyn std::error::Error>> {
         // Flip the PSF kernel to create its mirrored version
         let psf_mirror = psf.slice(s![..;-1, ..;-1]).to_owned();
 
@@ -454,7 +464,7 @@ impl Deconvolution {
         // Perform Richardson-Lucy iterations
         for _ in 0..n_iterations {
             // Convolve the current estimate with the PSF
-            let ustarp = convolve2d(&u, &psf, &*fft_cols, &*ifft_cols, &*fft_rows, &*ifft_rows);
+            let ustarp = convolve2d(&u, psf, &*fft_cols, &*ifft_cols, &*fft_rows, &*ifft_rows)?;
 
             // Compute the relative blur
             let relative_blur = Zip::from(&padded_image)
@@ -469,14 +479,14 @@ impl Deconvolution {
                 &*ifft_cols,
                 &*fft_rows,
                 &*ifft_rows,
-            );
+            )?;
 
             // Update the estimate by multiplying with the correction
             Zip::from(&mut u).and(&correction).for_each(|e, &c| *e *= c);
         }
 
         // Crop the deconvolved image to the original size
-        u.slice(s![pad_y..pad_y + h, pad_x..pad_x + w]).to_owned()
+        Ok(u.slice(s![pad_y..pad_y + h, pad_x..pad_x + w]).to_owned())
     }
 }
 
@@ -526,8 +536,17 @@ impl Filter for Deconvolution {
 
         // Check if the input data contains valid spatial resolution (dx, dy)
         if input_data.dx.is_none() || input_data.dy.is_none() {
-            println!("No data loaded, skipping deconvolution.");
-            return output_data;
+            log::error!("No data loaded, skipping deconvolution.");
+            return input_data.clone();
+        }
+
+        if gui_settings.psf.filters.is_empty() {
+            log::error!("PSF filters appear empty — a PSF may not have been loaded. Skipping deconvolution.");
+            return input_data.clone();
+        }
+        if gui_settings.psf.popt_x.is_empty() || gui_settings.psf.popt_y.is_empty() {
+            log::error!("PSF popt_x or popt_y appear empty — a PSF may not have been loaded correctly. Skipping deconvolution.");
+            return input_data.clone();
         }
 
         // Log the start of the deconvolution process and initialize the output data array
@@ -566,6 +585,18 @@ impl Filter for Deconvolution {
         // Record the start time for performance measurement
         let start = Instant::now();
 
+        let (dx, dy) = match (input_data.dx, input_data.dy) {
+            (Some(dx_val), Some(dy_val)) => (dx_val as f32, dy_val as f32),
+            _ => {
+                log::error!("dx or dy is missing in input_data");
+                return input_data.clone();
+            }
+        };
+
+        // Error flag to track if any non-contiguous rows are encountered
+        let error_flag = Arc::new(AtomicBool::new(false));
+        let error_flag_clone = Arc::clone(&error_flag);
+
         let processed_data = par_for_each_cancellable_reduce(
             gui_settings
                 .psf
@@ -575,6 +606,7 @@ impl Filter for Deconvolution {
                 .par_bridge(),
             &abort_flag,
             |(i, _)| {
+                let error_flag = Arc::clone(&error_flag_clone);
                 if let Ok(mut p) = progress_lock.write() {
                     if if let Some(p_old) = *p {
                         p_old < (i as f32) / (gui_settings.psf.n_filters as f32)
@@ -599,11 +631,6 @@ impl Filter for Deconvolution {
                     2.5,
                 );
 
-                let (dx, dy) = match (input_data.dx, input_data.dy) {
-                    (Some(dx_val), Some(dy_val)) => (dx_val as f32, dy_val as f32),
-                    _ => panic!("dx or dy is missing in input_data"),
-                };
-
                 let range_max_x = (range_max_x / dx).floor() * dx + dx;
                 let range_max_y = (range_max_y / dy).floor() * dy + dy;
 
@@ -617,14 +644,24 @@ impl Filter for Deconvolution {
                     .collect();
 
                 let popt_x_view = gui_settings.psf.popt_x.row(i);
-                let popt_x_row = popt_x_view
-                    .as_slice()
-                    .unwrap_or_else(|| panic!("popt_x row {i} is not contiguous"));
+                let popt_x_row = match popt_x_view.as_slice() {
+                    Some(slice) => slice,
+                    None => {
+                        log::error!("popt_x row {i} is not contiguous");
+                        error_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                        return None;
+                    }
+                };
 
                 let popt_y_view = gui_settings.psf.popt_y.row(i);
-                let popt_y_row = popt_y_view
-                    .as_slice()
-                    .unwrap_or_else(|| panic!("popt_y row {i} is not contiguous"));
+                let popt_y_row = match popt_y_view.as_slice() {
+                    Some(slice) => slice,
+                    None => {
+                        log::error!("popt_y row {i} is not contiguous");
+                        error_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                        return None;
+                    }
+                };
 
                 let gaussian_x = gaussian(&arr1(&x), popt_x_row).to_vec();
                 let gaussian_y = gaussian(&arr1(&y), popt_y_row).to_vec();
@@ -643,9 +680,15 @@ impl Filter for Deconvolution {
                     + 1.0)
                     .floor()) as usize;
 
-                let deconvolved_image = self
-                    .richardson_lucy(&filtered_image, &psf_2d, n_iter)
-                    .mapv(|x| x.max(0.0));
+                let deconvolved_image = match self.richardson_lucy(&filtered_image, &psf_2d, n_iter)
+                {
+                    Ok(image) => image.mapv(|x| x.max(0.0)),
+                    Err(e) => {
+                        log::error!("Richardson-Lucy deconvolution failed for iteration {i}: {e}");
+                        error_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                        return None;
+                    }
+                };
 
                 let mut deconvolution_gains =
                     Array2::zeros((output_data.data.dim().0, output_data.data.dim().1));
@@ -675,6 +718,17 @@ impl Filter for Deconvolution {
             },
             Array3::zeros(input_data.data.dim()), // initial accumulator
         );
+
+        // Check if any errors occurred during processing
+        if error_flag.load(std::sync::atomic::Ordering::Relaxed) {
+            log::error!(
+                "Deconvolution failed due to non-contiguous data rows. Returning original data."
+            );
+            if let Ok(mut p) = progress_lock.write() {
+                *p = None;
+            }
+            return input_data.clone();
+        }
         // Update the progress lock to indicate the completion of the filtering process
         if let Ok(mut p) = progress_lock.write() {
             *p = Some(1.0);
