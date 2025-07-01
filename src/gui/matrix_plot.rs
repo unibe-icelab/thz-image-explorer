@@ -365,26 +365,31 @@ pub fn plot_matrix(
 
     let width = data.len_of(Axis(0));
     let height = data.len_of(Axis(1));
-    let size = [plot_width / width as f64, plot_height / height as f64]
+    // Adjust size calculation for rotated dimensions
+    let size = [plot_width / height as f64, plot_height / width as f64]
         .iter()
         .fold(f64::INFINITY, |ai, &bi| ai.min(bi));
 
-    let mut img = ColorImage::new([width, height], Color32::TRANSPARENT);
+    // Create image with swapped dimensions for rotation
+    let mut img = ColorImage::new([height, width], Color32::TRANSPARENT);
     let mut intensity_matrix = vec![vec![0.0; height]; width];
     let mut id_matrix = vec![vec!["".to_string(); height]; width];
 
     for y in 0..height {
         for x in 0..width {
             if let Some(i) = data.get((x, y)) {
-                img[(x, y)] = color_from_intensity(
+                // Swap and mirror coordinates for rotation and mirroring
+                // img is indexed by (column, row)
+                // original x -> row, original y -> column
+                img[(y, x)] = color_from_intensity(
                     i,
                     &max,
                     &explorer.cut_off,
                     &explorer.mid_point,
                     &explorer.bw,
                 );
-                intensity_matrix[x][height - 1 - y] = *i as f64 / max * 100.0;
-                id_matrix[x][height - 1 - y] = format!("{:05}-{:05}", x, y);
+                intensity_matrix[x][y] = *i as f64 / max * 100.0;
+                id_matrix[x][y] = format!("{:05}-{:05}", x, y);
             }
         }
     }
@@ -403,21 +408,24 @@ pub fn plot_matrix(
         return pixel_clicked;
     };
 
+    // Correct the size vector for the PlotImage
     let im = PlotImage::new(
         texture,
         PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
-        img.height() as f32 * vec2(texture.aspect_ratio(), 1.0),
+        vec2(img.width() as f32, img.height() as f32),
     );
 
     ui.horizontal(|ui| {
+        // Swap width and height for the plot dimensions to match the rotated image
         let plot = Plot::new("image")
-            .height(0.75 * height as f32 * size as f32)
-            .width(0.75 * width as f32 * size as f32)
+            .height(0.75 * width as f32 * size as f32)
+            .width(0.75 * height as f32 * size as f32)
             .show_axes([false, false])
             .show_x(false)
             .show_y(false)
             .set_margin_fraction(Vec2 { x: 0.0, y: 0.0 })
-            .allow_drag(false);
+            .allow_drag(false)
+            .data_aspect(1.0); // Ensure aspect ratio is 1:1
 
         let mut hovered_roi_idx: Option<usize> = None;
 
@@ -517,8 +525,6 @@ pub fn plot_matrix(
                 // Handle multiple polygon ROIs
                 let plot_x = explorer.val.x;
                 let plot_y = explorer.val.y;
-                let _pixel_x = plot_x.floor() as usize;
-                let _pixel_y = height - 1 - plot_y.floor() as usize;
 
                 if explorer.pixel_selected.open_roi.is_none() {
                     // If last ROI is closed, start a new one
@@ -550,35 +556,42 @@ pub fn plot_matrix(
                 pixel_clicked = true;
             } else {
                 // Handle single pixel selection
+                // plot_x -> original y
+                let pixel_y = explorer.val.x.floor() as usize;
+                // plot_y -> original x (inverted)
+                let pixel_x = (img.height() - 1) - explorer.val.y.floor() as usize;
 
-                if explorer.pixel_selected.x == explorer.val.x.floor() as usize
-                    && explorer.pixel_selected.y == height - 1 - explorer.val.y.floor() as usize
+                if explorer.pixel_selected.x == pixel_x
+                    && explorer.pixel_selected.y == pixel_y
                     && explorer.pixel_selected.selected
                 {
                     explorer.pixel_selected.selected = false;
                 } else {
                     explorer.pixel_selected.selected = true;
+                    let rect_x = explorer.val.x.floor();
+                    let rect_y = explorer.val.y.floor();
                     explorer.pixel_selected.rect = vec![
-                        [explorer.val.x.floor(), explorer.val.y.floor()],
-                        [explorer.val.x.floor() + 1.0, explorer.val.y.floor()],
-                        [explorer.val.x.floor() + 1.0, explorer.val.y.floor() + 1.0],
-                        [explorer.val.x.floor(), explorer.val.y.floor() + 1.0],
-                        [explorer.val.x.floor(), explorer.val.y.floor()],
+                        [rect_x, rect_y],
+                        [rect_x + 1.0, rect_y],
+                        [rect_x + 1.0, rect_y + 1.0],
+                        [rect_x, rect_y + 1.0],
+                        [rect_x, rect_y],
                     ];
-                    explorer.pixel_selected.x = explorer.val.x.floor() as usize;
-                    explorer.pixel_selected.y = height - 1 - explorer.val.y.floor() as usize;
-                    explorer.pixel_selected.id =
-                        id_matrix[explorer.pixel_selected.x][explorer.pixel_selected.y].clone();
+                    explorer.pixel_selected.x = pixel_x;
+                    explorer.pixel_selected.y = pixel_y;
+                    if pixel_x < id_matrix.len() && pixel_y < id_matrix[0].len() {
+                        explorer.pixel_selected.id = id_matrix[pixel_x][pixel_y].clone();
+                    }
                 }
                 pixel_clicked = true;
             }
         }
 
-        ui.add_space(0.01 * &(width as f32 * size as f32));
+        ui.add_space(0.01 * &(height as f32 * size as f32));
         colorbar_with_midpoint_slider(
             ui,
-            &(0.1 * width as f64 * size),
-            &(0.75 * height as f64 * size),
+            &(0.1 * height as f64 * size),
+            &(0.75 * width as f64 * size),
             explorer,
         );
     });
