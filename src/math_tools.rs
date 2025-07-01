@@ -17,7 +17,7 @@
 //! * **Phase Unwrapping**: Tools to remove 2π discontinuities in phase data, producing
 //!   continuous phase information across the spectrum.
 
-use crate::config::{ConfigContainer};
+use crate::config::ConfigContainer;
 use crate::data_container::ScannedImageFilterData;
 use ndarray::{Array1, Array3, ArrayView1, ArrayViewMut, Axis, Ix1, Zip};
 use rayon::iter::IntoParallelIterator;
@@ -588,8 +588,11 @@ fn point_in_polygon(x: usize, y: usize, polygon: &[(usize, usize)]) -> bool {
 /// * `polygon` - Vector of (x, y) coordinates defining the ROI boundary
 ///
 /// Returns a 1D array with averages along the z-axis for the polygon region
-pub fn average_polygon_roi(data: &Array3<f32>, polygon: &Vec<(usize, usize)>, scaling: usize) -> Array1<f32> {
-
+pub fn average_polygon_roi(
+    data: &Array3<f32>,
+    polygon: &Vec<(usize, usize)>,
+    scaling: usize,
+) -> Array1<f32> {
     let mut polygon = polygon.clone();
 
     for (x, y) in polygon.iter_mut() {

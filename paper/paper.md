@@ -47,6 +47,9 @@ application implements the dotTHz standard [@lee_dotthz_2023] and is platform in
 it
 easier to maintain and increasing its reach.
 
+![THz Image Explorer screenshot.\label{fig:icon}](screenshot.png)
+
+
 # Statement of need
 
 Interactive analysis tools for THz spectroscopy are essential to browse through images and analyse different regions of
@@ -81,8 +84,7 @@ extend the communication for additional data-types, these two structs need to be
 `crossbeam_channel::Sender<T>`/`crossbeam_channel::Receiver<T>`.
 
 The structure of the software architecture is shown in figure \ref{fig:software_architecture}.
-![Software Architecture.\label{fig:software_architecture}](software_architecture.png){#id .class width=80%}
-
+![Software Architecture.\label{fig:software_architecture}](thz-image-explorer.png){#id .class width=80%}
 
 # Installation
 
@@ -163,9 +165,11 @@ The left side-panel contains the intensity plot of the 2D scan along with the me
 side-panel contains the possible filters with configuration settings.
 A pixel can be (de-)selected by clicking inside the intensity plot.
 For large scans, it is recommend to down-scale the image. This will average the pixel values in a $2 \times 2$
-(or $4 \times 4$ and so on) pixel block, depending on the down-scaling factor.
+(or $4 \times 4$ and so on) pixel block, depending on the down-scaling factor. Note that the "Signal" trace in
+time-domain will still show the raw trace, but the "Signal" spectrum in the FFT plot will show the averaged spectrum of
+the down-scaled image.
 
-A sample scan is available in the `sample_data` directory.
+A sample scan (of a resolution target) is available in the `sample_data` directory.
 
 ## IO
 
@@ -175,11 +179,12 @@ is shown in the file opening dialog, allowing to easily
 browse through directories containing multiple scans and is also displayed upon opening a
 scan.
 
+THz Image Explorer supports drag & drop of `.thz` files, so that the user can easily open files from the file.
+
 The 3D structure can be exported as a `.vtu` file for further analysis (e.g.
 with [ParaView](https://www.paraview.org) ).
 
-A reference file can be loaded, which is used to compute the refractive index and absorption coefficient. If such a file
-is loaded, the dataset named "reference" is used as the reference, if no such dataset label is found, then the first
+A reference file can be loaded, which is used to compute the refractive index and absorption coefficient. The first
 entry will be used.
 
 ## Regions of Interest (ROI)
@@ -203,13 +208,13 @@ coefficient for that pixel in the center plot.
 
 The application maps the gaussian envelope of the intensity along the $z$-axis
 to opacity in an interactive voxel plot. The opacity threshold can be adjusted to improve performance and reduce nosie.
-The 3D viewer is implemented using the `bevy` game engine.
+The 3D viewer is implemented using the `bevy` game engine and a custom wgsl shader implemented in another
+crate: [bevy_voxel_plot](https://github.com/hacknus/bevy_voxel_plot).
 
 ## Filtering pipeline
 
-The filtering process is a simple linear pipeline, where the output of one filter is the input of the next filter. The structure is shown in figure \ref{fig:filtering_pipeline}.
-![Filtering Pipeline.\label{fig:filtering_pipeline}](filtering_pipeline.png){#id .class width=80%}
-
+The filtering process is a simple linear pipeline, where the output of one filter is the input of the next filter. The
+structure is shown in figure \ref{fig:software-architecture}.
 
 ### Time Domain Before FFT
 
@@ -363,6 +368,80 @@ impl Filter for ExampleFilter {
 
 To implement more complex methods, further adaptations might be required, but the code structure has been set up with
 modularity and simplicity in mind.
+
+
+# Further processing (with Python)
+
+After regions of interest (ROIs) have been selected, they can be saved in the meta-data of the dotTHz file. The
+coordinates are saved for each ROI with label "ROI {i}" as a list, e.g.:
+
+```
+"ROI 1": [[27.57,34.72],[37.96,23.65],[40.35,32.06],[35.06,37.92]]
+```
+
+while the label of the ROI is saved in the "ROI Labels" meta-data field as a comma-separated list.
+The file can then be opened with Python using the `pydotthz` package
+to further process the data. The `dotthz` package provides a convenient way to read and write dotTHz files and with the
+following code one can easily extract and average the region of interest:
+
+```python
+from pathlib import Path
+from typing import Optional
+
+from shapely.geometry import Polygon, Point
+import numpy as np
+from pydotthz import DotthzFile
+
+
+def extract_rois(path: Path, measurement_key: Optional[str] = None):
+    """
+    Extracts Regions of Interest (ROIs) from a DotthzFile and returns the pixel coordinates inside each ROI.
+
+    Parameters:
+    path (Path): Path to the DotthzFile containing the image data.
+    measurement_key (Optional[str]): The key for selecting a specific measurement. Defaults to the first measurement.
+
+    Returns:
+    dict: A dictionary mapping ROI labels to lists of pixel coordinates within each ROI.
+    """
+    rois = {}
+    with DotthzFile(path, "r") as image_file:
+        # Read the measurement
+        if measurement_key is None:
+            # Just get the first one
+            measurement_key = list(image_file.get_measurements().keys())[0]
+        datasets = image_file[measurement_key].datasets
+        metadata = image_file[measurement_key].metadata
+
+        # Extract image data
+        image = np.array(datasets["dataset"])
+        image_to_plot = np.sum(image ** 2, axis=2)  # Aggregate along 3rd dimension
+
+        # Get image dimensions
+        height, width = int(float(metadata["height"])), int(float(metadata["width"]))
+
+        # Extract and parse ROI polygon from metadata
+        for (index, roi_label) in enumerate(metadata["ROI Labels"].split(",")):
+            print((index, roi_label))
+            roi_raw = metadata[f"ROI {index}"]  # Assuming ROI is stored as a string like "[[x1,y1],[x2,y2],...]"
+            roi_points = eval(roi_raw) if isinstance(roi_raw, str) else roi_raw  # Convert to list of lists
+            roi_points = list(roi_points)  # Ensure it's a list
+
+            # Convert to image coordinate system (flip Y)
+            roi_points_corrected = [(x, height - y) for x, y in roi_points]
+            polygon = Polygon(roi_points_corrected)
+
+            # Find all pixels inside the ROI
+            pixels_inside_roi = [
+                (x, y) for y in range(height) for x in range(width) if polygon.contains(Point(x, y))
+            ]
+            rois[roi_label] = pixels_inside_roi
+
+    if len(rois) == 0:
+        raise Exception(f"No ROIs found in {path}")
+
+    return rois  # Returns list of pixel coordinates
+```
 
 # Summary
 

@@ -1223,20 +1223,29 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                     // Process each ROI
                                     for (roi_name, polygon) in &filtered.rois {
                                         // Time domain ROI averaging
-                                        let roi_signal =
-                                            average_polygon_roi(&filtered.data, polygon, filtered.scaling);
+                                        let roi_signal = average_polygon_roi(
+                                            &filtered.data,
+                                            polygon,
+                                            filtered.scaling,
+                                        );
                                         data.roi_signal
                                             .insert(roi_name.clone(), roi_signal.to_vec());
 
                                         // Frequency domain ROI averaging (amplitudes)
-                                        let roi_signal_fft =
-                                            average_polygon_roi(&filtered.amplitudes, polygon, filtered.scaling);
+                                        let roi_signal_fft = average_polygon_roi(
+                                            &filtered.amplitudes,
+                                            polygon,
+                                            filtered.scaling,
+                                        );
                                         data.roi_signal_fft
                                             .insert(roi_name.clone(), roi_signal_fft.to_vec());
 
                                         // Frequency domain ROI averaging (phases)
-                                        let roi_phase =
-                                            average_polygon_roi(&filtered.phases, polygon, filtered.scaling);
+                                        let roi_phase = average_polygon_roi(
+                                            &filtered.phases,
+                                            polygon,
+                                            filtered.scaling,
+                                        );
                                         data.roi_phase.insert(roi_name.clone(), roi_phase.to_vec());
                                     }
 
