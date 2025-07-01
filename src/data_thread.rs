@@ -5,14 +5,15 @@
 use crate::config::{ConfigCommand, ConfigContainer, ThreadCommunication};
 use crate::data_container::ScannedImageFilterData;
 use crate::filters::filter::{Filter, FILTER_REGISTRY};
-use crate::gui::matrix_plot::{SelectedPixel, ROI};
+use crate::gui::matrix_plot::ROI;
 use crate::io::{
     load_meta_data_of_thz_file, open_pulse_from_thz, open_scan_from_thz, save_to_thz,
     update_meta_data_of_thz_file,
 };
 use crate::math_tools::{
     apply_adapted_blackman_window, apply_blackman, apply_flat_top, apply_hamming, apply_hanning,
-    average_polygon_roi, calculate_optical_properties, fft, ifft, numpy_unwrap, FftWindowType,
+    average_polygon_roi, calculate_optical_properties, fft, ifft, numpy_unwrap, scaling,
+    FftWindowType,
 };
 use dotthz::DotthzMetaData;
 use ndarray::parallel::prelude::*;
@@ -134,7 +135,6 @@ fn update_metadata_rois(md: &mut DotthzMetaData, input: &ScannedImageFilterData)
 pub fn main_thread(mut thread_communication: ThreadCommunication) {
     // reads data from mutex, samples and saves if needed
     let mut config = ConfigContainer::default();
-    let mut selected_pixel = SelectedPixel::default();
     let mut meta_data = DotthzMetaData::default();
 
     let mut reset_filters = false;
@@ -710,21 +710,16 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     config.fft_window_type = wt;
                     update = UpdateType::Filter(thread_communication.fft_index);
                 }
-                ConfigCommand::SetDownScaling => {
-                    if let Ok(scaling) = thread_communication.scaling_lock.read() {
-                        //scan.scaling = *scaling as usize;
-                        // scan.rescale()
-                    }
-                    // TODO implement downscaling!
-                    log::error!("scaling is not supported yet!");
+                ConfigCommand::SetDownScaling(scaling) => {
+                    config.scale_factor = scaling;
                     update = UpdateType::Filter(1);
                 }
                 ConfigCommand::SetSelectedPixel(pixel) => {
-                    selected_pixel = pixel.clone();
-                    // if let Ok(scaling) = thread_communication.scaling_lock.read() {
-                    //     scan.scaling = *scaling as usize;
-                    //     scan.rescale()
-                    // }
+                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                        for data in filter_data.iter_mut() {
+                            data.pixel_selected = [pixel.x / data.scaling, pixel.y / data.scaling]
+                        }
+                    }
 
                     // TODO how do we update the traces in the filter panel??
                     update = UpdateType::Plot;
@@ -814,10 +809,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                 }
             }
 
-            if let Ok(pixel) = thread_communication.pixel_lock.read() {
-                selected_pixel = pixel.clone();
-            }
-
             match update {
                 UpdateType::Filter(start_idx) => {
                     // updating back the static fields
@@ -904,6 +895,12 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
 
                                         let start = Instant::now();
                                         match filter_id.as_str() {
+                                            "scaling" => {
+                                                // println!("Performing FFT");
+                                                // println!("{} -> {}", input_index, output_index);
+                                                filter_data[output_index] =
+                                                    scaling(&filter_data[input_index], &config);
+                                            }
                                             "fft" => {
                                                 // println!("Performing FFT");
                                                 // println!("{} -> {}", input_index, output_index);
@@ -1030,26 +1027,72 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
 
                                 // update intensity image
                                 if let Some(filtered) = filter_data.last_mut() {
-                                    (
-                                        filtered.data.axis_iter(Axis(0)),
-                                        filtered.img.axis_iter_mut(Axis(0)),
-                                    )
-                                        .into_par_iter()
-                                        .for_each(
-                                            |(data_columns, mut img_columns)| {
-                                                (
-                                                    data_columns.axis_iter(Axis(0)),
-                                                    img_columns.axis_iter_mut(Axis(0)),
-                                                )
-                                                    .into_par_iter()
-                                                    .for_each(|(data, img)| {
-                                                        *img.into_scalar() = data
-                                                            .iter()
-                                                            .map(|xi| xi * xi)
-                                                            .sum::<f32>();
-                                                    });
-                                            },
-                                        );
+                                    if filtered.scaling > 1 {
+                                        let scaled_width = filtered.data.shape()[0];
+                                        let scaled_height = filtered.data.shape()[1];
+                                        let scaling = filtered.scaling;
+
+                                        // Create a temporary scaled image
+                                        let mut scaled_img =
+                                            Array2::zeros((scaled_width, scaled_height));
+
+                                        // Calculate intensity for the scaled data
+                                        for x in 0..scaled_width {
+                                            for y in 0..scaled_height {
+                                                scaled_img[[x, y]] = filtered
+                                                    .data
+                                                    .slice(ndarray::s![x, y, ..])
+                                                    .iter()
+                                                    .map(|&v| v * v)
+                                                    .sum();
+                                            }
+                                        }
+
+                                        // Expand the scaled image to the original dimensions
+                                        filtered.img = Array2::zeros((
+                                            scaled_width * scaling,
+                                            scaled_height * scaling,
+                                        ));
+                                        for x in 0..scaled_width {
+                                            for y in 0..scaled_height {
+                                                let val = scaled_img[[x, y]];
+                                                for i in 0..scaling {
+                                                    for j in 0..scaling {
+                                                        let original_x = x * scaling + i;
+                                                        let original_y = y * scaling + j;
+                                                        if original_x < filtered.img.shape()[0]
+                                                            && original_y < filtered.img.shape()[1]
+                                                        {
+                                                            filtered.img
+                                                                [[original_x, original_y]] = val;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        // Original parallel calculation when no scaling is applied
+                                        (
+                                            filtered.data.axis_iter(Axis(0)),
+                                            filtered.img.axis_iter_mut(Axis(0)),
+                                        )
+                                            .into_par_iter()
+                                            .for_each(
+                                                |(data_columns, mut img_columns)| {
+                                                    (
+                                                        data_columns.axis_iter(Axis(0)),
+                                                        img_columns.axis_iter_mut(Axis(0)),
+                                                    )
+                                                        .into_par_iter()
+                                                        .for_each(|(data, img)| {
+                                                            *img.into_scalar() = data
+                                                                .iter()
+                                                                .map(|xi| xi * xi)
+                                                                .sum::<f32>();
+                                                        });
+                                                },
+                                            );
+                                    }
 
                                     update_intensity_image(&filtered, &thread_communication);
                                 }
@@ -1078,13 +1121,13 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             // raw trace
                             // time domain
                             if let Some(raw) = filter_data.first() {
-                                if raw.data.dim().0 <= selected_pixel.x
-                                    || raw.data.dim().1 <= selected_pixel.y
+                                if raw.data.dim().0 <= raw.pixel_selected[0] / raw.scaling
+                                    || raw.data.dim().1 <= raw.pixel_selected[1] / raw.scaling
                                 {
                                     log::warn!(
                                         "selected pixel ({}, {}) is out of bounds for raw data with shape {:?}",
-                                        selected_pixel.x,
-                                        selected_pixel.y,
+                                        raw.pixel_selected[0] / raw.scaling,
+                                        raw.pixel_selected[1] / raw.scaling,
                                         raw.data.shape()
                                         );
                                     continue;
@@ -1092,8 +1135,8 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 data.time = raw.time.to_vec();
                                 data.signal = raw
                                     .data
-                                    .index_axis(Axis(0), selected_pixel.x)
-                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .index_axis(Axis(0), raw.pixel_selected[0] / raw.scaling)
+                                    .index_axis(Axis(0), raw.pixel_selected[1] / raw.scaling)
                                     .to_vec();
                             }
 
@@ -1106,13 +1149,13 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 data.frequencies = raw.frequency.to_vec();
                                 data.signal_fft = raw
                                     .amplitudes
-                                    .index_axis(Axis(0), selected_pixel.x)
-                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .index_axis(Axis(0), raw.pixel_selected[0] / raw.scaling)
+                                    .index_axis(Axis(0), raw.pixel_selected[1] / raw.scaling)
                                     .to_vec();
                                 data.phase_fft = raw
                                     .phases
-                                    .index_axis(Axis(0), selected_pixel.x)
-                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .index_axis(Axis(0), raw.pixel_selected[0] / raw.scaling)
+                                    .index_axis(Axis(0), raw.pixel_selected[1] / raw.scaling)
                                     .to_vec();
                             }
 
@@ -1121,20 +1164,38 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 data.filtered_time = filtered.time.to_vec();
                                 data.filtered_signal = filtered
                                     .data
-                                    .index_axis(Axis(0), selected_pixel.x)
-                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[0] / filtered.scaling,
+                                    )
+                                    .index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[1] / filtered.scaling,
+                                    )
                                     .to_vec();
                                 // frequency domain
                                 data.filtered_frequencies = filtered.frequency.to_vec();
                                 data.filtered_signal_fft = filtered
                                     .amplitudes
-                                    .index_axis(Axis(0), selected_pixel.x)
-                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[0] / filtered.scaling,
+                                    )
+                                    .index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[1] / filtered.scaling,
+                                    )
                                     .to_vec();
                                 data.filtered_phase_fft = filtered
                                     .phases
-                                    .index_axis(Axis(0), selected_pixel.x)
-                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[0] / filtered.scaling,
+                                    )
+                                    .index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[1] / filtered.scaling,
+                                    )
                                     .to_vec();
 
                                 // averaged
@@ -1163,19 +1224,19 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                     for (roi_name, polygon) in &filtered.rois {
                                         // Time domain ROI averaging
                                         let roi_signal =
-                                            average_polygon_roi(&filtered.data, polygon);
+                                            average_polygon_roi(&filtered.data, polygon, filtered.scaling);
                                         data.roi_signal
                                             .insert(roi_name.clone(), roi_signal.to_vec());
 
                                         // Frequency domain ROI averaging (amplitudes)
                                         let roi_signal_fft =
-                                            average_polygon_roi(&filtered.amplitudes, polygon);
+                                            average_polygon_roi(&filtered.amplitudes, polygon, filtered.scaling);
                                         data.roi_signal_fft
                                             .insert(roi_name.clone(), roi_signal_fft.to_vec());
 
                                         // Frequency domain ROI averaging (phases)
                                         let roi_phase =
-                                            average_polygon_roi(&filtered.phases, polygon);
+                                            average_polygon_roi(&filtered.phases, polygon, filtered.scaling);
                                         data.roi_phase.insert(roi_name.clone(), roi_phase.to_vec());
                                     }
 
@@ -1201,15 +1262,23 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 filtered.roi_phase_fft.get(&reference_roi),
                             ) {
                                 if &sample_roi == "Selected Pixel" {
-                                    let amplitudes_x =
-                                        filtered.amplitudes.index_axis(Axis(0), selected_pixel.x);
-                                    let sample_amplitude =
-                                        amplitudes_x.index_axis(Axis(0), selected_pixel.y);
+                                    let amplitudes_x = filtered.amplitudes.index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[0] / filtered.scaling,
+                                    );
+                                    let sample_amplitude = amplitudes_x.index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[1] / filtered.scaling,
+                                    );
 
-                                    let phases_x =
-                                        filtered.phases.index_axis(Axis(0), selected_pixel.x);
-                                    let sample_phase =
-                                        phases_x.index_axis(Axis(0), selected_pixel.y);
+                                    let phases_x = filtered.phases.index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[0] / filtered.scaling,
+                                    );
+                                    let sample_phase = phases_x.index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[1] / filtered.scaling,
+                                    );
 
                                     let (refractive_index, absorption_coeff, extinction_coeff) =
                                         calculate_optical_properties(
@@ -1259,26 +1328,72 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     // update intensity image
                     if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
                         if let Some(filtered) = filter_data.last_mut() {
-                            (
-                                filtered.data.axis_iter(Axis(0)),
-                                filtered.img.axis_iter_mut(Axis(0)),
-                            )
-                                .into_par_iter()
-                                .for_each(
-                                    |(data_columns, mut img_columns)| {
-                                        (
-                                            data_columns.axis_iter(Axis(0)),
-                                            img_columns.axis_iter_mut(Axis(0)),
-                                        )
-                                            .into_par_iter()
-                                            .for_each(
-                                                |(data, img)| {
-                                                    *img.into_scalar() =
-                                                        data.iter().map(|xi| xi * xi).sum::<f32>();
-                                                },
-                                            );
-                                    },
-                                );
+                            if filtered.scaling > 1 {
+                                let scaled_width = filtered.data.shape()[0];
+                                let scaled_height = filtered.data.shape()[1];
+                                let scaling = filtered.scaling;
+
+                                // Create a temporary scaled image
+                                let mut scaled_img = Array2::zeros((scaled_width, scaled_height));
+
+                                // Calculate intensity for the scaled data
+                                for x in 0..scaled_width {
+                                    for y in 0..scaled_height {
+                                        scaled_img[[x, y]] = filtered
+                                            .data
+                                            .slice(ndarray::s![x, y, ..])
+                                            .iter()
+                                            .map(|&v| v * v)
+                                            .sum();
+                                    }
+                                }
+
+                                // Expand the scaled image to the original dimensions
+                                filtered.img = Array2::zeros((
+                                    scaled_width * scaling,
+                                    scaled_height * scaling,
+                                ));
+                                for x in 0..scaled_width {
+                                    for y in 0..scaled_height {
+                                        let val = scaled_img[[x, y]];
+                                        for i in 0..scaling {
+                                            for j in 0..scaling {
+                                                let original_x = x * scaling + i;
+                                                let original_y = y * scaling + j;
+                                                if original_x < filtered.img.shape()[0]
+                                                    && original_y < filtered.img.shape()[1]
+                                                {
+                                                    filtered.img[[original_x, original_y]] = val;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Original parallel calculation when no scaling is applied
+                                (
+                                    filtered.data.axis_iter(Axis(0)),
+                                    filtered.img.axis_iter_mut(Axis(0)),
+                                )
+                                    .into_par_iter()
+                                    .for_each(
+                                        |(data_columns, mut img_columns)| {
+                                            (
+                                                data_columns.axis_iter(Axis(0)),
+                                                img_columns.axis_iter_mut(Axis(0)),
+                                            )
+                                                .into_par_iter()
+                                                .for_each(
+                                                    |(data, img)| {
+                                                        *img.into_scalar() = data
+                                                            .iter()
+                                                            .map(|xi| xi * xi)
+                                                            .sum::<f32>();
+                                                    },
+                                                );
+                                        },
+                                    );
+                            }
 
                             update_intensity_image(&filtered, &thread_communication);
                         }
@@ -1293,13 +1408,13 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             // raw trace
                             // time domain
                             if let Some(raw) = filter_data.first() {
-                                if raw.data.dim().0 <= selected_pixel.x
-                                    || raw.data.dim().1 <= selected_pixel.y
+                                if raw.data.dim().0 <= raw.pixel_selected[0] / raw.scaling
+                                    || raw.data.dim().1 <= raw.pixel_selected[1] / raw.scaling
                                 {
                                     log::warn!(
                                         "selected pixel ({}, {}) is out of bounds for raw data with shape {:?}",
-                                        selected_pixel.x,
-                                        selected_pixel.y,
+                                        raw.pixel_selected[0]/ raw.scaling,
+                                        raw.pixel_selected[1]/ raw.scaling,
                                         raw.data.shape()
                                         );
                                     continue;
@@ -1308,8 +1423,8 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 data.time = raw.time.to_vec();
                                 data.signal = raw
                                     .data
-                                    .index_axis(Axis(0), selected_pixel.x)
-                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .index_axis(Axis(0), raw.pixel_selected[0] / raw.scaling)
+                                    .index_axis(Axis(0), raw.pixel_selected[1] / raw.scaling)
                                     .to_vec();
                             }
 
@@ -1322,13 +1437,13 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 data.frequencies = raw.frequency.to_vec();
                                 data.signal_fft = raw
                                     .amplitudes
-                                    .index_axis(Axis(0), selected_pixel.x)
-                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .index_axis(Axis(0), raw.pixel_selected[0] / raw.scaling)
+                                    .index_axis(Axis(0), raw.pixel_selected[1] / raw.scaling)
                                     .to_vec();
                                 data.phase_fft = raw
                                     .phases
-                                    .index_axis(Axis(0), selected_pixel.x)
-                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .index_axis(Axis(0), raw.pixel_selected[0] / raw.scaling)
+                                    .index_axis(Axis(0), raw.pixel_selected[1] / raw.scaling)
                                     .to_vec();
                             }
 
@@ -1337,20 +1452,38 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 data.filtered_time = filtered.time.to_vec();
                                 data.filtered_signal = filtered
                                     .data
-                                    .index_axis(Axis(0), selected_pixel.x)
-                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[0] / filtered.scaling,
+                                    )
+                                    .index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[1] / filtered.scaling,
+                                    )
                                     .to_vec();
                                 // frequency domain
                                 data.filtered_frequencies = filtered.frequency.to_vec();
                                 data.filtered_signal_fft = filtered
                                     .amplitudes
-                                    .index_axis(Axis(0), selected_pixel.x)
-                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[0] / filtered.scaling,
+                                    )
+                                    .index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[1] / filtered.scaling,
+                                    )
                                     .to_vec();
                                 data.filtered_phase_fft = filtered
                                     .phases
-                                    .index_axis(Axis(0), selected_pixel.x)
-                                    .index_axis(Axis(0), selected_pixel.y)
+                                    .index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[0] / filtered.scaling,
+                                    )
+                                    .index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[1] / filtered.scaling,
+                                    )
                                     .to_vec();
 
                                 // averaged
@@ -1383,15 +1516,23 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 filtered.roi_phase_fft.get(&reference_roi),
                             ) {
                                 if &sample_roi == "Selected Pixel" {
-                                    let amplitudes_x =
-                                        filtered.amplitudes.index_axis(Axis(0), selected_pixel.x);
-                                    let sample_amplitude =
-                                        amplitudes_x.index_axis(Axis(0), selected_pixel.y);
+                                    let amplitudes_x = filtered.amplitudes.index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[0] / filtered.scaling,
+                                    );
+                                    let sample_amplitude = amplitudes_x.index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[1] / filtered.scaling,
+                                    );
 
-                                    let phases_x =
-                                        filtered.phases.index_axis(Axis(0), selected_pixel.x);
-                                    let sample_phase =
-                                        phases_x.index_axis(Axis(0), selected_pixel.y);
+                                    let phases_x = filtered.phases.index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[0] / filtered.scaling,
+                                    );
+                                    let sample_phase = phases_x.index_axis(
+                                        Axis(0),
+                                        filtered.pixel_selected[1] / filtered.scaling,
+                                    );
 
                                     let (refractive_index, absorption_coeff, extinction_coeff) =
                                         calculate_optical_properties(

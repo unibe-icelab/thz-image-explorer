@@ -78,7 +78,7 @@ pub fn right_panel(
                         ui.end_row();
                         ui.label("Down scaling:");
 
-                        ui.style_mut().spacing.slider_width = 320.0;
+                        ui.style_mut().spacing.slider_width = 100.0;
 
                         ui.vertical(|ui| {
                             if ui
@@ -88,50 +88,7 @@ pub fn right_panel(
                                 ))
                                 .changed()
                             {
-                                explorer.pixel_selected.rect = vec![
-                                    [
-                                        (explorer.pixel_selected.x as f64)
-                                            / thread_communication.gui_settings.down_scaling as f64,
-                                        (explorer.pixel_selected.y as f64)
-                                            / thread_communication.gui_settings.down_scaling as f64,
-                                    ],
-                                    [
-                                        (explorer.pixel_selected.x as f64)
-                                            / thread_communication.gui_settings.down_scaling as f64
-                                            + 1.0,
-                                        (explorer.pixel_selected.y as f64)
-                                            / thread_communication.gui_settings.down_scaling as f64,
-                                    ],
-                                    [
-                                        (explorer.pixel_selected.x as f64)
-                                            / thread_communication.gui_settings.down_scaling as f64
-                                            + 1.0,
-                                        (explorer.pixel_selected.y as f64)
-                                            / thread_communication.gui_settings.down_scaling as f64
-                                            + 1.0,
-                                    ],
-                                    [
-                                        (explorer.pixel_selected.x as f64)
-                                            / thread_communication.gui_settings.down_scaling as f64,
-                                        (explorer.pixel_selected.y as f64)
-                                            / thread_communication.gui_settings.down_scaling as f64
-                                            + 1.0,
-                                    ],
-                                    [
-                                        (explorer.pixel_selected.x as f64)
-                                            / thread_communication.gui_settings.down_scaling as f64,
-                                        (explorer.pixel_selected.y as f64)
-                                            / thread_communication.gui_settings.down_scaling as f64,
-                                    ],
-                                ];
-                                if let Ok(mut s) = thread_communication.scaling_lock.write() {
-                                    *s = thread_communication.gui_settings.down_scaling as u8;
-                                }
-                                if let Ok(mut write_guard) = thread_communication.pixel_lock.write()
-                                {
-                                    *write_guard = explorer.pixel_selected.clone();
-                                }
-                                send_latest_config(thread_communication, ConfigCommand::SetDownScaling);
+                                send_latest_config(thread_communication, ConfigCommand::SetDownScaling(thread_communication.gui_settings.down_scaling));
                             }
                         });
                     });

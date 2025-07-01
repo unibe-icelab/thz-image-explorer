@@ -3,7 +3,6 @@ use crate::data_container::{DataPoint, ScannedImageFilterData};
 use crate::data_thread::main_thread;
 use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
-use crate::gui::matrix_plot::SelectedPixel;
 use crate::gui::threed_plot::{
     animate, set_enable_camera_controls_system, setup, update_instance_buffer_system,
     CameraInputAllowed, OpacityThreshold, SceneVisibility,
@@ -113,9 +112,14 @@ fn main() {
 
     let mut fft_index = 0;
     let mut ifft_index = 0;
+    let mut scaling_index = 0;
 
     if let Ok(mut filters) = FILTER_REGISTRY.lock() {
         let mut ordered_filters = vec![];
+
+        scaling_index = ordered_filters.len();
+        // Insert down-scaling step
+        ordered_filters.push("scaling".to_string());
 
         // Collect filters in the desired order, inserting FFT and iFFT manually
         for domain in [
@@ -179,6 +183,8 @@ fn main() {
         }
     }
 
+    // scaling
+    filter_data.push(ScannedImageFilterData::default());
     // FFT
     filter_data.push(ScannedImageFilterData::default());
     // iFFT
@@ -196,8 +202,6 @@ fn main() {
         |(_, _, _)| 0.0,
     )));
     let filtered_time_lock = Arc::new(RwLock::new(Array1::from_shape_fn(1, |_| 0.0)));
-    let pixel_lock = Arc::new(RwLock::new(SelectedPixel::default()));
-    let scaling_lock = Arc::new(RwLock::new(1));
     let md_lock = Arc::new(RwLock::new(DotthzMetaData::default()));
     let voxel_plot_instances_lock = Arc::new(RwLock::new((vec![], 1.0, 1.0, 1.0)));
 
@@ -224,10 +228,9 @@ fn main() {
         filtered_data_lock: filtered_data_lock.clone(),
         filtered_time_lock: filtered_time_lock.clone(),
         voxel_plot_instances_lock: voxel_plot_instances_lock.clone(),
-        pixel_lock: pixel_lock.clone(),
-        scaling_lock: scaling_lock.clone(),
         img_lock: img_lock.clone(),
         progress_lock: progress_lock.clone(),
+        scaling_index,
         fft_index,
         ifft_index,
         filter_computation_time_lock: filter_computation_time_lock.clone(),

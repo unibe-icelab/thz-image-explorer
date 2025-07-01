@@ -110,7 +110,7 @@ pub struct DataPoint {
 }
 
 /// Multi-dimensional dataset for 2D spectroscopic imaging, including time and frequency domain data.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct ScannedImageFilterData {
     /// Minimum x value (if known).
     pub x_min: Option<f32>,
@@ -164,4 +164,37 @@ pub struct ScannedImageFilterData {
     pub roi_signal_fft: HashMap<String, Array1<f32>>,
     /// ROI-averaged FFT phase.
     pub roi_phase_fft: HashMap<String, Array1<f32>>,
+}
+
+impl Default for ScannedImageFilterData {
+    fn default() -> Self {
+        Self {
+            x_min: None,
+            dx: None,
+            y_min: None,
+            dy: None,
+            height: 0,
+            width: 0,
+            scaling: 1, // Set the default value here
+            pixel_selected: [0, 0],
+            r2c: None,
+            c2r: None,
+            rois: HashMap::new(),
+            time: Array1::zeros(0),
+            img: Array2::zeros((0, 0)),
+            data: Array3::zeros((0, 0, 0)),
+            avg_data: Array1::zeros(0),
+            datasets: HashMap::new(),
+            roi_data: HashMap::new(),
+            frequency: Array1::zeros(0),
+            fft: Array3::zeros((0, 0, 0)),
+            amplitudes: Array3::zeros((0, 0, 0)),
+            phases: Array3::zeros((0, 0, 0)),
+            avg_fft: Array1::zeros(0),
+            avg_signal_fft: Array1::zeros(0),
+            avg_phase_fft: Array1::zeros(0),
+            roi_signal_fft: HashMap::new(),
+            roi_phase_fft: HashMap::new(),
+        }
+    }
 }

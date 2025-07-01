@@ -17,7 +17,7 @@
 //! * **Phase Unwrapping**: Tools to remove 2π discontinuities in phase data, producing
 //!   continuous phase information across the spectrum.
 
-use crate::config::ConfigContainer;
+use crate::config::{ConfigContainer};
 use crate::data_container::ScannedImageFilterData;
 use ndarray::{Array1, Array3, ArrayView1, ArrayViewMut, Axis, Ix1, Zip};
 use rayon::iter::IntoParallelIterator;
@@ -239,6 +239,76 @@ pub fn numpy_unwrap(x: &[f32], period: Option<f32>) -> Vec<f32> {
     unwrapped
 }
 
+pub fn scaling(input: &ScannedImageFilterData, config: &ConfigContainer) -> ScannedImageFilterData {
+    let scaling = config.scale_factor;
+    if scaling <= 1 {
+        return input.clone();
+    }
+
+    let mut output = input.clone();
+
+    let new_width = input.width / scaling;
+    let new_height = input.height / scaling;
+
+    if new_width == 0 || new_height == 0 {
+        // Scaling is too large, return original data
+        return input.clone();
+    }
+
+    // Update metadata for scaled data, but keep original width/height for display
+    output.width = new_width;
+    output.height = new_height;
+    output.scaling = scaling;
+    if let Some(dx) = output.dx {
+        output.dx = Some(dx * scaling as f32);
+    }
+    if let Some(dy) = output.dy {
+        output.dy = Some(dy * scaling as f32);
+    }
+
+    output.pixel_selected[0] /= scaling;
+    output.pixel_selected[1] /= scaling;
+
+    // Helper function to scale a 3D array by averaging blocks
+    fn scale_3d<T: Clone + Default + std::ops::AddAssign + std::ops::Div<f32, Output = T>>(
+        data: &Array3<T>,
+        new_width: usize,
+        new_height: usize,
+        scaling: usize,
+    ) -> Array3<T> {
+        let z_len = data.shape()[2];
+        let mut scaled_data = Array3::<T>::default((new_width, new_height, z_len));
+        let scaling_factor = (scaling * scaling) as f32;
+
+        for nx in 0..new_width {
+            for ny in 0..new_height {
+                for z in 0..z_len {
+                    let mut sum = T::default();
+                    for i in 0..scaling {
+                        for j in 0..scaling {
+                            let ox = nx * scaling + i;
+                            let oy = ny * scaling + j;
+                            if ox < data.shape()[0] && oy < data.shape()[1] {
+                                sum += data[[ox, oy, z]].clone();
+                            }
+                        }
+                    }
+                    scaled_data[[nx, ny, z]] = sum / scaling_factor;
+                }
+            }
+        }
+        scaled_data
+    }
+
+    // Scale 3D data arrays for faster backend processing
+    output.data = scale_3d(&input.data, new_width, new_height, scaling);
+    output.amplitudes = scale_3d(&input.amplitudes, new_width, new_height, scaling);
+    output.phases = scale_3d(&input.phases, new_width, new_height, scaling);
+    output.fft = scale_3d(&input.fft, new_width, new_height, scaling);
+
+    output
+}
+
 /// Performs Fast Fourier Transform (FFT) on time-domain data.
 ///
 /// This function applies the selected windowing function to the time-domain data before
@@ -404,13 +474,13 @@ pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
     for (roi_name, polygon) in &input.rois {
         // Time domain ROI processing (direct spatial averaging)
         if !config.avg_in_fourier_space {
-            let roi_signal = average_polygon_roi(&input.data, polygon);
+            let roi_signal = average_polygon_roi(&input.data, polygon, input.scaling);
             output.roi_data.insert(roi_name.clone(), roi_signal);
         }
 
         // Frequency domain processing (for visualization)
-        let roi_signal_fft = average_polygon_roi(&input.amplitudes, polygon);
-        let roi_phase_fft = average_polygon_roi(&input.phases, polygon);
+        let roi_signal_fft = average_polygon_roi(&input.amplitudes, polygon, input.scaling);
+        let roi_phase_fft = average_polygon_roi(&input.phases, polygon, input.scaling);
 
         // Store frequency domain results
         output
@@ -456,7 +526,7 @@ pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
                     Err(e) => {
                         println!("IFFT error for ROI {}: {}", roi_name, e);
                         // Fall back to time-domain averaging if IFFT fails
-                        let roi_signal = average_polygon_roi(&input.data, polygon);
+                        let roi_signal = average_polygon_roi(&input.data, polygon, input.scaling);
                         output.roi_data.insert(roi_name.clone(), roi_signal);
                     }
                 }
@@ -518,7 +588,14 @@ fn point_in_polygon(x: usize, y: usize, polygon: &[(usize, usize)]) -> bool {
 /// * `polygon` - Vector of (x, y) coordinates defining the ROI boundary
 ///
 /// Returns a 1D array with averages along the z-axis for the polygon region
-pub fn average_polygon_roi(data: &Array3<f32>, polygon: &[(usize, usize)]) -> Array1<f32> {
+pub fn average_polygon_roi(data: &Array3<f32>, polygon: &Vec<(usize, usize)>, scaling: usize) -> Array1<f32> {
+
+    let mut polygon = polygon.clone();
+
+    for (x, y) in polygon.iter_mut() {
+        *x /= scaling;
+        *y /= scaling;
+    }
     let x_size = data.shape()[0];
     let y_size = data.shape()[1];
     let z_size = data.shape()[2];
@@ -533,11 +610,11 @@ pub fn average_polygon_roi(data: &Array3<f32>, polygon: &[(usize, usize)]) -> Ar
     let mut x_max = 0;
     let mut y_max = 0;
 
-    for &(x, y) in polygon {
-        x_min = min(x_min, x);
-        y_min = min(y_min, y);
-        x_max = max(x_max, x);
-        y_max = max(y_max, y);
+    for (x, y) in polygon.iter() {
+        x_min = min(x_min, *x);
+        y_min = min(y_min, *y);
+        x_max = max(x_max, *x);
+        y_max = max(y_max, *y);
     }
 
     // Clamp to array bounds
@@ -550,7 +627,7 @@ pub fn average_polygon_roi(data: &Array3<f32>, polygon: &[(usize, usize)]) -> Ar
     for y in y_min..=y_max {
         for x in x_min..=x_max {
             // Check if the pixel is inside the polygon
-            if point_in_polygon(x, y, polygon) {
+            if point_in_polygon(x, y, &polygon) {
                 // Add the value to the average for each z-slice
                 for z in 0..z_size {
                     result[z] += data[[x, y, z]];

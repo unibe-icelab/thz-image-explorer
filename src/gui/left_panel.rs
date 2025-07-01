@@ -401,9 +401,6 @@ pub fn left_panel(
                     thread_communication,
                     ConfigCommand::SetSelectedPixel(explorer.pixel_selected.clone()),
                 );
-                if let Ok(mut write_guard) = thread_communication.pixel_lock.write() {
-                    *write_guard = explorer.pixel_selected.clone();
-                }
 
                 // Check if any ROI was just closed and send AddROI command
                 if let Some(roi) = &explorer.pixel_selected.open_roi {

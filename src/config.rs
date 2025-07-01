@@ -105,7 +105,7 @@ pub enum ConfigCommand {
 
     /// Command to adjust the downscaling factor.
     /// This affects the resolution of the processed image and data.
-    SetDownScaling,
+    SetDownScaling(usize),
 
     /// Command to update the currently selected pixel in the image.
     /// The selected pixel is represented by the [`SelectedPixel`] structure.
@@ -151,6 +151,8 @@ pub struct ConfigContainer {
     /// See [`FftWindowType`] for details.
     pub fft_window_type: FftWindowType,
 
+    pub scale_factor: usize,
+
     /// Flag indicating whether to use logarithmic plotting for FFT results.
     pub fft_log_plot: bool,
 
@@ -170,6 +172,7 @@ impl Default for ConfigContainer {
     /// The defaults are:
     /// - `fft_window`: `[1.0, 7.0]`
     /// - `fft_window_type`: `FftWindowType::AdaptedBlackman`
+    /// - `scale_factor`: `1`
     /// - `fft_log_plot`: `false`
     /// - `normalize_fft`: `false`
     /// - `avg_in_fourier_space`: `true`
@@ -178,6 +181,7 @@ impl Default for ConfigContainer {
         ConfigContainer {
             fft_window: [1.0, 7.0],
             fft_window_type: FftWindowType::AdaptedBlackman,
+            scale_factor: 1,
             fft_log_plot: false,
             normalize_fft: false,
             avg_in_fourier_space: true,
@@ -212,15 +216,12 @@ pub struct ThreadCommunication {
     /// Contains instances of voxels and their dimensions (width, height, depth).
     pub voxel_plot_instances_lock: Arc<RwLock<(Vec<InstanceData>, f32, f32, f32)>>,
 
-    /// Lock for the currently selected pixel in the image.
-    pub pixel_lock: Arc<RwLock<SelectedPixel>>,
-
-    /// Lock for the image scaling factor (used for downscaling).
-    /// Controls the resolution of displayed images.
-    pub scaling_lock: Arc<RwLock<u8>>,
-
     /// Lock for the 2D array representing the intensity image.
     pub img_lock: Arc<RwLock<Array2<f32>>>,
+
+    /// Index for the scaling filter in the filter chain.
+    /// Used to identify where scaling processing occurs in the sequence.
+    pub scaling_index: usize,
 
     /// Index for the FFT filter in the filter chain.
     /// Used to identify where FFT processing occurs in the sequence.
