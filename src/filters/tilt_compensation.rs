@@ -46,12 +46,21 @@ impl Filter for TiltCompensation {
         }
     }
 
-    /// No special reset operation needed for this filter
+    /// No special reset operation needed for this filter. Not used in this implementation.
     ///
     /// # Arguments
     /// * `_time` - The time axis array (unused in this implementation)
     /// * `_shape` - The shape of the data array (unused in this implementation)
     fn reset(&mut self, _time: &Array1<f32>, _shape: &[usize]) {
+        // NOOP
+    }
+
+    /// Updates the filter's GUI data with new data. Not used in this implementation.
+    ///
+    /// # Arguments
+    /// * `_data` - The scanned image filter data containing the signal and time axis
+    ///
+    fn show_data(&mut self, _data: &ScannedImageFilterData) {
         // NOOP
     }
 

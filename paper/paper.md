@@ -378,7 +378,11 @@ impl Filter for ExampleFilter {
     fn new() -> Self { ExampleFilter }
 
     fn reset(&mut self, time: &Array1<f32>, shape: &[usize]) {
-        // Reset logic here
+        // Reset any internal state if necessary
+    }
+
+    fn show_data(&mut self, data: &ScannedImageFilterData) {
+        // Display any data in the GUI if needed
     }
 
     fn filter(

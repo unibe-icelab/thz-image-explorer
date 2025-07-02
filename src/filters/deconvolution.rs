@@ -514,7 +514,13 @@ impl Filter for Deconvolution {
         Deconvolution { n_iterations: 500 }
     }
 
+    /// Resets the filter state. Not used.
     fn reset(&mut self, _time: &Array1<f32>, _shape: &[usize]) {
+        // NOOP
+    }
+
+    /// Displays the filter settings in the GUI. Not used, no data to show.
+    fn show_data(&mut self, _data: &ScannedImageFilterData) {
         // NOOP
     }
 

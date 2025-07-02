@@ -54,6 +54,10 @@ downcast_rs::impl_downcast!(CopyStaticFieldsTrait);
 ///         // Reset logic here
 ///     }
 ///
+///     fn show_data(&mut self, data: &ScannedImageFilterData) {
+///        // Optional: Show filter data in the GUI
+///     }
+///
 ///     fn filter(
 ///         &mut self,
 ///         input_data: &ScannedImageFilterData,
@@ -90,8 +94,11 @@ pub trait Filter: Send + Sync + Debug + CloneBoxedFilter + CopyStaticFieldsTrait
     where
         Self: Sized;
 
-    /// Resets the filter to its initial state, allowing it to be reused.
+    /// Resets the filter to its initial state. Useful when loading a new file or resetting the filter parameters.
     fn reset(&mut self, time: &Array1<f32>, shape: &[usize]);
+
+    /// Shows the filter data in the GUI. Optional.
+    fn show_data(&mut self, data: &ScannedImageFilterData);
 
     /// Returns the filter configuration, including name, description and domain.
     fn config(&self) -> FilterConfig;

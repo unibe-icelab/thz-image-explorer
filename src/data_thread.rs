@@ -785,7 +785,46 @@ pub fn main_thread(
                         }
                     }
 
-                    // TODO how do we update the traces in the filter panel??
+                    let mut filters_cloned: Option<Vec<(String, Box<dyn Filter>)>> = None;
+
+                    // we need to clone the filters out of the filter_registry, otherwise this
+                    // would block the gui thread (because it is also required to update the filters)
+
+                    if let Ok(filters) = FILTER_REGISTRY.lock() {
+                        // Clone (uuid, filter) pairs
+                        filters_cloned = Some(
+                            filters
+                                .filters
+                                .iter()
+                                .map(|(uuid, filter)| (uuid.clone(), filter.clone()))
+                                .collect::<Vec<(String, Box<dyn Filter>)>>(),
+                        );
+                    }
+                    if let Ok(filter_data) = thread_communication.filter_data_pipeline_lock.read() {
+                        if let Some(last) = filter_data.last() {
+                            if let Some(filters_cloned) = &mut filters_cloned {
+                                for (_, filter) in filters_cloned.iter_mut() {
+                                    filter.show_data(last)
+                                }
+                            }
+                        }
+                    }
+
+                    // updating back the static fields
+                    if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+                        if let Some(filters_cloned) = filters_cloned {
+                            for (uuid, filter) in filters_cloned.iter() {
+                                if let Some((_, filter_from_registry)) =
+                                    filters.filters.iter_mut().find(|(id, _)| *id == uuid)
+                                {
+                                    filter_from_registry.copy_static_fields_from(filter.as_ref());
+                                } else {
+                                    log::warn!("Filter with uuid {} not found in registry", uuid);
+                                }
+                            }
+                        }
+                    }
+
                     update = UpdateType::Plot;
                 }
                 ConfigCommand::UpdateFilters => {
@@ -1044,6 +1083,9 @@ pub fn main_thread(
                                                                     &thread_communication
                                                                         .abort_flag,
                                                                 );
+                                                            filter.show_data(
+                                                                &filter_data[output_index],
+                                                            );
                                                         }
 
                                                         if let Ok(mut computation_time) =

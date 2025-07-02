@@ -66,6 +66,30 @@ impl Filter for FrequencyDomainBandPass {
         // NOOP
     }
 
+    /// Updates the filter's GUI data with new data
+    ///
+    /// # Arguments
+    /// * `data` - The scanned image filter data containing the signal and time axis
+    ///
+    fn show_data(&mut self, data: &ScannedImageFilterData) {
+        // Extract spectrum for the selected pixel (for visualization)
+
+        let shape = data.fft.dim();
+        let h = shape.0;
+        let w = shape.1;
+
+        // Store the frequency axis for UI visualization
+        self.freq_axis = data.frequency.to_vec();
+
+        let pixel = data.pixel_selected;
+        if pixel[0] < h && pixel[1] < w {
+            let spectrum = data.fft.slice(s![pixel[0], pixel[1], ..]);
+            self.signal_axis = spectrum.iter().map(|c| c.norm()).collect();
+        } else {
+            self.signal_axis = vec![0.0; data.frequency.len()];
+        }
+    }
+
     /// Returns the filter's configuration and metadata
     fn config(&self) -> FilterConfig {
         FilterConfig {
@@ -100,9 +124,6 @@ impl Filter for FrequencyDomainBandPass {
         let shape = output_data.fft.dim();
         let h = shape.0;
         let w = shape.1;
-
-        // Store the frequency axis for UI visualization
-        self.freq_axis = output_data.frequency.to_vec();
 
         // Ensure cutoff frequencies are within the valid range
         let safe_low = self.low.max(0.0) as f32;
@@ -160,15 +181,6 @@ impl Filter for FrequencyDomainBandPass {
                 }
             }
         });
-
-        // Extract spectrum for the selected pixel (for visualization)
-        let pixel = output_data.pixel_selected;
-        if pixel[0] < h && pixel[1] < w {
-            let spectrum = output_data.fft.slice(s![pixel[0], pixel[1], ..]);
-            self.signal_axis = spectrum.iter().map(|c| c.norm()).collect();
-        } else {
-            self.signal_axis = vec![0.0; output_data.frequency.len()];
-        }
 
         let original_freq_len = input_data.frequency.len();
 

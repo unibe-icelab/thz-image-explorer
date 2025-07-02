@@ -71,6 +71,29 @@ impl Filter for TimeDomainBandPassAfterFFT {
         self.high = *time.last().unwrap_or(&0.0) as f64;
     }
 
+    /// Updates the filter's GUI data with new data
+    ///
+    /// # Arguments
+    /// * `data` - The scanned image filter data containing the signal and time axis
+    ///
+    fn show_data(&mut self, data: &ScannedImageFilterData) {
+        let shape = data.data.dim();
+
+        // Store the time axis for UI visualization
+        self.time_axis = data.time.to_vec();
+
+        // Safely get the signal for the selected pixel with bounds checking
+        let pixel = data.pixel_selected;
+        if pixel[0] < shape.0 && pixel[1] < shape.1 {
+            self.signal_axis = data.data.slice(s![pixel[0], pixel[1], ..]).to_vec();
+        } else {
+            // Use default values if pixel is out of bounds
+            self.signal_axis = vec![0.0; data.time.len()];
+        }
+
+        self.input_signal_axis = data.data.slice(s![pixel[0], pixel[1], ..]).to_vec();
+    }
+
     /// Returns the filter's configuration and metadata
     fn config(&self) -> FilterConfig {
         FilterConfig {
@@ -145,20 +168,6 @@ impl Filter for TimeDomainBandPassAfterFFT {
                 );
             }
         }
-
-        // Store the time axis for UI visualization
-        self.time_axis = output_data.time.to_vec();
-
-        // Safely get the signal for the selected pixel with bounds checking
-        let pixel = input_data.pixel_selected;
-        if pixel[0] < shape.0 && pixel[1] < shape.1 {
-            self.signal_axis = output_data.data.slice(s![pixel[0], pixel[1], ..]).to_vec();
-        } else {
-            // Use default values if pixel is out of bounds
-            self.signal_axis = vec![0.0; output_data.time.len()];
-        }
-
-        self.input_signal_axis = input_data.data.slice(s![pixel[0], pixel[1], ..]).to_vec();
 
         if let Ok(mut p) = progress_lock.write() {
             *p = None;
