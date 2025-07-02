@@ -1,11 +1,6 @@
 name: Rust
 
 on:
-  push:
-    branches: [ "main" ]
-    paths:
-      - "**/*.rs"
-      - "**/Cargo.toml"
   pull_request:
     branches: [ "main" ]
     paths:
