@@ -64,8 +64,6 @@ pub struct PlotDataContainer {
     pub available_references: Vec<String>,
     /// List of available sample names.
     pub available_samples: Vec<String>,
-    /// Thickness of the sample (in µm or mm).
-    pub sample_thickness: f32,
     /// Time axis data (raw).
     pub time: Vec<f32>,
     /// Filtered time axis data.

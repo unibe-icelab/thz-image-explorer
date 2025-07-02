@@ -22,6 +22,7 @@ use realfft::RealFftPlanner;
 use std::f32::consts::PI;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
+use bevy::winit::EventLoopProxy;
 
 pub enum UpdateType {
     None,
@@ -30,6 +31,12 @@ pub enum UpdateType {
     Image,
     Plot,
 }
+
+ fn request_repaint(proxy: &EventLoopProxy<bevy::winit::WakeUp>) {
+     log::debug!("requesting repaint.");
+     let _ = proxy.send_event(bevy::winit::WakeUp); // Wakes up the event loop
+}
+
 
 /// Updates the intensity image lock with the filtered image from the scan.
 ///
@@ -132,7 +139,7 @@ fn update_metadata_rois(md: &mut DotthzMetaData, input: &ScannedImageFilterData)
 ///
 /// # Arguments
 /// * `thread_communication` - A channel-based communication structure between threads.
-pub fn main_thread(mut thread_communication: ThreadCommunication) {
+pub fn main_thread(mut thread_communication: ThreadCommunication, proxy: &EventLoopProxy<bevy::winit::WakeUp>) {
     // reads data from mutex, samples and saves if needed
     let mut config = ConfigContainer::default();
     let mut meta_data = DotthzMetaData::default();
@@ -833,6 +840,10 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         sample_roi = name;
                     }
                 }
+                ConfigCommand::SetMaterialThickness(d) => {
+                    update = UpdateType::Plot;
+                    thread_communication.gui_settings.sample_thickness = d / 1.0e3;
+                }
                 ConfigCommand::SetReference(name) => {
                     update = UpdateType::Plot;
                     if let Ok(mut filter_data) =
@@ -1313,9 +1324,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     }
                     if let Ok(filter_data) = thread_communication.filter_data_pipeline_lock.read() {
                         if let Some(filtered) = filter_data.last() {
-                            // Get sample thickness from GUI settings (in meters)
-                            // TODO!
-                            let sample_thickness = 1.0 / 1e3; // explorer.data.sample_thickness;
 
                             // Get ROI data
                             if let (Some((_, reference_amplitude)), Some((_, reference_phase))) = (
@@ -1348,7 +1356,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                             reference_amplitude.view(),
                                             reference_phase.view(),
                                             filtered.frequency.view(),
-                                            sample_thickness,
+                                            thread_communication.gui_settings.sample_thickness,
                                         );
 
                                     // Store the calculated data
@@ -1371,7 +1379,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                             reference_amplitude.view(),
                                             reference_phase.view(),
                                             filtered.frequency.view(),
-                                            sample_thickness,
+                                            thread_communication.gui_settings.sample_thickness,
                                         );
 
                                     // Store the calculated data
@@ -1386,7 +1394,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             log::warn!("No filtered data available for material calculation");
                         }
                     }
-                    // TODO: request repaint
+                    request_repaint(proxy);
                 }
                 UpdateType::Image => {
                     // update intensity image
@@ -1464,7 +1472,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             update_intensity_image(&filtered, &thread_communication);
                         }
                     }
-                    // TODO: request repaint
+                    request_repaint(proxy);
                 }
                 UpdateType::Plot => {
                     // add selected pixel and avg data to the data lock for the plot
@@ -1574,9 +1582,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
 
                     if let Ok(filter_data) = thread_communication.filter_data_pipeline_lock.read() {
                         if let Some(filtered) = filter_data.last() {
-                            // Get sample thickness from GUI settings (in meters)
-                            // TODO
-                            let sample_thickness = 1.0 / 1e3; // explorer.data.sample_thickness;
 
                             // Get ROI data
                             if let (Some((_, reference_amplitude)), Some((_, reference_phase))) = (
@@ -1609,7 +1614,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                             reference_amplitude.view(),
                                             reference_phase.view(),
                                             filtered.frequency.view(),
-                                            sample_thickness,
+                                            thread_communication.gui_settings.sample_thickness,
                                         );
 
                                     // Store the calculated data
@@ -1632,7 +1637,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                             reference_amplitude.view(),
                                             reference_phase.view(),
                                             filtered.frequency.view(),
-                                            sample_thickness,
+                                            thread_communication.gui_settings.sample_thickness,
                                         );
 
                                     // Store the calculated data
@@ -1647,8 +1652,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             log::warn!("No filtered data available for material calculation");
                         }
                     }
-                    // println!("updated plot.This took {: ?}", start.elapsed());
-                    // TODO: request repaint
+                    request_repaint(proxy);
                 }
                 UpdateType::None => {
                     // do nothing

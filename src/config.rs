@@ -136,6 +136,9 @@ pub enum ConfigCommand {
 
     /// Command to set the sample data for processing.
     SetSample(String),
+
+    /// Command to set the material thickness for processing.
+    SetMaterialThickness(f32),
 }
 
 /// A container for storing configuration settings related to FFT and filtering processes.

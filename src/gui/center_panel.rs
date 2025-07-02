@@ -5,7 +5,7 @@ use crate::gui::toggle_widget::toggle;
 use crate::vec2;
 use bevy::prelude::*;
 use bevy_egui::egui::epaint;
-use bevy_egui::egui::{self, Checkbox, DragValue, Stroke, Ui};
+use bevy_egui::egui::{self, Checkbox, DragValue, Slider, Stroke, Ui};
 use bevy_voxel_plot::InstanceMaterialData;
 use egui_plot::{GridMark, Legend, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 use ndarray::Array2;
@@ -32,7 +32,7 @@ pub fn pulse_tab(
     thread_communication: &mut ThreadCommunication,
 ) {
     ui.vertical(|ui| {
-        if let Ok(read_guard) = thread_communication.data_lock.read() {
+        if let Ok(read_guard) = thread_communication.data_lock.try_read() {
             explorer.data = read_guard.clone();
         }
 
@@ -563,7 +563,7 @@ pub fn refractive_index_tab(
     explorer: &mut THzImageExplorer,
     thread_communication: &mut ThreadCommunication,
 ) {
-    if let Ok(data) = thread_communication.data_lock.read() {
+    if let Ok(data) = thread_communication.data_lock.try_read() {
         if !data.roi_signal.is_empty() {
             let roi_names: Vec<String> = data.roi_signal.values().map(|v| v.0.clone()).collect();
             explorer.data.available_references = roi_names.clone();
@@ -750,7 +750,8 @@ pub fn refractive_index_tab(
             ui.label("Sample Thickness:");
             if ui
                 .add(
-                    DragValue::new(&mut explorer.data.sample_thickness)
+                    // we just use 20 as a maximum value for the slider for practical purposes
+                    Slider::new(&mut thread_communication.gui_settings.sample_thickness, 0.01..=20.0)
                         .min_decimals(2)
                         .max_decimals(2)
                         .suffix(" mm"),
@@ -759,11 +760,11 @@ pub fn refractive_index_tab(
             {
                 thread_communication
                     .config_tx
-                    .send(ConfigCommand::UpdateMaterialCalculation)
+                    .send(ConfigCommand::SetMaterialThickness(thread_communication.gui_settings.sample_thickness))
                     .unwrap();
             }
 
-            ui.add_space(30.0);
+            ui.add_space(10.0);
             ui.add(Checkbox::new(
                 &mut thread_communication.gui_settings.water_lines_visible,
                 "",

@@ -15,7 +15,8 @@ use bevy::render::render_resource::WgpuFeatures;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy::render::{RenderDebugFlags, RenderPlugin};
 use bevy::window::ExitCondition;
-use bevy::winit::WinitSettings;
+use bevy::winit::{WinitSettings};
+use bevy::winit::EventLoopProxyWrapper;
 use bevy_egui::egui;
 use bevy_egui::egui::{vec2, Visuals};
 use bevy_egui::{EguiContexts, EguiPlugin};
@@ -45,10 +46,15 @@ const APP_INFO: AppInfo = AppInfo {
     author: "Linus Leo Stöckli",
 };
 
-fn spawn_data_thread(state: ResMut<ThreadCommunication>) {
-    let state = state.clone(); // If ThreadCommunication is Arc/Mutex or cloneable
+fn spawn_data_thread(
+    state: ResMut<ThreadCommunication>,
+    event_loop_proxy: Res<EventLoopProxyWrapper<bevy::winit::WakeUp>>,
+) {
+    let state = state.clone();
+    let proxy = event_loop_proxy.clone();
+
     thread::spawn(move || {
-        main_thread(state);
+        main_thread(state, &proxy);
     });
 }
 

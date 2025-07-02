@@ -108,6 +108,7 @@ impl Tab {
 pub struct GuiSettingsContainer {
     pub reference_index: usize,
     pub sample_index: usize,
+    pub sample_thickness: f32,
     pub selected_path: PathBuf,
     pub log_plot: bool,
     pub down_scaling: usize,
@@ -154,6 +155,7 @@ impl GuiSettingsContainer {
         GuiSettingsContainer {
             reference_index: 0,
             sample_index: 0,
+            sample_thickness: 1.0,
             selected_path: home_dir().unwrap_or_else(|| PathBuf::from("/")),
             log_plot: true,
             down_scaling: 1,

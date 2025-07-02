@@ -340,7 +340,7 @@ pub fn three_dimensional_plot_ui(
     height -= 100.0;
     let available_size = egui::vec2(width.min(height), width.min(height));
 
-    if let Ok(read_guard) = thread_communication.voxel_plot_instances_lock.read() {
+    if let Ok(read_guard) = thread_communication.voxel_plot_instances_lock.try_read() {
         let (instances, cube_width, cube_height, cube_depth) = read_guard.clone();
 
         let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
