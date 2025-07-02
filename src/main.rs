@@ -302,7 +302,7 @@ fn main() {
         .add_systems(Startup, setup_fonts)
         .add_systems(Update, update_gui)
         .add_systems(Last, autosave_on_exit)
-        // .add_systems(Update, animate)
+        .add_systems(Update, animate)
         .add_systems(Update, set_enable_camera_controls_system)
         .run();
 }

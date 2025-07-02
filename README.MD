@@ -6,6 +6,8 @@ This Application is written in Rust and the GUI is based on egui and bevy.
 
 ![Screenshot of the application on macOS](paper/screenshot.png)
 
+![3D render gif](thz-image-explorer-gif-3d.gif)
+
 A sample scan of a THz time-domain 2D imaging system can be found in the `sample_data` directory.
 
 ## Installation:
