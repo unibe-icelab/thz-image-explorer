@@ -84,9 +84,9 @@ The entire thread communication is handled with the `ThreadCommunication` struct
 extend the communication for additional data-types, these two structs need to be extended with `Arc<RwLock<T>>` or
 `crossbeam_channel::Sender<T>`/`crossbeam_channel::Receiver<T>`.
 
-The structure of the software architecture is shown in figure \ref{fig:software_architecture}.
+The structure of the software architecture is shown in figure \ref{fig:software-architecture}.
 
-![Software Architecture.\label{fig:software_architecture}](thz-image-explorer.drawio.png){width=80% .center}
+![Software Architecture.\label{fig:software-architecture}](thz-image-explorer.drawio.png){width=80% .center}
 
 For each filter, an entry in the `filter_data_pipeline` vector is created, which contains the dataset. Each filter is
 assigned an input and output index. This is memory intensive, but for the size of usual THz TDS datasets (tens to
