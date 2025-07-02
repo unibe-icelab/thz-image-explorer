@@ -1,19 +1,17 @@
-use crate::config::{ConfigCommand, GuiThreadCommunication};
-use crate::gui::application::FileDialogState;
+use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
+use crate::gui::application::{FileDialogState, THzImageExplorer};
 use crate::gui::gauge_widget::gauge;
-use crate::gui::matrix_plot::{make_dummy, plot_matrix, SelectedPixel, ROI};
+use crate::gui::matrix_plot::{make_dummy, plot_matrix, ColorBarState, ImageState};
 use crate::gui::toggle_widget::toggle_ui;
-use crate::io::{find_files_with_same_extension, load_psf};
-use crate::DataPoint;
+use crate::io::find_files_with_same_extension;
+use crate::PlotDataContainer;
+use bevy_egui::egui;
+use bevy_egui::egui::panel::Side;
+use bevy_egui::egui::TextStyle;
 use dotthz::DotthzMetaData;
-use eframe::egui;
-use eframe::egui::panel::Side;
-use eframe::egui::TextStyle;
 use egui_extras::{Column, TableBuilder};
-use egui_file_dialog::information_panel::InformationPanel;
-use egui_file_dialog::FileDialog;
-use egui_plot::PlotPoint;
-use std::path::{Path, PathBuf};
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 /// Calculates the width of a single char.
 fn calc_char_width(ui: &egui::Ui, char: char) -> f32 {
@@ -101,22 +99,14 @@ pub fn truncate_filename(ui: &egui::Ui, item: &Path, max_length: f32) -> String 
 #[allow(clippy::too_many_arguments)]
 pub fn left_panel(
     ctx: &egui::Context,
-    thread_communication: &mut GuiThreadCommunication,
+    explorer: &mut THzImageExplorer,
     left_panel_width: &f32,
-    pixel_selected: &mut SelectedPixel,
-    val: &mut PlotPoint,
-    mid_point: &mut f32,
-    bw: &mut bool,
-    cut_off: &mut [f32; 2],
-    file_dialog_state: &mut FileDialogState,
-    file_dialog: &mut FileDialog,
-    information_panel: &mut InformationPanel,
-    other_files: &mut Vec<PathBuf>,
-    selected_file_name: &mut String,
-    scroll_to_selection: &mut bool,
+    image_state: &mut ImageState,
+    color_bar_state: &mut ColorBarState,
+    thread_communication: &mut ThreadCommunication,
 ) {
     let gauge_size = left_panel_width / 3.0;
-    let mut data = DataPoint::default();
+    let mut data = PlotDataContainer::default();
     if let Ok(read_guard) = thread_communication.data_lock.read() {
         data = read_guard.clone();
     }
@@ -173,8 +163,8 @@ pub fn left_panel(
                     )))
                     .clicked()
                 {
-                    *file_dialog_state = FileDialogState::Open;
-                    file_dialog.pick_file();
+                    explorer.file_dialog_state = FileDialogState::Open;
+                    explorer.file_dialog.pick_file();
                 };
                 if ui
                     .button(egui::RichText::new(format!(
@@ -183,12 +173,12 @@ pub fn left_panel(
                     )))
                     .clicked()
                 {
-                    *file_dialog_state = FileDialogState::OpenRef;
-                    file_dialog.pick_file();
+                    explorer.file_dialog_state = FileDialogState::OpenRef;
+                    explorer.file_dialog.pick_file();
                 };
             });
 
-            if !other_files.is_empty() {
+            if !explorer.other_files.is_empty() {
                 ui.add_space(5.0);
                 ui.label("Files in same directory:");
                 let row_height = ui
@@ -203,23 +193,23 @@ pub fn left_panel(
                     .resizable(false)
                     .max_scroll_height(row_height * 5.0)
                     .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
-                if *scroll_to_selection {
-                    if let Some(selected_index) = other_files.iter().position(|path| {
-                        path.file_name().unwrap().to_str().unwrap() == selected_file_name
+                if explorer.scroll_to_selection {
+                    if let Some(selected_index) = explorer.other_files.iter().position(|path| {
+                        path.file_name().unwrap().to_str().unwrap() == explorer.selected_file_name
                     }) {
                         table_builder =
                             table_builder.scroll_to_row(selected_index, Some(egui::Align::Center));
                     }
-                    *scroll_to_selection = false;
+                    explorer.scroll_to_selection = false;
                 }
                 let table = table_builder
                     .column(Column::remainder().at_least(120.0)) // "Date Modified"
                     .header(row_height, |_header| {});
                 table.body(|body| {
-                    body.rows(row_height, other_files.len(), |mut row| {
-                        if let Some(item) = &mut other_files.get(row.index()) {
-                            let selected =
-                                item.file_name().unwrap().to_str().unwrap() == selected_file_name;
+                    body.rows(row_height, explorer.other_files.len(), |mut row| {
+                        if let Some(item) = &mut explorer.other_files.get(row.index()) {
+                            let selected = item.file_name().unwrap().to_str().unwrap()
+                                == explorer.selected_file_name;
                             row.set_selected(selected);
 
                             row.col(|ui| {
@@ -245,64 +235,64 @@ pub fn left_panel(
                                 }
                             });
                             if row.response().clicked() {
-                                *selected_file_name =
+                                explorer.selected_file_name =
                                     item.file_name().unwrap().to_str().unwrap().to_string();
                                 thread_communication.gui_settings.selected_path =
                                     item.to_path_buf();
-                                thread_communication
-                                    .config_tx
-                                    .send(ConfigCommand::OpenFile(item.to_path_buf()))
-                                    .expect("unable to send open file cmd");
+
+                                send_latest_config(
+                                    thread_communication,
+                                    ConfigCommand::OpenFile(item.to_path_buf()),
+                                );
                             }
                         }
                     });
                 });
-                if let Some(selected_index) = other_files.iter().position(|path| {
-                    path.file_name().unwrap().to_str().unwrap() == selected_file_name
+                if let Some(selected_index) = explorer.other_files.iter().position(|path| {
+                    path.file_name().unwrap().to_str().unwrap() == explorer.selected_file_name
                 }) {
                     if ui.input(|i| i.key_pressed(egui::Key::ArrowDown))
-                        && selected_index < other_files.len() - 1
+                        && selected_index < explorer.other_files.len() - 1
                     {
-                        let item = other_files[selected_index + 1].clone();
-                        *selected_file_name =
+                        let item = explorer.other_files[selected_index + 1].clone();
+                        explorer.selected_file_name =
                             item.file_name().unwrap().to_str().unwrap().to_string();
                         thread_communication.gui_settings.selected_path = item.to_path_buf();
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::OpenFile(item.to_path_buf()))
-                            .expect("unable to send open file cmd");
-                        *scroll_to_selection = true;
+                        send_latest_config(
+                            thread_communication,
+                            ConfigCommand::OpenFile(item.to_path_buf()),
+                        );
+                        explorer.scroll_to_selection = true;
                     }
                     if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) && selected_index > 0 {
-                        let item = other_files[selected_index - 1].clone();
-                        *selected_file_name =
+                        let item = explorer.other_files[selected_index - 1].clone();
+                        explorer.selected_file_name =
                             item.file_name().unwrap().to_str().unwrap().to_string();
                         thread_communication.gui_settings.selected_path = item.to_path_buf();
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::OpenFile(item.to_path_buf()))
-                            .expect("unable to send open file cmd");
-                        *scroll_to_selection = true;
+
+                        send_latest_config(
+                            thread_communication,
+                            ConfigCommand::OpenFile(item.to_path_buf()),
+                        );
+                        explorer.scroll_to_selection = true;
                     }
                 }
             }
 
-            file_dialog.set_right_panel_width(300.0);
+            explorer.file_dialog.set_right_panel_width(300.0);
 
             let mut repaint = false;
             ctx.input(|i| {
                 // Check if files were dropped
                 if let Some(dropped_file) = i.raw.dropped_files.last() {
                     let path = dropped_file.clone().path.unwrap();
-                    *other_files = find_files_with_same_extension(&path).unwrap();
-                    *selected_file_name = path.file_name().unwrap().to_str().unwrap().to_string();
-                    *scroll_to_selection = true;
-                    file_dialog.config_mut().initial_directory = path.clone();
+                    explorer.other_files = find_files_with_same_extension(&path).unwrap();
+                    explorer.selected_file_name =
+                        path.file_name().unwrap().to_str().unwrap().to_string();
+                    explorer.scroll_to_selection = true;
+                    explorer.file_dialog.config_mut().initial_directory = path.clone();
                     thread_communication.gui_settings.selected_path = path.clone();
-                    thread_communication
-                        .config_tx
-                        .send(ConfigCommand::OpenFile(path))
-                        .expect("unable to send open file cmd");
+                    send_latest_config(thread_communication, ConfigCommand::OpenFile(path));
                     repaint = true;
                 }
             });
@@ -312,47 +302,131 @@ pub fn left_panel(
                 ctx.request_repaint();
             }
 
-            match file_dialog_state {
+            match explorer.file_dialog_state {
                 FileDialogState::Open => {
-                    if let Some(path) = file_dialog
-                        .update_with_right_panel_ui(ctx, &mut |ui, dia| {
-                            information_panel.ui(ui, dia);
-                        })
-                        .picked()
+                    #[cfg(target_os = "macos")]
                     {
-                        *file_dialog_state = FileDialogState::None;
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::OpenFile(path.to_path_buf()))
-                            .expect("unable to send open file cmd");
+                        // use RFD for macOS to be ablte to use the dotTHz plugin
+                        let thread_communication_clone = thread_communication.clone();
+                        std::thread::spawn(move || {
+                            let task = rfd::AsyncFileDialog::new()
+                                .set_title("Open File")
+                                .add_filter("thz", &["thz", "thzimg", "thzswp"])
+                                .pick_file();
+
+                            futures::executor::block_on(async {
+                                if let Some(file) = task.await {
+                                    send_latest_config(
+                                        &thread_communication_clone,
+                                        ConfigCommand::OpenFile(file.path().to_path_buf()),
+                                    );
+                                }
+                            });
+                        });
+
+                        explorer.file_dialog_state = FileDialogState::None;
                     }
-                    if let Some(path) = file_dialog.take_picked() {
-                        *other_files = find_files_with_same_extension(&path).unwrap();
-                        *selected_file_name =
-                            path.file_name().unwrap().to_str().unwrap().to_string();
-                        *scroll_to_selection = true;
-                        file_dialog.config_mut().initial_directory = path.clone();
-                        thread_communication.gui_settings.selected_path = path;
+
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        if let Some(path) = explorer
+                            .file_dialog
+                            .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                explorer.information_panel.ui(ui, dia);
+                            })
+                            .picked()
+                        {
+                            explorer.file_dialog_state = FileDialogState::None;
+                            send_latest_config(
+                                thread_communication,
+                                ConfigCommand::OpenFile(path.to_path_buf()),
+                            );
+                        }
                     }
                 }
-                FileDialogState::OpenRef => {}
-                FileDialogState::OpenPSF => {
-                    if let Some(path) = file_dialog
-                        .update_with_right_panel_ui(ctx, &mut |ui, dia| {
-                            information_panel.ui(ui, dia);
-                        })
-                        .picked()
+                FileDialogState::OpenRef => {
+                    #[cfg(target_os = "macos")]
                     {
-                        *file_dialog_state = FileDialogState::None;
-                        if let Ok(psf) = load_psf(&path.to_path_buf()) {
-                            thread_communication.gui_settings.psf = psf;
-                            thread_communication.gui_settings.beam_shape_path = path.to_path_buf();
+                        // use RFD for macOS to be ablte to use the dotTHz plugin
+                        let thread_communication_clone = thread_communication.clone();
+                        std::thread::spawn(move || {
+                            let task = rfd::AsyncFileDialog::new()
+                                .set_title("Open File")
+                                .add_filter("thz", &["thz"])
+                                .pick_file();
+
+                            futures::executor::block_on(async {
+                                if let Some(file) = task.await {
+                                    send_latest_config(
+                                        &thread_communication_clone,
+                                        ConfigCommand::OpenRef(file.path().to_path_buf()),
+                                    );
+                                }
+                            });
+                        });
+
+                        explorer.file_dialog_state = FileDialogState::None;
+                    }
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        if let Some(path) = explorer
+                            .file_dialog
+                            .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                explorer.information_panel.ui(ui, dia);
+                            })
+                            .picked()
+                        {
+                            explorer.file_dialog_state = FileDialogState::None;
+                            send_latest_config(
+                                thread_communication,
+                                ConfigCommand::OpenRef(path.to_path_buf()),
+                            );
+                        }
+                    }
+                }
+                FileDialogState::OpenPSF => {
+                    #[cfg(target_os = "macos")]
+                    {
+                        // use RFD for macOS to be ablte to use the dotTHz plugin
+                        let thread_communication_clone = thread_communication.clone();
+                        std::thread::spawn(move || {
+                            let task = rfd::AsyncFileDialog::new()
+                                .set_title("Open File")
+                                .add_filter("npz", &["npz"])
+                                .pick_file();
+
+                            futures::executor::block_on(async {
+                                if let Some(file) = task.await {
+                                    send_latest_config(
+                                        &thread_communication_clone,
+                                        ConfigCommand::OpenPSF(file.path().to_path_buf()),
+                                    );
+                                }
+                            });
+                        });
+
+                        explorer.file_dialog_state = FileDialogState::None;
+                    }
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        if let Some(path) = explorer
+                            .file_dialog
+                            .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                explorer.information_panel.ui(ui, dia);
+                            })
+                            .picked()
+                        {
+                            send_latest_config(
+                                &thread_communication_clone,
+                                ConfigCommand::OpenRef(file.path().to_path_buf()),
+                            );
+                            explorer.file_dialog_state = FileDialogState::None;
                         }
                     }
                 }
                 FileDialogState::Save => {
-                    if let Some(_path) = file_dialog.update(ctx).picked() {
-                        *file_dialog_state = FileDialogState::None;
+                    if let Some(_path) = explorer.file_dialog.update(ctx).picked() {
+                        explorer.file_dialog_state = FileDialogState::None;
                         // match tera_flash_conf.filetype {
                         //     FileType::Csv => {
                         //         picked_path.set_extension("csv");
@@ -369,6 +443,49 @@ pub fn left_panel(
                         // }
                     }
                 }
+                FileDialogState::SaveToVTU => {
+                    #[cfg(target_os = "macos")]
+                    {
+                        // use RFD for macOS to be ablte to use the dotTHz plugin
+                        let thread_communication_clone = thread_communication.clone();
+                        std::thread::spawn(move || {
+                            let task = rfd::AsyncFileDialog::new()
+                                .set_title("Save File")
+                                .set_file_name("thz_scan.vtu")
+                                .save_file();
+
+                            futures::executor::block_on(async {
+                                if let Some(file) = task.await {
+                                    send_latest_config(
+                                        &thread_communication_clone,
+                                        ConfigCommand::SaveVTU(file.path().to_path_buf()),
+                                    );
+                                }
+                            });
+                        });
+
+                        explorer.file_dialog_state = FileDialogState::None;
+                    }
+                    explorer.file_dialog.save_file();
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        explorer.file_dialog.save_file();
+
+                        if let Some(path) = explorer
+                            .file_dialog
+                            .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                explorer.information_panel.ui(ui, dia);
+                            })
+                            .picked()
+                        {
+                            send_latest_config(
+                                &thread_communication_clone,
+                                ConfigCommand::SaveVTU(file.path().to_path_buf()),
+                            );
+                            explorer.file_dialog_state = FileDialogState::None;
+                        }
+                    }
+                }
                 FileDialogState::None => {}
             }
 
@@ -382,124 +499,45 @@ pub fn left_panel(
                 img_data = read_guard.clone();
             }
 
-            // read rois from md
-
-            let open_roi = if let Some(a) = pixel_selected.rois.last() {
-                if !a.closed {
-                    Some(a.clone())
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-
-            pixel_selected.rois.clear();
-
-            if let Some(labels) = meta_data.md.get("ROI Labels") {
-                let roi_labels: Vec<&str> = labels.split(',').collect();
-                for (i, label) in roi_labels.iter().enumerate() {
-                    if let Some(roi_data) = meta_data.md.get(&format!("ROI {}", i)) {
-                        // Ensure we are correctly extracting coordinates
-                        let polygon = roi_data
-                            .split("],") // Split by "]," to separate coordinate pairs
-                            .filter_map(|point| {
-                                let cleaned = point.trim_matches(|c| c == '[' || c == ']');
-                                let values: Vec<f64> = cleaned
-                                    .split(',')
-                                    .filter_map(|v| v.trim().parse::<f64>().ok())
-                                    .collect();
-
-                                if values.len() == 2 {
-                                    Some([values[0], values[1]])
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect::<Vec<[f64; 2]>>();
-
-                        if !polygon.is_empty() {
-                            pixel_selected.rois.push(ROI {
-                                polygon,
-                                closed: true,
-                                name: label.to_string(),
-                            });
-                        }
-                    }
-                }
-            }
-
-            if let Some(roi) = open_roi {
-                pixel_selected.rois.push(roi.clone());
-            }
-
-            // TODO: implement selecting reference pixel
             let pixel_clicked = plot_matrix(
                 ui,
                 &img_data,
                 &(*left_panel_width as f64),
                 &(height as f64),
-                cut_off,
-                val,
-                pixel_selected,
-                mid_point,
-                bw,
+                explorer,
+                image_state,
+                color_bar_state,
             );
             if pixel_clicked {
-                thread_communication
-                    .config_tx
-                    .send(ConfigCommand::SetSelectedPixel(pixel_selected.clone()))
-                    .unwrap();
-                if let Ok(mut write_guard) = thread_communication.pixel_lock.write() {
-                    *write_guard = pixel_selected.clone();
-                }
-                let mut md_update_requested = false;
-                for (roi_i, roi) in pixel_selected.rois.iter_mut().enumerate() {
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::SetSelectedPixel(explorer.pixel_selected.clone()),
+                );
+
+                // Check if any ROI was just closed and send AddROI command
+                if let Some(roi) = &explorer.pixel_selected.open_roi {
                     if roi.closed {
-                        let formatted = roi
-                            .polygon
-                            .iter()
-                            .map(|&[x, y]| format!("[{:.2},{:.2}]", x, y))
-                            .collect::<Vec<String>>()
-                            .join(",");
-                        meta_data.md.insert(format!("ROI {}", roi_i), formatted);
-                        md_update_requested = true;
-
-                        if let Some(labels) = meta_data.md.get_mut("ROI Labels") {
-                            // Append new ROI label
-                            labels.push_str(&roi.name.clone());
-                        }
+                        let roi_uuid = uuid::Uuid::new_v4();
+                        explorer.rois.insert(roi_uuid.to_string(), roi.clone());
+                        send_latest_config(
+                            thread_communication,
+                            ConfigCommand::AddROI(roi_uuid.to_string(), roi.clone()),
+                        );
+                        explorer.pixel_selected.open_roi = None;
                     }
-                }
-
-                if md_update_requested {
-                    let labels = pixel_selected
-                        .rois
-                        .iter()
-                        .map(|l| l.name.clone())
-                        .collect::<Vec<String>>()
-                        .join(",");
-                    meta_data.md.insert("ROI Labels".to_string(), labels);
-
-                    if let Ok(mut md) = thread_communication.md_lock.write() {
-                        *md = meta_data.clone();
-                    }
-
-                    thread_communication
-                        .config_tx
-                        .send(ConfigCommand::UpdateMetaData(
-                            thread_communication.gui_settings.selected_path.clone(),
-                        ))
-                        .expect("unable to send save file cmd");
                 }
             }
 
             ui.add_space(10.0);
-            ui.label("Black/White");
-            toggle_ui(ui, bw);
-            ui.label(format!("Pixel: {}", pixel_selected.id));
-            ui.label(format!("x: {}", pixel_selected.x));
-            ui.label(format!("y: {}", pixel_selected.y));
+            ui.horizontal(|ui| {
+                ui.label("Black/White");
+                toggle_ui(ui, &mut explorer.bw);
+                ui.add_space(5.0);
+                ui.label(format!(
+                    "Pixel: {}/{}",
+                    explorer.pixel_selected.x, explorer.pixel_selected.y
+                ));
+            });
 
             ui.separator();
             ui.heading("Regions of Interest (ROI)");
@@ -507,9 +545,28 @@ pub fn left_panel(
                 egui::Grid::new("rois polygons")
                     .striped(true)
                     .show(ui, |ui| {
-                        let mut changed = false;
-                        for roi in pixel_selected.rois.iter_mut() {
-                            changed |= ui.add(egui::TextEdit::singleline(&mut roi.name)).changed();
+                        let mut rois_to_update = HashMap::new();
+                        let mut rois_to_delete = HashSet::new();
+                        for (roi_uuid, roi) in explorer.rois.iter_mut() {
+                            if ui
+                                .selectable_label(
+                                    false,
+                                    egui::RichText::new(format!(
+                                        "{}",
+                                        egui_phosphor::regular::TRASH
+                                    )),
+                                )
+                                .clicked()
+                            {
+                                rois_to_delete.insert(roi_uuid.clone());
+                                send_latest_config(
+                                    thread_communication,
+                                    ConfigCommand::DeleteROI(roi.name.clone()),
+                                );
+                            }
+
+                            let changed =
+                                ui.add(egui::TextEdit::singleline(&mut roi.name)).changed();
                             let points = roi
                                 .polygon
                                 .iter()
@@ -518,29 +575,66 @@ pub fn left_panel(
                                 .join(",");
                             ui.label(points);
                             ui.end_row();
+
+                            if changed {
+                                rois_to_update.insert(roi_uuid.clone(), roi.clone());
+                                send_latest_config(
+                                    thread_communication,
+                                    ConfigCommand::UpdateROI(roi_uuid.clone(), roi.clone()),
+                                );
+                            }
                         }
-                        if changed {
-                            let labels = pixel_selected
-                                .rois
+
+                        for roi in rois_to_delete.iter() {
+                            explorer.rois.remove(roi);
+                        }
+
+                        for (roi_uuid, roi) in rois_to_update.iter() {
+                            explorer.rois.insert(roi_uuid.clone(), roi.clone());
+                        }
+
+                        if let Some(roi) = &mut explorer.pixel_selected.open_roi {
+                            let mut delete_roi = false;
+                            if ui
+                                .selectable_label(
+                                    false,
+                                    egui::RichText::new(format!(
+                                        "{}",
+                                        egui_phosphor::regular::TRASH
+                                    )),
+                                )
+                                .clicked()
+                            {
+                                delete_roi = true;
+                            }
+                            ui.add(egui::TextEdit::singleline(&mut roi.name));
+                            let points = roi
+                                .polygon
                                 .iter()
-                                .map(|l| l.name.clone())
+                                .map(|&[x, y]| format!("[{:.2},{:.2}]", x, y))
                                 .collect::<Vec<String>>()
                                 .join(",");
-                            meta_data.md.insert("ROI Labels".to_string(), labels);
-
-                            dbg!(&meta_data.md.get("ROI Labels"));
-                            if let Ok(mut md) = thread_communication.md_lock.write() {
-                                *md = meta_data.clone();
+                            ui.label(points);
+                            ui.end_row();
+                            if delete_roi {
+                                explorer.pixel_selected.open_roi = None;
                             }
-                            thread_communication
-                                .config_tx
-                                .send(ConfigCommand::UpdateMetaData(
-                                    thread_communication.gui_settings.selected_path.clone(),
-                                ))
-                                .expect("unable to send save file cmd");
                         }
                     });
             });
+
+            if ui
+                .button("Save ROIs")
+                .on_hover_text("Save current ROIs to file")
+                .clicked()
+            {
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::SaveROIs(
+                        thread_communication.gui_settings.selected_path.clone(),
+                    ),
+                );
+            }
 
             ui.separator();
             ui.heading("Meta Data");
@@ -558,12 +652,12 @@ pub fn left_panel(
                     .clicked()
                 {
                     if thread_communication.gui_settings.meta_data_edit {
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::UpdateMetaData(
+                        send_latest_config(
+                            thread_communication,
+                            ConfigCommand::UpdateMetaData(
                                 thread_communication.gui_settings.selected_path.clone(),
-                            ))
-                            .expect("unable to send save file cmd");
+                            ),
+                        );
                     }
                     thread_communication.gui_settings.meta_data_edit =
                         !thread_communication.gui_settings.meta_data_edit;
@@ -579,12 +673,16 @@ pub fn left_panel(
                     {
                         thread_communication.gui_settings.meta_data_edit = false;
                         thread_communication.gui_settings.meta_data_unlocked = false;
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::LoadMetaData(
+                        send_latest_config(
+                            thread_communication,
+                            ConfigCommand::LoadMetaData(
                                 thread_communication.gui_settings.selected_path.clone(),
-                            ))
-                            .expect("unable to send open file cmd");
+                            ),
+                        );
+                    }
+                    if ui.button(egui::RichText::new("Cancel")).clicked() {
+                        thread_communication.gui_settings.meta_data_edit = false;
+                        thread_communication.gui_settings.meta_data_unlocked = false;
                     }
                 }
             });
@@ -646,37 +744,8 @@ pub fn left_panel(
                         ui.end_row()
                     }
 
-                    for attr in attributes_to_delete {
-                        if attr.contains("ROI") {
-                            if let Some(labels_string) = meta_data.md.get_mut("ROI Labels") {
-                                let mut labels = labels_string.split(",").collect::<Vec<&str>>();
-                                if let Some(index) = attr
-                                    .strip_prefix("ROI ")
-                                    .and_then(|num| num.parse::<usize>().ok())
-                                {
-                                    dbg!(index);
-                                    pixel_selected.rois.remove(index);
-                                    if pixel_selected.rois.is_empty() {
-                                        let mut roi = ROI::default();
-                                        roi.name = format!("ROI {}", pixel_selected.rois.len() + 1);
-                                        pixel_selected.rois.push(roi);
-                                    }
-                                    labels.remove(index);
-                                    *labels_string = labels.join(",");
-                                } else {
-                                    if attr == "ROI Labels" {
-                                        for roi_i in 0..pixel_selected.rois.len() {
-                                            meta_data.md.swap_remove(&format!("ROI {roi_i}"));
-                                        }
-                                        pixel_selected.rois.clear();
-                                        let mut roi = ROI::default();
-                                        roi.name = "ROI 0".to_string();
-                                        pixel_selected.rois.push(roi);
-                                    }
-                                }
-                            }
-                        }
-                        meta_data.md.swap_remove(&attr);
+                    for attr in attributes_to_delete.iter() {
+                        meta_data.md.swap_remove(attr);
                     }
 
                     ui.label("User:");

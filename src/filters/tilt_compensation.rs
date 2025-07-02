@@ -1,24 +1,41 @@
-use crate::config::GuiThreadCommunication;
-use crate::data_container::ScannedImage;
-use crate::filters::filter::{Filter, FilterConfig, FilterDomain};
+//! Tilt compensation filter for correcting sample misalignment.
+//!
+//! This filter corrects for physical misalignment of samples by applying position-dependent
+//! time shifts to the data. When samples are tilted relative to the scanning plane,
+//! different parts of the sample are at different optical path lengths, causing
+//! timing offsets in the measured signals. This filter compensates for these effects
+//! by calculating and applying the appropriate time shifts based on specified tilt angles.
+
+use crate::config::ThreadCommunication;
+use crate::data_container::ScannedImageFilterData;
+use crate::filters::filter::{CopyStaticFieldsTrait, Filter, FilterConfig, FilterDomain};
 use crate::gui::application::GuiSettingsContainer;
 use crate::math_tools::apply_adapted_blackman_window;
-use eframe::egui::{self, Ui};
-//use filter_macros::register_filter;
+use bevy_egui::egui::{self, Ui};
+use filter_macros::{register_filter, CopyStaticFields};
 use ndarray::{concatenate, s, Array1, Array3, Axis};
 use realfft::RealFftPlanner;
 use std::f32::consts::PI;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
-#[derive(Debug, Clone)]
-//#[register_filter]
+/// Tilt compensation filter for correcting sample misalignment along X and Y axes.
+///
+/// This filter applies position-dependent time shifts to compensate for sample tilt.
+/// When a sample is tilted, different positions on the sample are at different distances
+/// from the detector, causing time delays in the signal. This filter corrects these
+/// delays based on specified tilt angles.
+#[register_filter]
+#[derive(Clone, Debug, CopyStaticFields)]
 pub struct TiltCompensation {
+    /// Tilt angle around the X axis in degrees (-15 to 15 degrees)
     pub tilt_x: f64,
+    /// Tilt angle around the Y axis in degrees (-15 to 15 degrees)
     pub tilt_y: f64,
 }
 
 impl Filter for TiltCompensation {
+    /// Creates a new instance of the tilt compensation filter with default values (no tilt)
     fn new() -> Self
     where
         Self: Sized,
@@ -29,59 +46,107 @@ impl Filter for TiltCompensation {
         }
     }
 
+    /// No special reset operation needed for this filter
+    ///
+    /// # Arguments
+    /// * `_time` - The time axis array (unused in this implementation)
+    /// * `_shape` - The shape of the data array (unused in this implementation)
+    fn reset(&mut self, _time: &Array1<f32>, _shape: &[usize]) {
+        // NOOP
+    }
+
+    /// Returns the filter's configuration and metadata
     fn config(&self) -> FilterConfig {
         FilterConfig {
             name: "Tilt Compensation".to_string(),
-            domain: FilterDomain::Frequency,
+            description: "Compensate any misalignment of the sample along x and y axis."
+                .to_string(),
+            hyperlink: None,
+            domain: FilterDomain::TimeBeforeFFTPrioFirst,
         }
     }
 
+    /// Applies tilt compensation to the input data
+    ///
+    /// This function:
+    /// 1. Converts tilt angles to radians
+    /// 2. Calculates position-dependent time shifts for each pixel
+    /// 3. Extends the time range to accommodate the shifted data
+    /// 4. Applies appropriate time shifts to each pixel's time trace
+    /// 5. Updates FFT parameters for the extended data
+    ///
+    /// The time shift for each pixel is calculated based on:
+    /// - Its distance from the center of the scan area
+    /// - The tilt angles specified for X and Y axes
+    /// - The speed of light (c = 0.3 mm/ps)
+    ///
+    /// # Arguments
+    /// * `input_data` - The input data to process
+    /// * `_gui_settings` - Container for GUI settings (unused in this implementation)
+    /// * `_progress_lock` - Progress reporting lock (unused in this implementation)
+    /// * `_abort_flag` - Flag for aborting processing (unused in this implementation)
     fn filter(
-        &self,
-        scan: &mut ScannedImage,
+        &mut self,
+        input_data: &ScannedImageFilterData,
         _gui_settings: &mut GuiSettingsContainer,
         _progress_lock: &mut Arc<RwLock<Option<f32>>>,
         _abort_flag: &Arc<AtomicBool>,
-    ) {
-        // only rotation around the center are implemented, offset rotations are still to be done.
+    ) -> ScannedImageFilterData {
+        // Convert tilt angles from degrees to radians
         let time_shift_x = self.tilt_x as f32 / 180.0 * PI;
         let time_shift_y = self.tilt_y as f32 / 180.0 * PI;
 
-        if let (Some(dx), Some(dy)) = (scan.dx, scan.dy) {
-            let (width, height, time_samples) = scan.raw_data.dim();
+        let mut output_data = input_data.clone();
+
+        // Only proceed if we have spatial resolution information
+        if let (Some(dx), Some(dy)) = (input_data.dx, input_data.dy) {
+            let (width, height, time_samples) = input_data.data.dim();
+
+            // Calculate center position for reference
             let center_x = width as f32 / 2.0 * dx;
             let center_y = height as f32 / 2.0 * dy;
-            let c = 0.299792458_f64; // mm/ps
 
+            // Speed of light in mm/ps
+            let c = 0.299792458_f64;
+
+            // Time step for calculations
             let dt = 0.05;
 
-            // Compute extension and round it to the nearest step
+            // Calculate maximum time offsets based on the sample dimensions and tilt angles
             let max_offset_x = (center_x as f64 * time_shift_x.abs() as f64 / c) as f32;
             let max_offset_y = (center_y as f64 * time_shift_y.abs() as f64 / c) as f32;
             let extension = (max_offset_x + max_offset_y) / dt;
             let extension = extension.floor() * dt;
 
-            // Clone the original time array
-            let original_time = scan.time.clone();
+            // Get the original time array
+            let original_time = input_data.time.clone();
 
-            // Get first and last values
+            if original_time.is_empty() {
+                log::warn!("scan time is empty, cannot update voxel plot instances");
+                return output_data;
+            }
+
+            // Get boundary values for time extension
             let first_value = *original_time.first().unwrap();
             let last_value = *original_time.last().unwrap();
 
-            // Compute number of steps for extension
+            // Calculate the number of additional time steps needed
             let num_steps = (extension / dt).round() as usize;
-            let extended_samples = original_time.len() + num_steps * 2; // Extra steps on both sides
+            let extended_samples = original_time.len() + num_steps * 2; // Extend both before and after
 
-            // Generate extended time array
+            // Create extended time array by concatenating time segments
             let front_array =
                 Array1::linspace(first_value - extension, first_value - dt, num_steps);
             let back_array = Array1::linspace(last_value + dt, last_value + extension, num_steps);
-            scan.filtered_time = concatenate![Axis(0), front_array, original_time, back_array];
+            output_data.time = concatenate![Axis(0), front_array, original_time, back_array];
 
-            // Create new filtered_data with extra time samples
+            // Create new data array with the extended time dimension
             let mut new_filtered_data = Array3::zeros((width, height, extended_samples));
+
+            // Process each pixel
             for i in 0..width {
                 for j in 0..height {
+                    // Calculate the position-dependent time shift for this pixel
                     let x_offset = (((i as f32 - width as f32 / 2.0) * dx) as f64
                         * time_shift_x as f64
                         / c) as f32;
@@ -90,83 +155,105 @@ impl Filter for TiltCompensation {
                         / c) as f32;
                     let delta = x_offset + y_offset;
 
+                    // Convert time shift to discrete steps
                     let delta_steps = (delta / dt).floor() as isize;
 
-                    let raw_trace = scan.filtered_data.slice_mut(s![i, j, ..]);
+                    // Get the original time trace for this pixel
+                    let raw_trace = output_data.data.slice_mut(s![i, j, ..]);
                     let mut extended_trace = Array1::zeros(extended_samples);
 
-                    let insert_index = (num_steps as isize + delta_steps).max(0) as usize; // Ensure non-negative index
+                    // Calculate where to insert the original trace in the extended array
+                    let insert_index = (num_steps as isize + delta_steps).max(0) as usize;
 
-                    // Fill before the trace with first value
+                    // Fill the beginning of the extended trace
                     extended_trace
                         .slice_mut(s![..insert_index])
                         .fill(*raw_trace.first().unwrap());
 
-                    // Insert original trace
+                    // Calculate end index, ensuring we don't exceed array bounds
                     let end_index = (insert_index + time_samples).min(extended_samples);
 
-                    let mut raw_trace_copy = raw_trace.to_owned(); // Create a mutable copy
-                    let mut data_view = raw_trace_copy.view_mut(); // Obtain a mutable view
-
+                    // Apply Blackman window to smooth the signal and reduce artifacts
+                    let mut raw_trace_copy = raw_trace.to_owned();
+                    let mut data_view = raw_trace_copy.view_mut();
                     apply_adapted_blackman_window(&mut data_view, &original_time, &0.0, &7.0);
+
+                    // Insert the windowed trace into the extended array
                     extended_trace
                         .slice_mut(s![insert_index..end_index])
                         .assign(&data_view.slice(s![..(end_index - insert_index)]));
 
-                    // Fill after the trace with last value
+                    // Fill the end of the extended trace with zeros
                     extended_trace.slice_mut(s![end_index..]).fill(0.0);
 
-                    // Assign extended trace to the new data
+                    // Assign the extended trace to the new data array
                     new_filtered_data
                         .slice_mut(s![i, j, ..])
                         .assign(&extended_trace);
                 }
             }
-            let n = scan.filtered_time.len();
-            let rng = scan.filtered_time.last().unwrap() - scan.filtered_time.first().unwrap();
 
+            // Update FFT parameters for the extended data
+            let n = output_data.time.len();
+            let rng = output_data.time.last().unwrap() - output_data.time.first().unwrap();
+
+            // Create new FFT planner and transforms for the extended data
             let mut real_planner = RealFftPlanner::<f32>::new();
             let r2c = real_planner.plan_fft_forward(n);
             let c2r = real_planner.plan_fft_inverse(n);
             let spectrum = r2c.make_output_vec();
+
+            // Calculate new frequency axis
             let freq = (0..spectrum.len()).map(|i| i as f32 / rng).collect();
-            scan.filtered_frequencies = freq;
-            scan.filtered_r2c = Some(r2c);
-            scan.filtered_c2r = Some(c2r);
+            output_data.frequency = freq;
+            output_data.r2c = Some(r2c);
+            output_data.c2r = Some(c2r);
 
-            scan.filtered_data = new_filtered_data;
-
-            dbg!(&scan.filtered_time.len());
-            dbg!(&scan.filtered_data.shape());
+            // Assign the processed data to the output
+            output_data.data = new_filtered_data;
         }
+
+        output_data
     }
 
+    /// Renders the filter's UI controls
+    ///
+    /// Provides sliders for adjusting the X and Y tilt angles, with a range of
+    /// -15 to 15 degrees for each axis.
+    ///
+    /// # Arguments
+    /// * `ui` - The egui UI context to render into
+    /// * `_thread_communication` - Communication channel with processing threads (unused here)
+    /// * `_panel_width` - Width of the panel in pixels (unused in this implementation)
     fn ui(
         &mut self,
         ui: &mut Ui,
-        _thread_communication: &mut GuiThreadCommunication,
+        _thread_communication: &mut ThreadCommunication,
+        _panel_width: f32,
     ) -> egui::Response {
         let mut final_response = ui.allocate_response(egui::Vec2::ZERO, egui::Sense::hover());
 
+        // Slider for X-axis tilt adjustment
         let response_x = ui
             .horizontal(|ui| {
                 ui.label("Tilt X: ");
                 ui.add(egui::Slider::new(&mut self.tilt_x, -15.0..=15.0).suffix(" deg"))
             })
-            .inner; // Get the slider's response
+            .inner;
 
+        // Slider for Y-axis tilt adjustment
         let response_y = ui
             .horizontal(|ui| {
                 ui.label("Tilt Y: ");
                 ui.add(egui::Slider::new(&mut self.tilt_y, -15.0..=15.0).suffix(" deg"))
             })
-            .inner; // Get the slider's response
+            .inner;
 
-        // Merge responses to track interactivity
+        // Combine responses for UI interactions
         final_response |= response_x.clone();
         final_response |= response_y.clone();
 
-        // Only mark changed if any slider was changed (not just hovered)
+        // Mark as changed only if slider values actually changed
         if response_x.changed() || response_y.changed() {
             final_response.mark_changed();
         }

@@ -1,17 +1,25 @@
-use crate::config::{ConfigCommand, GuiThreadCommunication};
-use crate::data_container::DataPoint;
-use crate::gui::application::Tab;
+use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
+use crate::gui::application::{THzImageExplorer, Tab};
+use crate::gui::threed_plot::{three_dimensional_plot_ui, CameraInputAllowed, OpacityThreshold};
 use crate::gui::toggle_widget::toggle;
 use crate::vec2;
-use eframe::egui;
-use eframe::egui::{Checkbox, DragValue, Stroke, Ui, Vec2};
-use egui_plot::{GridMark, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
-use egui_plotter::EguiBackend;
-use ndarray::{Array2, Array3};
-use plotters::prelude::*;
+use bevy::prelude::*;
+use bevy_egui::egui::epaint;
+use bevy_egui::egui::{self, Checkbox, DragValue, Slider, Stroke, Ui};
+use bevy_voxel_plot::InstanceMaterialData;
+use egui_plot::{GridMark, Legend, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 use std::ops::RangeInclusive;
-const MOVE_SCALE: f32 = 0.01;
-const SCROLL_SCALE: f32 = 0.001;
+
+const ROI_COLORS: [egui::Color32; 8] = [
+    egui::Color32::from_rgb(0, 255, 128),   // Mint green
+    egui::Color32::from_rgb(128, 0, 128),   // Purple
+    egui::Color32::from_rgb(0, 200, 200),   // Cyan
+    egui::Color32::from_rgb(255, 0, 255),   // Magenta
+    egui::Color32::from_rgb(255, 128, 0),   // Orange
+    egui::Color32::from_rgb(128, 64, 0),    // Brown
+    egui::Color32::from_rgb(255, 128, 192), // Pink
+    egui::Color32::from_rgb(128, 255, 0),   // Lime
+];
 
 pub fn pulse_tab(
     ui: &mut Ui,
@@ -19,98 +27,102 @@ pub fn pulse_tab(
     width: f32,
     spacing: f32,
     right_panel_width: f32,
-    thread_communication: &mut GuiThreadCommunication,
-    data: &mut DataPoint,
-    water_vapour_lines: &[f64],
+    explorer: &mut THzImageExplorer,
+    thread_communication: &mut ThreadCommunication,
 ) {
     ui.vertical(|ui| {
-        ui.horizontal(|ui| {
-            ui.add_space(50.0);
-            ui.add(Checkbox::new(
-                &mut thread_communication.gui_settings.signal_1_visible,
-                "",
-            ));
-            ui.colored_label(egui::Color32::RED, "— ");
-            ui.label("Signal 1");
-            ui.add_space(50.0);
-            ui.add(Checkbox::new(
-                &mut thread_communication.gui_settings.filtered_signal_1_visible,
-                "",
-            ));
-            ui.colored_label(egui::Color32::BLUE, "— ");
-            ui.label("Filtered Signal 1");
-            ui.add_space(50.0);
-            ui.add(Checkbox::new(
-                &mut thread_communication.gui_settings.avg_signal_1_visible,
-                "",
-            ));
-            ui.colored_label(egui::Color32::YELLOW, "--- ");
-            ui.label("Averaged Signal 1");
-        });
-
-        if let Ok(read_guard) = thread_communication.data_lock.read() {
-            *data = read_guard.clone();
-            // self.data.time = linspace::<f64>(self.tera_flash_conf.t_begin as f64,
-            //                                  (self.tera_flash_conf.t_begin + self.tera_flash_conf.range) as f64, NUM_PULSE_LINES).collect();
+        if let Ok(read_guard) = thread_communication.data_lock.try_read() {
+            explorer.data = read_guard.clone();
         }
 
         let mut signal_1: Vec<[f64; 2]> = Vec::new();
         let mut filtered_signal_1: Vec<[f64; 2]> = Vec::new();
         let mut avg_signal_1: Vec<[f64; 2]> = Vec::new();
 
-        let mut axis_display_offset_signal_1 = f64::NEG_INFINITY;
-        let mut axis_display_offset_filtered_signal_1 = f64::NEG_INFINITY;
-        let mut axis_display_offset_avg_signal_1 = f64::NEG_INFINITY;
+        let axis_display_offset_signal_1 = explorer
+            .data
+            .signal
+            .iter()
+            .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
+            .abs();
 
-        if thread_communication.gui_settings.signal_1_visible {
-            axis_display_offset_signal_1 = data
-                .signal_1
+        let axis_display_offset_filtered_signal_1 = explorer
+            .data
+            .filtered_signal
+            .iter()
+            .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
+            .abs();
+
+        let axis_display_offset_avg_signal_1 = explorer
+            .data
+            .avg_signal
+            .iter()
+            .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
+            .abs();
+
+        // Create a vector of [ROI name, plot points] pairs
+        let mut roi_plots = Vec::new();
+
+        // Find minimum values for each ROI signal to calculate offsets
+        let mut roi_min_values = Vec::new();
+        for (_, (_, roi_data)) in &explorer.data.roi_signal {
+            let min_value = roi_data
                 .iter()
                 .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
                 .abs();
-        }
-        if thread_communication.gui_settings.filtered_signal_1_visible {
-            axis_display_offset_filtered_signal_1 = data
-                .filtered_signal_1
-                .iter()
-                .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
-                .abs();
-        }
-        if thread_communication.gui_settings.avg_signal_1_visible {
-            axis_display_offset_avg_signal_1 = data
-                .avg_signal_1
-                .iter()
-                .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
-                .abs();
+            roi_min_values.push(min_value);
         }
 
+        // Get the maximum offset value from all signals including ROIs
         let axis_display_offset = [
             axis_display_offset_signal_1,
             axis_display_offset_filtered_signal_1,
             axis_display_offset_avg_signal_1,
         ]
         .iter()
+        .chain(roi_min_values.iter())
         .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi))
             * 1.05;
 
-        for i in 0..data.time.len() {
+        // Generate plot points for each ROI
+        for (_, (roi_name, roi_data)) in &explorer.data.roi_signal {
+            let mut roi_plot_points = Vec::new();
+
+            for i in 0..explorer.data.time.len().min(roi_data.len()) {
+                roi_plot_points.push([
+                    explorer.data.time[i] as f64,
+                    roi_data[i] as f64 + axis_display_offset,
+                ]);
+            }
+
+            if !roi_plot_points.is_empty() {
+                roi_plots.push((roi_name.clone(), roi_plot_points));
+            }
+        }
+
+        for i in 0..explorer.data.time.len() {
             signal_1.push([
-                data.time[i] as f64,
-                data.signal_1[i] as f64 + axis_display_offset,
+                explorer.data.time[i] as f64,
+                explorer.data.signal[i] as f64 + axis_display_offset,
             ]);
         }
 
-        for i in 0..data.filtered_time.len().min(data.filtered_signal_1.len()) {
+        for i in 0..explorer
+            .data
+            .filtered_time
+            .len()
+            .min(explorer.data.filtered_signal.len())
+        {
             filtered_signal_1.push([
-                data.filtered_time[i] as f64,
-                data.filtered_signal_1[i] as f64 + axis_display_offset,
+                explorer.data.filtered_time[i] as f64,
+                explorer.data.filtered_signal[i] as f64 + axis_display_offset,
             ]);
         }
 
-        for i in 0..data.time.len().min(data.avg_signal_1.len()) {
+        for i in 0..explorer.data.time.len().min(explorer.data.avg_signal.len()) {
             avg_signal_1.push([
-                data.time[i] as f64,
-                data.avg_signal_1[i] as f64 + axis_display_offset,
+                explorer.data.time[i] as f64,
+                explorer.data.avg_signal[i] as f64 + axis_display_offset,
             ]);
         }
 
@@ -137,109 +149,175 @@ pub fn pulse_tab(
             //.coordinates_formatter(Corner::LeftTop, position_fmt)
             //.include_x(&self.tera_flash_conf.t_begin + &self.tera_flash_conf.range)
             //.include_x(self.tera_flash_conf.t_begin)
-            .min_size(vec2(50.0, 100.0));
+            .min_size(vec2(50.0, 100.0))
+            .legend(Legend::default());
 
         signal_plot.show(ui, |signal_plot_ui| {
-            if thread_communication.gui_settings.signal_1_visible {
+            signal_plot_ui.line(
+                Line::new(PlotPoints::from(signal_1))
+                    .color(egui::Color32::RED)
+                    .style(LineStyle::Solid)
+                    .width(2.0)
+                    .name("signal"),
+            );
+
+            signal_plot_ui.line(
+                Line::new(PlotPoints::from(filtered_signal_1))
+                    .color(egui::Color32::BLUE)
+                    .style(LineStyle::Solid)
+                    .width(2.0)
+                    .name("filtered signal"),
+            );
+
+            signal_plot_ui.line(
+                Line::new(PlotPoints::from(avg_signal_1))
+                    .color(egui::Color32::YELLOW)
+                    .style(LineStyle::Solid)
+                    .width(2.0)
+                    .name("avg signal"),
+            );
+
+            // Plot each ROI with its own color
+            for (i, (roi_name, roi_points)) in roi_plots.iter().enumerate() {
+                let color_idx = i % ROI_COLORS.len();
+
                 signal_plot_ui.line(
-                    Line::new(PlotPoints::from(signal_1))
-                        .color(egui::Color32::RED)
+                    Line::new(PlotPoints::from(roi_points.clone()))
+                        .color(ROI_COLORS[color_idx])
                         .style(LineStyle::Solid)
                         .width(2.0)
-                        .name("signal 1"),
-                );
-            }
-            if thread_communication.gui_settings.filtered_signal_1_visible {
-                signal_plot_ui.line(
-                    Line::new(PlotPoints::from(filtered_signal_1))
-                        .color(egui::Color32::BLUE)
-                        .style(LineStyle::Solid)
-                        .width(2.0)
-                        .name("filtered signal 1"),
-                );
-            }
-            if thread_communication.gui_settings.avg_signal_1_visible {
-                signal_plot_ui.line(
-                    Line::new(PlotPoints::from(avg_signal_1))
-                        .color(egui::Color32::YELLOW)
-                        .style(LineStyle::Dashed { length: 10.0 })
-                        .width(2.0)
-                        .name("ref 1"),
+                        .name(roi_name),
                 );
             }
         });
 
         ui.add_space(spacing);
 
-        let signal_1_fft: Vec<[f64; 2]> = data
+        // First, get the current value of min_fft_signals
+        let fft_signals = [&explorer.data.signal_fft];
+        let min_fft_signals = fft_signals
+            .iter()
+            .flat_map(|v| v.iter().copied())
+            .map(|x| x)
+            .fold(f32::MAX, |a, b| a.min(b));
+
+        let floor_value = min_fft_signals / 5.0;
+
+        let signal_1_fft: Vec<[f64; 2]> = explorer
+            .data
             .frequencies
             .iter()
-            .zip(data.signal_1_fft.iter())
+            .zip(explorer.data.signal_fft.iter())
             .map(|(x, y)| {
                 let fft = if thread_communication.gui_settings.log_plot {
-                    20.0 * (*y + 1e-10).log(10.0)
+                    if *y < floor_value {
+                        20.0 * (floor_value).log10()
+                    } else {
+                        20.0 * (*y).log10()
+                    }
                 } else {
                     *y
                 };
-                // TODO: is this needed?
-                // if fft < 0.0 {
-                //     fft = 0.0;
-                // }
                 [*x as f64, fft as f64]
             })
             .collect();
-        let filtered_signal_1_fft: Vec<[f64; 2]> = data
+        let filtered_signal_1_fft: Vec<[f64; 2]> = explorer
+            .data
             .filtered_frequencies
             .iter()
-            .zip(data.filtered_signal_1_fft.iter())
+            .zip(explorer.data.filtered_signal_fft.iter())
             .map(|(x, y)| {
                 let fft = if thread_communication.gui_settings.log_plot {
-                    20.0 * (*y + 1e-10).log(10.0)
+                    if *y < floor_value {
+                        20.0 * (floor_value).log10()
+                    } else {
+                        20.0 * (*y).log10()
+                    }
                 } else {
                     *y
                 };
-                // TODO: is this needed?
-                // if fft < 0.0 {
-                //     fft = 0.0;
-                // }
                 [*x as f64, fft as f64]
             })
             .collect();
-        let avg_signal_1_fft: Vec<[f64; 2]> = data
+        let avg_signal_1_fft: Vec<[f64; 2]> = explorer
+            .data
             .frequencies
             .iter()
-            .zip(data.avg_signal_1_fft.iter())
+            .zip(explorer.data.avg_signal_fft.iter())
             .map(|(x, y)| {
                 let fft = if thread_communication.gui_settings.log_plot {
-                    20.0 * (*y + 1e-10).log(10.0)
+                    if *y < floor_value {
+                        20.0 * (floor_value).log10()
+                    } else {
+                        20.0 * (*y).log10()
+                    }
                 } else {
                     *y
                 };
-                // TODO: is this needed?
-                // if fft < 0.0 {
-                //     fft = 0.0;
-                // }
                 [*x as f64, fft as f64]
             })
             .collect();
-        let phase_1_fft: Vec<[f64; 2]> = data
+        let phase_1_fft: Vec<[f64; 2]> = explorer
+            .data
             .frequencies
             .iter()
-            .zip(data.phase_1_fft.iter())
+            .zip(explorer.data.phase_fft.iter())
             .map(|(x, y)| [*x as f64, *y as f64])
             .collect();
-        let filtered_phase_1_fft: Vec<[f64; 2]> = data
+        let filtered_phase_1_fft: Vec<[f64; 2]> = explorer
+            .data
             .filtered_frequencies
             .iter()
-            .zip(data.filtered_phase_fft.iter())
+            .zip(explorer.data.filtered_phase_fft.iter())
             .map(|(x, y)| [*x as f64, *y as f64])
             .collect();
-        let avg_phase_1_fft: Vec<[f64; 2]> = data
+        let avg_phase_1_fft: Vec<[f64; 2]> = explorer
+            .data
             .frequencies
             .iter()
-            .zip(data.avg_phase_fft.iter())
+            .zip(explorer.data.avg_phase_fft.iter())
             .map(|(x, y)| [*x as f64, *y as f64])
             .collect();
+
+        // Create a vector of [ROI name, amplitude plot points, phase plot points] tuples
+        let mut roi_fft_plots = Vec::new();
+
+        // Generate FFT plot points for each ROI
+        for (roi_uuid, _) in &explorer.data.roi_signal {
+            if let (Some((roi_name, roi_signal_fft)), Some((_, roi_phase_fft))) = (
+                explorer.data.roi_signal_fft.get(roi_uuid),
+                explorer.data.roi_phase.get(roi_uuid),
+            ) {
+                let roi_amplitude_plot: Vec<[f64; 2]> = explorer
+                    .data
+                    .frequencies
+                    .iter()
+                    .zip(roi_signal_fft.iter())
+                    .map(|(x, y)| {
+                        let fft = if thread_communication.gui_settings.log_plot {
+                            if *y < floor_value {
+                                20.0 * (floor_value).log10()
+                            } else {
+                                20.0 * (*y).log10()
+                            }
+                        } else {
+                            *y
+                        };
+                        [*x as f64, fft as f64]
+                    })
+                    .collect();
+
+                let roi_phase_plot: Vec<[f64; 2]> = explorer
+                    .data
+                    .frequencies
+                    .iter()
+                    .zip(roi_phase_fft.iter())
+                    .map(|(x, y)| [*x as f64, *y as f64])
+                    .collect();
+
+                roi_fft_plots.push((roi_name.clone(), roi_amplitude_plot, roi_phase_plot));
+            }
+        }
 
         let fft_signals = [&signal_1_fft];
 
@@ -294,7 +372,8 @@ pub fn pulse_tab(
             .y_axis_formatter(a_fmt)
             .x_axis_formatter(f_fmt)
             .include_x(0.0)
-            .include_x(10.0);
+            .include_x(10.0)
+            .legend(Legend::default());
 
         if !thread_communication.gui_settings.phases_visible {
             // fft_plot = fft_plot.include_y(-100.0);
@@ -302,71 +381,90 @@ pub fn pulse_tab(
         };
 
         fft_plot.show(ui, |fft_plot_ui| {
-            if thread_communication.gui_settings.signal_1_visible {
-                if !thread_communication.gui_settings.phases_visible {
-                    fft_plot_ui.line(
-                        Line::new(PlotPoints::from(signal_1_fft))
-                            .color(egui::Color32::RED)
-                            .style(LineStyle::Solid)
-                            .width(2.0)
-                            .name("amplitude 1"),
-                    );
-                } else {
-                    fft_plot_ui.line(
-                        Line::new(PlotPoints::from(phase_1_fft))
-                            .color(egui::Color32::RED)
-                            .style(LineStyle::Solid)
-                            .width(2.0)
-                            .name("phase 1"),
-                    );
-                }
+            if !thread_communication.gui_settings.phases_visible {
+                fft_plot_ui.line(
+                    Line::new(PlotPoints::from(signal_1_fft))
+                        .color(egui::Color32::RED)
+                        .style(LineStyle::Solid)
+                        .width(2.0)
+                        .name("amplitude"),
+                );
+            } else {
+                fft_plot_ui.line(
+                    Line::new(PlotPoints::from(phase_1_fft))
+                        .color(egui::Color32::RED)
+                        .style(LineStyle::Solid)
+                        .width(2.0)
+                        .name("phase"),
+                );
             }
-            if thread_communication.gui_settings.filtered_signal_1_visible {
-                if !thread_communication.gui_settings.phases_visible {
-                    fft_plot_ui.line(
-                        Line::new(PlotPoints::from(filtered_signal_1_fft))
-                            .color(egui::Color32::BLUE)
-                            .style(LineStyle::Dashed { length: 10.0 })
-                            .width(2.0)
-                            .name("filtered amplitude 1"),
-                    )
-                } else {
-                    fft_plot_ui.line(
-                        Line::new(PlotPoints::from(filtered_phase_1_fft))
-                            .color(egui::Color32::BLUE)
-                            .style(LineStyle::Dashed { length: 10.0 })
-                            .width(2.0)
-                            .name("filtered phase 1"),
-                    );
-                }
+
+            if !thread_communication.gui_settings.phases_visible {
+                fft_plot_ui.line(
+                    Line::new(PlotPoints::from(filtered_signal_1_fft))
+                        .color(egui::Color32::BLUE)
+                        .style(LineStyle::Solid)
+                        .width(2.0)
+                        .name("filtered amplitude"),
+                )
+            } else {
+                fft_plot_ui.line(
+                    Line::new(PlotPoints::from(filtered_phase_1_fft))
+                        .color(egui::Color32::BLUE)
+                        .style(LineStyle::Solid)
+                        .width(2.0)
+                        .name("filtered phase"),
+                );
             }
-            if thread_communication.gui_settings.avg_signal_1_visible {
-                if !thread_communication.gui_settings.phases_visible {
-                    fft_plot_ui.line(
-                        Line::new(PlotPoints::from(avg_signal_1_fft))
-                            .color(egui::Color32::YELLOW)
-                            .style(LineStyle::Dashed { length: 10.0 })
-                            .width(2.0)
-                            .name("avg amplitude 1"),
-                    )
-                } else {
-                    fft_plot_ui.line(
-                        Line::new(PlotPoints::from(avg_phase_1_fft))
-                            .color(egui::Color32::YELLOW)
-                            .style(LineStyle::Dashed { length: 10.0 })
-                            .width(2.0)
-                            .name("avg phase 1"),
-                    );
-                }
+
+            if !thread_communication.gui_settings.phases_visible {
+                fft_plot_ui.line(
+                    Line::new(PlotPoints::from(avg_signal_1_fft))
+                        .color(egui::Color32::YELLOW)
+                        .style(LineStyle::Solid)
+                        .width(2.0)
+                        .name("avg amplitude"),
+                )
+            } else {
+                fft_plot_ui.line(
+                    Line::new(PlotPoints::from(avg_phase_1_fft))
+                        .color(egui::Color32::YELLOW)
+                        .style(LineStyle::Solid)
+                        .width(2.0)
+                        .name("avg phase"),
+                );
             }
 
             if thread_communication.gui_settings.water_lines_visible {
-                for line in water_vapour_lines.iter() {
+                for line in explorer.water_vapour_lines.iter() {
                     fft_plot_ui.vline(
                         VLine::new(*line)
                             .stroke(Stroke::new(1.0, egui::Color32::BLUE))
                             .width(2.0)
                             .name("water vapour"),
+                    );
+                }
+            }
+
+            // Plot each ROI FFT with its own color
+            for (i, (roi_name, roi_amplitude, roi_phase)) in roi_fft_plots.iter().enumerate() {
+                let color_idx = i % ROI_COLORS.len();
+
+                if !thread_communication.gui_settings.phases_visible {
+                    fft_plot_ui.line(
+                        Line::new(PlotPoints::from(roi_amplitude.clone()))
+                            .color(ROI_COLORS[color_idx])
+                            .style(LineStyle::Solid)
+                            .width(2.0)
+                            .name(roi_name),
+                    );
+                } else {
+                    fft_plot_ui.line(
+                        Line::new(PlotPoints::from(roi_phase.clone()))
+                            .color(ROI_COLORS[color_idx])
+                            .style(LineStyle::Solid)
+                            .width(2.0)
+                            .name(roi_name),
                     );
                 }
             }
@@ -385,21 +483,22 @@ pub fn pulse_tab(
                 )
                 .lost_focus()
             {
-                if thread_communication.gui_settings.frequency_resolution_temp > 1.0 / data.hk.range
+                if thread_communication.gui_settings.frequency_resolution_temp
+                    > 1.0 / explorer.data.hk.range
                 {
                     thread_communication.gui_settings.frequency_resolution_temp =
-                        1.0 / data.hk.range;
+                        1.0 / explorer.data.hk.range;
                 } else if thread_communication.gui_settings.frequency_resolution_temp < 0.0001 {
                     thread_communication.gui_settings.frequency_resolution_temp = 0.0001;
                 }
                 thread_communication.gui_settings.frequency_resolution =
                     thread_communication.gui_settings.frequency_resolution_temp;
-                thread_communication
-                    .config_tx
-                    .send(ConfigCommand::SetFFTResolution(
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::SetFFTResolution(
                         thread_communication.gui_settings.frequency_resolution,
-                    ))
-                    .expect("unable to send config");
+                    ),
+                );
             }
             ui.add_space(50.0);
             ui.label("FFT");
@@ -421,17 +520,20 @@ pub fn pulse_tab(
             ui.colored_label(egui::Color32::BLUE, "— ");
             ui.label("Water Lines");
 
-            ui.add_space(ui.available_size().x - 400.0 - right_panel_width);
+            ui.add_space(ui.available_size().x - 250.0 - right_panel_width);
 
             // dynamic range:
-            let length = data.signal_1_fft.len();
-            let dr1 = if !data.signal_1_fft.is_empty() {
-                data.signal_1_fft[length - 100..length].iter().sum::<f32>() / 100.0
+            let length = explorer.data.signal_fft.len();
+            let dr1 = if !explorer.data.signal_fft.is_empty() {
+                explorer.data.signal_fft[length - 100..length]
+                    .iter()
+                    .sum::<f32>()
+                    / 100.0
             } else {
                 0.0
             };
             ui.label(format!(
-                "DR: CH1 {:.1} dB",
+                "DR: {:.1} dB",
                 20.0 * (dr1.abs() + 1e-10).log(10.0) - max_fft_signals as f32,
             ));
 
@@ -439,292 +541,282 @@ pub fn pulse_tab(
 
             // peak to peak
             let ptp1 = if let (Some(min), Some(max)) = (
-                data.signal_1.iter().cloned().reduce(f32::min),
-                data.signal_1.iter().cloned().reduce(f32::max),
+                explorer.data.signal.iter().cloned().reduce(f32::min),
+                explorer.data.signal.iter().cloned().reduce(f32::max),
             ) {
                 max - min
             } else {
                 0.0
             };
-            ui.label(format!("ptp: CH1 {:.1} nA", ptp1));
+            ui.label(format!("ptp: {:.1} nA", ptp1));
         });
     });
 }
 
 pub fn refractive_index_tab(
-    _ui: &mut Ui,
-    _height: f32,
-    _width: f32,
-    _spacing: f32,
-    _right_panel_width: f32,
-    _thread_communication: &mut GuiThreadCommunication,
-    _data: &mut DataPoint,
-    _water_vapour_lines: &[f64],
-) {
-}
-
-fn three_dimensional_plot(
     ui: &mut Ui,
-    thread_communication: &mut GuiThreadCommunication,
-    right_panel_width: f32,
     height: f32,
+    width: f32,
+    spacing: f32,
+    right_panel_width: f32,
+    explorer: &mut THzImageExplorer,
+    thread_communication: &mut ThreadCommunication,
 ) {
-    let size = Vec2::new(ui.available_width() - right_panel_width, height);
-    ui.allocate_ui(size, |ui| {
-        // First, get mouse data
-        let (pitch_delta, yaw_delta, scale_delta) = ui.input(|input| {
-            let pointer = &input.pointer;
-            let delta = pointer.delta();
+    if let Ok(data) = thread_communication.data_lock.try_read() {
+        if !data.roi_signal.is_empty() {
+            let roi_names: Vec<String> = data.roi_signal.values().map(|v| v.0.clone()).collect();
+            explorer.data.available_references = roi_names.clone();
+            explorer.data.available_samples = roi_names;
+            explorer
+                .data
+                .available_samples
+                .push("Selected Pixel".to_string());
+        } else {
+            // If no ROIs are available, use the default references and samples
+            explorer.data.available_references = vec!["Default Reference".to_string()];
+            explorer.data.available_samples = vec!["Selected Pixel".to_string()];
+        }
+    }
+    ui.vertical(|ui| {
+        // Signal selection controls
+        ui.horizontal(|ui| {
+            ui.label("Reference:");
+            egui::ComboBox::from_id_salt("reference_selection")
+                .selected_text(
+                    explorer.data.available_references
+                        [thread_communication.gui_settings.reference_index]
+                        .clone(),
+                )
+                .width(120.0)
+                .show_ui(ui, |ui| {
+                    for i in 0..explorer.data.available_references.len() {
+                        if ui
+                            .selectable_label(
+                                thread_communication.gui_settings.reference_index == i,
+                                explorer.data.available_references[i].clone(),
+                            )
+                            .clicked()
+                        {
+                            thread_communication.gui_settings.reference_index = i;
+                            thread_communication
+                                .config_tx
+                                .send(ConfigCommand::SetReference(
+                                    explorer.data.available_references[i].clone(),
+                                ))
+                                .unwrap();
+                        }
+                    }
+                });
 
-            let (pitch_delta, yaw_delta) = match pointer.primary_down() {
-                true => (delta.y * MOVE_SCALE, -delta.x * MOVE_SCALE),
-                false => (
-                    thread_communication.gui_settings.chart_pitch_vel,
-                    thread_communication.gui_settings.chart_yaw_vel,
-                ),
-            };
+            ui.add_space(20.0);
 
-            let scale_delta = input.smooth_scroll_delta.y * SCROLL_SCALE;
-
-            (pitch_delta, yaw_delta, scale_delta)
+            ui.label("Sample:");
+            egui::ComboBox::from_id_salt("sample_selection")
+                .selected_text(
+                    explorer.data.available_samples[thread_communication.gui_settings.sample_index]
+                        .clone(),
+                )
+                .width(120.0)
+                .show_ui(ui, |ui| {
+                    for i in 0..explorer.data.available_samples.len() {
+                        if ui
+                            .selectable_label(
+                                thread_communication.gui_settings.sample_index == i,
+                                explorer.data.available_samples[i].clone(),
+                            )
+                            .clicked()
+                        {
+                            thread_communication.gui_settings.sample_index = i;
+                            thread_communication
+                                .config_tx
+                                .send(ConfigCommand::SetSample(
+                                    explorer.data.available_samples[i].clone(),
+                                ))
+                                .unwrap();
+                        }
+                    }
+                });
         });
 
-        thread_communication.gui_settings.chart_pitch_vel = pitch_delta;
-        thread_communication.gui_settings.chart_yaw_vel = yaw_delta;
+        ui.add_space(spacing / 2.0);
 
-        thread_communication.gui_settings.chart_pitch +=
-            thread_communication.gui_settings.chart_pitch_vel;
-        thread_communication.gui_settings.chart_yaw +=
-            thread_communication.gui_settings.chart_yaw_vel;
-        thread_communication.gui_settings.chart_scale += scale_delta;
-
-        // Next plot everything
-        let root = EguiBackend::new(ui).into_drawing_area();
-
-        root.fill(&WHITE).unwrap();
-
-        let mut width = 10;
-        let mut height = 10;
-        let mut depth = 10;
-        let mut image = Array2::zeros((width, height));
-        let mut filtered_data = Array3::zeros((width, height, depth));
-        if let Ok(img) = thread_communication.img_lock.read() {
-            let shape = img.shape();
-            width = shape[0];
-            height = shape[1];
-            image = img.clone().into();
+        if let Ok(read_guard) = thread_communication.data_lock.read() {
+            explorer.data = read_guard.clone();
         }
 
-        if let Ok(fd) = thread_communication.filtered_data_lock.read() {
-            let shape = fd.shape();
-            width = shape[0];
-            height = shape[1];
-            depth = shape[2];
-            filtered_data = fd.clone().into();
-        }
-
-        // Ensure equal axis scaling
-        let max_dim = width.max(height);
-
-        let mut chart = ChartBuilder::on(&root)
-            .caption("3D Plot", (FontFamily::SansSerif, 20))
-            .build_cartesian_3d(
-                -(max_dim as f32 / 2.0)..max_dim as f32 / 2.0,
-                -(max_dim as f32 / 2.0)..max_dim as f32 / 2.0,
-                -(max_dim as f32 / 2.0)..max_dim as f32 / 2.0,
-            )
-            .unwrap();
-
-        chart.with_projection(|mut pb| {
-            pb.yaw = thread_communication.gui_settings.chart_yaw as f64;
-            pb.pitch = thread_communication.gui_settings.chart_pitch as f64;
-            pb.scale = thread_communication.gui_settings.chart_scale as f64;
-            pb.into_matrix()
-        });
-
-        chart
-            .configure_axes()
-            .light_grid_style(BLACK.mix(0.15))
-            .max_light_lines(3)
-            .draw()
-            .unwrap();
-
-        // Compute min and max values for normalization
-        let (min_val, max_val) = image
+        // Refractive index plot data
+        let refractive_index: Vec<[f64; 2]> = explorer
+            .data
+            .frequencies
             .iter()
-            .cloned()
-            .fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), v| {
-                (min.min(v), max.max(v))
-            });
-        let range = max_val - min_val;
+            .zip(explorer.data.refractive_index.iter())
+            .map(|(x, y)| [*x as f64, *y as f64])
+            .filter(|point| !point[1].is_infinite()) // Filter out infinite values
+            .collect();
 
-        // let surface_series = SurfaceSeries::xoy(
-        //     (-((image.shape()[0] as isize) / 2)..(image.shape()[0] as isize / 2)).map(|x| x as f32),
-        //     (-((image.shape()[1] as isize) / 2)..(image.shape()[1] as isize / 2)).map(|y| y as f32),
-        //     |x, y| {
-        //         let xi = ((x + width as f32 / 2.0).round() as usize).clamp(0, image.shape()[0] - 1);
-        //         let yi =
-        //             ((y + height as f32 / 2.0).round() as usize).clamp(0, image.shape()[1] - 1);
-        //         let z = image[[xi, yi]];
-        //         // Normalize z to [0, 1] range
-        //         if range > 0.0 {
-        //             (z - min_val) / range
-        //         } else {
-        //             0.5 // Avoid division by zero, default mid-gray color
-        //         }
-        //     },
-        // )
-        // .style_func(&|z| {
-        //     let normalized = ((z + 1.0) / 2.0).clamp(0.0, 1.0); // Normalize between 0 and 1
-        //     HSLColor(normalized as f64, 1.0, 0.5).filled() // Color mapping
-        // });
+        let extinction_coefficient: Vec<[f64; 2]> = explorer
+            .data
+            .frequencies
+            .iter()
+            .zip(explorer.data.extinction_coefficient.iter())
+            .map(|(x, y)| [*x as f64, *y as f64])
+            .filter(|point| !point[1].is_infinite()) // Filter out infinite values
+            .collect();
 
-        // 🔹 Draw cubes at fixed Z-height with heatmap colors
+        let absorption: Vec<[f64; 2]> = explorer
+            .data
+            .frequencies
+            .iter()
+            .zip(explorer.data.absorption_coefficient.iter())
+            .map(|(x, y)| [*x as f64, *y as f64])
+            .filter(|point| !point[1].is_infinite()) // Filter out infinite values
+            .collect();
 
-        // let height_level = max_dim as f32 / 4.0; // Fixed Z-level for cubes
-        //
-        // chart
-        //     .draw_series(
-        //         (0..image.shape()[0])
-        //             .flat_map(|x| (0..image.shape()[1]).map(move |y| (x, y)))
-        //             .map(|(x, y)| {
-        //                 let z = image[[x, y]];
-        //                 let normalized_z = if range > 0.0 {
-        //                     (z - min_val) / range
-        //                 } else {
-        //                     0.5
-        //                 };
-        //
-        //                 let color = heatmap_color(normalized_z);
-        //
-        //                 Cubiod::new(
-        //                     [
-        //                         (
-        //                             x as f32 - width as f32 / 2.0,
-        //                             height_level,
-        //                             y as f32 - height as f32 / 2.0,
-        //                         ),
-        //                         (
-        //                             x as f32 - width as f32 / 2.0 + 1.0,
-        //                             height_level + 0.5,
-        //                             y as f32 - height as f32 / 2.0 + 1.0,
-        //                         ),
-        //                     ],
-        //                     color.filled(),
-        //                     &TRANSPARENT,
-        //                 )
-        //             }),
-        //     )
-        //     .unwrap();
+        // Format functions for the plots
+        let f_fmt = |x: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} THz", x.value);
+        let n_fmt = |y: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2}", y.value);
+        let label_fmt =
+            |s: &str, val: &PlotPoint| format!("{}\n{:4.2} THz\n{:4.2}", s, val.x, val.y);
 
-        // chart
-        //     .draw_series(
-        //         (0..filtered_data.shape()[0])
-        //             .flat_map(|x| {
-        //                 (0..filtered_data.shape()[1]).flat_map({
-        //                     let value = filtered_data.clone();
-        //                     move |y| {
-        //                         let z_range = 0..value.shape()[2];
-        //
-        //                         // Collect z-values for (x, y)
-        //                         let z_vals: Vec<f32> = z_range
-        //                             .clone()
-        //                             .map(|z| value[[x, y, z]])
-        //                             .collect();
-        //
-        //                         let local_min = z_vals.iter().cloned().fold(f32::INFINITY, f32::min);
-        //                         let local_max = z_vals.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-        //                         let local_range = local_max - local_min;
-        //
-        //                         z_range.map(move |z| {
-        //                             let val = z_vals[z];
-        //                             let normalized_val = if local_range > 0.0 {
-        //                                 (val - local_min) / local_range
-        //                             } else {
-        //                                 0.5
-        //                             };
-        //                             (x, y, z, normalized_val)
-        //                         })
-        //                     }
-        //                 })
-        //             })
-        //             .filter_map(|(x, y, z, normalized_value)| {
-        //                 if normalized_value < 0.9 {
-        //                     return None;
-        //                 }
-        //                 println!("{}, {}, {}, {}", x, y, z, normalized_value);
-        //                 let normalized_val = if range > 0.0 {
-        //                     (normalized_value - min_val) / range
-        //                 } else {
-        //                     0.5
-        //                 };
-        //
-        //                 let color = heatmap_color(normalized_val);
-        //
-        //                 Some(Cubiod::new(
-        //                     [
-        //                         (
-        //                             x as f32 - width as f32 / 2.0,
-        //                             y as f32 - height as f32 / 2.0,
-        //                             z as f32 - depth as f32 / 2.0,
-        //                         ),
-        //                         (
-        //                             x as f32 - width as f32 / 2.0 + 1.0,
-        //                             y as f32 - height as f32 / 2.0 + 1.0,
-        //                             z as f32 - depth as f32 / 2.0 + 1.0,
-        //                         ),
-        //                     ],
-        //                     color.filled(),
-        //                     &TRANSPARENT,
-        //                 ))
-        //             }),
-        //     )
-        //     .unwrap();
+        // Refractive index plot
+        let n_plot = Plot::new("refractive_index")
+            .height(height)
+            .width(width)
+            .y_axis_formatter(n_fmt)
+            .x_axis_formatter(f_fmt)
+            .label_formatter(label_fmt)
+            .include_x(0.0)
+            .include_x(explorer.data.frequencies.last().unwrap_or(&10.0) * 1.05)
+            .legend(Legend::default());
 
-        // chart.draw_series(surface_series).unwrap();
+        n_plot.show(ui, |plot_ui| {
+            plot_ui.line(
+                Line::new(PlotPoints::from(refractive_index))
+                    .color(egui::Color32::RED)
+                    .style(LineStyle::Solid)
+                    .width(2.0)
+                    .name("Refractive Index (n)"),
+            );
+        });
 
-        // chart
-        //     .draw_series(
-        //         SurfaceSeries::xoz(
-        //             (-30..30).map(|f| f as f64 / 10.0),
-        //             (-30..30).map(|f| f as f64 / 10.0),
-        //             |x, z| (x * x + z * z).cos(),
-        //         )
-        //             .style(BLUE.mix(0.2).filled()),
-        //     )
-        //     .unwrap()
-        //     .label("Surface")
-        //     .legend(|(x, y)| Rectangle::new([(x + 5, y - 5), (x + 15, y + 5)], BLUE.mix(0.5).filled()));
+        ui.add_space(spacing);
 
-        // chart
-        //     .draw_series(LineSeries::new(
-        //         (-100..100)
-        //             .map(|y| y as f64 / 40.0)
-        //             .map(|y| ((y * 10.0).sin(), y, (y * 10.0).cos())),
-        //         &BLACK,
-        //     ))
-        //     .unwrap()
-        //     .label("Line")
-        //     .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLACK));
+        // Absorption plot
+        let a_fmt = |y: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} cm⁻¹", y.value);
+        let a_label_fmt =
+            |s: &str, val: &PlotPoint| format!("{}\n{:4.2} THz\n{:4.2} cm⁻¹", s, val.x, val.y);
 
-        chart
-            .configure_series_labels()
-            .border_style(BLACK)
-            .draw()
-            .unwrap();
+        let absorption_plot = Plot::new("absorption")
+            .height(height)
+            .width(width)
+            .y_axis_formatter(a_fmt)
+            .x_axis_formatter(f_fmt)
+            .label_formatter(a_label_fmt)
+            .legend(Legend::default());
 
-        root.present().unwrap();
+        absorption_plot.show(ui, |plot_ui| {
+            plot_ui.line(
+                Line::new(PlotPoints::from(absorption))
+                    .color(egui::Color32::GREEN)
+                    .style(LineStyle::Solid)
+                    .width(2.0)
+                    .name("Absorption (α)"),
+            );
+
+            plot_ui.line(
+                Line::new(PlotPoints::from(extinction_coefficient))
+                    .color(egui::Color32::BLUE)
+                    .style(LineStyle::Solid)
+                    .width(2.0)
+                    .name("Extinction Coefficient (k)"),
+            );
+
+            if thread_communication.gui_settings.water_lines_visible {
+                for line in explorer.water_vapour_lines.iter() {
+                    plot_ui.vline(
+                        VLine::new(*line)
+                            .stroke(Stroke::new(1.0, egui::Color32::BLUE))
+                            .width(2.0)
+                            .name("water vapour"),
+                    );
+                }
+            }
+        });
+
+        // Bottom controls
+        ui.add_space(5.0);
+        ui.horizontal(|ui| {
+            ui.label("Sample Thickness:");
+            if ui
+                .add(
+                    // we just use 20 as a maximum value for the slider for practical purposes
+                    Slider::new(
+                        &mut thread_communication.gui_settings.sample_thickness,
+                        0.01..=20.0,
+                    )
+                    .min_decimals(2)
+                    .max_decimals(2)
+                    .suffix(" mm"),
+                )
+                .changed()
+            {
+                thread_communication
+                    .config_tx
+                    .send(ConfigCommand::SetMaterialThickness(
+                        thread_communication.gui_settings.sample_thickness,
+                    ))
+                    .unwrap();
+            }
+
+            ui.add_space(10.0);
+            ui.add(Checkbox::new(
+                &mut thread_communication.gui_settings.water_lines_visible,
+                "",
+            ));
+            ui.colored_label(egui::Color32::BLUE, "— ");
+            ui.label("Water Lines");
+
+            ui.add_space(ui.available_size().x - 400.0 - right_panel_width);
+
+            // Display material statistics if available
+            if let Some(max_n) = explorer
+                .data
+                .refractive_index
+                .iter()
+                .cloned()
+                .reduce(f32::max)
+            {
+                ui.label(format!("Max n: {:.2}", max_n));
+            }
+
+            ui.add_space(30.0);
+
+            if let Some(max_alpha) = explorer
+                .data
+                .absorption_coefficient
+                .iter()
+                .cloned()
+                .reduce(f32::max)
+            {
+                ui.label(format!("Max α: {:.2} cm⁻¹", max_alpha));
+            }
+        });
+        ui.add_space(5.0);
     });
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn center_panel(
+    meshes: &mut ResMut<Assets<Mesh>>,
+    query: &mut Query<(&mut InstanceMaterialData, &mut Mesh3d)>,
+    cube_preview_texture_id: &epaint::TextureId,
     ctx: &egui::Context,
     right_panel_width: &f32,
     left_panel_width: &f32,
-    thread_communication: &mut GuiThreadCommunication,
-    data: &mut DataPoint,
-    water_vapour_lines: &[f64],
+    explorer: &mut THzImageExplorer,
+    opacity_threshold: &mut ResMut<OpacityThreshold>,
+    cam_input: &mut ResMut<CameraInputAllowed>,
+    thread_communication: &mut ResMut<ThreadCommunication>,
 ) {
     egui::CentralPanel::default().show(ctx, |ui| {
         let window_height = ui.available_height();
@@ -745,6 +837,10 @@ pub fn center_panel(
                 .clicked()
             {
                 thread_communication.gui_settings.tab = Tab::RefractiveIndex;
+                thread_communication
+                    .config_tx
+                    .send(ConfigCommand::UpdateMaterialCalculation)
+                    .unwrap();
             }
             if ui
                 .selectable_label(tabs[2], Tab::ThreeD.to_string())
@@ -765,55 +861,33 @@ pub fn center_panel(
                     width,
                     spacing,
                     *right_panel_width,
+                    explorer,
                     thread_communication,
-                    data,
-                    water_vapour_lines,
                 ),
                 Tab::RefractiveIndex => refractive_index_tab(
                     ui,
-                    height,
+                    height * 0.95,
                     width,
                     spacing,
                     *right_panel_width,
+                    explorer,
                     thread_communication,
-                    data,
-                    water_vapour_lines,
                 ),
                 Tab::ThreeD => {
-                    three_dimensional_plot(
-                        ui,
-                        thread_communication,
-                        *right_panel_width,
+                    three_dimensional_plot_ui(
+                        meshes,
+                        cube_preview_texture_id,
+                        width,
                         window_height,
+                        ui,
+                        query,
+                        opacity_threshold,
+                        cam_input,
+                        thread_communication,
+                        explorer,
                     );
                 }
             }
         });
     });
-}
-
-#[allow(dead_code)]
-/// **Map Heatmap Values to RGB Colors**
-fn heatmap_color(value: f32) -> RGBColor {
-    let normalized = ((value + 1.0) / 2.0).clamp(0.0, 1.0); // Normalize between 0 and 1
-    let r = (255.0 * normalized) as u8;
-    let g = (255.0 * (1.0 - normalized)) as u8;
-    let b = 150;
-    RGBColor(r, g, b)
-}
-
-#[allow(dead_code)]
-fn generate_sample_image(width: usize, height: usize) -> Array2<f32> {
-    let mut image = Array2::zeros((width, height));
-    let center_x = width as f32 / 2.0;
-    let center_y = height as f32 / 2.0;
-
-    for x in 0..width {
-        for y in 0..height {
-            let dx = (x as f32 - center_x) / center_x;
-            let dy = (y as f32 - center_y) / center_y;
-            image[[x, y]] = (-10.0 * (dx * dx + dy * dy)).exp(); // Gaussian function
-        }
-    }
-    image
 }

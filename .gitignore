@@ -1,1 +1,8 @@
 /target
+/paper/jats
+/paper/paper.pdf
+.idea/
+.DS_Store
+*/.DS_Store
+*.vtu
+*.thz

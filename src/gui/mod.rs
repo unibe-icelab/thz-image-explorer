@@ -5,4 +5,5 @@ pub mod left_panel;
 pub mod matrix_plot;
 pub mod right_panel;
 pub mod settings_window;
+pub mod threed_plot;
 pub mod toggle_widget;

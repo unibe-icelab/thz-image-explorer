@@ -1,19 +1,21 @@
 //! This module provides utilities for working with spectroscopic data, covering file I/O operations
-//! and data processing tasks for various file formats such as `.npy`, `.npz`, `.csv`, and `.thz` (HDF5).
+//! and data processing tasks for various file formats such as `.npy`, `.npz`, `.csv`, `.thz` (HDF5),
+//! and `.vtk`.
 //!
 //! # Features
 //! - **File Loading**: Supports `.npz` files for loading filter data, `.json` for metadata, and `.csv` for raw data.
+//! - **File Export**: Converts voxel data to VTK format for visualization in third-party tools.
 //! - **Signal Processing**: Includes FFT setup and intensity calculations for spectroscopic data.
 //! - **Pattern Search**: Finds files with specific extensions in directories.
+//! - **THz File Handling**: Specialized support for `.thz` (HDF5) files with reading, writing, and metadata operations.
 //!
 //! These functionalities are essential for managing and analyzing large-scale spectroscopic or
 //! imaging datasets efficiently.
 
-use crate::data_container::{HouseKeeping, Meta, ScannedImage};
+use crate::data_container::ScannedImageFilterData;
 use crate::filters::psf::PSF;
-use csv::ReaderBuilder;
+use bevy_voxel_plot::InstanceData;
 use dotthz::{DotthzFile, DotthzMetaData};
-use glob::glob;
 use ndarray::{Array0, Array1, Array2, Array3, Axis, Ix0, Ix1, Ix2, OwnedRepr};
 use ndarray_npy::NpzReader;
 use realfft::RealFftPlanner;
@@ -21,6 +23,118 @@ use std::error::Error;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use vtkio::model::{Attributes, ByteOrder, Cells, Piece};
+use vtkio::{
+    model::{
+        Attribute, CellType, DataArray, DataSet, UnstructuredGridPiece, Version, VertexNumbers, Vtk,
+    },
+    IOBuffer,
+};
+
+use bevy_egui::egui::ColorImage;
+use image::RgbaImage;
+
+/// Exports voxel data to VTK file format for visualization in external applications.
+///
+/// This function converts instance data from the voxel plot system into a structured VTK file,
+/// preserving position, color, and opacity information for each voxel. The resulting file
+/// can be loaded into visualization software like ParaView or VTK-based viewers.
+///
+/// # Arguments
+/// * `instances` - A slice of `InstanceData` containing the voxel information to export
+/// * `cube_width` - Width of each voxel in model units
+/// * `cube_height` - Height of each voxel in model units
+/// * `cube_depth` - Depth of each voxel in model units
+/// * `filename` - The path where the VTK file will be written
+///
+/// # Returns
+/// * `Ok(())` - If the file was successfully written
+/// * `Err(Box<dyn std::error::Error>)` - If an error occurred during file creation or writing
+///
+/// # Examples
+/// ```
+/// let voxels = vec![instance1, instance2, instance3];
+/// export_to_vtk(&voxels, 0.1, 0.1, 0.1, "output_visualization.vtk")?;
+/// ```
+pub fn export_to_vtk(
+    instances: &[InstanceData],
+    filename: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Create points for each voxel center
+    let mut points_vec = Vec::new();
+    let mut colors_vec = Vec::new();
+    let mut opacities_vec = Vec::new();
+
+    for instance in instances {
+        let pos = instance.pos_scale;
+        points_vec.push(pos[0] as f64);
+        points_vec.push(pos[1] as f64);
+        points_vec.push(pos[2] as f64);
+
+        colors_vec.push(instance.color[0] as f64);
+        colors_vec.push(instance.color[1] as f64);
+        colors_vec.push(instance.color[2] as f64);
+
+        opacities_vec.push(instance.color[3] as f64);
+    }
+
+    // Create points IOBuffer
+    let points_buffer = IOBuffer::from(points_vec);
+
+    // Create cell data
+    let connectivity_vec = (0..instances.len() as u64).collect::<Vec<_>>();
+    let offsets_vec = (1..=instances.len() as u64).collect::<Vec<_>>();
+    let types_vec = vec![CellType::Vertex; instances.len()];
+
+    // Create vertex numbers using the XML variant
+    let vertex_numbers = VertexNumbers::XML {
+        connectivity: connectivity_vec,
+        offsets: offsets_vec,
+    };
+
+    // Create the cells structure
+    let cells = Cells {
+        cell_verts: vertex_numbers,
+        types: types_vec,
+    };
+
+    // Create RGB and opacity attributes
+    let colors_buffer = IOBuffer::from(colors_vec);
+    let colors_array = DataArray::vectors("RGB").with_data(colors_buffer);
+
+    let opacities_buffer = IOBuffer::from(opacities_vec);
+    let opacity_array = DataArray::scalars("Opacity", 1).with_data(opacities_buffer);
+
+    // Create piece data with attributes
+    let mut piece_data = Attributes::new();
+    piece_data.point.push(Attribute::DataArray(colors_array));
+    piece_data.point.push(Attribute::DataArray(opacity_array));
+
+    // Create unstructured grid piece
+    let piece = UnstructuredGridPiece {
+        points: points_buffer,
+        cells,
+        data: piece_data,
+    };
+
+    // Create VTK file
+    let vtk = Vtk {
+        version: Version::default(),
+        title: "Voxel Plot".to_string(),
+        byte_order: ByteOrder::BigEndian,
+        data: DataSet::UnstructuredGrid {
+            meta: Default::default(),
+            pieces: vec![Piece::Inline(Box::new(piece))],
+        },
+        file_path: None,
+    };
+
+    // Write to file
+    let mut file = std::fs::File::create(filename)?;
+    vtk.write_xml(&mut file)?;
+
+    Ok(())
+}
 
 /// Loads a Point Spread Function (PSF) from a `.npz` file.
 ///
@@ -162,194 +276,25 @@ pub fn find_files_with_same_extension(file_path: &Path) -> std::io::Result<Vec<P
     }
 }
 
-/// Opens a `.json` file and loads housekeeping metadata.
+/// Loads metadata from a THz file without reading the full dataset.
 ///
-/// The extracted metadata is stored in a `HouseKeeping` struct, and the function returns
-/// the width and height dimensions of the data.
-///
-/// # Arguments
-/// * `hk` - A mutable reference to the `HouseKeeping` struct where metadata will be stored.
-/// * `file_path` - The file path of the `.json` file to be opened.
-///
-/// # Returns
-/// * A `Result` with the width and height of the dataset or an error if parsing fails.
-///
-/// # Errors
-/// If the file cannot be opened or the JSON parsing fails, the function will return a descriptive error.
-pub fn open_json(
-    hk: &mut HouseKeeping,
-    file_path: &PathBuf,
-) -> Result<(usize, usize), Box<dyn Error>> {
-    let text = std::fs::read_to_string(file_path).unwrap();
-
-    // Parse the string into a dynamically-typed JSON structure.
-    let meta: Meta = serde_json::from_str::<Meta>(&text).unwrap();
-
-    hk.dx = meta.dx;
-    hk.x_range[0] = meta.x_min;
-    hk.x_range[1] = meta.x_max;
-    hk.dy = meta.dy;
-    hk.y_range[0] = meta.y_min;
-    hk.y_range[1] = meta.y_max;
-
-    Ok((meta.width, meta.height))
-}
-
-// pub fn open_from_csv(
-//     data: &mut DataPoint,
-//     file_path: &String,
-//     file_path_fft: &String,
-// ) -> Result<(), Box<dyn Error>> {
-//     data.time = vec![];
-//     data.signal_1 = vec![];
-//     data.ref_1 = vec![];
-//
-//     data.frequencies_fft = vec![];
-//     data.signal_1_fft = vec![];
-//     data.phase_1_fft = vec![];
-//     data.ref_1_fft = vec![];
-//     data.ref_phase_1_fft = vec![];
-//
-//     let mut rdr = ReaderBuilder::new()
-//         .has_headers(true)
-//         .from_path(file_path)?;
-//
-//     for result in rdr.records() {
-//         let row = result?;
-//         data.time.push(row[0].parse::<f32>().unwrap());
-//         data.signal_1.push(row[1].parse::<f32>().unwrap());
-//         data.ref_1.push(row[2].parse::<f32>().unwrap());
-//     }
-//
-//     let mut rdr = ReaderBuilder::new()
-//         .has_headers(true)
-//         .from_path(file_path_fft)?;
-//
-//     for result in rdr.records() {
-//         let row = result?;
-//         data.frequencies_fft
-//             .push(row[0].parse::<f32>().unwrap() / 1000.0);
-//         data.signal_1_fft.push(row[1].parse::<f32>().unwrap());
-//         data.phase_1_fft.push(row[2].parse::<f32>().unwrap());
-//         data.ref_1_fft.push(row[3].parse::<f32>().unwrap());
-//         data.ref_phase_1_fft.push(row[4].parse::<f32>().unwrap());
-//     }
-//     Ok(())
-// }
-
-// pub fn save_to_csv(
-//     data: &DataPoint,
-//     file_path: &String,
-//     file_path_fft: &String,
-// ) -> Result<(), Box<dyn Error>> {
-//     let mut wtr = WriterBuilder::new()
-//         .has_headers(false)
-//         .from_path(file_path)?;
-//     // serialize does not work, so we do it with a loop..
-//     wtr.write_record(&["Time_abs/ps", " Signal 1/nA", " Reference 1/nA"])?;
-//     for i in 0..data.time.len() {
-//         wtr.write_record(&[
-//             data.time[i].to_string(),
-//             data.signal_1[i].to_string(),
-//             data.ref_1[i].to_string(),
-//         ])?;
-//     }
-//     wtr.flush()?;
-//
-//     let mut wtr = WriterBuilder::new()
-//         .has_headers(false)
-//         .from_path(file_path_fft)?;
-//     // serialize does not work, so we do it with a loop..
-//     wtr.write_record(&[
-//         "Frequency/GHz",
-//         " Amplitude rel. 1",
-//         " Phase 1",
-//         " Ref.Amplitude rel. 1",
-//         " Ref.Phase 1",
-//     ])?;
-//     for i in 0..data.frequencies_fft.len() {
-//         wtr.write_record(&[
-//             (data.frequencies_fft[i] * 1_000.0).round().to_string(),
-//             data.signal_1_fft[i].to_string(),
-//             data.phase_1_fft[i].to_string(),
-//             data.ref_1_fft[i].to_string(),
-//             data.ref_phase_1_fft[i].to_string(),
-//         ])?;
-//     }
-//     wtr.flush()?;
-//
-//     Ok(())
-// }
-
-/// Opens a `.npz` file and loads it into a `ScannedImage` struct.
-///
-/// The function loads the time array and dataset into the given `ScannedImage`, computes the image matrix,
-/// and sets FFT-related information for further signal processing.
+/// This function extracts only the metadata from a `.thz` file, which is useful for
+/// quickly inspecting file properties without loading the potentially large data arrays.
+/// The metadata is stored in the provided `DotthzMetaData` structure.
 ///
 /// # Arguments
-/// * `scan` - A mutable reference to the `ScannedImage` where data will be stored.
-/// * `file_path` - The file path of the `.npz` file to be opened.
+/// * `file_path` - A reference to the path of the `.thz` file to be read
+/// * `metadata` - A mutable reference to a `DotthzMetaData` structure where metadata will be stored
 ///
 /// # Returns
-/// * A `Result` indicating success or error during the process.
+/// * `Ok(())` - If metadata was successfully loaded
+/// * `Err(Box<dyn Error>)` - If an error occurred while opening the file or reading metadata
 ///
 /// # Errors
-/// The function will return an error if:
-/// * The file cannot be opened.
-/// * The expected datasets (`time.npy`, `dataset.npy`) are missing or misformatted.
-pub fn open_from_npz(scan: &mut ScannedImage, file_path: &PathBuf) -> Result<(), Box<dyn Error>> {
-    let file = File::open(file_path)?;
-    let mut npz = NpzReader::new(file)?;
-    let time: Array1<f32> = npz.by_name("time.npy")?;
-    let n = time.len();
-    let rng = time[n - 1] - time[0];
-    scan.time = time;
-    let data: Array3<f32> = npz.by_name("dataset.npy")?;
-    scan.raw_data = data;
-    scan.raw_img = Array2::zeros((scan.width, scan.height));
-    for x in 0..scan.width {
-        for y in 0..scan.height {
-            // subtract bias
-            let offset = scan.raw_data[[x, y, 0]];
-            scan.raw_data
-                .index_axis_mut(Axis(0), x)
-                .index_axis_mut(Axis(0), y)
-                .mapv_inplace(|p| p - offset);
-
-            // calculate the intensity by summing the squares
-            let sig_squared_sum = scan
-                .raw_data
-                .index_axis(Axis(0), x)
-                .index_axis(Axis(0), y)
-                .mapv(|xi| xi * xi)
-                .sum();
-            scan.raw_img[[x, y]] = sig_squared_sum;
-        }
-    }
-
-    scan.scaled_data = scan.raw_data.clone();
-
-    scan.filtered_time = scan.time.clone();
-    scan.filtered_data = scan.scaled_data.clone();
-    scan.filtered_img = scan.raw_img.clone();
-
-    let mut real_planner = RealFftPlanner::<f32>::new();
-    let r2c = real_planner.plan_fft_forward(n);
-    let c2r = real_planner.plan_fft_inverse(n);
-    let spectrum = r2c.make_output_vec();
-    let freq = (0..spectrum.len()).map(|i| i as f32 / rng).collect();
-    scan.frequencies = freq;
-    scan.r2c = Some(r2c);
-    scan.c2r = Some(c2r);
-
-    scan.filtered_frequencies = scan.frequencies.clone();
-
-    scan.filtered_c2r = scan.c2r.clone();
-    scan.filtered_r2c = scan.r2c.clone();
-    Ok(())
-}
-
-// Function to write the metadata to an HDF5 file / dotTHz file
+/// Will return an error if:
+/// - The file cannot be opened
+/// - The "Image" group does not exist in the file
+/// - The metadata in the file is corrupted or in an unexpected format
 pub fn load_meta_data_of_thz_file(
     file_path: &PathBuf,
     metadata: &mut DotthzMetaData,
@@ -365,7 +310,25 @@ pub fn load_meta_data_of_thz_file(
     Ok(())
 }
 
-// Function to write the metadata to an HDF5 file / dotTHz file
+/// Updates the metadata in an existing THz file without modifying the data arrays.
+///
+/// This function is useful for correcting or enhancing metadata information in a file
+/// without rewriting the entire dataset. It will clear existing metadata and replace it
+/// with the provided metadata structure.
+///
+/// # Arguments
+/// * `file_path` - A reference to the path of the `.thz` file to be updated
+/// * `metadata` - A reference to the `DotthzMetaData` structure containing the new metadata
+///
+/// # Returns
+/// * `Ok(())` - If metadata was successfully updated
+/// * `Err(Box<dyn Error>)` - If an error occurred during file access or metadata writing
+///
+/// # Errors
+/// Will return an error if:
+/// - The file cannot be opened in read-write mode
+/// - The "Image" group does not exist in the file
+/// - Writing the new metadata fails
 pub fn update_meta_data_of_thz_file(
     file_path: &PathBuf,
     metadata: &DotthzMetaData,
@@ -385,10 +348,33 @@ pub fn update_meta_data_of_thz_file(
     Ok(())
 }
 
-// Function to save the data and metadata to an HDF5 file / dotTHz file
+/// Saves spectroscopic data and metadata to a THz file.
+///
+/// This function creates a new `.thz` file and writes both the time-domain data arrays
+/// and associated metadata. The file follows the standard THz file format with data
+/// organized in an "Image" group.
+///
+/// # Arguments
+/// * `file_path` - A reference to the path where the `.thz` file will be created
+/// * `scan` - A reference to the `ScannedImageFilterData` containing the spectroscopic data
+/// * `metadata` - A reference to the `DotthzMetaData` structure with metadata to include
+///
+/// # Returns
+/// * `Ok(())` - If the file was successfully created and data was written
+/// * `Err(Box<dyn Error>)` - If an error occurred during file creation or writing
+///
+/// # Errors
+/// Will return an error if:
+/// - The file cannot be created at the specified location
+/// - Creating the "Image" group fails
+/// - Writing datasets or metadata fails
+///
+/// # Note
+/// This function writes only the raw data and time vectors. Derived data such as
+/// FFT results, phases, and amplitudes are not saved to the file.
 pub fn save_to_thz(
     file_path: &PathBuf,
-    scan: &ScannedImage,
+    scan: &ScannedImageFilterData,
     metadata: &DotthzMetaData,
 ) -> Result<(), Box<dyn Error>> {
     // Create a new DotthzFile for writing
@@ -401,14 +387,59 @@ pub fn save_to_thz(
     file.add_group(group_name, metadata)?;
 
     // Save raw data
-    file.add_dataset(group_name, "dataset", scan.raw_data.view())?;
+    if let Some(ds) = metadata.ds_description.iter().position(|d| d == "time") {
+        let name = format!("ds{}", ds + 1);
+        file.add_dataset(group_name, name.as_str(), scan.time.view())?;
+    }
 
     // Save time data
-    file.add_dataset(group_name, "time", scan.time.view())?;
+    if let Some(ds) = metadata.ds_description.iter().position(|d| d == "dataset") {
+        let name = format!("ds{}", ds + 1);
+        file.add_dataset(group_name, name.as_str(), scan.data.view())?;
+    }
 
     Ok(())
 }
 
+pub fn open_pulse_from_thz(
+    file_path: &PathBuf,
+    metadata: &mut DotthzMetaData,
+) -> Result<(Array1<f32>, Array1<f32>), Box<dyn Error>> {
+    // Open the HDF5 file for reading
+    let file = DotthzFile::open(file_path)?;
+
+    let mut time = Array1::<f32>::zeros(0);
+    let mut signal = Array1::<f32>::zeros(0);
+
+    if let Some(group_name) = file.get_group_names()?.first() {
+        if file.get_groups()?.len() > 1 {
+            log::info!("found more than one group, opening only the first");
+        }
+        // For TeraFlash measurements we always just get the first entry
+        let group = file.get_group(group_name)?;
+
+        // get the metadata
+        *metadata = file.get_meta_data(group_name)?;
+
+        if let Ok(datasets) = group.datasets() {
+            log::info!(
+                "Found {} datasets in group: {}, taking first one",
+                datasets.len(),
+                group_name
+            );
+
+            if let Some(dataset) = datasets.first() {
+                if let Ok(arr) = dataset.read_2d::<f32>() {
+                    time = arr.column(0).to_owned();
+                    signal = arr.column(1).to_owned();
+                }
+            }
+        } else {
+            log::warn!("No datasets found in group: {}", group_name);
+        }
+    }
+    Ok((time, signal))
+}
 /// Opens and reads data from an HDF5 `.thz` file, populating the scan data and metadata.
 ///
 /// This function loads time and raw data arrays from HDF5 files containing spectroscopic information.
@@ -427,9 +458,9 @@ pub fn save_to_thz(
 /// Will return an error if:
 /// - The `.thz` file cannot be found or opened.
 /// - The time or data datasets are missing or misformatted.
-pub fn open_from_thz(
+pub fn open_scan_from_thz(
     file_path: &PathBuf,
-    scan: &mut ScannedImage,
+    scan: &mut ScannedImageFilterData,
     metadata: &mut DotthzMetaData,
 ) -> Result<(), Box<dyn Error>> {
     // Open the HDF5 file for reading
@@ -447,25 +478,30 @@ pub fn open_from_thz(
         *metadata = file.get_meta_data(group_name)?;
 
         // Read datasets and populate DataContainer fields, skipping any that are missing
-        if let Some(ds1) = metadata.ds_description.iter().position(|d| d == "time") {
-            if let Some(ds) = group.datasets().unwrap().get(ds1) {
+        if let Some(ds) = metadata.ds_description.iter().position(|d| d == "time") {
+            if let Ok(ds) = group.dataset(format!("ds{}", ds + 1).as_str()) {
                 if let Ok(arr) = ds.read_1d() {
                     scan.time = arr;
                 }
             }
         }
-        if let Some(ds2) = metadata.ds_description.iter().position(|d| d == "dataset") {
-            if let Some(ds) = group.datasets().unwrap().get(ds2) {
+
+        if let Some(ds) = metadata.ds_description.iter().position(|d| d == "dataset") {
+            if let Ok(ds) = group.dataset(format!("ds{}", ds + 1).as_str()) {
                 if let Ok(arr) = ds.read_dyn::<f32>() {
                     if let Ok(arr3) = arr.into_dimensionality::<ndarray::Ix3>() {
                         // check dimensions to make sure
                         if arr3.shape().len() == 3 {
-                            scan.raw_data = arr3;
+                            scan.data = arr3;
                         }
                     }
                 }
             }
         }
+    }
+
+    if scan.data.is_empty() {
+        return Err("No 2D scan data found in the THz file".into());
     }
     if let Some(w) = metadata.md.get("width") {
         if let Ok(width) = w.parse::<usize>() {
@@ -479,36 +515,35 @@ pub fn open_from_thz(
         }
     }
 
-    scan.raw_img = Array2::zeros((scan.width, scan.height));
+    scan.img = Array2::zeros((scan.width, scan.height));
 
     for x in 0..scan.width {
         for y in 0..scan.height {
             // subtract bias
-            let offset = scan.raw_data[[x, y, 0]];
-            scan.raw_data
+            let offset = scan.data[[x, y, 0]];
+            scan.data
                 .index_axis_mut(Axis(0), x)
                 .index_axis_mut(Axis(0), y)
                 .mapv_inplace(|p| p - offset);
 
             // calculate the intensity by summing the squares
             let sig_squared_sum = scan
-                .raw_data
+                .data
                 .index_axis(Axis(0), x)
                 .index_axis(Axis(0), y)
                 .mapv(|xi| xi * xi)
                 .sum();
-            scan.raw_img[[x, y]] = sig_squared_sum;
+            scan.img[[x, y]] = sig_squared_sum;
         }
     }
 
-    scan.scaled_data = scan.raw_data.clone();
+    if let Some(dx) = metadata.md.get("dx [mm]") {
+        scan.dx = dx.parse::<f32>().ok();
+    }
 
-    scan.filtered_time = scan.time.clone();
-    scan.filtered_data = scan.scaled_data.clone();
-    scan.filtered_img = scan.raw_img.clone();
-
-    scan.dx = metadata.md.get("dx [mm]").unwrap().parse::<f32>().ok();
-    scan.dy = metadata.md.get("dy [mm]").unwrap().parse::<f32>().ok();
+    if let Some(dy) = metadata.md.get("dy [mm]") {
+        scan.dy = dy.parse::<f32>().ok();
+    }
 
     let n = scan.time.len();
     let rng = scan.time[n - 1] - scan.time[0];
@@ -517,189 +552,45 @@ pub fn open_from_thz(
     let c2r = real_planner.plan_fft_inverse(n);
     let spectrum = r2c.make_output_vec();
     let freq = (0..spectrum.len()).map(|i| i as f32 / rng).collect();
-    scan.frequencies = freq;
-    scan.filtered_frequencies = scan.frequencies.clone();
+    scan.frequency = freq;
 
     scan.r2c = Some(r2c);
     scan.c2r = Some(c2r);
 
-    scan.filtered_c2r = scan.c2r.clone();
-    scan.filtered_r2c = scan.r2c.clone();
+    scan.phases = Array3::zeros((scan.width, scan.height, scan.frequency.len()));
+    scan.amplitudes = Array3::zeros((scan.width, scan.height, scan.frequency.len()));
+    scan.fft = Array3::zeros((scan.width, scan.height, scan.frequency.len()));
 
     Ok(())
 }
 
-/// Helper function to extract a substring between two delimiters.
+/// Saves an image to a given file location.
+///
+/// The image is saved as PNG in the specified directory.
+/// Currently, the function does not support saving large images.
+///
+/// # Arguments
+/// * `img` - The `ColorImage` object to be saved.
+/// * `file_path` - The directory path where the image will be saved.
 #[allow(dead_code)]
-fn extract_substring(text: &str, start: &str, end: &str) -> Option<String> {
-    let start_idx = text.find(start)? + start.len();
-    let end_idx = text[start_idx..].find(end)? + start_idx;
-    Some(text[start_idx..end_idx].to_string())
-}
-
-/// Helper function for trimming signals (placeholder; implement your logic here).
-#[allow(dead_code)]
-pub fn get_windowed_signal(
-    signal: &Vec<f64>,
-    _ratio: f64,
-    _lr: &str,
-    _window: &str,
-    _alpha: f64,
-) -> (Vec<f64>, Vec<f64>) {
-    // Implement signal processing logic here
-    (signal.clone(), vec![1.0; signal.len()]) // Placeholder
-}
-
-#[allow(dead_code)]
-pub fn load_psfs(
-    raw_psf_path: &PathBuf,
-    trim: bool,
-) -> Result<(Array1<f64>, Array1<f64>, Array2<f64>, Array2<f64>, Vec<f64>), Box<dyn Error>> {
-    let dirs = fs::read_dir(raw_psf_path)?
-        .map(|entry| entry.unwrap().path())
-        .collect::<Vec<_>>();
-    let mut psf_t_x = Vec::new();
-    let mut psf_t_y = Vec::new();
-    let mut pos_x = Vec::new();
-    let mut pos_y = Vec::new();
-    let mut xx = Vec::new();
-    let mut yy = Vec::new();
-    let mut times = None;
-    let mut len_traces = None;
-    let mut nx = 0;
-    let mut ny = 0;
-
-    for dir in dirs.iter() {
-        let path = dir.to_str().unwrap();
-        if glob(&format!("{}/x*.csv", path))?.count() > 0 {
-            nx += 1;
-            for entry in glob(&format!("{}/x*.csv", path))? {
-                let file = entry.unwrap();
-                let x = extract_substring(file.to_str().unwrap(), "x=", ".csv")
-                    .unwrap()
-                    .parse::<f64>()?;
-                pos_x.push(x);
-
-                let mut reader = ReaderBuilder::new().has_headers(true).from_path(file)?;
-                let df: Vec<f64> = reader
-                    .records()
-                    .map(|r| r.unwrap().get(1).unwrap().parse::<f64>().unwrap())
-                    .collect();
-
-                if times.is_none() {
-                    times = Some(
-                        reader
-                            .records()
-                            .map(|r| r.unwrap().get(0).unwrap().parse::<f64>().unwrap())
-                            .collect(),
-                    );
-                }
-                if len_traces.is_none() {
-                    len_traces = Some(df.len());
-                }
-            }
-            xx = pos_x.clone();
-            xx.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        }
-
-        if glob(&format!("{}/y*.csv", path))?.count() > 0 {
-            ny += 1;
-            for entry in glob(&format!("{}/y*.csv", path))? {
-                let file = entry.unwrap();
-                let y = extract_substring(file.to_str().unwrap(), "y=", ".csv")
-                    .unwrap()
-                    .parse::<f64>()?;
-                pos_y.push(y);
-
-                let mut reader = ReaderBuilder::new().has_headers(true).from_path(file)?;
-                let df: Vec<f64> = reader
-                    .records()
-                    .map(|r| r.unwrap().get(1).unwrap().parse::<f64>().unwrap())
-                    .collect();
-
-                if times.is_none() {
-                    times = Some(
-                        reader
-                            .records()
-                            .map(|r| r.unwrap().get(0).unwrap().parse::<f64>().unwrap())
-                            .collect(),
-                    );
-                }
-                if len_traces.is_none() {
-                    len_traces = Some(df.len());
-                }
-            }
-            yy = pos_y.clone();
-            yy.sort_by(|a, b| a.partial_cmp(b).unwrap());
+fn save_image(img: &ColorImage, file_path: &Path) {
+    let height = img.height();
+    let width = img.width();
+    let mut raw: Vec<u8> = vec![];
+    for p in img.pixels.clone().iter() {
+        raw.push(p.r());
+        raw.push(p.g());
+        raw.push(p.b());
+        raw.push(p.a());
+    }
+    let img_to_save = RgbaImage::from_raw(width as u32, height as u32, raw)
+        .expect("container should have the right size for the image dimensions");
+    let mut image_path = file_path.to_path_buf();
+    image_path.push("image.png");
+    match img_to_save.save(image_path) {
+        Ok(_) => {}
+        Err(err) => {
+            log::error!("error in saving image: {err:?}");
         }
     }
-
-    for &x in &xx {
-        let mut psf_x_t = vec![0.0; len_traces.unwrap()];
-        for dir in dirs.iter() {
-            let path = dir.to_str().unwrap();
-            if glob(&format!("{}/x*.csv", path))?.count() > 0 {
-                let file = format!("{}/x={:.2}.csv", path, x);
-                let mut reader = ReaderBuilder::new().has_headers(true).from_path(file)?;
-                let df: Vec<f64> = reader
-                    .records()
-                    .map(|r| r.unwrap().get(1).unwrap().parse::<f64>().unwrap())
-                    .collect();
-                for (i, &val) in df.iter().enumerate() {
-                    psf_x_t[i] += val / nx as f64;
-                }
-            }
-        }
-        psf_t_x.push(psf_x_t);
-    }
-
-    for &y in &yy {
-        let mut psf_y_t = vec![0.0; len_traces.unwrap()];
-        for dir in dirs.iter() {
-            let path = dir.to_str().unwrap();
-            if glob(&format!("{}/y*.csv", path))?.count() > 0 {
-                let file = format!("{}/y={:.2}.csv", path, y);
-                let mut reader = ReaderBuilder::new().has_headers(true).from_path(file)?;
-                let df: Vec<f64> = reader
-                    .records()
-                    .map(|r| r.unwrap().get(1).unwrap().parse::<f64>().unwrap())
-                    .collect();
-                for (i, &val) in df.iter().enumerate() {
-                    psf_y_t[i] += val / ny as f64;
-                }
-            }
-        }
-        psf_t_y.push(psf_y_t);
-    }
-
-    let mut np_psf_t_x = Array2::zeros((psf_t_x.len(), len_traces.unwrap()));
-    let mut np_psf_t_y = Array2::zeros((psf_t_y.len(), len_traces.unwrap()));
-
-    for (i, row) in psf_t_x.iter().enumerate() {
-        np_psf_t_x.row_mut(i).assign(&Array1::from(row.clone()));
-    }
-    for (i, row) in psf_t_y.iter().enumerate() {
-        np_psf_t_y.row_mut(i).assign(&Array1::from(row.clone()));
-    }
-
-    if trim {
-        for i in 0..np_psf_t_x.len_of(Axis(0)) {
-            let (trimmed, _) =
-                get_windowed_signal(&np_psf_t_x.row(i).to_vec(), 0.9, "left", "tukey", 0.1);
-            np_psf_t_x.row_mut(i).assign(&Array1::from(trimmed));
-        }
-        for i in 0..np_psf_t_y.len_of(Axis(0)) {
-            let (trimmed, _) =
-                get_windowed_signal(&np_psf_t_y.row(i).to_vec(), 0.9, "left", "tukey", 0.1);
-            np_psf_t_y.row_mut(i).assign(&Array1::from(trimmed));
-        }
-    }
-
-    Ok((
-        Array1::from_vec(xx),
-        Array1::from_vec(yy),
-        np_psf_t_x,
-        np_psf_t_y,
-        times.unwrap(),
-    ))
 }

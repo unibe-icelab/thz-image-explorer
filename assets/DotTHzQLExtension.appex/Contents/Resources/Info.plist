@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSExtension</key>
+	<dict>
+		<key>CFBundleDocumentTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleTypeName</key>
+				<string>DotTHz File</string>
+				<key>CFBundleTypeExtensions</key>
+				<array>
+                    <string>thz</string>
+                    <string>thzimg</string>
+                    <string>thzswp</string>
+				</array>
+				<key>LSItemContentTypes</key>
+				<array>
+                    <string>ch.unibe.dotthz</string>
+				</array>
+			</dict>
+		</array>
+		<key>NSExtensionAttributes</key>
+		<dict>
+            <key>UTExportedTypeDeclarations</key>
+            <array>
+                <dict>
+                    <key>UTTypeIdentifier</key>
+                    <string>ch.unibe.dotthz</string>
+                    <key>UTTypeConformsTo</key>
+                    <array>
+                        <string>public.data</string>
+                    </array>
+                    <key>UTTypeDescription</key>
+                    <string>DotThz Data File</string>
+                    <key>UTTypeTagSpecification</key>
+                    <dict>
+                        <key>public.filename-extension</key>
+                        <array>
+                            <string>thz</string>
+                            <string>thzimg</string>
+                            <string>thzswp</string>
+                        </array>
+                        <key>public.mime-type</key>
+                        <string>application/x-dotthz</string>
+                    </dict>
+                </dict>
+            </array>
+			<key>QLIsDataBasedPreview</key>
+			<true/>
+			<key>QLSupportedContentTypes</key>
+			<array>
+                <string>ch.unibe.dotthz</string>
+			</array>
+			<key>QLSupportsSearchableItems</key>
+			<true/>
+		</dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.quicklook.preview</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).PreviewProvider</string>
+	</dict>
+</dict>
+</plist>

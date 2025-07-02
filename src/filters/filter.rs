@@ -1,137 +1,248 @@
 //! This module provides the `Filter` trait and related structures for managing filters and their configuration.
-//! Filters can be applied to processed data (`ScannedImage`) and customized through settings.
+//! Filters can be applied to processed data (`ScannedImageFilterData`) and customized through settings.
 //! It also implements a global, thread-safe registry for managing filters dynamically.
 
-use crate::config::GuiThreadCommunication;
-use crate::data_container::ScannedImage;
+use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
+use crate::data_container::ScannedImageFilterData;
 use crate::gui::application::GuiSettingsContainer;
-#[allow(unused_imports)]
+use crate::gui::toggle_widget::toggle;
+use bevy_egui::egui;
+use chrono::Utc;
+#[allow(unused_imports)] // this dependency is required by the `register_filter` macro
 use ctor::ctor;
-// this dependency is required by the `register_filter` macro
-use eframe::egui;
+use downcast_rs::Downcast;
+use ndarray::Array1;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Mutex, RwLock};
+use uuid::Uuid;
+
+pub trait CopyStaticFieldsTrait: Downcast {
+    fn copy_static_fields_from(&mut self, other: &dyn CopyStaticFieldsTrait);
+}
+downcast_rs::impl_downcast!(CopyStaticFieldsTrait);
 
 /// The `Filter` trait defines the structure and behavior of an image filter.
 ///
 /// Filters must implement:
 /// - A `new` function to initialize a filter with default parameters.
-/// - A `filter` function to apply the filter to a `ScannedImage`.
+/// - A `reset` function that is called during the initialization of the filter (when loading a new file).
 /// - A `config` function to provide metadata and parameters for the filter.
+/// - A `filter` function to apply the filter to a `ScannedImageFilterData`.
+/// - A `ui` function to render the filter in the UI.
+///
+/// Different applications can be found in the `src/filters` directory.
+///
+/// To implement a new filter, you must create a struct that implements the `Filter` trait. The struct needs to derive `Clone`, `Debug`, and `CopyStaticFields` traits and be registered using the `register_filter` macro. The file also need sto be added in the `src/filters/mod.rs` file to be included in the filter registry.
+/// For simple filters, this will automatically integrate the filter in the data processing pipeline and the GUI. For more complex filters, further adaptations in other files might be necessary (e.g. the deconvolution filter required the loading of the PSF in the settings window).
 ///
 /// **Example**:
 /// ```rust
-/// use crate::filters::filter::{Filter, ScannedImage, GuiSettingsContainer};
+/// use crate::filters::filter::{Filter, ScannedImageFilterData, GuiSettingsContainer};
 ///
+/// #[register_filter]
+/// #[derive(Clone, Debug, CopyStaticFields)]
 /// struct ExampleFilter;
 ///
 /// impl Filter for ExampleFilter {
 ///     fn new() -> Self { ExampleFilter }
 ///
-///     fn filter(&self, scan: &mut ScannedImage, gui_settings: &mut GuiSettingsContainer) {
-///         // Apply filter logic here
+///     fn reset(&mut self, time: &Array1<f32>, shape: &[usize]) {
+///         // Reset logic here
+///     }
+///
+///     fn filter(
+///         &mut self,
+///         input_data: &ScannedImageFilterData,
+///         gui_settings: &mut GuiSettingsContainer,
+///         progress_lock: &mut Arc<RwLock<Option<f32>>>,
+///         abort_flag: &Arc<AtomicBool>,
+///     ) -> ScannedImageFilterData {
+///            // Apply filter logic here
+///             input_data.clone() // Placeholder, replace with actual filtering logic
 ///     }
 ///
 ///     fn config(&self) -> FilterConfig {
 ///         FilterConfig {
 ///             name: "Example Filter".to_string(),
-///             domain: FilterDomain::Time,
-///             parameters: vec![]
+///             description: "Description of the example filter.".to_string(),
+///             hyperlink: None, // Optional DOI or reference link
+///             domain: FilterDomain::TimeBeforeFFT, // Specify the domain of the filter
 ///         }
+///     }
+///
+///     fn ui(
+///         &mut self,
+///         ui: &mut egui::Ui,
+///         thread_communication: &mut ThreadCommunication,
+///         panel_width: f32,
+///     ) -> egui::Response {
+///        // Render filter configuration UI here
 ///     }
 /// }
 /// ```
-pub trait Filter: Send + Sync + Debug + CloneBoxedFilter {
+pub trait Filter: Send + Sync + Debug + CloneBoxedFilter + CopyStaticFieldsTrait {
     /// Creates a new instance of the filter with default parameters.
     fn new() -> Self
     where
         Self: Sized;
-    /// Returns the filter configuration, including name and domain.
+
+    /// Resets the filter to its initial state, allowing it to be reused.
+    fn reset(&mut self, time: &Array1<f32>, shape: &[usize]);
+
+    /// Returns the filter configuration, including name, description and domain.
     fn config(&self) -> FilterConfig;
 
     /// Applies the filter to the given `ScannedImage`.
     ///
     /// # Arguments
     ///
-    /// - `_scan`: A mutable reference to the image to be processed.
+    /// - `input_data`: A reference to the `ScannedImageFilterData` to be processed.
     /// - `gui_settings`: Mutable reference to GUI settings associated with the filter.
+    /// - `progress_lock`: A mutable reference to `Arc<RwLock<Option<f32>>>` for the progress bar (Optional, only recommended for filters that take a long time to run).
+    /// - `abort_flag`: A reference to an `Arc<AtomicBool>` to abort the filter calculation (Optional, only recommended for filters that take a long time to run).
+    ///
+    /// # Returns
+    /// A new `ScannedImageFilterData` containing the filtered data.
+    ///
+    /// To use progress_lock and abort_flag, the filter must be long-running and cancellable loops must be used. (For details, see the `cancellable_loops` crate in this project).
+    /// For example:
+    /// ```rust
+    ///     use cancellable_loops::{par_for_each_cancellable_reduce};
+
+    ///     par_for_each_cancellable_reduce(
+    ///             gui_settings
+    ///                 your_iterator.iter()
+    ///                 .enumerate()
+    ///                 .par_bridge(),
+    ///             &abort_flag,
+    ///             |(i, _)| {
+    ///                 // Filter logic here
+    ///                Some(ScannedImageFilterData::default()) // Replace with actual filtering logic
+    ///            },
+    ///            |a, b| {
+    ///                // Combine results here
+    ///               a + b // Replace with actual combination logic
+    ///            },
+    ///           ScannedImageFilterData::default(), // Initial value
+    ///       );
+    /// ```
+    ///
+    /// or
+    ///
+    /// ```rust
+    ///     use cancellable_loops::{par_for_each_cancellable};
+    ///    par_for_each_cancellable(
+    ///           your_iterator.iter()
+    ///           .par_bridge(),
+    ///          &abort_flag,
+    ///          |(i, _)| {
+    ///               // Filter logic here
+    ///              // Use progress_lock to update progress
+    ///               if let Ok(mut progress) = progress_lock.write() {
+    ///                 *progress = Some(i as f32 / gui_settings.psf.filters.len() as f32);
+    ///               }
+    ///               // Return filtered data
+    ///               ScannedImageFilterData::default() // Replace with actual filtering logic
+    ///           },
+    ///           );
+    /// ```
     fn filter(
-        &self,
-        scan: &mut ScannedImage,
+        &mut self,
+        input_data: &ScannedImageFilterData,
         gui_settings: &mut GuiSettingsContainer,
         progress_lock: &mut Arc<RwLock<Option<f32>>>,
         abort_flag: &Arc<AtomicBool>,
-    );
+    ) -> ScannedImageFilterData;
 
     /// Renders the filter configuration in the GUI.
-    /// make sure to return the `egui::Reponse` of the GUI elements. This way, the application
+    /// make sure to return the `egui::Response` of the GUI elements. This way, the application
     /// can detect if any GUI element has been changed and will request a calculation update.
     ///
     /// # Example:
     ///
     /// ```rust
-    /// fn ui(&mut self, ui: &mut Ui, _thread_communication: &mut GuiThreadCommunication) -> egui::Response {
-    ///     let mut final_response = ui.allocate_response(egui::Vec2::ZERO, egui::Sense::hover());
+    /// fn ui(
+    ///         &mut self,
+    ///         ui: &mut Ui,
+    ///         _thread_communication: &mut ThreadCommunication,
+    ///         _panel_width: f32,
+    ///     ) -> egui::Response {
+    ///         let mut final_response = ui.allocate_response(egui::Vec2::ZERO, egui::Sense::hover());
     ///
-    ///     let response_x = ui.horizontal(|ui| {
-    ///         ui.label("Tilt X: ");
-    ///         ui.add(egui::Slider::new(&mut self.tilt_x, -15.0..=15.0).suffix(" deg"))
-    ///     }).inner; // Get the slider's response
+    ///         let response_x = ui
+    ///             .horizontal(|ui| {
+    ///                ui.label("Tilt X: ");
+    ///                 ui.add(egui::Slider::new(&mut self.tilt_x, -15.0..=15.0).suffix(" deg"))
+    ///             })
+    ///             .inner; // Get the slider's response
     ///
-    ///     let response_y = ui.horizontal(|ui| {
-    ///         ui.label("Tilt Y: ");
-    ///         ui.add(egui::Slider::new(&mut self.tilt_y, -15.0..=15.0).suffix(" deg"))
-    ///     }).inner; // Get the slider's response
+    ///         let response_y = ui
+    ///             .horizontal(|ui| {
+    ///                 ui.label("Tilt Y: ");
+    ///                 ui.add(egui::Slider::new(&mut self.tilt_y, -15.0..=15.0).suffix(" deg"))
+    ///             })
+    ///             .inner; // Get the slider's response
     ///
-    ///     // Merge responses to track interactivity
-    ///     final_response |= response_x.clone();
-    ///     final_response |= response_y.clone();
+    ///         // Merge responses to track interactivity
+    ///         final_response |= response_x.clone();
+    ///         final_response |= response_y.clone();
     ///
-    ///     // Only mark changed if any slider was changed (not just hovered)
-    ///     if response_x.changed() || response_y.changed() {
-    ///         final_response.mark_changed();
+    ///         // Only mark changed if any slider was changed (not just hovered)
+    ///         if response_x.changed() || response_y.changed() {
+    ///            final_response.mark_changed();
+    ///         }
+    ///
+    ///         final_response
     ///     }
-    ///
-    ///     final_response
-    /// }
     /// ```
     ///
     fn ui(
         &mut self,
         ui: &mut egui::Ui,
-        thread_communication: &mut GuiThreadCommunication,
+        thread_communication: &mut ThreadCommunication,
+        panel_width: f32,
     ) -> egui::Response;
 }
 
-/// The `FilterDomain` enum specifies whether a filter operates in the time or frequency domain.
+/// The `FilterDomain` enum specifies the domain and execution order of filters.
 ///
-/// - `Time`: The filter processes data in the time domain.
-/// - `Frequency`: The filter processes data in the frequency domain.
+/// # Variants
+/// - `TimeBeforeFFTPrioFirst`: Time-domain filters that should run first before FFT.
+/// - `TimeBeforeFFT`: Standard time-domain filters that run before FFT.
+/// - `Frequency`: Filters that operate in the frequency domain.
+/// - `TimeAfterFFT`: Standard time-domain filters that run after FFT.
+/// - `TimeAfterFFTPrioLast`: Time-domain filters that should run last after FFT.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FilterDomain {
-    Time,
+    TimeBeforeFFTPrioFirst,
+    TimeBeforeFFT,
     Frequency,
+    TimeAfterFFT,
+    TimeAfterFFTPrioLast,
 }
 
 /// A structure representing the configuration and metadata of a filter.
 ///
-/// This includes:
-/// - The filter's name.
-/// - The domain (time or frequency).
-/// - A list of configurable parameters.
-///
-/// **Fields**:
+/// # Fields
 /// - `name`: A human-readable name for the filter.
+/// - `description`: A detailed description of what the filter does.
+/// - `hyperlink`: Optional DOI or reference link with label.
 /// - `domain`: The working domain, represented as a `FilterDomain`.
 #[derive(Debug, Clone)]
 pub struct FilterConfig {
     pub name: String,
+    pub description: String,
+    pub hyperlink: Option<(Option<String>, String)>, // (optional_label, url)
     pub domain: FilterDomain,
 }
 
+/// A trait to allow cloning of boxed filters.
+/// This is necessary because `Box<dyn Filter>` cannot be cloned directly.
+///
 pub trait CloneBoxedFilter {
     fn clone_box(&self) -> Box<dyn Filter>;
 }
@@ -188,12 +299,21 @@ impl FilterRegistry {
         // Create an instance of the filter
         let filter_instance = F::new();
 
-        // Extract the name from the filter's config
+        // Get the UUID for this filter type
+        let uuid = Uuid::new_v4().to_string();
+
+        // Store mapping from filter name to UUID
         let name = filter_instance.config().name.clone();
+        {
+            let mut map = FILTER_INSTANCE_UUIDS.lock().unwrap();
+            map.insert(name, uuid.clone());
+        }
 
         // Register the filter in the registry
         let mut registry = FILTER_REGISTRY.lock().unwrap();
-        registry.filters.insert(name, Box::new(F::new()));
+        registry
+            .filters
+            .insert(uuid.clone(), Box::new(filter_instance));
     }
 
     /// Retrieves a registered filter by its name.
@@ -309,3 +429,245 @@ pub static FILTER_REGISTRY: Lazy<Mutex<FilterRegistry>> = Lazy::new(|| {
         filters: HashMap::new(),
     })
 });
+
+static FILTER_INSTANCE_UUIDS: Lazy<Mutex<HashMap<String, String>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+/// Draws all filters of a specific domain in the UI panel.
+///
+/// This function:
+/// 1. Renders each filter's header with name, info button, progress indicators, and toggle
+/// 2. Shows filter-specific UI controls when the filter is active
+/// 3. Displays progress bars for long-running filter operations
+/// 4. Handles user interactions including toggling filters and aborting calculations
+///
+/// # Arguments
+/// - `ui`: The egui UI context to draw into
+/// - `thread_communication`: Communication channel for thread coordination
+/// - `domain`: Which domain of filters to render (Time/Frequency)
+/// - `right_panel_width`: The width of the panel for layout calculations
+pub fn draw_filters(
+    ui: &mut egui::Ui,
+    thread_communication: &mut ThreadCommunication,
+    domain: FilterDomain,
+    right_panel_width: f32,
+) {
+    let now = Utc::now().timestamp_millis();
+
+    if let Ok(mut filters) = FILTER_REGISTRY.lock() {
+        let filter_entries: Vec<(String, usize)> =
+            filters.filters.keys().cloned().zip(0..).collect();
+
+        // 1. Check if any filter is busy for more than 0.5s
+        let mut busy_long_enough = false;
+        for (uuid, _) in &filter_entries {
+            if let Some(Some(_)) = thread_communication.gui_settings.progress_bars.get(uuid) {
+                if let Some(start) = thread_communication
+                    .gui_settings
+                    .progress_start_time
+                    .get(uuid)
+                {
+                    if now - *start > 500 {
+                        busy_long_enough = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 2. Update progress and draw UI
+        for (idx, (uuid, _)) in filter_entries.iter().enumerate() {
+            let filter = filters.filters.get_mut(uuid).unwrap();
+            if filter.config().domain != domain {
+                continue;
+            }
+
+            // Update progress bar value and start time for this filter
+            if let Some(update) = thread_communication
+                .gui_settings
+                .last_progress_bar_update
+                .get_mut(uuid)
+            {
+                if now - *update > 100 {
+                    if let Some(progress) = thread_communication.progress_lock.get(uuid) {
+                        *update = now;
+                        if let Ok(progress) = progress.read() {
+                            if let Some(progress_entry) = thread_communication
+                                .gui_settings
+                                .progress_bars
+                                .get_mut(uuid)
+                            {
+                                let was_none = progress_entry.is_none();
+                                *progress_entry = *progress;
+                                if progress.is_some() && was_none {
+                                    thread_communication
+                                        .gui_settings
+                                        .progress_start_time
+                                        .insert(uuid.clone(), now);
+                                }
+                                if progress.is_none() {
+                                    thread_communication
+                                        .gui_settings
+                                        .progress_start_time
+                                        .remove(uuid);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            let mut filter_is_active = true;
+
+            ui.vertical(|ui| {
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.heading(filter.config().clone().name);
+                        ui.add_space(5.0); // Add a small gap between heading and icon
+
+                        // Create a unique ID for this filter's info popup
+                        let popup_id = ui.make_persistent_id(format!("info_popup_{}", uuid));
+
+                        // Show info icon and handle clicks
+                        let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
+                        if info_button.clicked() {
+                            ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                        }
+
+                        egui::popup_below_widget(
+                            ui,
+                            popup_id,
+                            &info_button,
+                            egui::popup::PopupCloseBehavior::CloseOnClickOutside, // Add the missing parameter
+                            |ui: &mut egui::Ui| {
+                                // Set max width for the popup
+                                ui.set_max_width(right_panel_width * 0.8);
+
+                                // Add description text
+                                ui.label(filter.config().clone().description);
+                                ui.add_space(5.0);
+
+                                // Add DOI hyperlink if present in the filter config
+                                if let Some((hyperlink_label, hyperlink)) =
+                                    filter.config().clone().hyperlink
+                                {
+                                    let hyperlink_label =
+                                        hyperlink_label.unwrap_or(hyperlink.clone());
+                                    ui.horizontal(|ui| {
+                                        ui.hyperlink_to(hyperlink_label, hyperlink);
+                                    });
+                                }
+                            },
+                        );
+                    });
+                    // Progress bar, abort button, and toggle are always enabled
+                    if let Some(progress) =
+                        thread_communication.gui_settings.progress_bars.get(uuid)
+                    {
+                        if let Some(p) = progress {
+                            if *p >= 0.0 {
+                                ui.add_space(
+                                    ui.available_width()
+                                        - ui.spacing().interact_size.y * 2.0
+                                        - 15.0
+                                        - 50.0
+                                        - 55.0,
+                                );
+                                ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
+
+                                if ui
+                                    .button(format!("{}", egui_phosphor::regular::X_SQUARE))
+                                    .on_hover_text("Abort the current calculation")
+                                    .clicked()
+                                {
+                                    thread_communication.abort_flag.store(true, Relaxed);
+                                }
+                                ui.label(format!("{} %", (p * 100.0) as u8));
+                            }
+                        } else {
+                            ui.add_space(
+                                ui.available_width()
+                                    - ui.spacing().interact_size.y * 2.0
+                                    - 15.0
+                                    - 50.0
+                                    - 55.0,
+                            );
+                            ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
+                        }
+                    } else {
+                        ui.add_space(
+                            ui.available_width() - ui.spacing().interact_size.y * 2.0 - 15.0 - 50.0,
+                        );
+                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
+                    }
+
+                    // Enable only the toggle and computation time label
+                    if let Ok(mut filters_active) = thread_communication.filters_active_lock.write()
+                    {
+                        if let Ok(filter_computation_time) =
+                            thread_communication.filter_computation_time_lock.read()
+                        {
+                            if let Some(t) = filter_computation_time.get(uuid) {
+                                if idx < filter_computation_time.len() {
+                                    ui.label(format!("{:.2} ms", t.as_millis()));
+                                } else {
+                                    ui.label("N/A ms");
+                                }
+                            } else {
+                                ui.label("N/A ms");
+                            }
+                        } else {
+                            ui.label("N/A ms");
+                        }
+                        if let Some(active) = filters_active.get_mut(uuid) {
+                            ui.add(toggle(active));
+                            filter_is_active = *active;
+                        }
+                    }
+                });
+
+                // Only enable the filter config UI if not busy for >0.5s and filter is active
+                ui.add_enabled_ui(!busy_long_enough && filter_is_active, |ui| {
+                    if filter
+                        .ui(ui, thread_communication, right_panel_width)
+                        .changed()
+                    {
+                        send_latest_config(
+                            &thread_communication,
+                            ConfigCommand::UpdateFilter(uuid.clone()),
+                        );
+                    }
+                });
+            });
+
+            // Draw progress bar below (optional)
+            if let Some(progress) = thread_communication.gui_settings.progress_bars.get(uuid) {
+                if let Some(p) = progress {
+                    if *p > 0.0 {
+                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
+                        ui.horizontal(|ui| {
+                            ui.add(
+                                egui::ProgressBar::new(*p)
+                                    .text(format!("{} %", (p * 100.0) as u8))
+                                    .desired_width(right_panel_width - 50.0),
+                            );
+                            if ui
+                                .button(format!("{}", egui_phosphor::regular::X_SQUARE))
+                                .on_hover_text("Abort the current calculation")
+                                .clicked()
+                            {
+                                thread_communication.abort_flag.store(true, Relaxed);
+                            }
+                        });
+                        ui.ctx().request_repaint();
+                    } else {
+                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
+                    }
+                } else {
+                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
+                }
+            }
+        }
+    }
+}
