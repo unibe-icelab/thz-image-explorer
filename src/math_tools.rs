@@ -673,19 +673,18 @@ pub fn calculate_optical_properties(
     for i in 0..frequencies.len() {
         // Convert frequency to Hz (from THz)
         let frequency_hz = frequencies[i] * 1.0e12;
+        let delta_phi = sample_phase[i] - reference_phase[i];
+        let omega = 2.0 * PI * frequency_hz * 1.0e12;
+        let n = 1.0 + C * delta_phi / (omega * sample_thickness);
 
-        // Phase difference (may need unwrapping for discontinuities)
-        let phase_diff = sample_phase[i] - reference_phase[i];
+        // Avoid division by zero or log of non-positive
+        let amp = sample_amplitude[i].max(1e-12);
+        let amp_ref = reference_amplitude[i].max(1e-12);
+        let n_safe = n.max(1e-6);
 
-        // Refractive index: n = 1 + (c * Δφ) / (2π * f * d)
-        let n = 1.0 + (C * phase_diff) / (2.0 * PI * frequency_hz * sample_thickness);
+        let alpha = -2.0 / sample_thickness
+            * (((n_safe + 1.0).powi(2)) / (4.0 * n_safe) * amp / amp_ref).ln();
 
-        // Absorption coefficient: α = -2 * ln(|T|) / d
-        // where |T| = |E_sample| / |E_reference|
-        let amplitude_ratio = sample_amplitude[i] / reference_amplitude[i];
-        let alpha = -2.0 * amplitude_ratio.ln() / sample_thickness;
-
-        // Extinction coefficient: κ = α * c / (4π * f)
         let kappa = alpha * C / (4.0 * PI * frequency_hz);
 
         refractive_index[i] = n;

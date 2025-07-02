@@ -49,7 +49,6 @@ easier to maintain and increasing its reach.
 
 ![THz Image Explorer screenshot.\label{fig:screenshot}](screenshot.png)
 
-
 # Statement of need
 
 Interactive analysis tools for THz spectroscopy are essential to browse through images and analyse different regions of
@@ -86,6 +85,10 @@ extend the communication for additional data-types, these two structs need to be
 The structure of the software architecture is shown in figure \ref{fig:software_architecture}.
 ![Software Architecture.\label{fig:software_architecture}](thz-image-explorer.drawio.png){#id .class width=80%}
 
+For each filter, an entry in the `filter_data_pipeline` vector is created, which contains the dataset. Each filter is
+assigned an input and output index. This is memory intensive, but for the size of usual THz TDS datasets (tens to
+hundreds of MB) it is acceptable. This structure defines the processing pipeline in a clean and easily extendable way.
+
 # Installation
 
 ## Pre-built Bundles
@@ -102,6 +105,10 @@ running the following command:
 ```shell
 xattr -rd com.apple.quarantine THz\ Image\ Explorer.app
 ```
+
+On macOS the `DotTHzQLExtension.appex` Plugin will automatically be installed in the
+`THz Image Explorer.app/Contents/PlugIns` directory. The source code of the plugin can be
+found [here](https://github.com/hacknus/DotTHzQL). Note: This plugin requires HDF5 to be installed system-wide.
 
 ## Compile from Source
 
@@ -161,10 +168,10 @@ settings window.
 The window is structured with the time domain trace and frequency domain spectrum for the selected pixel (default is
 0,0) in the center panel. A different tab showing the refractive index and absorption coefficient can be selected, as
 well as a tab containing an interactive 3D viewer.
-The left side-panel contains the intensity plot of the 2D scan along with the meta-data, which can be edited. The right
+The left side-panel contains the intensity plot of the 2D scan along with the meta-data editor. The right
 side-panel contains the possible filters with configuration settings.
 A pixel can be (de-)selected by clicking inside the intensity plot.
-For large scans, it is recommend to down-scale the image. This will average the pixel values in a $2 \times 2$
+For large scans, it is recommended to down-scale the image. This will average the pixel values in a $2 \times 2$
 (or $4 \times 4$ and so on) pixel block, depending on the down-scaling factor. Note that the "Signal" trace in
 time-domain will still show the raw trace, but the "Signal" spectrum in the FFT plot will show the averaged spectrum of
 the down-scaled image.
@@ -200,6 +207,7 @@ displayed in the center plot.
 The refractive index and absorption coefficient can be computed from the frequency domain spectrum using the
 Kramers-Kronig relations [@Jepsen2019]. The refractive index and absorption coefficient
 are computed from the complex refractive index $n$ as follows:
+
 The refractive index and absorption coefficient are computed for the selected source and selected reference. The user
 can select a pixel or a ROI in the 2D plot to display the refractive index and absorption
 coefficient for that pixel in the center plot.
@@ -257,12 +265,14 @@ hovered above the filter UI.
 The deconvolution filter is an implementation of the Frequency-dependent Richardson-Lucy algorithm described
 in [@demion_frequency-dependent_2025].
 
-You need to performa knife-edge scan and create a `.thz` file with all entries. An example can be found in the `sample_data/example_beam_width/` directories.
+You need to performa knife-edge scan and create a `.thz` file with all entries. An example can be found in the
+`sample_data/example_beam_width/` directories.
 Then, use the following command (replace the paths with your own):
 
 ```shell
 python generate_psf.py --path_x sample_data/example_beam_width/measurement_x/data/1750085285.8557956_data.thz --path_y sample_data/example_beam_width/measurement_y/data/1750163177.929295_data.thz
 ```
+
 to generate a `psf.npz` file that can be loaded in the settings of THz-image-explorer to remove the PSF blur.
 
 The Richardson-Lucy algorithm is defined as
@@ -376,7 +386,6 @@ impl Filter for ExampleFilter {
 
 To implement more complex methods, further adaptations might be required, but the code structure has been set up with
 modularity and simplicity in mind.
-
 
 # Further processing (with Python)
 

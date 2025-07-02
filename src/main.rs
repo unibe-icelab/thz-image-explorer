@@ -99,8 +99,8 @@ fn main() {
         gui_settings.chart_scale = 1.0;
     }
 
-    let mut filter_data = vec![];
-    filter_data.push(ScannedImageFilterData::default());
+    let mut filter_data_pipeline = vec![];
+    filter_data_pipeline.push(ScannedImageFilterData::default());
 
     let mut filters_active = HashMap::new();
     filters_active.insert("initial".to_string(), true);
@@ -173,7 +173,7 @@ fn main() {
     // populate with standard / empty values
     if let Ok(mut filters) = FILTER_REGISTRY.lock() {
         for (uuid, filter) in filters.filters.iter_mut() {
-            filter_data.push(ScannedImageFilterData::default());
+            filter_data_pipeline.push(ScannedImageFilterData::default());
             // disable deconvolution filters by default
             if filter.config().name.contains("Deconvolution") {
                 filters_active.insert(uuid.clone(), false);
@@ -185,15 +185,15 @@ fn main() {
     }
 
     // scaling
-    filter_data.push(ScannedImageFilterData::default());
+    filter_data_pipeline.push(ScannedImageFilterData::default());
     // FFT
-    filter_data.push(ScannedImageFilterData::default());
+    filter_data_pipeline.push(ScannedImageFilterData::default());
     // iFFT
-    filter_data.push(ScannedImageFilterData::default());
+    filter_data_pipeline.push(ScannedImageFilterData::default());
 
     let filter_chain_lock = Arc::new(RwLock::new(filter_chain));
     let filter_uuid_to_index_lock = Arc::new(RwLock::new(filter_uuid_to_index));
-    let filter_data_lock = Arc::new(RwLock::new(filter_data));
+    let filter_data_pipeline_lock = Arc::new(RwLock::new(filter_data_pipeline));
     let filters_active_lock = Arc::new(RwLock::new(filters_active));
 
     let data_lock = Arc::new(RwLock::new(PlotDataContainer::default()));
@@ -239,7 +239,7 @@ fn main() {
         filter_computation_time_lock: filter_computation_time_lock.clone(),
         filter_chain_lock: filter_chain_lock.clone(),
         filter_uuid_to_index_lock: filter_uuid_to_index_lock.clone(),
-        filter_data_lock: filter_data_lock.clone(),
+        filter_data_pipeline_lock: filter_data_pipeline_lock.clone(),
         filters_active_lock: filters_active_lock.clone(),
         gui_settings: gui_settings.clone(),
         config_tx,

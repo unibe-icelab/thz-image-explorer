@@ -45,7 +45,7 @@ run
 
 On macOS the `DotTHzQLExtension.appex` Plugin will automatically be installed in the
 `THz Image Explorer.app/Contents/PlugIns` directory. The source code of the plugin can be
-found [here](https://github.com/hacknus/DotTHzQL).
+found [here](https://github.com/hacknus/DotTHzQL). Note: This plugin requires HDF5 to be installed system-wide.
 
 It can be compiled and run on all platforms.
 

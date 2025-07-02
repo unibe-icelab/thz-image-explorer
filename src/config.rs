@@ -236,8 +236,8 @@ pub struct ThreadCommunication {
     pub filter_computation_time_lock: Arc<RwLock<HashMap<String, Duration>>>,
 
     /// Lock for storing the data processed by each filter.
-    /// Contains a vector of filter output data for each step in the chain.
-    pub filter_data_lock: Arc<RwLock<Vec<ScannedImageFilterData>>>,
+    /// Contains a vector of filter output data for each step in the chain/pipeline.
+    pub filter_data_pipeline_lock: Arc<RwLock<Vec<ScannedImageFilterData>>>,
 
     /// Lock for the ordered sequence of filter UUIDs to be applied.
     /// Determines the processing pipeline order.

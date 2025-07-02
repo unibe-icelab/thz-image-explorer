@@ -163,7 +163,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             match load_meta_data_of_thz_file(&path, &mut meta_data) {
                                 Ok(_) => {
                                     if let Ok(mut filter_data) =
-                                        thread_communication.filter_data_lock.write()
+                                        thread_communication.filter_data_pipeline_lock.write()
                                     {
                                         if let Some(input) = filter_data.first_mut() {
                                             if let Some(labels) = meta_data.md.get("ROI Labels") {
@@ -255,7 +255,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         if os_path != "thz" || os_path != "thzimg" || os_path != "thzswp" {
                             path.set_extension("thz");
                             // save full file, not just metadata, since the dotTHz file does not exist yet.
-                            if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
+                            if let Ok(filter_data) = thread_communication.filter_data_pipeline_lock.read() {
                                 if let Some(input) = filter_data.first() {
                                     if let Ok(mut md) = thread_communication.md_lock.write() {
                                         // add ROIs to metadata
@@ -276,7 +276,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 }
                             }
                         } else {
-                            if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
+                            if let Ok(filter_data) = thread_communication.filter_data_pipeline_lock.read() {
                                 if let Ok(mut md) = thread_communication.md_lock.write() {
                                     if let Some(input) = filter_data.first() {
                                         // add ROIs to metadata
@@ -308,7 +308,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         if os_path != "thz" || os_path != "thzimg" || os_path != "thzswp" {
                             path.set_extension("thz");
                             // save full file, not just metadata, since the dotTHz file does not exist yet.
-                            if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
+                            if let Ok(filter_data) = thread_communication.filter_data_pipeline_lock.read() {
                                 if let Some(input) = filter_data.first() {
                                     if let Ok(md) = thread_communication.md_lock.read() {
                                         match save_to_thz(&path, &input, &md) {
@@ -347,7 +347,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         open_pulse_from_thz(&selected_file_path, &mut meta_data)
                     {
                         update = UpdateType::Filter(1);
-                        if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                        if let Ok(mut filter_data) = thread_communication.filter_data_pipeline_lock.write() {
                             if let Some(input) = filter_data.first_mut() {
                                 if input.time.is_empty() {
                                     // no data loaded yet, populate with 1 x 1 scan and 0s
@@ -549,7 +549,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         match file_ending.to_str().unwrap() {
                             "thz" => {
                                 if let Ok(mut filter_data) =
-                                    thread_communication.filter_data_lock.write()
+                                    thread_communication.filter_data_pipeline_lock.write()
                                 {
                                     if let Some(input) = filter_data.first_mut() {
                                         match open_scan_from_thz(
@@ -673,7 +673,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         }
                     }
 
-                    if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
+                    if let Ok(filter_data) = thread_communication.filter_data_pipeline_lock.read() {
                         // note, we save the input data, not the filtered data
                         if let Some(input) = filter_data.first() {
                             if let Ok(mut md) = thread_communication.md_lock.write() {
@@ -726,7 +726,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     update = UpdateType::Filter(1);
                 }
                 ConfigCommand::SetSelectedPixel(pixel) => {
-                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                    if let Ok(mut filter_data) = thread_communication.filter_data_pipeline_lock.write() {
                         for data in filter_data.iter_mut() {
                             data.pixel_selected = [pixel.x / data.scaling, pixel.y / data.scaling]
                         }
@@ -759,7 +759,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                 }
                 ConfigCommand::AddROI(roi_uuid, roi) => {
                     update = UpdateType::Filter(1);
-                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                    if let Ok(mut filter_data) = thread_communication.filter_data_pipeline_lock.write() {
                         if let Some(input) = filter_data.first_mut() {
                             input.rois.insert(
                                 roi_uuid.to_string(),
@@ -776,7 +776,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                 }
                 ConfigCommand::UpdateROI(roi_uuid, roi) => {
                     update = UpdateType::Filter(1);
-                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                    if let Ok(mut filter_data) = thread_communication.filter_data_pipeline_lock.write() {
                         if let Some(input) = filter_data.first_mut() {
                             input.rois.insert(
                                 roi_uuid.to_string(),
@@ -793,7 +793,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                 }
                 ConfigCommand::DeleteROI(uuid) => {
                     update = UpdateType::Plot;
-                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                    if let Ok(mut filter_data) = thread_communication.filter_data_pipeline_lock.write() {
                         if let Some(input) = filter_data.first_mut() {
                             input.rois.remove(&uuid);
                         }
@@ -821,7 +821,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                     thread_communication.filter_uuid_to_index_lock.read()
                                 {
                                     if let Ok(filter_data) =
-                                        thread_communication.filter_data_lock.read()
+                                        thread_communication.filter_data_pipeline_lock.read()
                                     {
                                         for (i, uuid) in filter_chain.iter().enumerate() {
                                             let input_index = if i == 0 {
@@ -871,7 +871,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     if let Some(ref mut filters) = filters_cloned {
                         if let Ok(filter_chain) = thread_communication.filter_chain_lock.read() {
                             if let Ok(mut filter_data) =
-                                thread_communication.filter_data_lock.write()
+                                thread_communication.filter_data_pipeline_lock.write()
                             {
                                 if let Ok(filter_uuid_to_index) =
                                     thread_communication.filter_uuid_to_index_lock.read()
@@ -1117,7 +1117,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
 
                     // add selected pixel and avg data to the data lock for the plot
                     if let Ok(mut data) = thread_communication.data_lock.write() {
-                        if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
+                        if let Ok(filter_data) = thread_communication.filter_data_pipeline_lock.read() {
                             // raw trace
                             // time domain
                             if let Some(raw) = filter_data.first() {
@@ -1269,7 +1269,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             }
                         }
                     }
-                    if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
+                    if let Ok(filter_data) = thread_communication.filter_data_pipeline_lock.read() {
                         if let Some(filtered) = filter_data.last() {
                             // Get sample thickness from GUI settings (in meters)
                             // TODO!
@@ -1348,7 +1348,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                 }
                 UpdateType::Image => {
                     // update intensity image
-                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
+                    if let Ok(mut filter_data) = thread_communication.filter_data_pipeline_lock.write() {
                         if let Some(filtered) = filter_data.last_mut() {
                             if filtered.scaling > 1 {
                                 let scaled_width = filtered.data.shape()[0];
@@ -1426,7 +1426,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                     // add selected pixel and avg data to the data lock for the plot
 
                     if let Ok(mut data) = thread_communication.data_lock.write() {
-                        if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
+                        if let Ok(filter_data) = thread_communication.filter_data_pipeline_lock.read() {
                             // raw trace
                             // time domain
                             if let Some(raw) = filter_data.first() {
@@ -1526,7 +1526,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                         }
                     }
 
-                    if let Ok(filter_data) = thread_communication.filter_data_lock.read() {
+                    if let Ok(filter_data) = thread_communication.filter_data_pipeline_lock.read() {
                         if let Some(filtered) = filter_data.last() {
                             // Get sample thickness from GUI settings (in meters)
                             // TODO
