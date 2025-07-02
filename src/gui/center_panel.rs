@@ -66,7 +66,7 @@ pub fn pulse_tab(
 
         // Find minimum values for each ROI signal to calculate offsets
         let mut roi_min_values = Vec::new();
-        for (_, roi_data) in &explorer.data.roi_signal {
+        for (_, (_, roi_data)) in &explorer.data.roi_signal {
             let min_value = roi_data
                 .iter()
                 .fold(f64::INFINITY, |ai, &bi| ai.min(bi as f64))
@@ -86,7 +86,7 @@ pub fn pulse_tab(
             * 1.05;
 
         // Generate plot points for each ROI
-        for (roi_name, roi_data) in &explorer.data.roi_signal {
+        for (_, (roi_name, roi_data)) in &explorer.data.roi_signal {
             let mut roi_plot_points = Vec::new();
 
             for i in 0..explorer.data.time.len().min(roi_data.len()) {
@@ -284,10 +284,10 @@ pub fn pulse_tab(
         let mut roi_fft_plots = Vec::new();
 
         // Generate FFT plot points for each ROI
-        for (roi_name, _) in &explorer.data.roi_signal {
-            if let (Some(roi_signal_fft), Some(roi_phase_fft)) = (
-                explorer.data.roi_signal_fft.get(roi_name),
-                explorer.data.roi_phase.get(roi_name),
+        for (roi_uuid, _) in &explorer.data.roi_signal {
+            if let (Some((roi_name, roi_signal_fft)), Some((_,roi_phase_fft))) = (
+                explorer.data.roi_signal_fft.get(roi_uuid),
+                explorer.data.roi_phase.get(roi_uuid),
             ) {
                 let roi_amplitude_plot: Vec<[f64; 2]> = explorer
                     .data

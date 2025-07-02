@@ -105,7 +105,7 @@ fn update_metadata_rois(md: &mut DotthzMetaData, input: &ScannedImageFilterData)
     // Insert new ROI Labels and ROI {number} entries
     if !input.rois.is_empty() {
         let mut roi_labels = String::new();
-        for (i, (label, coords)) in input.rois.iter().enumerate() {
+        for (i, (_uuid, (label, coords))) in input.rois.iter().enumerate() {
             if i > 0 {
                 roi_labels.push(',');
             }
@@ -166,12 +166,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                         thread_communication.filter_data_lock.write()
                                     {
                                         if let Some(input) = filter_data.first_mut() {
-                                            if let Ok(mut data) =
-                                                thread_communication.data_lock.write()
-                                            {
-                                                data.rois.clear();
-                                            }
-
+                                            
                                             if let Some(labels) = meta_data.md.get("ROI Labels") {
                                                 let roi_labels: Vec<&str> =
                                                     labels.split(',').collect();
@@ -203,29 +198,28 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                                             .collect::<Vec<[f64; 2]>>();
 
                                                         if !polygon.is_empty() {
-                                                            if let Ok(mut data) =
-                                                                thread_communication
-                                                                    .data_lock
-                                                                    .write()
-                                                            {
-                                                                data.rois.push(ROI {
+                                                                let roi_uuid = uuid::Uuid::new_v4();
+                                                                thread_communication.roi_tx.send((roi_uuid.to_string(), ROI {
                                                                     polygon: polygon.clone(),
                                                                     closed: true,
                                                                     name: label.to_string(),
-                                                                });
+                                                                })).expect("send ROI error");
                                                                 input.rois.insert(
-                                                                    label.to_string(),
-                                                                    polygon
-                                                                        .iter()
-                                                                        .map(|v| {
-                                                                            (
-                                                                                v[0] as usize,
-                                                                                v[1] as usize,
-                                                                            )
-                                                                        })
-                                                                        .collect(),
+                                                                    roi_uuid.to_string(),
+                                                                    (
+                                                                        label.to_string(),
+                                                                        polygon
+                                                                            .iter()
+                                                                            .map(|v| {
+                                                                                (
+                                                                                    v[0] as usize,
+                                                                                    v[1] as usize,
+                                                                                )
+                                                                            })
+                                                                            .collect(),
+                                                                    ),
                                                                 );
-                                                            }
+                                                            
                                                         }
                                                     }
                                                 }
@@ -504,32 +498,39 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                         .zip(unwrapped.iter())
                                         .for_each(|(p, v)| *p = *v);
 
+                                    let ref_uuid = uuid::Uuid::new_v4();
+
                                     if let Ok(mut data) = thread_communication.data_lock.write() {
                                         data.available_references
                                             .push("Reference File".to_string());
                                         data.available_samples.push("Reference File".to_string());
 
                                         data.roi_signal.insert(
-                                            "Reference File".to_string(),
-                                            reference.to_vec(),
+                                            ref_uuid.to_string(),
+                                            ("Reference File".to_string(), reference.to_vec()),
                                         );
                                         data.roi_signal_fft.insert(
-                                            "Reference File".to_string(),
-                                            amplitudes.clone(),
+                                            ref_uuid.to_string(),
+                                            ("Reference File".to_string(), amplitudes.clone()),
                                         );
-                                        data.roi_phase
-                                            .insert("Reference File".to_string(), phases.clone());
+                                        data.roi_phase.insert(
+                                            ref_uuid.to_string(),
+                                            ("Reference File".to_string(), phases.clone()),
+                                        );
                                     }
                                     input
                                         .roi_data
-                                        .insert("Reference File".to_string(), reference);
+                                        .insert(ref_uuid.to_string(), ("Reference File".to_string(), reference));
                                     input.roi_signal_fft.insert(
-                                        "Reference File".to_string(),
-                                        Array1::from_vec(amplitudes),
+                                        ref_uuid.to_string(),
+                                        (
+                                            "Reference File".to_string(),
+                                            Array1::from_vec(amplitudes),
+                                        ),
                                     );
                                     input.roi_phase_fft.insert(
-                                        "Reference File".to_string(),
-                                        Array1::from_vec(phases),
+                                        ref_uuid.to_string(),
+                                        ("Reference File".to_string(), Array1::from_vec(phases)),
                                     );
                                 }
                             }
@@ -566,7 +567,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
 
                                         if let Ok(mut data) = thread_communication.data_lock.write()
                                         {
-                                            data.rois.clear();
                                             data.roi_signal.clear();
                                             data.roi_signal_fft.clear();
                                             data.roi_phase.clear();
@@ -606,27 +606,29 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                                         .collect::<Vec<[f64; 2]>>();
 
                                                     if !polygon.is_empty() {
-                                                        if let Ok(mut data) =
-                                                            thread_communication.data_lock.write()
-                                                        {
-                                                            data.rois.push(ROI {
+                                                     
+                                                            let roi_uuid = uuid::Uuid::new_v4();
+                                                            thread_communication.roi_tx.send((roi_uuid.to_string(), ROI {
                                                                 polygon: polygon.clone(),
                                                                 closed: true,
                                                                 name: label.to_string(),
-                                                            });
+                                                            })).expect("send ROI error");
                                                             input.rois.insert(
-                                                                label.to_string(),
-                                                                polygon
-                                                                    .iter()
-                                                                    .map(|v| {
-                                                                        (
-                                                                            v[0] as usize,
-                                                                            v[1] as usize,
-                                                                        )
-                                                                    })
-                                                                    .collect(),
+                                                                roi_uuid.to_string(),
+                                                                (
+                                                                    label.to_string(),
+                                                                    polygon
+                                                                        .iter()
+                                                                        .map(|v| {
+                                                                            (
+                                                                                v[0] as usize,
+                                                                                v[1] as usize,
+                                                                            )
+                                                                        })
+                                                                        .collect(),
+                                                                ),
                                                             );
-                                                        }
+                                                        
                                                     }
                                                 }
                                             }
@@ -746,56 +748,45 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                 ConfigCommand::UpdateMaterialCalculation => {
                     update = UpdateType::Plot;
                 }
-                ConfigCommand::AddROI(roi) => {
+                ConfigCommand::AddROI(roi_uuid, roi) => {
                     update = UpdateType::Filter(1);
-                    if let Ok(mut data) = thread_communication.data_lock.write() {
-                        data.rois.push(roi.clone());
-                    }
                     if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
                         if let Some(input) = filter_data.first_mut() {
                             input.rois.insert(
-                                roi.name,
-                                roi.polygon
-                                    .iter()
-                                    .map(|v| (v[0] as usize, v[1] as usize))
-                                    .collect(),
+                                roi_uuid.to_string(),
+                                (
+                                    roi.name,
+                                    roi.polygon
+                                        .iter()
+                                        .map(|v| (v[0] as usize, v[1] as usize))
+                                        .collect(),
+                                ),
                             );
                         }
                     }
                 }
-                ConfigCommand::UpdateROI(old_name, roi) => {
+                ConfigCommand::UpdateROI(roi_uuid, roi) => {
                     update = UpdateType::Filter(1);
-                    if let Ok(mut data) = thread_communication.data_lock.write() {
-                        data.rois.retain(|roi| roi.name != old_name);
-                    }
-                    if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
-                        if let Some(input) = filter_data.first_mut() {
-                            input.rois.remove(&old_name);
-                        }
-                    }
-                    if let Ok(mut data) = thread_communication.data_lock.write() {
-                        data.rois.push(roi.clone());
-                    }
                     if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
                         if let Some(input) = filter_data.first_mut() {
                             input.rois.insert(
-                                roi.name,
-                                roi.polygon
-                                    .iter()
-                                    .map(|v| (v[0] as usize, v[1] as usize))
-                                    .collect(),
+                                roi_uuid.to_string(),
+                                (
+                                    roi.name,
+                                    roi.polygon
+                                        .iter()
+                                        .map(|v| (v[0] as usize, v[1] as usize))
+                                        .collect(),
+                                ),
                             );
                         }
                     }
                 }
-                ConfigCommand::DeleteROI(name) => {
+                ConfigCommand::DeleteROI(uuid) => {
                     update = UpdateType::Plot;
-                    if let Ok(mut data) = thread_communication.data_lock.write() {
-                        data.rois.retain(|roi| roi.name != name);
-                    }
                     if let Ok(mut filter_data) = thread_communication.filter_data_lock.write() {
                         if let Some(input) = filter_data.first_mut() {
-                            input.rois.remove(&name);
+                            input.rois.remove(&uuid);
                         }
                     }
                 }
@@ -1216,20 +1207,22 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                 // Update ROIs data using average_polygon_roi
                                 if !filtered.rois.is_empty() {
                                     // Clear existing ROI data
-                                    // data.roi_signal.clear();
-                                    // data.roi_signal_fft.clear();
-                                    // data.roi_phase.clear();
+                                    data.roi_signal.clear();
+                                    data.roi_signal_fft.clear();
+                                    data.roi_phase.clear();
 
                                     // Process each ROI
-                                    for (roi_name, polygon) in &filtered.rois {
+                                    for (roi_uuid, (roi_name, polygon)) in &filtered.rois {
                                         // Time domain ROI averaging
                                         let roi_signal = average_polygon_roi(
                                             &filtered.data,
                                             polygon,
                                             filtered.scaling,
                                         );
-                                        data.roi_signal
-                                            .insert(roi_name.clone(), roi_signal.to_vec());
+                                        data.roi_signal.insert(
+                                            roi_uuid.to_string(),
+                                            (roi_name.clone(), roi_signal.to_vec()),
+                                        );
 
                                         // Frequency domain ROI averaging (amplitudes)
                                         let roi_signal_fft = average_polygon_roi(
@@ -1237,8 +1230,10 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                             polygon,
                                             filtered.scaling,
                                         );
-                                        data.roi_signal_fft
-                                            .insert(roi_name.clone(), roi_signal_fft.to_vec());
+                                        data.roi_signal_fft.insert(
+                                            roi_uuid.to_string(),
+                                            (roi_name.clone(), roi_signal_fft.to_vec()),
+                                        );
 
                                         // Frequency domain ROI averaging (phases)
                                         let roi_phase = average_polygon_roi(
@@ -1246,13 +1241,19 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                             polygon,
                                             filtered.scaling,
                                         );
-                                        data.roi_phase.insert(roi_name.clone(), roi_phase.to_vec());
+                                        data.roi_phase.insert(
+                                            roi_uuid.to_string(),
+                                            (roi_name.clone(), roi_phase.to_vec()),
+                                        );
                                     }
 
                                     if config.avg_in_fourier_space {
-                                        for (roi_name, roi_array) in &filtered.roi_data {
-                                            data.roi_signal
-                                                .insert(roi_name.clone(), roi_array.to_vec());
+                                        for (roi_uuid, (roi_name, roi_array)) in &filtered.roi_data
+                                        {
+                                            data.roi_signal.insert(
+                                                roi_uuid.to_string(),
+                                                (roi_name.clone(), roi_array.to_vec()),
+                                            );
                                         }
                                     }
                                 }
@@ -1266,7 +1267,10 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             let sample_thickness = 1.0 / 1e3; // explorer.data.sample_thickness;
 
                             // Get ROI data
-                            if let (Some(reference_amplitude), Some(reference_phase)) = (
+                            if let (
+                                Some((_, reference_amplitude)),
+                                Some((_, reference_phase)),
+                            ) = (
                                 filtered.roi_signal_fft.get(&reference_roi),
                                 filtered.roi_phase_fft.get(&reference_roi),
                             ) {
@@ -1305,7 +1309,10 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                         data.absorption_coefficient = absorption_coeff.to_vec();
                                         data.extinction_coefficient = extinction_coeff.to_vec();
                                     }
-                                } else if let (Some(sample_amplitude), Some(sample_phase)) = (
+                                } else if let (
+                                    Some((_, sample_amplitude)),
+                                    Some((_, sample_phase)),
+                                ) = (
                                     filtered.roi_signal_fft.get(&sample_roi),
                                     &filtered.roi_phase_fft.get(&sample_roi),
                                 ) {
@@ -1520,7 +1527,10 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             let sample_thickness = 1.0 / 1e3; // explorer.data.sample_thickness;
 
                             // Get ROI data
-                            if let (Some(reference_amplitude), Some(reference_phase)) = (
+                            if let (
+                                Some((_, reference_amplitude)),
+                                Some((_, reference_phase)),
+                            ) = (
                                 filtered.roi_signal_fft.get(&reference_roi),
                                 filtered.roi_phase_fft.get(&reference_roi),
                             ) {
@@ -1559,7 +1569,10 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                         data.absorption_coefficient = absorption_coeff.to_vec();
                                         data.extinction_coefficient = extinction_coeff.to_vec();
                                     }
-                                } else if let (Some(sample_amplitude), Some(sample_phase)) = (
+                                } else if let (
+                                    Some((_, sample_amplitude)),
+                                    Some((_, sample_phase)),
+                                ) = (
                                     filtered.roi_signal_fft.get(&sample_roi),
                                     &filtered.roi_phase_fft.get(&sample_roi),
                                 ) {

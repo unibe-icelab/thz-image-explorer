@@ -4,11 +4,11 @@
 //! file operations, and visualization panels for signal and image processing.
 
 use crate::config::ThreadCommunication;
-use crate::data_container::DataPoint;
+use crate::data_container::PlotDataContainer;
 use crate::filters::psf::PSF;
 use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
-use crate::gui::matrix_plot::{ImageState, SelectedPixel};
+use crate::gui::matrix_plot::{ImageState, SelectedPixel, ROI};
 use crate::gui::right_panel::right_panel;
 use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage, SceneVisibility};
 use crate::math_tools::FftWindowType;
@@ -289,7 +289,7 @@ pub struct THzImageExplorer {
     pub(crate) bw: bool,
     pub(crate) water_vapour_lines: Vec<f64>,
     pub(crate) wp: &'static [u8],
-    pub(crate) data: DataPoint,
+    pub(crate) data: PlotDataContainer,
     pub(crate) file_dialog_state: FileDialogState,
     pub(crate) file_dialog: FileDialog,
     pub(crate) information_panel: InformationPanel,
@@ -300,6 +300,7 @@ pub struct THzImageExplorer {
     pub(crate) update_text: String,
     #[cfg(feature = "self_update")]
     pub(crate) new_release: Option<Release>,
+    pub (crate) rois: HashMap<String, ROI>,
 }
 
 impl THzImageExplorer {
@@ -369,7 +370,7 @@ impl THzImageExplorer {
         Self {
             water_vapour_lines,
             wp: include_bytes!("../../images/WP-Logo.png"),
-            data: DataPoint::default(),
+            data: PlotDataContainer::default(),
             file_dialog_state: FileDialogState::None,
             file_dialog,
             information_panel: InformationPanel::default()
@@ -426,6 +427,7 @@ impl THzImageExplorer {
             update_text: "".to_string(),
             #[cfg(feature = "self_update")]
             new_release: None,
+            rois: HashMap::new(),
         }
     }
 }

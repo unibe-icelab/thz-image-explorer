@@ -1,5 +1,5 @@
 use crate::config::{ConfigCommand, ThreadCommunication};
-use crate::data_container::{DataPoint, ScannedImageFilterData};
+use crate::data_container::{PlotDataContainer, ScannedImageFilterData};
 use crate::data_thread::main_thread;
 use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
@@ -29,6 +29,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
+use crate::gui::matrix_plot::ROI;
 
 mod config;
 mod data_container;
@@ -195,7 +196,7 @@ fn main() {
     let filter_data_lock = Arc::new(RwLock::new(filter_data));
     let filters_active_lock = Arc::new(RwLock::new(filters_active));
 
-    let data_lock = Arc::new(RwLock::new(DataPoint::default()));
+    let data_lock = Arc::new(RwLock::new(PlotDataContainer::default()));
     let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
     let filtered_data_lock = Arc::new(RwLock::new(Array3::from_shape_fn(
         (1, 1, 1),
@@ -217,6 +218,8 @@ fn main() {
     }
     let (config_tx, config_rx): (Sender<ConfigCommand>, Receiver<ConfigCommand>) =
         crossbeam_channel::bounded(1);
+    let (roi_tx, roi_rx): (Sender<(String, ROI)>, Receiver<(String, ROI)>) =
+        crossbeam_channel::unbounded();
     let abort_flag = Arc::new(AtomicBool::new(false));
 
     let filter_computation_time_lock = Arc::new(RwLock::new(filter_computation_time));
@@ -241,6 +244,8 @@ fn main() {
         gui_settings: gui_settings.clone(),
         config_tx,
         config_rx,
+        roi_tx,
+        roi_rx
     };
 
     let mut wgpu_features = WgpuFeatures::default();

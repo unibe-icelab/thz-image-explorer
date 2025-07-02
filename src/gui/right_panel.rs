@@ -8,7 +8,7 @@ use crate::math_tools::{
     FftWindowType,
 };
 use crate::update::check_update;
-use crate::DataPoint;
+use crate::PlotDataContainer;
 use bevy_egui::egui;
 use bevy_egui::egui::panel::Side;
 use bevy_egui::egui::{vec2, DragValue, Stroke, Vec2, Visuals};
@@ -23,7 +23,7 @@ pub fn right_panel(
     right_panel_width: &f32,
     thread_communication: &mut ThreadCommunication,
 ) {
-    let mut data = DataPoint::default();
+    let mut data = PlotDataContainer::default();
     if let Ok(read_guard) = thread_communication.data_lock.read() {
         data = read_guard.clone();
     }

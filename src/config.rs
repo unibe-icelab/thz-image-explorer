@@ -7,7 +7,7 @@
 //! - Configuration settings for FFT processing via the `ConfigContainer`
 //! - Thread-safe data sharing through the `ThreadCommunication` structure
 
-use crate::data_container::{DataPoint, ScannedImageFilterData};
+use crate::data_container::{PlotDataContainer, ScannedImageFilterData};
 use crate::gui::application::GuiSettingsContainer;
 use crate::gui::matrix_plot::{SelectedPixel, ROI};
 use crate::math_tools::FftWindowType;
@@ -123,7 +123,7 @@ pub enum ConfigCommand {
     UpdateMaterialCalculation,
 
     /// Command to add a new Region of Interest (ROI) to the processing pipeline.
-    AddROI(ROI),
+    AddROI(String, ROI),
 
     /// Command to update an existing Region of Interest (ROI) identified by its name.
     UpdateROI(String, ROI),
@@ -202,8 +202,8 @@ pub struct ThreadCommunication {
     /// Lock for the metadata (`DotthzMetaData`) shared across threads.
     pub md_lock: Arc<RwLock<DotthzMetaData>>,
 
-    /// Lock for the [`DataPoint`] containing signal data.
-    pub data_lock: Arc<RwLock<DataPoint>>,
+    /// Lock for the [`PlotDataContainer`] containing signal data.
+    pub data_lock: Arc<RwLock<PlotDataContainer>>,
 
     /// Lock for the filtered 3D matrix data.
     /// Contains processed data after applying filters.
@@ -258,6 +258,12 @@ pub struct ThreadCommunication {
 
     /// Channel for receiving configuration commands in the processing thread.
     pub config_rx: Receiver<ConfigCommand>,
+
+    /// Channel for sending configuration ROI to the GUI thread.
+    pub roi_tx: Sender<(String, ROI)>,
+
+    /// Channel for receiving configuration ROI in the GUI thread.
+    pub roi_rx: Receiver<(String, ROI)>,
 
     /// Lock for tracking filter processing progress.
     /// Maps filter UUIDs to their current progress (0.0 to 1.0, or None if inactive).

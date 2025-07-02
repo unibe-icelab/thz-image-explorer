@@ -1,10 +1,11 @@
+use std::collections::{HashMap, HashSet};
 use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
 use crate::gui::application::{FileDialogState, THzImageExplorer};
 use crate::gui::gauge_widget::gauge;
 use crate::gui::matrix_plot::{make_dummy, plot_matrix, ImageState};
 use crate::gui::toggle_widget::toggle_ui;
 use crate::io::{find_files_with_same_extension, load_psf};
-use crate::DataPoint;
+use crate::PlotDataContainer;
 use bevy_egui::egui;
 use bevy_egui::egui::panel::Side;
 use bevy_egui::egui::TextStyle;
@@ -104,7 +105,7 @@ pub fn left_panel(
     thread_communication: &mut ThreadCommunication,
 ) {
     let gauge_size = left_panel_width / 3.0;
-    let mut data = DataPoint::default();
+    let mut data = PlotDataContainer::default();
     if let Ok(read_guard) = thread_communication.data_lock.read() {
         data = read_guard.clone();
     }
@@ -394,7 +395,6 @@ pub fn left_panel(
                 &(height as f64),
                 explorer,
                 image_state,
-                &data.rois,
             );
             if pixel_clicked {
                 send_latest_config(
@@ -405,9 +405,11 @@ pub fn left_panel(
                 // Check if any ROI was just closed and send AddROI command
                 if let Some(roi) = &explorer.pixel_selected.open_roi {
                     if roi.closed {
+                        let roi_uuid = uuid::Uuid::new_v4();
+                        explorer.rois.insert(roi_uuid.to_string(), roi.clone());
                         send_latest_config(
                             thread_communication,
-                            ConfigCommand::AddROI(roi.clone()),
+                            ConfigCommand::AddROI(roi_uuid.to_string(), roi.clone()),
                         );
                         explorer.pixel_selected.open_roi = None;
                     }
@@ -427,7 +429,9 @@ pub fn left_panel(
                 egui::Grid::new("rois polygons")
                     .striped(true)
                     .show(ui, |ui| {
-                        for roi in data.rois.iter_mut() {
+                        let mut rois_to_update = HashMap::new();
+                        let mut rois_to_delete = HashSet::new();
+                        for (roi_uuid, roi) in explorer.rois.iter_mut() {
                             if ui
                                 .selectable_label(
                                     false,
@@ -438,13 +442,13 @@ pub fn left_panel(
                                 )
                                 .clicked()
                             {
+                                rois_to_delete.insert(roi_uuid.clone());
                                 send_latest_config(
                                     thread_communication,
                                     ConfigCommand::DeleteROI(roi.name.clone()),
                                 );
                             }
 
-                            let old_name = roi.name.clone();
                             let changed =
                                 ui.add(egui::TextEdit::singleline(&mut roi.name)).changed();
                             let points = roi
@@ -457,11 +461,20 @@ pub fn left_panel(
                             ui.end_row();
 
                             if changed {
+                                rois_to_update.insert(roi_uuid.clone(),  roi.clone());
                                 send_latest_config(
                                     thread_communication,
-                                    ConfigCommand::UpdateROI(old_name.clone(), roi.clone()),
+                                    ConfigCommand::UpdateROI(roi_uuid.clone(), roi.clone()),
                                 );
                             }
+                        }
+
+                        for roi in rois_to_delete.iter() {
+                            explorer.rois.remove(roi);
+                        }
+
+                        for (roi_uuid, roi) in rois_to_update.iter() {
+                            explorer.rois.insert(roi_uuid.clone(), roi.clone());
                         }
 
                         if let Some(roi) = &mut explorer.pixel_selected.open_roi {

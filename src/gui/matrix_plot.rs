@@ -327,7 +327,6 @@ pub fn plot_matrix(
     plot_height: &f64,
     explorer: &mut THzImageExplorer,
     state: &mut ImageState,
-    rois: &[ROI],
 ) -> bool {
     let mut pixel_clicked = false;
     let max = data
@@ -427,7 +426,7 @@ pub fn plot_matrix(
             .allow_drag(false)
             .data_aspect(1.0); // Ensure aspect ratio is 1:1
 
-        let mut hovered_roi_idx: Option<usize> = None;
+        let mut hovered_roi_uuid: Option<String> = None;
 
         let plot_response = plot.show(ui, |plot_ui| {
             plot_ui.image(im);
@@ -451,7 +450,7 @@ pub fn plot_matrix(
 
             let pointer = plot_ui.pointer_coordinate();
 
-            for (i, roi) in rois.iter().enumerate() {
+            for (roi_uuid, roi) in explorer.rois.iter() {
                 // Check if mouse is close to any point in the ROI polygon
                 let is_hovered = if let Some(pos) = pointer {
                     point_in_polygon((pos.x, pos.y), &roi.polygon)
@@ -477,7 +476,7 @@ pub fn plot_matrix(
                 );
 
                 if is_hovered {
-                    hovered_roi_idx = Some(i);
+                    hovered_roi_uuid = Some(roi_uuid.to_string());
                 }
             }
 
@@ -499,23 +498,25 @@ pub fn plot_matrix(
             }
         });
 
-        if let Some(i) = hovered_roi_idx {
-            if let Some((cx, cy)) = polygon_centroid(&rois[i].polygon) {
-                let plot_transform = plot_response.transform;
-                let screen_pos = plot_transform.position_from_point(&PlotPoint::new(cx, cy));
-                let layer_id = egui::LayerId::new(
-                    egui::Order::Foreground,
-                    egui::Id::new(format!("roi_tooltip_layer_{i}").as_str()),
-                );
-                egui::show_tooltip_at(
-                    ui.ctx(),
-                    layer_id,
-                    egui::Id::new(format!("roi_tooltip_{i}").as_str()),
-                    screen_pos,
-                    |ui| {
-                        ui.label(&rois[i].name);
-                    },
-                );
+        if let Some(uuid) = hovered_roi_uuid {
+            if let Some(roi) = explorer.rois.get(&uuid) {
+                if let Some((cx, cy)) = polygon_centroid(&roi.polygon) {
+                    let plot_transform = plot_response.transform;
+                    let screen_pos = plot_transform.position_from_point(&PlotPoint::new(cx, cy));
+                    let layer_id = egui::LayerId::new(
+                        egui::Order::Foreground,
+                        egui::Id::new(format!("roi_tooltip_layer_{}", uuid)),
+                    );
+                    egui::show_tooltip_at(
+                        ui.ctx(),
+                        layer_id,
+                        egui::Id::new(format!("roi_tooltip_{}", uuid)),
+                        screen_pos,
+                        |ui| {
+                            ui.label(&roi.name);
+                        },
+                    );
+                }
             }
         }
 
@@ -529,7 +530,7 @@ pub fn plot_matrix(
                 if explorer.pixel_selected.open_roi.is_none() {
                     // If last ROI is closed, start a new one
                     let mut roi = ROI::default();
-                    roi.name = format!("ROI {}", rois.len() + 1);
+                    roi.name = format!("ROI {}", explorer.rois.len() + 1);
                     roi.polygon.push([plot_x, plot_y]);
                     explorer.pixel_selected.open_roi = Some(roi);
                 }

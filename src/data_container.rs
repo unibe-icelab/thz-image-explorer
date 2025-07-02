@@ -6,7 +6,6 @@
 //! - `DataPoint`: A single scan/experiment result with time, frequency, and ROI data.
 //! - `ScannedImageFilterData`: Multi-dimensional dataset for 2D scans with time/frequency domain data.
 
-use crate::gui::matrix_plot::ROI;
 use ndarray::{Array1, Array2, Array3};
 use realfft::num_complex::Complex32;
 use realfft::{ComplexToReal, RealToComplex};
@@ -58,7 +57,7 @@ impl Default for HouseKeeping {
 
 /// A single scan or experiment result, including time/frequency domain data and ROI information.
 #[derive(Clone, Default, Debug)]
-pub struct DataPoint {
+pub struct PlotDataContainer {
     /// Housekeeping metadata for this data point.
     pub hk: HouseKeeping,
     /// List of available reference names.
@@ -78,7 +77,7 @@ pub struct DataPoint {
     /// Averaged signal data (time domain).
     pub avg_signal: Vec<f32>,
     /// Signal data for each ROI (region of interest).
-    pub roi_signal: HashMap<String, Vec<f32>>,
+    pub roi_signal: HashMap<String, (String, Vec<f32>)>,
     /// Frequency axis data (raw).
     pub frequencies: Vec<f32>,
     /// Filtered frequency axis data.
@@ -102,11 +101,9 @@ pub struct DataPoint {
     /// FFT phase of the averaged signal.
     pub avg_phase_fft: Vec<f32>,
     /// FFT amplitude for each ROI.
-    pub roi_signal_fft: HashMap<String, Vec<f32>>,
+    pub roi_signal_fft: HashMap<String, (String, Vec<f32>)>,
     /// Phase spectrum for each ROI.
-    pub roi_phase: HashMap<String, Vec<f32>>,
-    /// List of regions of interest.
-    pub rois: Vec<ROI>,
+    pub roi_phase: HashMap<String, (String, Vec<f32>)>,
 }
 
 /// Multi-dimensional dataset for 2D spectroscopic imaging, including time and frequency domain data.
@@ -133,7 +130,7 @@ pub struct ScannedImageFilterData {
     /// FFT planner for complex-to-real transforms.
     pub c2r: Option<Arc<dyn ComplexToReal<f32>>>,
     /// Map of ROI names to pixel coordinates.
-    pub rois: HashMap<String, Vec<(usize, usize)>>,
+    pub rois: HashMap<String, (String, Vec<(usize, usize)>)>,
     /// Time axis data for the scan.
     pub time: Array1<f32>,
     /// 2D intensity image derived from the scan.
@@ -143,9 +140,9 @@ pub struct ScannedImageFilterData {
     /// Averaged time-domain data across all pixels.
     pub avg_data: Array1<f32>,
     /// Additional datasets for specific references or samples.
-    pub datasets: HashMap<String, Array1<f32>>,
+    pub datasets: HashMap<String, (String, Array1<f32>)>,
     /// ROI-averaged time-domain data.
-    pub roi_data: HashMap<String, Array1<f32>>,
+    pub roi_data: HashMap<String, (String, Array1<f32>)>,
     /// Frequency axis data for the scan.
     pub frequency: Array1<f32>,
     /// 3D array: (x, y, frequency) complex FFT results.
@@ -161,9 +158,9 @@ pub struct ScannedImageFilterData {
     /// Averaged FFT phase across all pixels.
     pub avg_phase_fft: Array1<f32>,
     /// ROI-averaged FFT amplitude.
-    pub roi_signal_fft: HashMap<String, Array1<f32>>,
+    pub roi_signal_fft: HashMap<String, (String, Array1<f32>)>,
     /// ROI-averaged FFT phase.
-    pub roi_phase_fft: HashMap<String, Array1<f32>>,
+    pub roi_phase_fft: HashMap<String, (String, Array1<f32>)>,
 }
 
 impl Default for ScannedImageFilterData {
