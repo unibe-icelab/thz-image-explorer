@@ -427,19 +427,15 @@ def extract_rois(path: Path, measurement_key: Optional[str] = None):
         if measurement_key is None:
             # Just get the first one
             measurement_key = list(image_file.get_measurements().keys())[0]
-        datasets = image_file[measurement_key].datasets
+            
+        _datasets = image_file[measurement_key].datasets
         metadata = image_file[measurement_key].metadata
-
-        # Extract image data
-        image = np.array(datasets["dataset"])
-        image_to_plot = np.sum(image ** 2, axis=2)  # Aggregate along 3rd dimension
 
         # Get image dimensions
         height, width = int(float(metadata["height"])), int(float(metadata["width"]))
 
         # Extract and parse ROI polygon from metadata
         for (index, roi_label) in enumerate(metadata["ROI Labels"].split(",")):
-            print((index, roi_label))
             roi_raw = metadata[f"ROI {index}"]  # Assuming ROI is stored as a string like "[[x1,y1],[x2,y2],...]"
             roi_points = eval(roi_raw) if isinstance(roi_raw, str) else roi_raw  # Convert to list of lists
             roi_points = list(roi_points)  # Ensure it's a list

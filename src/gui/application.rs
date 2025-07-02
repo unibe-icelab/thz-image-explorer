@@ -14,11 +14,9 @@ use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage,
 use crate::math_tools::FftWindowType;
 use bevy::prelude::*;
 use bevy_egui::egui::ThemePreference;
-use bevy_egui::{egui, EguiContexts};
+use bevy_egui::EguiContexts;
 use bevy_voxel_plot::InstanceMaterialData;
 use core::f64;
-use dotthz::DotthzFile;
-use egui_file_dialog::information_panel::InformationPanel;
 use egui_file_dialog::FileDialog;
 use egui_plot::PlotPoint;
 use home::home_dir;
@@ -34,14 +32,18 @@ use std::time::Duration;
 /// Represents the state of the file dialog for opening, saving, or working with PSF files.
 #[derive(Clone)]
 pub enum FileDialogState {
-    /// File dialog is set to open a generic file.
+    /// File dialog is set to open a dotTHz file.
     Open,
-    /// File dialog is set to open a reference file.
+    /// File dialog is set to open a reference dotTHz file.
     OpenRef,
     /// File dialog is set to open a PSF file.
     OpenPSF,
-    /// File dialog is set to save a file.
+    /// File dialog is set to save a dotTHz file.
+    // TODO, implement saving/exporting functionality
+    #[allow(dead_code)]
     Save,
+    /// File dialog is set to save a VTU file.
+    SaveToVTU,
     /// File dialog is not active.
     None,
 }
@@ -296,6 +298,7 @@ pub struct THzImageExplorer {
     pub(crate) data: PlotDataContainer,
     pub(crate) file_dialog_state: FileDialogState,
     pub(crate) file_dialog: FileDialog,
+    #[cfg(not(target_os = "macos"))]
     pub(crate) information_panel: InformationPanel,
     pub(crate) other_files: Vec<PathBuf>,
     pub(crate) selected_file_name: String,
@@ -325,7 +328,7 @@ impl THzImageExplorer {
             water_vapour_lines.push(line.trim().parse().unwrap());
         }
 
-        let mut file_dialog = FileDialog::default()
+        let file_dialog = FileDialog::default()
             //.initial_directory(PathBuf::from("/path/to/app"))
             .default_file_name("measurement.thz")
             .default_size([600.0, 400.0])
@@ -377,6 +380,7 @@ impl THzImageExplorer {
             data: PlotDataContainer::default(),
             file_dialog_state: FileDialogState::None,
             file_dialog,
+            #[cfg(not(target_os = "macos"))]
             information_panel: InformationPanel::default()
                 .add_file_preview("csv", |ui, item| {
                     ui.label("CSV preview:");

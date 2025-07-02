@@ -440,7 +440,6 @@ pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
         .expect("Axis 1 mean failed");
 
     if config.avg_in_fourier_space {
-        // println!("[FFT] Performing IFFT on average amplitude and phase data");
         // Reconstruct complex spectrum from average amplitude and phase
         if let Some(c2r) = &output.c2r {
             // Create a complex spectrum from the averaged amplitude and phase
@@ -528,7 +527,7 @@ pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
                             .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
                     }
                     Err(e) => {
-                        println!("IFFT error for ROI {}: {}", roi_name, e);
+                        log::error!("IFFT error for ROI {}: {}", roi_name, e);
                         // Fall back to time-domain averaging if IFFT fails
                         let roi_signal = average_polygon_roi(&input.data, polygon, input.scaling);
                         output

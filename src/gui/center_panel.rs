@@ -885,6 +885,7 @@ pub fn center_panel(
                         opacity_threshold,
                         cam_input,
                         thread_communication,
+                        explorer,
                     );
                 }
             }

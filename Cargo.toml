@@ -47,25 +47,17 @@ bevy_panorbit_camera = { version = "0.26" }
 crossbeam-channel = "0.5"
 log = "0.4.22"
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "gif", "png", "tiff", "rayon"] }
-itertools-num = "0.1"
 realfft = "3.4.0"
 preferences = "2.0.0"
 serde = { version = "1.0", features = ["derive"] }
-csv = "1.1.6"
 ndarray = { version = "0.16", features = ["rayon", "serde"] }
 ndarray-npy = { version = "0.9.1", features = ["npz"] }
-ndarray-stats = "0.6.0"
-ndarray-ndimage = { git = "https://github.com/hacknus/ndarray-ndimage" }
-statrs = "0.18.0"
-serde_json = "1.0.95"
-itertools = "0.14.0"
 dotthz = { version = "0.2", features = ["serde", "hdf5-sys-static"] }
 home = "0.5.11"
 self_update = { git = "https://github.com/hacknus/self_update", features = ["archive-zip", "compression-zip-deflate"], optional = true }
 tempfile = { version = "3.15", optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls", "http2"], optional = true }
 semver = { version = "1.0.24", optional = true }
-glob = "0.3.2"
 filter_macros = { path = "filter_macros" }
 cancellable_loops = { path = "cancellable_loops" }
 ctor = "0.4"
@@ -79,6 +71,10 @@ num-traits = "0.2.19"
 uuid = "1.17.0"
 downcast-rs = "2.0.1"
 vtkio = "0.7.0-rc1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+rfd = "0.15"
+futures = "0.3.31"
 
 [features]
 default = ["self_update"]

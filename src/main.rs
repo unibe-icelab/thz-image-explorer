@@ -2,6 +2,7 @@ use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::data_container::{PlotDataContainer, ScannedImageFilterData};
 use crate::data_thread::main_thread;
 use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
+use crate::filters::psf::PSF;
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::ROI;
 use crate::gui::threed_plot::{
@@ -27,6 +28,7 @@ use dotthz::DotthzMetaData;
 use ndarray::{Array1, Array2, Array3};
 use preferences::{AppInfo, Preferences};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -74,7 +76,7 @@ fn autosave_on_exit(
         let _ = thread_communication
             .gui_settings
             .save(&APP_INFO, "config/gui");
-        println!("GUI settings saved to {:?}", APP_INFO);
+        log::info!("GUI settings saved to {:?}", APP_INFO);
     }
 }
 
@@ -212,6 +214,8 @@ fn main() {
     let md_lock = Arc::new(RwLock::new(DotthzMetaData::default()));
     let voxel_plot_instances_lock = Arc::new(RwLock::new((vec![], 1.0, 1.0, 1.0)));
 
+    let psf_lock = Arc::new(RwLock::new((PathBuf::new(), PSF::default())));
+
     let mut progress_lock = HashMap::new();
     if let Ok(mut filters) = FILTER_REGISTRY.lock() {
         for (uuid, _) in filters.filters.iter_mut() {
@@ -247,6 +251,7 @@ fn main() {
         filter_uuid_to_index_lock: filter_uuid_to_index_lock.clone(),
         filter_data_pipeline_lock: filter_data_pipeline_lock.clone(),
         filters_active_lock: filters_active_lock.clone(),
+        psf_lock: psf_lock.clone(),
         gui_settings: gui_settings.clone(),
         config_tx,
         config_rx,

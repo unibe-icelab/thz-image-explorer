@@ -1,7 +1,6 @@
 use crate::config::ThreadCommunication;
-use crate::gui::application::Tab;
+use crate::gui::application::{FileDialogState, THzImageExplorer, Tab};
 use crate::gui::toggle_widget::toggle;
-use crate::io::export_to_vtk;
 use bevy::render::camera::{ImageRenderTarget, RenderTarget};
 use bevy::render::view::RenderLayers;
 use bevy::window::PrimaryWindow;
@@ -354,6 +353,7 @@ pub fn three_dimensional_plot_ui(
     opacity_threshold: &mut ResMut<OpacityThreshold>,
     cam_input: &mut ResMut<CameraInputAllowed>,
     thread_communication: &mut ResMut<ThreadCommunication>,
+    explorer: &mut THzImageExplorer,
 ) {
     height -= 200.0;
     let available_size = egui::vec2(width.min(height), width.min(height));
@@ -379,16 +379,13 @@ pub fn three_dimensional_plot_ui(
                         .instances
                         .retain(|instance| instance.color[3] >= opacity_threshold.0);
                 } else {
-                    println!("No existing entity found to update.");
+                    log::error!("No existing entity found to update.");
                 }
             }
 
             if ui.button("Export to VTU").clicked() {
-                if let Err(err) = export_to_vtk(&instances, "voxel_plot.vtu") {
-                    eprintln!("Failed to export VTU: {}", err);
-                } else {
-                    println!("Successfully exported to voxel_plot.vtk");
-                }
+                explorer.file_dialog_state = FileDialogState::SaveToVTU;
+                explorer.file_dialog.save_file();
             }
 
             ui.allocate_ui(available_size, |ui| {
@@ -426,6 +423,8 @@ pub fn three_dimensional_plot_ui(
                         .retain(|instance| instance.color[3] >= opacity_threshold.0);
                 }
             }
+
+            ui.add_space(10.0);
 
             ui.horizontal(|ui| {
                 ui.label("Animate Camera:");

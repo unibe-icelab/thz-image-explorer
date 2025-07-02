@@ -8,6 +8,7 @@
 //! - Thread-safe data sharing through the `ThreadCommunication` structure
 
 use crate::data_container::{PlotDataContainer, ScannedImageFilterData};
+use crate::filters::psf::PSF;
 use crate::gui::application::GuiSettingsContainer;
 use crate::gui::matrix_plot::{SelectedPixel, ROI};
 use crate::math_tools::FftWindowType;
@@ -55,17 +56,25 @@ pub fn send_latest_config(thread_communication: &ThreadCommunication, cmd: Confi
 /// such as opening files, setting FFT parameters, updating filtering windows, etc.
 #[derive(Clone, Debug)]
 pub enum ConfigCommand {
-    /// Command to open a specified file.
-    /// The file is identified using a `PathBuf`, and its type is determined based on its extension.
+    /// Command to open a specified `.thz` file.
+    /// The file is identified using a `PathBuf`.
     OpenFile(PathBuf),
 
-    /// Command to open a specified reference file.
-    /// The file is identified using a `PathBuf`, and its type is determined based on its extension.
+    /// Command to open a specified reference `.thz` file.
+    /// The file is identified using a `PathBuf`.
     OpenRef(PathBuf),
 
-    /// Command to save data to a specified file.
-    /// The file is identified using a `PathBuf`, and its type is determined based on its extension.
+    /// Command to save data to a specified `.thz` file.
+    /// The file is identified using a `PathBuf`.
     SaveFile(PathBuf),
+
+    /// Command to save 3D data to a specified `.vtu` file.
+    /// The file is identified using a `PathBuf`.
+    SaveVTU(PathBuf),
+
+    /// Command to open PSF `.npz` file.
+    /// The file is identified using a `PathBuf`.
+    OpenPSF(PathBuf),
 
     /// Command to load metadata from a specified file.
     /// The file is identified using a `PathBuf`.
@@ -252,6 +261,9 @@ pub struct ThreadCommunication {
     /// Lock for tracking which filters are currently active.
     /// Maps filter UUIDs to boolean activation status.
     pub filters_active_lock: Arc<RwLock<HashMap<String, bool>>>,
+
+    /// Lock to store the Point Spread Function (PSF) data.
+    pub psf_lock: Arc<RwLock<(PathBuf, PSF)>>,
 
     /// GUI-specific settings stored in the [`GuiSettingsContainer`].
     pub gui_settings: GuiSettingsContainer,

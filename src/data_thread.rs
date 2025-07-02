@@ -7,8 +7,8 @@ use crate::data_container::ScannedImageFilterData;
 use crate::filters::filter::{Filter, FILTER_REGISTRY};
 use crate::gui::matrix_plot::ROI;
 use crate::io::{
-    load_meta_data_of_thz_file, open_pulse_from_thz, open_scan_from_thz, save_to_thz,
-    update_meta_data_of_thz_file,
+    export_to_vtk, load_meta_data_of_thz_file, load_psf, open_pulse_from_thz, open_scan_from_thz,
+    save_to_thz, update_meta_data_of_thz_file,
 };
 use crate::math_tools::{
     apply_adapted_blackman_window, apply_blackman, apply_flat_top, apply_hamming, apply_hanning,
@@ -690,7 +690,6 @@ pub fn main_thread(
                     if let Some(os_path) = path.extension() {
                         if os_path != "thz" || os_path != "thzimg" || os_path != "thzswp" {
                             path.set_extension("thz");
-                            path.set_extension("thz");
                         }
                     }
 
@@ -711,6 +710,33 @@ pub fn main_thread(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+                ConfigCommand::SaveVTU(mut path) => {
+                    // THz Image Explorer always saves thz files
+                    if let Some(os_path) = path.extension() {
+                        if os_path != "vtu" {
+                            path.set_extension("vtu");
+                        }
+                    }
+                    if let Ok(instances_guard) =
+                        thread_communication.voxel_plot_instances_lock.read()
+                    {
+                        let (instances, _, _, _) = instances_guard.clone();
+                        if let Err(err) = export_to_vtk(&instances, "voxel_plot.vtu") {
+                            log::error!("Failed to export VTU: {}", err);
+                        } else {
+                            log::info!("Successfully exported to voxel_plot.vtk");
+                        }
+                    }
+                }
+                ConfigCommand::OpenPSF(path) => {
+                    if let Ok(psf) = load_psf(&path.to_path_buf()) {
+                        thread_communication.gui_settings.psf = psf.clone();
+                        thread_communication.gui_settings.beam_shape_path = path.to_path_buf();
+                        if let Ok(mut psf_guard) = thread_communication.psf_lock.write() {
+                            *psf_guard = (path.to_path_buf(), psf);
                         }
                     }
                 }
@@ -759,7 +785,6 @@ pub fn main_thread(
                     update = UpdateType::Plot;
                 }
                 ConfigCommand::UpdateFilters => {
-                    println!("update filters");
                     update = UpdateType::Filter(1);
                 }
                 ConfigCommand::UpdateFilter(uuid) => {
@@ -953,20 +978,14 @@ pub fn main_thread(
                                         let start = Instant::now();
                                         match filter_id.as_str() {
                                             "scaling" => {
-                                                // println!("Performing FFT");
-                                                // println!("{} -> {}", input_index, output_index);
                                                 filter_data[output_index] =
                                                     scaling(&filter_data[input_index], &config);
                                             }
                                             "fft" => {
-                                                // println!("Performing FFT");
-                                                // println!("{} -> {}", input_index, output_index);
                                                 filter_data[output_index] =
                                                     fft(&filter_data[input_index], &config);
                                             }
                                             "ifft" => {
-                                                // println!("Performing iFFT");
-                                                // println!("{} -> {}", input_index, output_index);
                                                 filter_data[output_index] =
                                                     ifft(&filter_data[input_index], &config);
                                             }
@@ -974,11 +993,6 @@ pub fn main_thread(
                                                 if let Some((_, filter)) =
                                                     filters.iter_mut().find(|(id, _)| id == uuid)
                                                 {
-                                                    // println!(
-                                                    //     "Applying filter: {}",
-                                                    //     filter.config().name
-                                                    // );
-                                                    // println!("{} -> {}", input_index, output_index);
                                                     let active = if let Ok(actives) =
                                                         thread_communication
                                                             .filters_active_lock

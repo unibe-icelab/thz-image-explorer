@@ -270,5 +270,15 @@ pub fn settings_window(
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                 }
             });
+
+            // update PSF also in gui thread
+            let mut psf_temp = None;
+            if let Ok(psf_guard) = thread_communication.psf_lock.try_read() {
+                psf_temp = Some((psf_guard.0.clone(), psf_guard.1.clone()));
+            }
+            if let Some((path, psf)) = psf_temp {
+                thread_communication.gui_settings.psf = psf;
+                thread_communication.gui_settings.beam_shape_path = path;
+            }
         })
 }
