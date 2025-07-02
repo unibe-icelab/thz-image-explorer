@@ -565,7 +565,7 @@ pub fn refractive_index_tab(
 ) {
     if let Ok(data) = thread_communication.data_lock.read() {
         if !data.roi_signal.is_empty() {
-            let roi_names: Vec<String> = data.roi_signal.keys().cloned().collect();
+            let roi_names: Vec<String> = data.roi_signal.values().map(|v| v.0.clone()).collect();
             explorer.data.available_references = roi_names.clone();
             explorer.data.available_samples = roi_names;
             explorer
