@@ -456,7 +456,7 @@ pub fn open_pulse_from_thz(
 ///
 /// # Errors
 /// Will return an error if:
-/// - The `.thz` file cannot be found or opened.
+/// - The `.thz` or `.thzimg` file cannot be found or opened.
 /// - The time or data datasets are missing or misformatted.
 pub fn open_scan_from_thz(
     file_path: &PathBuf,
@@ -468,6 +468,7 @@ pub fn open_scan_from_thz(
 
     if let Some(group_name) = file.get_group_names()?.first() {
         if file.get_groups()?.len() > 1 {
+            // TODO let the user choose which group to open
             log::info!("found more than one group, opening only the first");
         }
 
@@ -476,6 +477,8 @@ pub fn open_scan_from_thz(
 
         // get the metadata
         *metadata = file.get_meta_data(group_name)?;
+
+        // TODO: if the file is not a scan, just load the normal datasets as ROIs.
 
         // Read datasets and populate DataContainer fields, skipping any that are missing
         if let Some(ds) = metadata.ds_description.iter().position(|d| d == "time") {

@@ -570,7 +570,7 @@ pub fn main_thread(
                     reset_filters = true;
                     if let Some(file_ending) = selected_file_path.extension() {
                         match file_ending.to_str().unwrap() {
-                            "thz" => {
+                            "thz" | "thzimg" => {
                                 if let Ok(mut filter_data) =
                                     thread_communication.filter_data_pipeline_lock.write()
                                 {
@@ -676,6 +676,13 @@ pub fn main_thread(
                                         }
                                     }
                                 }
+                            }
+                            "thzswp" => {
+                                log::warn!(
+                                    "BRDF/sweep scans in .thzswp format are not yet supported: {:?} \n Open another file.",
+                                    selected_file_path
+                                );
+                                continue;
                             }
                             _ => {
                                 log::warn!(
