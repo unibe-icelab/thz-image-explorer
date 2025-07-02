@@ -166,7 +166,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                         thread_communication.filter_data_lock.write()
                                     {
                                         if let Some(input) = filter_data.first_mut() {
-                                            
                                             if let Some(labels) = meta_data.md.get("ROI Labels") {
                                                 let roi_labels: Vec<&str> =
                                                     labels.split(',').collect();
@@ -198,28 +197,33 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                                             .collect::<Vec<[f64; 2]>>();
 
                                                         if !polygon.is_empty() {
-                                                                let roi_uuid = uuid::Uuid::new_v4();
-                                                                thread_communication.roi_tx.send((roi_uuid.to_string(), ROI {
-                                                                    polygon: polygon.clone(),
-                                                                    closed: true,
-                                                                    name: label.to_string(),
-                                                                })).expect("send ROI error");
-                                                                input.rois.insert(
+                                                            let roi_uuid = uuid::Uuid::new_v4();
+                                                            thread_communication
+                                                                .roi_tx
+                                                                .send((
                                                                     roi_uuid.to_string(),
-                                                                    (
-                                                                        label.to_string(),
-                                                                        polygon
-                                                                            .iter()
-                                                                            .map(|v| {
-                                                                                (
-                                                                                    v[0] as usize,
-                                                                                    v[1] as usize,
-                                                                                )
-                                                                            })
-                                                                            .collect(),
-                                                                    ),
-                                                                );
-                                                            
+                                                                    ROI {
+                                                                        polygon: polygon.clone(),
+                                                                        closed: true,
+                                                                        name: label.to_string(),
+                                                                    },
+                                                                ))
+                                                                .expect("send ROI error");
+                                                            input.rois.insert(
+                                                                roi_uuid.to_string(),
+                                                                (
+                                                                    label.to_string(),
+                                                                    polygon
+                                                                        .iter()
+                                                                        .map(|v| {
+                                                                            (
+                                                                                v[0] as usize,
+                                                                                v[1] as usize,
+                                                                            )
+                                                                        })
+                                                                        .collect(),
+                                                                ),
+                                                            );
                                                         }
                                                     }
                                                 }
@@ -518,9 +522,10 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                             ("Reference File".to_string(), phases.clone()),
                                         );
                                     }
-                                    input
-                                        .roi_data
-                                        .insert(ref_uuid.to_string(), ("Reference File".to_string(), reference));
+                                    input.roi_data.insert(
+                                        ref_uuid.to_string(),
+                                        ("Reference File".to_string(), reference),
+                                    );
                                     input.roi_signal_fft.insert(
                                         ref_uuid.to_string(),
                                         (
@@ -606,29 +611,33 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                                                         .collect::<Vec<[f64; 2]>>();
 
                                                     if !polygon.is_empty() {
-                                                     
-                                                            let roi_uuid = uuid::Uuid::new_v4();
-                                                            thread_communication.roi_tx.send((roi_uuid.to_string(), ROI {
-                                                                polygon: polygon.clone(),
-                                                                closed: true,
-                                                                name: label.to_string(),
-                                                            })).expect("send ROI error");
-                                                            input.rois.insert(
+                                                        let roi_uuid = uuid::Uuid::new_v4();
+                                                        thread_communication
+                                                            .roi_tx
+                                                            .send((
                                                                 roi_uuid.to_string(),
-                                                                (
-                                                                    label.to_string(),
-                                                                    polygon
-                                                                        .iter()
-                                                                        .map(|v| {
-                                                                            (
-                                                                                v[0] as usize,
-                                                                                v[1] as usize,
-                                                                            )
-                                                                        })
-                                                                        .collect(),
-                                                                ),
-                                                            );
-                                                        
+                                                                ROI {
+                                                                    polygon: polygon.clone(),
+                                                                    closed: true,
+                                                                    name: label.to_string(),
+                                                                },
+                                                            ))
+                                                            .expect("send ROI error");
+                                                        input.rois.insert(
+                                                            roi_uuid.to_string(),
+                                                            (
+                                                                label.to_string(),
+                                                                polygon
+                                                                    .iter()
+                                                                    .map(|v| {
+                                                                        (
+                                                                            v[0] as usize,
+                                                                            v[1] as usize,
+                                                                        )
+                                                                    })
+                                                                    .collect(),
+                                                            ),
+                                                        );
                                                     }
                                                 }
                                             }
@@ -1267,10 +1276,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             let sample_thickness = 1.0 / 1e3; // explorer.data.sample_thickness;
 
                             // Get ROI data
-                            if let (
-                                Some((_, reference_amplitude)),
-                                Some((_, reference_phase)),
-                            ) = (
+                            if let (Some((_, reference_amplitude)), Some((_, reference_phase))) = (
                                 filtered.roi_signal_fft.get(&reference_roi),
                                 filtered.roi_phase_fft.get(&reference_roi),
                             ) {
@@ -1527,10 +1533,7 @@ pub fn main_thread(mut thread_communication: ThreadCommunication) {
                             let sample_thickness = 1.0 / 1e3; // explorer.data.sample_thickness;
 
                             // Get ROI data
-                            if let (
-                                Some((_, reference_amplitude)),
-                                Some((_, reference_phase)),
-                            ) = (
+                            if let (Some((_, reference_amplitude)), Some((_, reference_phase))) = (
                                 filtered.roi_signal_fft.get(&reference_roi),
                                 filtered.roi_phase_fft.get(&reference_roi),
                             ) {

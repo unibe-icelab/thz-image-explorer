@@ -3,6 +3,7 @@ use crate::data_container::{PlotDataContainer, ScannedImageFilterData};
 use crate::data_thread::main_thread;
 use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
+use crate::gui::matrix_plot::ROI;
 use crate::gui::threed_plot::{
     animate, set_enable_camera_controls_system, setup, update_instance_buffer_system,
     CameraInputAllowed, OpacityThreshold, SceneVisibility,
@@ -29,7 +30,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
-use crate::gui::matrix_plot::ROI;
 
 mod config;
 mod data_container;
@@ -245,7 +245,7 @@ fn main() {
         config_tx,
         config_rx,
         roi_tx,
-        roi_rx
+        roi_rx,
     };
 
     let mut wgpu_features = WgpuFeatures::default();

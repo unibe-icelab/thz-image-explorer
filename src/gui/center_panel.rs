@@ -285,7 +285,7 @@ pub fn pulse_tab(
 
         // Generate FFT plot points for each ROI
         for (roi_uuid, _) in &explorer.data.roi_signal {
-            if let (Some((roi_name, roi_signal_fft)), Some((_,roi_phase_fft))) = (
+            if let (Some((roi_name, roi_signal_fft)), Some((_, roi_phase_fft))) = (
                 explorer.data.roi_signal_fft.get(roi_uuid),
                 explorer.data.roi_phase.get(roi_uuid),
             ) {

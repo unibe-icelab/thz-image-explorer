@@ -300,7 +300,7 @@ pub struct THzImageExplorer {
     pub(crate) update_text: String,
     #[cfg(feature = "self_update")]
     pub(crate) new_release: Option<Release>,
-    pub (crate) rois: HashMap<String, ROI>,
+    pub(crate) rois: HashMap<String, ROI>,
 }
 
 impl THzImageExplorer {

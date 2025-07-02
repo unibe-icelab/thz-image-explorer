@@ -475,7 +475,9 @@ pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
         // Time domain ROI processing (direct spatial averaging)
         if !config.avg_in_fourier_space {
             let roi_signal = average_polygon_roi(&input.data, polygon, input.scaling);
-            output.roi_data.insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
+            output
+                .roi_data
+                .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
         }
 
         // Frequency domain processing (for visualization)
@@ -485,10 +487,10 @@ pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
         // Store frequency domain results
         output
             .roi_signal_fft
-            .insert(roi_uuid.clone(),(roi_name.clone(), roi_signal_fft.clone()));
+            .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal_fft.clone()));
         output
             .roi_phase_fft
-            .insert(roi_uuid.clone(),(roi_name.clone(), roi_phase_fft.clone()));
+            .insert(roi_uuid.clone(), (roi_name.clone(), roi_phase_fft.clone()));
 
         // In the ifft method where ROIs are processed:
         if config.avg_in_fourier_space {
@@ -521,13 +523,17 @@ pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
 
                         // Store the reconstructed time domain signal
                         let roi_signal = Array1::from_vec(normalized);
-                        output.roi_data.insert(roi_uuid.clone(),(roi_name.clone(), roi_signal));
+                        output
+                            .roi_data
+                            .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
                     }
                     Err(e) => {
                         println!("IFFT error for ROI {}: {}", roi_name, e);
                         // Fall back to time-domain averaging if IFFT fails
                         let roi_signal = average_polygon_roi(&input.data, polygon, input.scaling);
-                        output.roi_data.insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
+                        output
+                            .roi_data
+                            .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
                     }
                 }
             }

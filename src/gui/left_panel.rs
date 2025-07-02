@@ -1,4 +1,3 @@
-use std::collections::{HashMap, HashSet};
 use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
 use crate::gui::application::{FileDialogState, THzImageExplorer};
 use crate::gui::gauge_widget::gauge;
@@ -11,6 +10,7 @@ use bevy_egui::egui::panel::Side;
 use bevy_egui::egui::TextStyle;
 use dotthz::DotthzMetaData;
 use egui_extras::{Column, TableBuilder};
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// Calculates the width of a single char.
@@ -461,7 +461,7 @@ pub fn left_panel(
                             ui.end_row();
 
                             if changed {
-                                rois_to_update.insert(roi_uuid.clone(),  roi.clone());
+                                rois_to_update.insert(roi_uuid.clone(), roi.clone());
                                 send_latest_config(
                                     thread_communication,
                                     ConfigCommand::UpdateROI(roi_uuid.clone(), roi.clone()),
