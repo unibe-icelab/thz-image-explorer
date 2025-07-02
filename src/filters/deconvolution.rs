@@ -16,7 +16,6 @@ use num_complex::Complex32;
 use rayon::prelude::*;
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::error::Error;
-use std::time::Instant;
 
 use cancellable_loops::par_for_each_cancellable_reduce;
 use std::sync::atomic::AtomicBool;
