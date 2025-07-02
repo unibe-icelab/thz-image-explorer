@@ -47,7 +47,7 @@ application implements the dotTHz standard [@lee_dotthz_2023] and is platform in
 it
 easier to maintain and increasing its reach.
 
-![THz Image Explorer screenshot.\label{fig:icon}](screenshot.png)
+![THz Image Explorer screenshot.\label{fig:screenshot}](screenshot.png)
 
 
 # Statement of need
@@ -256,6 +256,14 @@ hovered above the filter UI.
 
 The deconvolution filter is an implementation of the Frequency-dependent Richardson-Lucy algorithm described
 in [@demion_frequency-dependent_2025].
+
+You need to performa knife-edge scan and create a `.thz` file with all entries. An example can be found in the `sample_data/example_beam_width/` directories.
+Then, use the following command (replace the paths with your own):
+
+```shell
+python generate_psf.py --path_x sample_data/example_beam_width/measurement_x/data/1750085285.8557956_data.thz --path_y sample_data/example_beam_width/measurement_y/data/1750163177.929295_data.thz
+```
+to generate a `psf.npz` file that can be loaded in the settings of THz-image-explorer to remove the PSF blur.
 
 The Richardson-Lucy algorithm is defined as
 

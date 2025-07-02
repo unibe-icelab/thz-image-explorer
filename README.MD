@@ -4,8 +4,9 @@
 
 This Application is written in Rust and the GUI is based on egui and bevy.
 
-![Screenshot of the application on macOS](screenshot.png)
+![Screenshot of the application on macOS](paper/screenshot.png)
 
+A sample scan of a THz time-domain 2D imaging system can be found in the `sample_data` directory.
 
 ## Installation:
 
@@ -21,7 +22,7 @@ around this you first need to run:
 On Linux first install the following:
 
 ```sh
-sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libasound2-dev
 ```
 
 ### Compile from source
@@ -34,7 +35,7 @@ As a work-around we can use [cargo wix](https://github.com/volks73/cargo-wix) to
 On Linux first install the following:
 
 ```sh
-sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libasound2-dev
 ```
 
 After installing
@@ -50,7 +51,7 @@ It can be compiled and run on all platforms.
 
 ## PSF file generation:
 
-You need to performa knife-edge scan and create a `.thz` file with all entries. An example can be found in the `sample_directory/example_beam_width/` directories.
+You need to performa knife-edge scan and create a `.thz` file with all entries. An example can be found in the `sample_data/example_beam_width/` directories.
 Then, use the following command (replace the paths with your own):
 
 ```shell
