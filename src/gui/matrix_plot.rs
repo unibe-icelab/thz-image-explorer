@@ -14,6 +14,11 @@ pub struct ImageState {
     texture: Option<TextureHandle>,
 }
 
+#[derive(Default)]
+pub struct ColorBarState {
+    texture: Option<TextureHandle>,
+}
+
 #[derive(Debug, Clone)]
 pub struct ROI {
     pub polygon: Vec<[f64; 2]>,
@@ -107,6 +112,7 @@ pub fn color_from_intensity(
 }
 fn colorbar_with_midpoint_slider(
     ui: &mut egui::Ui,
+    color_bar_state: &mut ColorBarState,
     width: &f64,
     height: &f64,
     explorer: &mut THzImageExplorer,
@@ -162,13 +168,24 @@ fn colorbar_with_midpoint_slider(
             }
         }
 
-        let texture = ui
-            .ctx()
-            .load_texture("image", img.clone(), TextureOptions::NEAREST);
+        // Only load once
+        if let Some(color_bar_texture) = &mut color_bar_state.texture {
+            color_bar_texture.set(img.clone(), TextureOptions::NEAREST); // This *updates* the GPU texture in-place
+        } else {
+            let color_bar_texture = ui
+                .ctx()
+                .load_texture("image", img.clone(), TextureOptions::NEAREST);
+            color_bar_state.texture = Some(color_bar_texture);
+        }
+
+        let Some(color_bar_texture) = &color_bar_state.texture else {
+            return;
+        };
+
         let im = PlotImage::new(
-            &texture,
+            color_bar_texture,
             PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
-            img.height() as f32 * vec2(texture.aspect_ratio(), 1.0),
+            img.height() as f32 * vec2(color_bar_texture.aspect_ratio(), 1.0),
         );
 
         let mut val_y = 0.0;
@@ -326,7 +343,8 @@ pub fn plot_matrix(
     plot_width: &f64,
     plot_height: &f64,
     explorer: &mut THzImageExplorer,
-    state: &mut ImageState,
+    img_state: &mut ImageState,
+    colorbar_state: &mut ColorBarState,
 ) -> bool {
     let mut pixel_clicked = false;
     let max = data
@@ -394,22 +412,22 @@ pub fn plot_matrix(
     }
 
     // Only load once
-    if let Some(texture) = &mut state.texture {
+    if let Some(texture) = &mut img_state.texture {
         texture.set(img.clone(), TextureOptions::NEAREST); // This *updates* the GPU texture in-place
     } else {
         let texture = ui
             .ctx()
             .load_texture("image", img.clone(), TextureOptions::NEAREST);
-        state.texture = Some(texture);
+        img_state.texture = Some(texture);
     }
 
-    let Some(texture) = &state.texture else {
+    let Some(img_texture) = &img_state.texture else {
         return pixel_clicked;
     };
 
     // Correct the size vector for the PlotImage
     let im = PlotImage::new(
-        texture,
+        img_texture,
         PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
         vec2(img.width() as f32, img.height() as f32),
     );
@@ -591,6 +609,7 @@ pub fn plot_matrix(
         ui.add_space(0.01 * &(height as f32 * size as f32));
         colorbar_with_midpoint_slider(
             ui,
+            colorbar_state,
             &(0.1 * height as f64 * size),
             &(0.75 * width as f64 * size),
             explorer,

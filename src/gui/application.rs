@@ -8,7 +8,7 @@ use crate::data_container::PlotDataContainer;
 use crate::filters::psf::PSF;
 use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
-use crate::gui::matrix_plot::{ImageState, SelectedPixel, ROI};
+use crate::gui::matrix_plot::{ColorBarState, ImageState, SelectedPixel, ROI};
 use crate::gui::right_panel::right_panel;
 use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage, SceneVisibility};
 use crate::math_tools::FftWindowType;
@@ -204,6 +204,7 @@ pub fn update_gui(
     mut contexts: EguiContexts,
     mut explorer: NonSendMut<THzImageExplorer>,
     mut image_state: Local<ImageState>,
+    mut color_bar_state: Local<ColorBarState>,
     mut opacity_threshold: ResMut<OpacityThreshold>,
     mut cam_input: ResMut<CameraInputAllowed>,
     mut thread_communication: ResMut<ThreadCommunication>,
@@ -241,6 +242,7 @@ pub fn update_gui(
         &mut explorer,
         &left_panel_width,
         &mut image_state,
+        &mut color_bar_state,
         &mut thread_communication,
     );
 

@@ -1,7 +1,7 @@
 use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
 use crate::gui::application::{FileDialogState, THzImageExplorer};
 use crate::gui::gauge_widget::gauge;
-use crate::gui::matrix_plot::{make_dummy, plot_matrix, ImageState};
+use crate::gui::matrix_plot::{make_dummy, plot_matrix, ColorBarState, ImageState};
 use crate::gui::toggle_widget::toggle_ui;
 use crate::io::find_files_with_same_extension;
 use crate::PlotDataContainer;
@@ -102,6 +102,7 @@ pub fn left_panel(
     explorer: &mut THzImageExplorer,
     left_panel_width: &f32,
     image_state: &mut ImageState,
+    color_bar_state: &mut ColorBarState,
     thread_communication: &mut ThreadCommunication,
 ) {
     let gauge_size = left_panel_width / 3.0;
@@ -506,6 +507,7 @@ pub fn left_panel(
                 &(height as f64),
                 explorer,
                 image_state,
+                color_bar_state,
             );
             if pixel_clicked {
                 send_latest_config(
