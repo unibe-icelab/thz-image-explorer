@@ -96,10 +96,6 @@ pub enum ConfigCommand {
     /// A `true` value enables logarithmic plotting, while `false` disables it.
     SetFFTLogPlot(bool),
 
-    /// Command to enable or disable normalization of FFT data.
-    /// A `true` value enables normalization, while `false` disables it.
-    SetFFTNormalization(bool),
-
     /// Command to enable or disable averaging in frequency domain.
     /// A `true` value enables averaging in frequency domain, while `false` enables averaging in time domain.
     SetAvgInFourierSpace(bool),
@@ -168,9 +164,6 @@ pub struct ConfigContainer {
     /// Flag indicating whether to use logarithmic plotting for FFT results.
     pub fft_log_plot: bool,
 
-    /// Flag indicating whether to normalize the FFT results.
-    pub normalize_fft: bool,
-
     /// Flag indicating whether to average in frequency domain or not.
     pub avg_in_fourier_space: bool,
 
@@ -186,7 +179,6 @@ impl Default for ConfigContainer {
     /// - `fft_window_type`: `FftWindowType::AdaptedBlackman`
     /// - `scale_factor`: `1`
     /// - `fft_log_plot`: `false`
-    /// - `normalize_fft`: `false`
     /// - `avg_in_fourier_space`: `true`
     /// - `fft_df`: `1.0`
     fn default() -> Self {
@@ -195,7 +187,6 @@ impl Default for ConfigContainer {
             fft_window_type: FftWindowType::AdaptedBlackman,
             scale_factor: 1,
             fft_log_plot: false,
-            normalize_fft: false,
             avg_in_fourier_space: true,
             fft_df: 1.0,
         }

@@ -54,17 +54,6 @@ pub fn right_panel(
                         }
                         ui.end_row();
 
-                        ui.label("Normalize FFT: ");
-                        if ui
-                            .add(toggle(&mut thread_communication.gui_settings.normalize_fft))
-                            .changed()
-                        {
-                            send_latest_config(thread_communication, ConfigCommand::SetFFTNormalization(
-                                thread_communication.gui_settings.normalize_fft,
-                            ));
-                        }
-
-                        ui.end_row();
                         ui.label("Average in frequency domain: ");
                         if ui
                             .add(toggle(&mut thread_communication.gui_settings.avg_in_fourier_space))

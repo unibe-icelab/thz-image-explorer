@@ -760,10 +760,6 @@ pub fn main_thread(
                     config.fft_log_plot = log_plot;
                     update = UpdateType::Plot;
                 }
-                ConfigCommand::SetFFTNormalization(normalization) => {
-                    config.normalize_fft = normalization;
-                    update = UpdateType::Plot;
-                }
                 ConfigCommand::SetAvgInFourierSpace(avg_in_fourier_space) => {
                     config.avg_in_fourier_space = avg_in_fourier_space;
                     update = UpdateType::Filter(thread_communication.fft_index);
