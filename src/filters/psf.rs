@@ -25,7 +25,6 @@ use serde::{Deserialize, Serialize};
 ///    the first dimension represents the fit parameters, and the second dimension represents the frequency index.
 ///    The fit parameters are the center and width of the PSF (in this order).
 ///
-/// TODO: improve the names of the fields for the fit parameters.
 ///
 /// # Typical Usage
 ///

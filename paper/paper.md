@@ -83,7 +83,9 @@ extend the communication for additional data-types, these two structs need to be
 `crossbeam_channel::Sender<T>`/`crossbeam_channel::Receiver<T>`.
 
 The structure of the software architecture is shown in figure \ref{fig:software_architecture}.
-![Software Architecture.\label{fig:software_architecture}](thz-image-explorer.drawio.png){#id .class width=80%}
+
+
+![Software Architecture.\label{fig:software_architecture}](thz-image-explorer.drawio.png){width=80% .center}
 
 For each filter, an entry in the `filter_data_pipeline` vector is created, which contains the dataset. Each filter is
 assigned an input and output index. This is memory intensive, but for the size of usual THz TDS datasets (tens to

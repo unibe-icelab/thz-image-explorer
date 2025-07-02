@@ -8,7 +8,6 @@ use bevy_egui::egui::epaint;
 use bevy_egui::egui::{self, Checkbox, DragValue, Slider, Stroke, Ui};
 use bevy_voxel_plot::InstanceMaterialData;
 use egui_plot::{GridMark, Legend, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
-use ndarray::Array2;
 use std::ops::RangeInclusive;
 
 const ROI_COLORS: [egui::Color32; 8] = [
@@ -891,20 +890,4 @@ pub fn center_panel(
             }
         });
     });
-}
-
-#[allow(dead_code)]
-fn generate_sample_image(width: usize, height: usize) -> Array2<f32> {
-    let mut image = Array2::zeros((width, height));
-    let center_x = width as f32 / 2.0;
-    let center_y = height as f32 / 2.0;
-
-    for x in 0..width {
-        for y in 0..height {
-            let dx = (x as f32 - center_x) / center_x;
-            let dy = (y as f32 - center_y) / center_y;
-            image[[x, y]] = (-10.0 * (dx * dx + dy * dy)).exp(); // Gaussian function
-        }
-    }
-    image
 }

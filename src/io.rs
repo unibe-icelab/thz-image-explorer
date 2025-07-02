@@ -593,5 +593,4 @@ fn save_image(img: &ColorImage, file_path: &Path) {
             log::error!("error in saving image: {err:?}");
         }
     }
-    //TODO: implement large image saving
 }

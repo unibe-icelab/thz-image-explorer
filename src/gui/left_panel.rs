@@ -499,7 +499,6 @@ pub fn left_panel(
                 img_data = read_guard.clone();
             }
 
-            // TODO: implement selecting reference pixel
             let pixel_clicked = plot_matrix(
                 ui,
                 &img_data,
@@ -530,11 +529,15 @@ pub fn left_panel(
             }
 
             ui.add_space(10.0);
-            ui.label("Black/White");
-            toggle_ui(ui, &mut explorer.bw);
-            ui.label(format!("Pixel: {}", explorer.pixel_selected.id));
-            ui.label(format!("x: {}", explorer.pixel_selected.x));
-            ui.label(format!("y: {}", explorer.pixel_selected.y));
+            ui.horizontal(|ui| {
+                ui.label("Black/White");
+                toggle_ui(ui, &mut explorer.bw);
+                ui.add_space(5.0);
+                ui.label(format!(
+                    "Pixel: {}/{}",
+                    explorer.pixel_selected.x, explorer.pixel_selected.y
+                ));
+            });
 
             ui.separator();
             ui.heading("Regions of Interest (ROI)");

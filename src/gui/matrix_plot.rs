@@ -172,9 +172,9 @@ fn colorbar_with_midpoint_slider(
         if let Some(color_bar_texture) = &mut color_bar_state.texture {
             color_bar_texture.set(img.clone(), TextureOptions::NEAREST); // This *updates* the GPU texture in-place
         } else {
-            let color_bar_texture = ui
-                .ctx()
-                .load_texture("image", img.clone(), TextureOptions::NEAREST);
+            let color_bar_texture =
+                ui.ctx()
+                    .load_texture("image", img.clone(), TextureOptions::NEAREST);
             color_bar_state.texture = Some(color_bar_texture);
         }
 

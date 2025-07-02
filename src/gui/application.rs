@@ -39,7 +39,7 @@ pub enum FileDialogState {
     /// File dialog is set to open a PSF file.
     OpenPSF,
     /// File dialog is set to save a dotTHz file.
-    // TODO, implement saving/exporting functionality
+    // TODO, implement saving/exporting  dotTHz functionality
     #[allow(dead_code)]
     Save,
     /// File dialog is set to save a VTU file.
@@ -368,7 +368,7 @@ impl THzImageExplorer {
             .initial_directory(thread_communication.gui_settings.selected_path.clone())
             //.default_file_filter("dotTHz files")
             ;
-        // TODO: fix this!!
+        // TODO: fix this for linux and windows!!
         // // Load the persistent data of the file dialog.
         // // Alternatively, you can also use the `FileDialog::storage` builder method.
         // if let Some(storage) = cc.storage {

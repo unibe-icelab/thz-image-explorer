@@ -105,7 +105,6 @@ pub fn settings_window(
                         },
                     );
 
-                    // TODO: maybe change this check here...
                     if thread_communication.gui_settings.psf.popt_x.is_empty() {
                         ui.colored_label(egui::Color32::RED, "No PSF loaded.");
                     } else {
