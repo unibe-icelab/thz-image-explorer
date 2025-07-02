@@ -549,6 +549,10 @@ pub fn plot_matrix(
                     // If last ROI is closed, start a new one
                     let mut roi = ROI::default();
                     roi.name = format!("ROI {}", explorer.rois.len() + 1);
+                    roi.polygon.push([
+                        explorer.pixel_selected.x as f64,
+                        explorer.pixel_selected.y as f64,
+                    ]);
                     roi.polygon.push([plot_x, plot_y]);
                     explorer.pixel_selected.open_roi = Some(roi);
                 }
