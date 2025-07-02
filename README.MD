@@ -1,6 +1,6 @@
 # Explorer Software for the Data of THz time-domain imaging analysis
 
-<a href="https://github.com/hacknus/thz-image-explorer/releases"><img src="icons/icon.png" alt=“” width="100" height="100"> </img> </a>
+<a href="https://github.com/hacknus/thz-image-explorer/releases"><img src="assets/icons/icon.png" alt=“” width="100" height="100"> </img> </a>
 
 This Application is written in Rust and the GUI is based on egui and bevy.
 

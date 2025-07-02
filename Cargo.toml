@@ -86,7 +86,7 @@ msrv = "1.87"
 [package.metadata.bundle]
 name = "THz Image Explorer"
 identifier = "ch.unibe.thzimageexplorer"
-icon = ["./icons/install.png"]
+icon = ["assets/icons/install.png"]
 copyright = "Copyright (c) 2025, University of Bern, Space Research & Planetary Sciences, Linus Leo Stöckli."
 category = "Developer Tool"
 short_description = "Explorer Software for THz time domain images."

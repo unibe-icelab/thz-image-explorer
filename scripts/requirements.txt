@@ -2,4 +2,4 @@ numpy==1.26.4
 tqdm==4.66.4
 thz-deconvolution==1.0.3
 matplotlib~=3.10.3
-thz_deconvolution=1.0.3
+shapely==2.0.1

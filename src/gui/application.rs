@@ -325,7 +325,7 @@ impl THzImageExplorer {
     #[allow(clippy::too_many_arguments)]
     pub fn new(thread_communication: ThreadCommunication) -> Self {
         let mut water_vapour_lines: Vec<f64> = Vec::new();
-        let buffered = include_str!("../../resources/water_lines.csv");
+        let buffered = include_str!("../../assets/water_lines.csv");
         for line in buffered.lines() {
             water_vapour_lines.push(line.trim().parse().unwrap());
         }
@@ -378,7 +378,7 @@ impl THzImageExplorer {
 
         Self {
             water_vapour_lines,
-            wp: include_bytes!("../../images/WP-Logo.png"),
+            wp: include_bytes!("../../assets/images/WP-Logo.png"),
             data: PlotDataContainer::default(),
             file_dialog_state: FileDialogState::None,
             file_dialog,
