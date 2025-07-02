@@ -30,6 +30,7 @@ downcast_rs::impl_downcast!(CopyStaticFieldsTrait);
 /// Filters must implement:
 /// - A `new` function to initialize a filter with default parameters.
 /// - A `reset` function that is called during the initialization of the filter (when loading a new file).
+/// - A `show_data` function that updates the data to be shown in the UI..
 /// - A `config` function to provide metadata and parameters for the filter.
 /// - A `filter` function to apply the filter to a `ScannedImageFilterData`.
 /// - A `ui` function to render the filter in the UI.
