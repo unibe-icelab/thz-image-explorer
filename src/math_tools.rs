@@ -673,7 +673,7 @@ pub fn calculate_optical_properties(
         // Convert frequency to Hz (from THz)
         let frequency_hz = frequencies[i] * 1.0e12;
         let delta_phi = sample_phase[i] - reference_phase[i];
-        let omega = 2.0 * PI * frequency_hz * 1.0e12;
+        let omega = 2.0 * PI * frequency_hz;
         let n = 1.0 + C * delta_phi / (omega * sample_thickness);
 
         // Avoid division by zero or log of non-positive

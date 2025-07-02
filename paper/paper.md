@@ -204,13 +204,40 @@ displayed in the center plot.
 
 ## Refractive Index and Absorption Coefficient
 
-The refractive index and absorption coefficient can be computed from the frequency domain spectrum using the
-Kramers-Kronig relations [@Jepsen2019]. The refractive index and absorption coefficient
-are computed from the complex refractive index $n$ as follows:
+The refractive index and absorption coefficient can be computed from the frequency domain spectrum using the following
+relations [@Jepsen2019]:
+
+### Refractive Index
+
+The refractive index $n(\omega)$ is calculated from the phase difference between sample and reference:
+
+$$n(\omega) = 1 + \frac{c \Delta\phi(\omega)}{\omega d}$$
+
+where:
+
+- $\Delta\phi(\omega) = \phi_{\text{sample}}(\omega) - \phi_{\text{reference}}(\omega)$ is the phase difference
+- $c$ is the speed of light
+- $\omega = 2\pi f$ is the angular frequency
+- $d$ is the sample thickness
+
+### Absorption Coefficient
+
+The absorption coefficient $\alpha(\omega)$ is derived from the amplitude ratio:
+
+$$\alpha(\omega) = -\frac{2}{d} \ln\left(\frac{(n+1)^2}{4n} \cdot \frac{A_{\text{sample}}(\omega)}{A_{\text{reference}}(\omega)}\right)$$
+
+where $A_{\text{sample}}(\omega)$ and $A_{\text{reference}}(\omega)$ are the amplitude spectra of the sample and
+reference measurements, respectively.
+
+### Extinction Coefficient
+
+The extinction coefficient $\kappa(\omega)$ is related to the absorption coefficient by:
+
+$$\kappa(\omega) = \frac{\alpha(\omega) c}{4\pi f}$$
 
 The refractive index and absorption coefficient are computed for the selected source and selected reference. The user
-can select a pixel or a ROI in the 2D plot to display the refractive index and absorption
-coefficient for that pixel in the center plot.
+can select a pixel or a ROI in the 2D plot to display the refractive index and absorption coefficient for that pixel in
+the center plot.
 
 ## Interactive 3D Viewer
 
@@ -427,7 +454,7 @@ def extract_rois(path: Path, measurement_key: Optional[str] = None):
         if measurement_key is None:
             # Just get the first one
             measurement_key = list(image_file.get_measurements().keys())[0]
-            
+
         _datasets = image_file[measurement_key].datasets
         metadata = image_file[measurement_key].metadata
 
