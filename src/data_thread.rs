@@ -854,6 +854,14 @@ pub fn main_thread(
                     {
                         if let Some(input) = filter_data.first_mut() {
                             input.rois.remove(&uuid);
+                            input.roi_data.remove(&uuid);
+                            input.roi_phase_fft.remove(&uuid);
+                            input.roi_signal_fft.remove(&uuid);
+                        }
+                        if let Ok(mut data) = thread_communication.data_lock.write() {
+                            data.roi_signal.remove(&uuid);
+                            data.roi_signal_fft.remove(&uuid);
+                            data.roi_phase.remove(&uuid);
                         }
                     }
                 }

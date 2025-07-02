@@ -130,10 +130,10 @@ pub enum ConfigCommand {
     /// Command to add a new Region of Interest (ROI) to the processing pipeline.
     AddROI(String, ROI),
 
-    /// Command to update an existing Region of Interest (ROI) identified by its name.
+    /// Command to update an existing Region of Interest (ROI) identified by its uuid.
     UpdateROI(String, ROI),
 
-    /// Command to delete a specific Region of Interest (ROI) identified by its name.
+    /// Command to delete a specific Region of Interest (ROI) identified by its uuid.
     DeleteROI(String),
 
     /// Command to set the reference data for processing.

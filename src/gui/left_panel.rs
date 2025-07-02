@@ -561,7 +561,7 @@ pub fn left_panel(
                                 rois_to_delete.insert(roi_uuid.clone());
                                 send_latest_config(
                                     thread_communication,
-                                    ConfigCommand::DeleteROI(roi.name.clone()),
+                                    ConfigCommand::DeleteROI(roi_uuid.clone()),
                                 );
                             }
 

@@ -550,8 +550,8 @@ pub fn plot_matrix(
                     let mut roi = ROI::default();
                     roi.name = format!("ROI {}", explorer.rois.len() + 1);
                     roi.polygon.push([
-                        explorer.pixel_selected.x as f64,
                         explorer.pixel_selected.y as f64,
+                        width as f64 - explorer.pixel_selected.x as f64,
                     ]);
                     roi.polygon.push([plot_x, plot_y]);
                     explorer.pixel_selected.open_roi = Some(roi);
@@ -578,6 +578,11 @@ pub fn plot_matrix(
                 }
                 pixel_clicked = true;
             } else {
+                if let Some(current_roi) = &mut explorer.pixel_selected.open_roi {
+                    if !current_roi.closed {
+                        explorer.pixel_selected.open_roi = None;
+                    }
+                }
                 // Handle single pixel selection
                 // plot_x -> original y
                 let pixel_y = explorer.val.x.floor() as usize;
