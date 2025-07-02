@@ -227,15 +227,19 @@ fn direct_convolve2d(a: &Array2<f32>, b: &Array2<f32>) -> Array2<f32> {
 
     let mut result = Array2::<f32>::zeros((a_rows, a_cols));
 
+    let half_b_rows = b_rows / 2;
+    let half_b_cols = b_cols / 2;
+
     for i in 0..a_rows {
         for j in 0..a_cols {
             let mut sum = 0.0;
             for m in 0..b_rows {
                 for n in 0..b_cols {
-                    let x = i + m - (b_rows / 2);
-                    let y = j + n - (b_cols / 2);
-                    if x < a_rows && y < a_cols {
-                        sum += a[[x, y]] * b[[m, n]];
+                    let x = i as isize + m as isize - half_b_rows as isize;
+                    let y = j as isize + n as isize - half_b_cols as isize;
+
+                    if x >= 0 && y >= 0 && (x as usize) < a_rows && (y as usize) < a_cols {
+                        sum += a[[x as usize, y as usize]] * b[[m, n]];
                     }
                 }
             }
@@ -275,9 +279,9 @@ pub fn convolve2d(
         return Ok(direct_convolve2d(a, b));
     }
 
-    // Calculate the next power of two for padding dimensions
-    let padded_rows = a_rows.next_power_of_two();
-    let padded_cols = a_cols.next_power_of_two();
+    // Calculate padding to ensure output size matches input
+    let padded_rows = (a_rows + b_rows - 1).next_power_of_two();
+    let padded_cols = (a_cols + b_cols - 1).next_power_of_two();
 
     // Pad both input arrays to the calculated dimensions
     let mut a_padded = pad_array(a, (padded_rows, padded_cols));
@@ -302,17 +306,29 @@ pub fn convolve2d(
         return Err(e);
     }
 
-    // Crop the central part of the result to match the original input size
+    // For "same" size convolution, we need to extract the center part
     let start_row = (b_rows - 1) / 2;
     let start_col = (b_cols - 1) / 2;
 
-    // Use slicing to extract the relevant portion of the result
+    // Ensure we have enough data to extract the required output size
+    let available_rows = result_freq.nrows();
+    let available_cols = result_freq.ncols();
+
+    if start_row + a_rows > available_rows || start_col + a_cols > available_cols {
+        log::error!("Insufficient data after convolution: need {}x{} starting at ({}, {}), but only have {}x{}",
+                   a_rows, a_cols, start_row, start_col, available_rows, available_cols);
+
+        // Fallback: use direct convolution
+        return Ok(direct_convolve2d(a, b));
+    }
+
+    // Extract the result with the same size as input 'a'
     let result_view = result_freq.slice(s![
         start_row..start_row + a_rows,
         start_col..start_col + a_cols
     ]);
 
-    // Extract the real part of the complex result and store it in a new array
+    // Extract the real part of the complex result
     let mut result = Array2::<f32>::zeros((a_rows, a_cols));
     Zip::from(&mut result)
         .and(result_view)
@@ -537,15 +553,40 @@ impl Filter for Deconvolution {
         // Check if the input data contains valid spatial resolution (dx, dy)
         if input_data.dx.is_none() || input_data.dy.is_none() {
             log::error!("No data loaded, skipping deconvolution.");
+            if let Ok(mut p) = progress_lock.write() {
+                *p = None;
+            }
             return input_data.clone();
         }
 
         if gui_settings.psf.filters.is_empty() {
             log::error!("PSF filters appear empty — a PSF may not have been loaded. Skipping deconvolution.");
+            if let Ok(mut p) = progress_lock.write() {
+                *p = None;
+            }
             return input_data.clone();
         }
         if gui_settings.psf.popt_x.is_empty() || gui_settings.psf.popt_y.is_empty() {
             log::error!("PSF popt_x or popt_y appear empty — a PSF may not have been loaded correctly. Skipping deconvolution.");
+            if let Ok(mut p) = progress_lock.write() {
+                *p = None;
+            }
+            return input_data.clone();
+        }
+
+        // Get image dimensions for bounds checking
+        let (img_rows, img_cols, _) = input_data.data.dim();
+
+        // Check minimum image size for meaningful deconvolution
+        const MIN_IMAGE_SIZE: usize = 16;
+        if img_rows < MIN_IMAGE_SIZE || img_cols < MIN_IMAGE_SIZE {
+            log::warn!(
+            "Image dimensions ({}x{}) are too small for deconvolution (minimum {}x{}). Skipping.",
+            img_rows, img_cols, MIN_IMAGE_SIZE, MIN_IMAGE_SIZE
+        );
+            if let Ok(mut p) = progress_lock.write() {
+                *p = None;
+            }
             return input_data.clone();
         }
 
@@ -582,16 +623,31 @@ impl Filter for Deconvolution {
         let w_min = wx_min.min(wy_min);
         let w_max = wx_max.max(wy_max);
 
-        // Record the start time for performance measurement
-        let start = Instant::now();
-
         let (dx, dy) = match (input_data.dx, input_data.dy) {
             (Some(dx_val), Some(dy_val)) => (dx_val as f32, dy_val as f32),
             _ => {
                 log::error!("dx or dy is missing in input_data");
+                if let Ok(mut p) = progress_lock.write() {
+                    *p = None;
+                }
                 return input_data.clone();
             }
         };
+
+        // Check if maximum PSF dimensions would be too large for the image
+        let max_psf_width_x = ((wx_max / dx).ceil() as usize * 2 + 1).max(3);
+        let max_psf_width_y = ((wy_max / dy).ceil() as usize * 2 + 1).max(3);
+
+        if max_psf_width_x >= img_cols || max_psf_width_y >= img_rows {
+            log::warn!(
+            "Maximum PSF dimensions ({}x{}) are too large for image dimensions ({}x{}). Skipping deconvolution.",
+            max_psf_width_x, max_psf_width_y, img_rows, img_cols
+        );
+            if let Ok(mut p) = progress_lock.write() {
+                *p = None;
+            }
+            return input_data.clone();
+        }
 
         // Error flag to track if any non-contiguous rows are encountered
         let error_flag = Arc::new(AtomicBool::new(false));
@@ -634,12 +690,29 @@ impl Filter for Deconvolution {
                 let range_max_x = (range_max_x / dx).floor() * dx + dx;
                 let range_max_y = (range_max_y / dy).floor() * dy + dy;
 
-                let x: Vec<f32> = (-((range_max_x / dx).floor() as isize)
-                    ..=((range_max_x / dx).floor() as isize))
+                // Constrain PSF size to be smaller than image dimensions
+                let max_allowed_x = (img_cols as f32 - 2.0) * dx / 2.0;
+                let max_allowed_y = (img_rows as f32 - 2.0) * dy / 2.0;
+                let constrained_range_x = range_max_x.min(max_allowed_x);
+                let constrained_range_y = range_max_y.min(max_allowed_y);
+
+                if constrained_range_x != range_max_x || constrained_range_y != range_max_y {
+                    log::warn!(
+                        "PSF range constrained from ({:.2}, {:.2}) to ({:.2}, {:.2}) for filter {}",
+                        range_max_x,
+                        range_max_y,
+                        constrained_range_x,
+                        constrained_range_y,
+                        i
+                    );
+                }
+
+                let x: Vec<f32> = (-((constrained_range_x / dx).floor() as isize)
+                    ..=((constrained_range_x / dx).floor() as isize))
                     .map(|i| i as f32 * dx)
                     .collect();
-                let y: Vec<f32> = (-((range_max_y / dy).floor() as isize)
-                    ..=((range_max_y / dy).floor() as isize))
+                let y: Vec<f32> = (-((constrained_range_y / dy).floor() as isize)
+                    ..=((constrained_range_y / dy).floor() as isize))
                     .map(|i| i as f32 * dy)
                     .collect();
 
@@ -735,14 +808,9 @@ impl Filter for Deconvolution {
         }
 
         output_data.data = processed_data;
-
-        // Calculate and log the total processing time
-        let duration = start.elapsed();
+        output_data.img = output_data.data.mapv(|x| x * x).sum_axis(Axis(2));
 
         log::info!("\nDeconvolution filter completed.");
-        log::info!("Processing time: {:?}", duration);
-
-        output_data.img = output_data.data.mapv(|x| x * x).sum_axis(Axis(2));
 
         // Reset the progress lock to indicate that the process has finished
         if let Ok(mut p) = progress_lock.write() {
@@ -758,8 +826,6 @@ impl Filter for Deconvolution {
         _thread_communication: &mut ThreadCommunication,
         _panel_width: f32,
     ) -> egui::Response {
-        // thread_communication can be used, but is not required. It contains the gui_settings GuiSettingsContainer
-        // implement your GUI parameter handling here, for example like this:
         let mut clicked = false;
         let mut response = ui
             .horizontal(|ui| {
