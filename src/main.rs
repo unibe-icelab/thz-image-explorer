@@ -2,7 +2,6 @@ use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::data_container::{PlotDataContainer, ScannedImageFilterData};
 use crate::data_thread::main_thread;
 use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
-use crate::filters::psf::PSF;
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::ROI;
 use crate::gui::threed_plot::{
@@ -28,7 +27,6 @@ use dotthz::DotthzMetaData;
 use ndarray::{Array1, Array2, Array3};
 use preferences::{AppInfo, Preferences};
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -99,6 +97,11 @@ fn main() {
             log::error!("error in loading gui_settings: {err:?}");
         }
     }
+
+    let psf_lock = Arc::new(RwLock::new((
+        gui_settings.beam_shape_path.clone(),
+        gui_settings.psf.clone(),
+    )));
 
     gui_settings.meta_data_edit = false;
     gui_settings.meta_data_unlocked = false;
@@ -213,8 +216,6 @@ fn main() {
     let filtered_time_lock = Arc::new(RwLock::new(Array1::from_shape_fn(1, |_| 0.0)));
     let md_lock = Arc::new(RwLock::new(DotthzMetaData::default()));
     let voxel_plot_instances_lock = Arc::new(RwLock::new((vec![], 1.0, 1.0, 1.0)));
-
-    let psf_lock = Arc::new(RwLock::new((PathBuf::new(), PSF::default())));
 
     let mut progress_lock = HashMap::new();
     if let Ok(mut filters) = FILTER_REGISTRY.lock() {

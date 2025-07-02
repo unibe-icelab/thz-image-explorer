@@ -15,10 +15,12 @@ use crate::math_tools::{
     average_polygon_roi, calculate_optical_properties, fft, ifft, numpy_unwrap, scaling,
     FftWindowType,
 };
+use crate::APP_INFO;
 use bevy::winit::EventLoopProxy;
 use dotthz::DotthzMetaData;
 use ndarray::parallel::prelude::*;
 use ndarray::{Array1, Array2, Array3, Axis};
+use preferences::Preferences;
 use realfft::RealFftPlanner;
 use std::f32::consts::PI;
 use std::sync::atomic::Ordering;
@@ -738,6 +740,12 @@ pub fn main_thread(
                         if let Ok(mut psf_guard) = thread_communication.psf_lock.write() {
                             *psf_guard = (path.to_path_buf(), psf);
                         }
+                        if let Err(e) = thread_communication
+                            .gui_settings
+                            .save(&APP_INFO, "config/gui")
+                        {
+                            log::error!("Failed to save config: {}", e);
+                        };
                     }
                 }
                 ConfigCommand::SetFFTWindowLow(low) => {
