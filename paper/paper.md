@@ -41,9 +41,10 @@ images pixel by pixel or by selecting a region of interest (ROI) without an inte
 
 ![THz Image Explorer icon.\label{fig:icon}](icon.png){#id .class width=20%}
 
-We developed an interactive graphical user interface (GUI), written in [Rust](https://www.rust-lang.org), to aid
+We developed an interactive graphical user interface (GUI), written
+in [Rust](https://www.rust-lang.org) [@matsakis2014rust], to aid
 investigating acquired 2D scans. The
-application implements the dotTHz standard [@lee_dotthz_2023] and is platform independent and open source, thus making
+application implements the dotTHz standard [@lee_dotthz_2023] and is platform independent and open-source, thus making
 it
 easier to maintain and increasing its reach.
 
@@ -70,7 +71,8 @@ The application is multithreaded with two main threads:
 - GUI thread
 - Data thread
 
-The GUI uses [egui](https://www.egui.rs), an immediate-mode GUI library for rust and [bevy](https://bevy.org), a game
+The GUI uses [egui](https://www.egui.rs), an immediate-mode GUI library for rust
+and [bevy](https://bevy.org) [@bevyengine], a game
 engine used for rendering.
 
 The GUI thread handles all the user input and displaying of plots and other window elements. The configuration values
@@ -83,7 +85,6 @@ extend the communication for additional data-types, these two structs need to be
 `crossbeam_channel::Sender<T>`/`crossbeam_channel::Receiver<T>`.
 
 The structure of the software architecture is shown in figure \ref{fig:software_architecture}.
-
 
 ![Software Architecture.\label{fig:software_architecture}](thz-image-explorer.drawio.png){width=80% .center}
 
@@ -178,7 +179,8 @@ For large scans, it is recommended to down-scale the image. This will average th
 time-domain will still show the raw trace, but the "Signal" spectrum in the FFT plot will show the averaged spectrum of
 the down-scaled image.
 
-A sample scan (of a resolution target) is available in the `sample_data` directory.
+A sample scan (of a resolution target) is available in the `sample_data` directory. The measurement has been acquired
+using the COCoNuT setup [@coconut_2025].
 
 ## IO
 
@@ -188,7 +190,8 @@ is shown in the file opening dialog, allowing to easily
 browse through directories containing multiple scans and is also displayed upon opening a
 scan.
 
-THz Image Explorer supports drag & drop of `.thz` files, so that the user can easily open files from the file.
+THz Image Explorer supports drag & drop of `.thz`, `.thzimg` and `.thzswp` files, so that the user can easily open files
+from the file.
 
 The 3D structure can be exported as a `.vtu` file for further analysis (e.g.
 with [ParaView](https://www.paraview.org) ).
@@ -271,7 +274,10 @@ window is applied, but the user can also select other windows:
 - Hamming
 - FlatTop
 
-These windows are defined in `math_tools.rs`.
+The adapted Blackman window is a modified version of the Blackman window, where most of the signal is preserved and only
+the first and last couple of datapoints are modified.
+
+All windows are defined in `math_tools.rs`.
 
 ### Frequency Band Pass Filter
 
@@ -279,15 +285,15 @@ A simple band-pass filter can be applied in fourier space to only display certai
 
 ### Inverse FFT
 
-The inverse FFT is applied to convert the frequency domain back to the time domain.
+The inverse FFT is applied to convert the data from frequency domain back to time domain.
 
 ### Time Domain After FFT
 
-After converting back to the time domain, another band-pass filter can be applied to the time traces.
-By selecting a slice in the time domain, it is possible to scan through the $z$-axis of the scan and analysing
+After converting back to time domain, another band-pass filter can be applied to the time traces.
+By selecting a slice in time domain, it is possible to scan through the $z$-axis of the scan and analysing
 sub-surface layers [@koch-dandolo_reflection_2015]. The double-slider can be controlled with zoom and scroll/pan
-gestures on the trackpad/mouse wheel. The user can step through the time domain using the left/right arrow keys, when
-hovered above the filter UI.
+gestures on the trackpad/mouse wheel. The user can step through the data along the time axis using the left/right arrow
+keys, when hovered above the filter UI.
 
 ### Deconvolution
 
@@ -355,8 +361,8 @@ directory with a struct that implements the `Filter` trait. The file needs to be
 `src/filters` directory, so that it is included in the compilation.
 By defining the `config()` function, the user can supply a name, description and specify in which domain the filter
 operates (time or frequency).
-The math of the filter needs to be placed in the `filter()` function and the user interface in the `ui()` function using
-`egui` syntax.
+The math of the filter needs to be placed in the `filter()` function and the user-interface (UI) in the `ui()` function
+the using `egui` library.
 `Clone`, `Debug` and `CopyStaticFields` need to be derived.
 Additionally, the `#[register_filter]` procedural macro
 needs to added to the custom filter struct to automatically add it to the application and the user does not need to
@@ -491,7 +497,8 @@ def extract_rois(path: Path, measurement_key: Optional[str] = None):
 
 # Summary
 
-THz Image Explorer primarily serves as a data analysis tool for THz 2D images. The main focus lies on preliminary
+THz Image Explorer primarily serves as a performant data analysis tool for THz 2D images. The main focus lies on
+preliminary
 browsing of
 measurements, rough analysis of scans and identifying regions of interest in each scan. It is designed in a modular way
 to allow
