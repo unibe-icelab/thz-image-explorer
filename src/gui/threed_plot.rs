@@ -104,40 +104,43 @@ pub(crate) fn instance_from_data(
     time_span: f32,
     mut dataset: Array3<f32>,
     opacity_threshold: f32,
+    scaling: usize,
+    original_dimensions: (usize, usize, usize),
 ) -> (Vec<InstanceData>, f32, f32, f32) {
-    //let timer = Instant::now();
-
     let grid_width = dataset.shape()[0];
     let grid_height = dataset.shape()[1];
     let grid_depth = dataset.shape()[2];
 
-    let cube_width = 1.0 / 4.0;
-    let cube_height = 1.0 / 4.0;
-    let c = 300_000_000.0;
-    let cube_depth = cube_width / (time_span * c / 1.0e9 * 1.0);
+    // Keep base cube size constant for mesh creation
+    let base_cube_size = 1.0 / 4.0;
+    let cube_width = base_cube_size;
+    let cube_height = base_cube_size;
 
-    // Precompute kernel once
+    let c = 300_000_000.0;
+    let cube_depth = base_cube_size / (time_span * c / 1.0e9 * 1.0);
+
+    // Use original dimensions for consistent spacing
+    let (orig_width, orig_height, orig_depth) = original_dimensions;
+
+    // Calculate spacing to maintain overall plot size
+    let spacing_width = (orig_width as f32 * cube_width) / grid_width as f32;
+    let spacing_height = (orig_height as f32 * cube_height) / grid_height as f32;
+    let spacing_depth = (orig_depth as f32 * cube_depth) / grid_depth as f32;
+
+    // Rest of your processing code...
     let kernel = gaussian_kernel1d(3.0, 9);
 
-    // Step 1: Envelope (convolve and square)
     dataset
         .axis_iter_mut(Axis(0))
         .into_par_iter()
         .for_each(|mut plane| {
             for mut line in plane.axis_iter_mut(Axis(0)) {
-                line.mapv_inplace(|v| v.powi(2)); // single squaring
-
+                line.mapv_inplace(|v| v.powi(2));
                 let envelope = convolve1d(&line.view(), &kernel);
-
-                // Write envelope back
                 line.assign(&envelope);
             }
         });
 
-    // println!("calculating envelope: {:?}", timer.elapsed());
-    // let timer = Instant::now();
-
-    // Step 2: Normalize (min-max normalization along z)
     dataset
         .axis_iter_mut(Axis(0))
         .into_par_iter()
@@ -154,25 +157,29 @@ pub(crate) fn instance_from_data(
             }
         });
 
-    // println!("normalizing: {:?}", timer.elapsed());
-    // let timer = Instant::now();
-
     let total_instances = grid_width * grid_height * grid_depth;
     let mut instances = Vec::with_capacity(total_instances);
 
-    // Precalculate
-    let half_width = (grid_width as f32 * cube_width) / 2.0;
-    let half_height = (grid_height as f32 * cube_height) / 2.0;
-    let half_depth = (grid_depth as f32 * cube_depth) / 2.0;
+    // Use original dimensions with base cube size for total plot size
+    let total_plot_width = orig_width as f32 * base_cube_size;
+    let total_plot_height = orig_height as f32 * base_cube_size;
+    let total_plot_depth = orig_depth as f32 * cube_depth;
 
-    let dataset_slice = dataset.as_slice().unwrap(); // SAFER: unwrap once, not every time
+    let half_width = total_plot_width / 2.0;
+    let half_height = total_plot_height / 2.0;
+    let half_depth = total_plot_depth / 2.0;
+
+    let dataset_slice = dataset.as_slice().unwrap();
+
+    // Scaling factor for individual cubes
+    let cube_scale = scaling as f32;
 
     for x in 0..grid_width {
         for y in 0..grid_height {
             for z in 0..grid_depth {
                 let flat_index = x * grid_height * grid_depth + y * grid_depth + z;
                 let mut opacity = dataset_slice[flat_index];
-                opacity = opacity * opacity; // opacity.powf(2.0)
+                opacity = opacity * opacity;
 
                 if opacity < opacity_threshold {
                     continue;
@@ -180,21 +187,20 @@ pub(crate) fn instance_from_data(
 
                 let (r, g, b) = jet_colormap(opacity);
 
+                // flip (x/y) axis to line up with the 2D scan
                 let position = Vec3::new(
-                    x as f32 * cube_width - half_width,
-                    y as f32 * cube_height - half_height,
-                    z as f32 * cube_depth - half_depth,
+                    y as f32 * spacing_height - half_height,
+                    half_width - x as f32 * spacing_width,
+                    z as f32 * spacing_depth - half_depth,
                 );
 
                 instances.push(InstanceData {
-                    pos_scale: [position.x, position.y, position.z, 1.0],
+                    pos_scale: [position.x, position.y, position.z, cube_scale],
                     color: LinearRgba::from(Color::srgba(r, g, b, opacity)).to_f32_array(),
                 });
             }
         }
     }
-    // println!("instances amount: {}", instances.len());
-    // println!("pushing instances: {:?}", timer.elapsed());
 
     (instances, cube_width, cube_height, cube_depth)
 }
@@ -279,8 +285,13 @@ pub fn setup(
                 target: RenderTarget::Image(ImageRenderTarget::from(image_handle.clone())),
                 ..default()
             },
-            Transform::from_translation(Vec3::new(0.0, 0.0, 120.0)).looking_at(Vec3::ZERO, Vec3::Y),
-            PanOrbitCamera::default(),
+            Transform::from_translation(Vec3::new(0.0, 120.0, 0.0)),
+            PanOrbitCamera {
+                allow_upside_down: true,
+                pitch: Some(0.0_f32.to_radians()),
+                yaw: Some(0.0_f32.to_radians()),
+                ..default()
+            },
             first_pass_layer,
         ))
         .id();

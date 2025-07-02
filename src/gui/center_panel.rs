@@ -751,16 +751,21 @@ pub fn refractive_index_tab(
             if ui
                 .add(
                     // we just use 20 as a maximum value for the slider for practical purposes
-                    Slider::new(&mut thread_communication.gui_settings.sample_thickness, 0.01..=20.0)
-                        .min_decimals(2)
-                        .max_decimals(2)
-                        .suffix(" mm"),
+                    Slider::new(
+                        &mut thread_communication.gui_settings.sample_thickness,
+                        0.01..=20.0,
+                    )
+                    .min_decimals(2)
+                    .max_decimals(2)
+                    .suffix(" mm"),
                 )
                 .changed()
             {
                 thread_communication
                     .config_tx
-                    .send(ConfigCommand::SetMaterialThickness(thread_communication.gui_settings.sample_thickness))
+                    .send(ConfigCommand::SetMaterialThickness(
+                        thread_communication.gui_settings.sample_thickness,
+                    ))
                     .unwrap();
             }
 

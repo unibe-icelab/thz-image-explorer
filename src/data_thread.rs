@@ -15,6 +15,7 @@ use crate::math_tools::{
     average_polygon_roi, calculate_optical_properties, fft, ifft, numpy_unwrap, scaling,
     FftWindowType,
 };
+use bevy::winit::EventLoopProxy;
 use dotthz::DotthzMetaData;
 use ndarray::parallel::prelude::*;
 use ndarray::{Array1, Array2, Array3, Axis};
@@ -22,7 +23,6 @@ use realfft::RealFftPlanner;
 use std::f32::consts::PI;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
-use bevy::winit::EventLoopProxy;
 
 pub enum UpdateType {
     None,
@@ -32,11 +32,10 @@ pub enum UpdateType {
     Plot,
 }
 
- fn request_repaint(proxy: &EventLoopProxy<bevy::winit::WakeUp>) {
-     log::debug!("requesting repaint.");
-     let _ = proxy.send_event(bevy::winit::WakeUp); // Wakes up the event loop
+fn request_repaint(proxy: &EventLoopProxy<bevy::winit::WakeUp>) {
+    log::debug!("requesting repaint.");
+    let _ = proxy.send_event(bevy::winit::WakeUp); // Wakes up the event loop
 }
-
 
 /// Updates the intensity image lock with the filtered image from the scan.
 ///
@@ -48,6 +47,8 @@ pub enum UpdateType {
 fn update_intensity_image(
     scan: &ScannedImageFilterData,
     thread_communication: &ThreadCommunication,
+    original_dims: (usize, usize, usize),
+    scaling: usize,
 ) {
     if scan.img.shape()[0] == 0 || scan.img.shape()[1] == 0 {
         if let Ok(mut write_guard) = thread_communication.img_lock.write() {
@@ -89,6 +90,8 @@ fn update_intensity_image(
                 time_span,
                 scan.data.clone(),
                 thread_communication.gui_settings.opacity_threshold,
+                scaling,
+                original_dims,
             );
         write_guard.0 = instances;
         write_guard.1 = cube_width;
@@ -139,7 +142,10 @@ fn update_metadata_rois(md: &mut DotthzMetaData, input: &ScannedImageFilterData)
 ///
 /// # Arguments
 /// * `thread_communication` - A channel-based communication structure between threads.
-pub fn main_thread(mut thread_communication: ThreadCommunication, proxy: &EventLoopProxy<bevy::winit::WakeUp>) {
+pub fn main_thread(
+    mut thread_communication: ThreadCommunication,
+    proxy: &EventLoopProxy<bevy::winit::WakeUp>,
+) {
     // reads data from mutex, samples and saves if needed
     let mut config = ConfigContainer::default();
     let mut meta_data = DotthzMetaData::default();
@@ -1076,6 +1082,16 @@ pub fn main_thread(mut thread_communication: ThreadCommunication, proxy: &EventL
                                     }
                                 }
 
+                                let mut original_dims = (1, 1, 1);
+
+                                if let Some(first) = filter_data.first() {
+                                    original_dims = (
+                                        first.data.shape()[0],
+                                        first.data.shape()[1],
+                                        first.data.shape()[2],
+                                    );
+                                }
+
                                 // update intensity image
                                 if let Some(filtered) = filter_data.last_mut() {
                                     if filtered.scaling > 1 {
@@ -1145,7 +1161,12 @@ pub fn main_thread(mut thread_communication: ThreadCommunication, proxy: &EventL
                                             );
                                     }
 
-                                    update_intensity_image(&filtered, &thread_communication);
+                                    update_intensity_image(
+                                        &filtered,
+                                        &thread_communication,
+                                        original_dims,
+                                        config.scale_factor,
+                                    );
                                 }
                             }
                         }
@@ -1324,7 +1345,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication, proxy: &EventL
                     }
                     if let Ok(filter_data) = thread_communication.filter_data_pipeline_lock.read() {
                         if let Some(filtered) = filter_data.last() {
-
                             // Get ROI data
                             if let (Some((_, reference_amplitude)), Some((_, reference_phase))) = (
                                 filtered.roi_signal_fft.get(&reference_roi),
@@ -1401,6 +1421,16 @@ pub fn main_thread(mut thread_communication: ThreadCommunication, proxy: &EventL
                     if let Ok(mut filter_data) =
                         thread_communication.filter_data_pipeline_lock.write()
                     {
+                        let mut original_dims = (1, 1, 1);
+
+                        if let Some(first) = filter_data.first() {
+                            original_dims = (
+                                first.data.shape()[0],
+                                first.data.shape()[1],
+                                first.data.shape()[2],
+                            );
+                        }
+
                         if let Some(filtered) = filter_data.last_mut() {
                             if filtered.scaling > 1 {
                                 let scaled_width = filtered.data.shape()[0];
@@ -1469,7 +1499,12 @@ pub fn main_thread(mut thread_communication: ThreadCommunication, proxy: &EventL
                                     );
                             }
 
-                            update_intensity_image(&filtered, &thread_communication);
+                            update_intensity_image(
+                                &filtered,
+                                &thread_communication,
+                                original_dims,
+                                config.scale_factor,
+                            );
                         }
                     }
                     request_repaint(proxy);
@@ -1582,7 +1617,6 @@ pub fn main_thread(mut thread_communication: ThreadCommunication, proxy: &EventL
 
                     if let Ok(filter_data) = thread_communication.filter_data_pipeline_lock.read() {
                         if let Some(filtered) = filter_data.last() {
-
                             // Get ROI data
                             if let (Some((_, reference_amplitude)), Some((_, reference_phase))) = (
                                 filtered.roi_signal_fft.get(&reference_roi),
