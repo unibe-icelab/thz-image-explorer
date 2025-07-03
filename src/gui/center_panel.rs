@@ -891,6 +891,7 @@ pub fn center_panel(
                         explorer,
                     );
                 }
+                // TODO add BRDF / sweep for .thzswp files
             }
         });
     });
