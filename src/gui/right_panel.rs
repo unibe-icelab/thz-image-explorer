@@ -89,7 +89,7 @@ pub fn right_panel(
                 ui.add_space(10.0);
                 ui.separator();
 
-                egui::ScrollArea::vertical().max_height(ui.available_height() - 200.0).show(ui, |ui| {
+                egui::ScrollArea::vertical().max_height(ui.available_height() - 60.0).show(ui, |ui| {
 
                     // TODO: fix this with right_panel_width or similar
                     ui.style_mut().spacing.slider_width = 320.0;
@@ -297,7 +297,6 @@ pub fn right_panel(
                 }
 
                 ui.add_space(5.0);
-                ui.separator();
 
 
             });
