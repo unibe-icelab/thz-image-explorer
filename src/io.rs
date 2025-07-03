@@ -413,9 +413,13 @@ pub fn open_pulse_from_thz(
 
     if let Some(group_name) = file.get_group_names()?.first() {
         if file.get_groups()?.len() > 1 {
-            log::info!("found more than one group, opening only the first");
+            // TODO let the user choose which group to open
+            log::info!(
+                "found more than one group in {:?}, opening only the first: {}",
+                file_path,
+                group_name
+            );
         }
-        // For TeraFlash measurements we always just get the first entry
         let group = file.get_group(group_name)?;
 
         // get the metadata
@@ -469,7 +473,11 @@ pub fn open_scan_from_thz(
     if let Some(group_name) = file.get_group_names()?.first() {
         if file.get_groups()?.len() > 1 {
             // TODO let the user choose which group to open
-            log::info!("found more than one group, opening only the first");
+            log::info!(
+                "found more than one group in {:?}, opening only the first: {}",
+                file_path,
+                group_name
+            );
         }
 
         // For TeraFlash measurements we always just get the first entry
@@ -478,34 +486,50 @@ pub fn open_scan_from_thz(
         // get the metadata
         *metadata = file.get_meta_data(group_name)?;
 
-        // TODO: if the file is not a scan, just load the normal datasets as ROIs.
-
-        // Read datasets and populate DataContainer fields, skipping any that are missing
-        if let Some(ds) = metadata.ds_description.iter().position(|d| d == "time") {
-            if let Ok(ds) = group.dataset(format!("ds{}", ds + 1).as_str()) {
-                if let Ok(arr) = ds.read_1d() {
-                    scan.time = arr;
-                }
+        // search for a 1D time dataset
+        let mut found_time_for_scan = false;
+        for ds in group.datasets()? {
+            if let Ok(arr) = ds.read_1d() {
+                scan.time = arr;
+                found_time_for_scan = true;
+                break;
             }
         }
 
-        if let Some(ds) = metadata.ds_description.iter().position(|d| d == "dataset") {
-            if let Ok(ds) = group.dataset(format!("ds{}", ds + 1).as_str()) {
-                if let Ok(arr) = ds.read_dyn::<f32>() {
-                    if let Ok(arr3) = arr.into_dimensionality::<ndarray::Ix3>() {
-                        // check dimensions to make sure
-                        if arr3.shape().len() == 3 {
-                            scan.data = arr3;
-                        }
+        // searching for a 3D dataset
+        let mut found_data_for_scan = false;
+        for ds in group.datasets()? {
+            if let Ok(arr) = ds.read_dyn::<f32>() {
+                if let Ok(arr3) = arr.into_dimensionality::<ndarray::Ix3>() {
+                    // check dimensions to make sure
+                    if arr3.shape().len() == 3 {
+                        scan.data = arr3;
+                        found_data_for_scan = true;
+                        break;
                     }
                 }
             }
         }
+
+        if !found_time_for_scan && !found_data_for_scan {
+            log::info!("no scan dataset found, trying to read single pulse dataset");
+            // TODO let the user choose which group to open
+            if let Some(ds) = group.datasets()?.first() {
+                if let Ok(arr) = ds.read_2d::<f32>() {
+                    scan.time = arr.column(0).to_owned();
+                    let column_data = arr.column(1).to_owned();
+                    scan.data =
+                        Array3::from_shape_vec((1, 1, column_data.len()), column_data.to_vec())
+                            .expect("Shape and data length should match");
+                    scan.height = 1;
+                    scan.width = 1;
+                    scan.dx = Some(1.0);
+                    scan.dy = Some(1.0);
+                }
+            }
+        }
     }
 
-    if scan.data.is_empty() {
-        return Err("No 2D scan data found in the THz file".into());
-    }
     if let Some(w) = metadata.md.get("width") {
         if let Ok(width) = w.parse::<usize>() {
             scan.width = width;

@@ -82,7 +82,11 @@ fn autosave_on_exit(
 
 // --- Main ---
 fn main() {
-    egui_logger::builder().init().unwrap();
+    egui_logger::builder()
+        // had to take out debug prints because bevy is spamming it
+        .max_level(log::LevelFilter::Info)
+        .init()
+        .unwrap();
 
     let mut gui_settings = GuiSettingsContainer::new();
     let prefs_key = "config/gui";
