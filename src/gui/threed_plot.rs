@@ -355,7 +355,7 @@ pub fn three_dimensional_plot_ui(
     thread_communication: &mut ResMut<ThreadCommunication>,
     explorer: &mut THzImageExplorer,
 ) {
-    height -= 200.0;
+    height -= 120.0;
     let available_size = egui::vec2(width.min(height), width.min(height));
 
     // need to do this to take it out of the next closure, we will put it back later
@@ -367,26 +367,7 @@ pub fn three_dimensional_plot_ui(
         let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
 
         ui.vertical(|ui| {
-            ui.label("3D Voxel Plot");
-
-            if ui.button("Refresh").clicked() {
-                // Update existing entity
-                if let Ok((mut instance_data, mut mesh3d)) = query.single_mut() {
-                    instance_data.instances = instances.clone();
-                    mesh3d.0 = new_mesh.clone();
-
-                    instance_data
-                        .instances
-                        .retain(|instance| instance.color[3] >= opacity_threshold.0);
-                } else {
-                    log::error!("No existing entity found to update.");
-                }
-            }
-
-            if ui.button("Export to VTU").clicked() {
-                explorer.file_dialog_state = FileDialogState::SaveToVTU;
-                explorer.file_dialog.save_file();
-            }
+            ui.add_space(10.0);
 
             ui.allocate_ui(available_size, |ui| {
                 ui.image(egui::load::SizedTexture::new(
@@ -430,6 +411,19 @@ pub fn three_dimensional_plot_ui(
                 ui.label("Animate Camera:");
                 ui.add(toggle(&mut animation_enabled));
             });
+
+            ui.add_space(10.0);
+
+            if ui
+                .button(egui::RichText::new(format!(
+                    "{} Export VTU",
+                    egui_phosphor::regular::FLOPPY_DISK
+                )))
+                .clicked()
+            {
+                explorer.file_dialog_state = FileDialogState::SaveToVTU;
+                explorer.file_dialog.save_file();
+            }
         });
     }
 

@@ -572,11 +572,15 @@ pub fn optical_properties_tab(
                 .available_samples
                 .push("Selected Pixel".to_string());
         } else {
-            // If no ROIs are available, use the default references and samples
-            explorer.data.available_references = vec!["Default Reference".to_string()];
-            explorer.data.available_samples = vec!["Selected Pixel".to_string()];
+            // If no ROIs are available yet
+            explorer.data.available_references = vec!["--------------".to_string()];
+            explorer.data.available_samples = vec!["--------------".to_string()];
         }
     }
+
+    // currently the user has to select a reference and sample actively, even though it might seem that
+    // by default the first ROI is selected. this is not very user-friendly for now..
+    // TODO : make this more intuitive.
     ui.vertical(|ui| {
         // Signal selection controls
         ui.horizontal(|ui| {
