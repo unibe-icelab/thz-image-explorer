@@ -134,7 +134,7 @@
         <mxCell id="fzYuc_R3unV9gP9Wz9dk-49" value="3D rendering" style="whiteSpace=wrap;html=1;" vertex="1" parent="iK0OME3ins9RKT_fmdNh-22">
           <mxGeometry x="90" y="1000" width="140" height="30" as="geometry" />
         </mxCell>
-        <mxCell id="iK0OME3ins9RKT_fmdNh-23" value="GUI Thread" style="swimlane;sketch=1;curveFitting=1;jiggle=2;" parent="1" vertex="1">
+        <mxCell id="iK0OME3ins9RKT_fmdNh-23" value="GUI Thread" style="swimlane;" parent="1" vertex="1">
           <mxGeometry x="510" y="70" width="290" height="1080" as="geometry" />
         </mxCell>
         <mxCell id="fzYuc_R3unV9gP9Wz9dk-22" value="UI" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" vertex="1" parent="iK0OME3ins9RKT_fmdNh-23">
@@ -208,7 +208,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="fzYuc_R3unV9gP9Wz9dk-57" value="&lt;div style=&quot;&quot;&gt;&lt;pre&gt;&lt;div style=&quot;white-space: normal;&quot;&gt;&lt;pre&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 10px; color: light-dark(rgb(188, 190, 196), rgb(255, 255, 255));&quot;&gt;Arc&amp;lt;RwLock&amp;lt;&lt;/font&gt;&lt;/pre&gt;&lt;pre&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 10px; color: light-dark(rgb(188, 190, 196), rgb(255, 255, 255));&quot;&gt;(Vec&amp;lt;InstanceData&amp;gt;,&lt;/font&gt;&lt;/pre&gt;&lt;pre&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 10px; color: light-dark(rgb(188, 190, 196), rgb(255, 255, 255));&quot;&gt; f32, f32, f32)&amp;gt;&amp;gt;&lt;/font&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/pre&gt;&lt;/div&gt;" style="shape=ext;double=1;rounded=0;whiteSpace=wrap;html=1;align=center;" vertex="1" parent="1">
+        <mxCell id="fzYuc_R3unV9gP9Wz9dk-57" value="&lt;div style=&quot;&quot;&gt;&lt;pre&gt;&lt;div style=&quot;white-space: normal;&quot;&gt;&lt;pre&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 10px;&quot;&gt;Arc&amp;lt;RwLock&amp;lt;&lt;/font&gt;&lt;/pre&gt;&lt;pre&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 10px;&quot;&gt;(Vec&amp;lt;InstanceData&amp;gt;,&lt;/font&gt;&lt;/pre&gt;&lt;pre&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 10px;&quot;&gt; f32, f32, f32)&amp;gt;&amp;gt;&lt;/font&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/pre&gt;&lt;/div&gt;" style="shape=ext;double=1;rounded=0;whiteSpace=wrap;html=1;align=center;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="374" y="1040" width="120" height="80" as="geometry" />
         </mxCell>
         <mxCell id="fzYuc_R3unV9gP9Wz9dk-55" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=4;" edge="1" parent="1" source="fzYuc_R3unV9gP9Wz9dk-39" target="fzYuc_R3unV9gP9Wz9dk-38">
@@ -219,7 +219,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="fzYuc_R3unV9gP9Wz9dk-54" value="&lt;div style=&quot;&quot;&gt;&lt;pre&gt;&lt;font style=&quot;color: light-dark(rgb(188, 190, 196), rgb(255, 255, 255)); font-size: 10px;&quot; face=&quot;Helvetica&quot;&gt;Arc&amp;lt;RwLock&lt;/font&gt;&lt;/pre&gt;&lt;pre&gt;&lt;font style=&quot;color: light-dark(rgb(188, 190, 196), rgb(255, 255, 255)); font-size: 10px;&quot; face=&quot;Helvetica&quot;&gt;&amp;lt;PlotDataContainer&amp;gt;&amp;gt;&lt;/font&gt;&lt;/pre&gt;&lt;/div&gt;" style="shape=ext;double=1;rounded=0;whiteSpace=wrap;html=1;align=center;" vertex="1" parent="1">
+        <mxCell id="fzYuc_R3unV9gP9Wz9dk-54" value="&lt;div style=&quot;&quot;&gt;&lt;pre&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 10px;&quot;&gt;Arc&amp;lt;RwLock&lt;/font&gt;&lt;/pre&gt;&lt;pre&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 10px;&quot;&gt;&amp;lt;PlotDataContainer&amp;gt;&amp;gt;&lt;/font&gt;&lt;/pre&gt;&lt;/div&gt;" style="shape=ext;double=1;rounded=0;whiteSpace=wrap;html=1;align=center;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="374" y="910" width="120" height="80" as="geometry" />
         </mxCell>
         <mxCell id="fzYuc_R3unV9gP9Wz9dk-62" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;strokeWidth=4;" edge="1" parent="1" source="iK0OME3ins9RKT_fmdNh-18" target="iK0OME3ins9RKT_fmdNh-25">
@@ -230,7 +230,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="fzYuc_R3unV9gP9Wz9dk-63" value="&lt;div style=&quot;&quot;&gt;&lt;pre&gt;&lt;font style=&quot;color: light-dark(rgb(188, 190, 196), rgb(255, 255, 255)); font-size: 10px;&quot; face=&quot;Helvetica&quot;&gt;Arc&amp;lt;RwLock&lt;/font&gt;&lt;/pre&gt;&lt;pre&gt;&lt;font style=&quot;color: light-dark(rgb(188, 190, 196), rgb(255, 255, 255)); font-size: 10px;&quot; face=&quot;Helvetica&quot;&gt;&amp;lt;PlotDataContainer&amp;gt;&amp;gt;&lt;/font&gt;&lt;/pre&gt;&lt;/div&gt;" style="shape=ext;double=1;rounded=0;whiteSpace=wrap;html=1;align=center;" vertex="1" parent="1">
+        <mxCell id="fzYuc_R3unV9gP9Wz9dk-63" value="&lt;div style=&quot;&quot;&gt;&lt;pre&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 10px;&quot;&gt;Arc&amp;lt;RwLock&lt;/font&gt;&lt;/pre&gt;&lt;pre&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 10px;&quot;&gt;&amp;lt;PlotDataContainer&amp;gt;&amp;gt;&lt;/font&gt;&lt;/pre&gt;&lt;/div&gt;" style="shape=ext;double=1;rounded=0;whiteSpace=wrap;html=1;align=center;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="374" y="770" width="120" height="80" as="geometry" />
         </mxCell>
         <mxCell id="fzYuc_R3unV9gP9Wz9dk-42" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;strokeWidth=4;" edge="1" parent="1" source="iK0OME3ins9RKT_fmdNh-6" target="iK0OME3ins9RKT_fmdNh-24">
@@ -239,10 +239,10 @@
         <mxCell id="fzYuc_R3unV9gP9Wz9dk-41" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;strokeWidth=4;" edge="1" parent="1" source="iK0OME3ins9RKT_fmdNh-17" target="iK0OME3ins9RKT_fmdNh-26">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="fzYuc_R3unV9gP9Wz9dk-66" value="&lt;div style=&quot;&quot;&gt;&lt;pre&gt;&lt;font style=&quot;color: light-dark(rgb(188, 190, 196), rgb(255, 255, 255)); font-size: 10px;&quot; face=&quot;Helvetica&quot;&gt;Arc&amp;lt;RwLock&lt;/font&gt;&lt;/pre&gt;&lt;pre&gt;&lt;font style=&quot;color: light-dark(rgb(188, 190, 196), rgb(255, 255, 255)); font-size: 10px;&quot; face=&quot;Helvetica&quot;&gt;&amp;lt;PlotDataContainer&amp;gt;&amp;gt;&lt;/font&gt;&lt;/pre&gt;&lt;/div&gt;" style="shape=ext;double=1;rounded=0;whiteSpace=wrap;html=1;align=center;" vertex="1" parent="1">
+        <mxCell id="fzYuc_R3unV9gP9Wz9dk-66" value="&lt;div style=&quot;&quot;&gt;&lt;pre&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 10px;&quot;&gt;Arc&amp;lt;RwLock&lt;/font&gt;&lt;/pre&gt;&lt;pre&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 10px;&quot;&gt;&amp;lt;PlotDataContainer&amp;gt;&amp;gt;&lt;/font&gt;&lt;/pre&gt;&lt;/div&gt;" style="shape=ext;double=1;rounded=0;whiteSpace=wrap;html=1;align=center;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="374" y="620" width="120" height="80" as="geometry" />
         </mxCell>
-        <mxCell id="fzYuc_R3unV9gP9Wz9dk-67" value="&lt;div style=&quot;&quot;&gt;&lt;pre&gt;&lt;font style=&quot;color: light-dark(rgb(188, 190, 196), rgb(255, 255, 255)); font-size: 10px;&quot; face=&quot;Helvetica&quot;&gt;Arc&amp;lt;RwLock&lt;/font&gt;&lt;/pre&gt;&lt;pre&gt;&lt;font style=&quot;color: light-dark(rgb(188, 190, 196), rgb(255, 255, 255)); font-size: 10px;&quot; face=&quot;Helvetica&quot;&gt;&amp;lt;PlotDataContainer&amp;gt;&amp;gt;&lt;/font&gt;&lt;/pre&gt;&lt;/div&gt;" style="shape=ext;double=1;rounded=0;whiteSpace=wrap;html=1;align=center;" vertex="1" parent="1">
+        <mxCell id="fzYuc_R3unV9gP9Wz9dk-67" value="&lt;div style=&quot;&quot;&gt;&lt;pre&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 10px;&quot;&gt;Arc&amp;lt;RwLock&lt;/font&gt;&lt;/pre&gt;&lt;pre&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 10px;&quot;&gt;&amp;lt;PlotDataContainer&amp;gt;&amp;gt;&lt;/font&gt;&lt;/pre&gt;&lt;/div&gt;" style="shape=ext;double=1;rounded=0;whiteSpace=wrap;html=1;align=center;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="374" y="440" width="120" height="80" as="geometry" />
         </mxCell>
       </root>
