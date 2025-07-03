@@ -96,7 +96,7 @@ hundreds of MB) it is acceptable. This structure defines the processing pipeline
 
 ## Pre-built Bundles
 
-Pre-built bundles are available for each release on [GitHub](https://github.com/hacknus/thz-image-explorer) for
+Pre-built bundles are available for each release on [GitHub](https://github.com/unibe-icelab/thz-image-explorer) for
 
 - macOS (`.app` bundle for x86 and Apple Silicon)
 - Linux (executable and `.deb` for x86)
@@ -115,7 +115,7 @@ found [here](https://github.com/hacknus/DotTHzQL). Note: This plugin requires HD
 
 ## Compile from Source
 
-Alternatively, to compile directly from source, rust needs to be installed and the following
+Alternatively, to compile directly from source, rust 1.87 or higher needs to be installed and the following
 command needs to be executed:
 
 ```shell
@@ -169,7 +169,7 @@ settings window.
 # Usage
 
 The window is structured with the time domain trace and frequency domain spectrum for the selected pixel (default is
-0,0) in the center panel. A different tab showing the refractive index and absorption coefficient can be selected, as
+0,0) in the center panel. A different tab showing the optical properties (refractive index and absorption coefficient) can be selected, as
 well as a tab containing an interactive 3D viewer.
 The left side-panel contains the intensity plot of the 2D scan along with the meta-data editor. The right
 side-panel contains the possible filters with configuration settings.
@@ -196,7 +196,7 @@ from the file.
 The 3D structure can be exported as a `.vtu` file for further analysis (e.g.
 with [ParaView](https://www.paraview.org) ).
 
-A reference file can be loaded, which is used to compute the refractive index and absorption coefficient. The first
+A reference file (standard `.thz`) can be loaded, which is used to compute the optical properties of the sample. The first
 entry will be used.
 
 ## Regions of Interest (ROI)
@@ -207,9 +207,9 @@ reasonably close to the first one (< 5 % of width/height of the image). This ROI
 the dotTHz file for future analysis. The full averaged scan as well as the averages of all selected ROIs can be
 displayed in the center plot.
 
-## Refractive Index and Absorption Coefficient
+## Optical Properties
 
-The refractive index and absorption coefficient can be computed from the frequency domain spectrum using the following
+The optical properties can be computed from the frequency domain spectrum using the following
 relations [@Jepsen2019]:
 
 ### Refractive Index
@@ -494,6 +494,8 @@ def extract_rois(path: Path, measurement_key: Optional[str] = None):
 
     return rois  # Returns list of pixel coordinates
 ```
+
+This code snipped and the PSF generation script can be found in the `scripts` directory of the repository.
 
 # Summary
 

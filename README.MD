@@ -1,6 +1,6 @@
 # Explorer Software for the Data of THz time-domain imaging analysis
 
-<a href="https://github.com/hacknus/thz-image-explorer/releases"><img src="assets/icons/icon.png" alt=“” width="100" height="100"> </img> </a>
+<a href="https://github.com/unibe-icelab/thz-image-explorer/releases"><img src="assets/icons/icon.png" alt=“” width="100" height="100"> </img> </a>
 
 This Application is written in Rust and the GUI is based on egui and bevy.
 
@@ -14,7 +14,7 @@ A sample scan of a THz time-domain 2D imaging system can be found in the `sample
 
 ### Download pre-built executables
 
-[Binary bundles](https://github.com/hacknus/thz-image-explorer/releases) are available for Linux, macOS and Windows.
+[Binary bundles](https://github.com/unibe-icelab/thz-image-explorer/releases) are available for Linux, macOS and Windows.
 
 Running the apple silicon (thz-image-explorer-aarch64-apple-darwin.app) binary may result to the message "THz Image
 Explorer is damaged and cannot be opened.", to get
