@@ -890,8 +890,7 @@ pub fn center_panel(
                         thread_communication,
                         explorer,
                     );
-                }
-                // TODO add BRDF / sweep for .thzswp files
+                } // TODO add BRDF / sweep for .thzswp files
             }
         });
     });

@@ -570,11 +570,11 @@ pub fn draw_filters(
                         );
                     });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-
                         ui.add_space(20.0);
 
                         // Enable only the toggle and computation time label
-                        if let Ok(mut filters_active) = thread_communication.filters_active_lock.write()
+                        if let Ok(mut filters_active) =
+                            thread_communication.filters_active_lock.write()
                         {
                             if let Some(active) = filters_active.get_mut(uuid) {
                                 ui.add(toggle(active));
