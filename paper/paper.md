@@ -23,7 +23,7 @@ affiliations:
   - name: University of Applied Sciences and Arts Western Switzerland Valais, HES-SO Valais-Wallis, Sion, Switzerland
     index: 2
     ror: 03r5zec51
-date: 26 June 2025
+date: 3 July 2025
 bibliography: paper.bib
 ---
 
@@ -245,9 +245,29 @@ the center plot.
 
 ## Interactive 3D Viewer
 
-The application maps the gaussian envelope of the intensity along the $z$-axis
-to opacity in an interactive voxel plot. The opacity threshold can be adjusted to improve performance and reduce nosie.
-The 3D viewer is implemented using the `bevy` game engine and a custom wgsl shader implemented in another
+A THz time domain scan produces a 3D data array with dimensions $n_x \times n_y \times n_t$, where $(n_x, n_y)$
+represent the spatial coordinates and $n_t$ represents the time axis.
+
+Scans performed in reflection can be visualized in 3D. First, we transform each time trace into an intensity value by computing
+the squared amplitude and
+applying a Gaussian envelope function:
+$$
+I(x,y,t) = |s(x,y,t)|^2 * G_{\sigma}(t)
+$$
+
+where $G_{\sigma}(t)$ is a normalized 1D Gaussian kernel with standard deviation $\sigma = 3.0$ and radius of 9 samples,
+applied via convolution to smooth the squared signal and extract the envelope.
+
+The time axis is converted to a spatial distance coordinate by assuming a refractive index of $n=1$ and using the
+relation $z = ct/2$, where $c$ is the speed of light and the factor of 2 accounts for the round-trip propagation. This
+transformation yields a three-dimensional intensity cube $I(x,y,z)$.
+
+Each element (voxel) in this cube represents the THz signal intensity at a specific point in 3D space, enabling
+visualization of reflections from internal interfaces and sub-surface structures. The computed intensities are mapped to
+voxel opacity values - regions with high intensity appear opaque while low-intensity regions become transparent.
+
+Users can adjust the opacity threshold to optimize rendering performance and reduce visual noise from weak signals. The
+3D viewer is implemented using the `bevy` game engine with a custom WGSL shader, available as a separate
 crate: [bevy_voxel_plot](https://github.com/hacknus/bevy_voxel_plot).
 
 ## Filtering pipeline
