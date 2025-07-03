@@ -1,5 +1,5 @@
 ---
-title: "THz Image Explorer - A Cross-Platform Open-Source THz Image Analysis Tool"
+title: "THz Image Explorer - An Interactive Cross-Platform Open-Source THz Image Analysis Tool"
 tags:
   - THz
   - Rust
