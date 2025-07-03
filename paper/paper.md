@@ -168,7 +168,8 @@ settings window.
 # Usage
 
 The window is structured with the time domain trace and frequency domain spectrum for the selected pixel (default is
-0,0) in the center panel. A different tab showing the optical properties (refractive index and absorption coefficient) can be selected, as
+0,0) in the center panel. A different tab showing the optical properties (refractive index and absorption coefficient)
+can be selected, as
 well as a tab containing an interactive 3D viewer.
 The left side-panel contains the intensity plot of the 2D scan along with the meta-data editor. The right
 side-panel contains the possible filters with configuration settings.
@@ -185,17 +186,16 @@ using the COCoNuT setup [@coconut_2025].
 
 THz Image Explorer is able to load scans in the `.thz` (dotTHz) format, which are based on the HDF5 standard.
 This allows the files to also contain meta-data, which will also be displayed by the THz Image Explorer. The meta-data
-is shown in the file opening dialog, allowing to easily
-browse through directories containing multiple scans and is also displayed upon opening a
-scan.
+is shown in the file opening dialog on Linux and Windows, and using QuickView on macOS, allowing to easily
+browse through directories containing multiple scans.
 
-THz Image Explorer supports drag & drop of `.thz`, `.thzimg` and `.thzswp` files, so that the user can easily open files
-from the file.
+THz Image Explorer supports drag & drop of `.thz`, `.thzimg` and `.thzswp` files.
 
 The 3D structure can be exported as a `.vtu` file for further analysis (e.g.
 with [ParaView](https://www.paraview.org) ).
 
-A reference file (standard `.thz`) can be loaded, which is used to compute the optical properties of the sample. The first
+A reference file (standard `.thz`) can be loaded, which is used to compute the optical properties of the sample. The
+first
 entry will be used.
 
 ## Regions of Interest (ROI)
