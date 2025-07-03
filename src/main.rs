@@ -10,6 +10,7 @@ use crate::gui::threed_plot::{
 };
 use bevy::app::AppExit;
 use bevy::ecs::event::EventReader;
+use bevy::log::LogPlugin;
 use bevy::prelude::*;
 use bevy::render::render_resource::WgpuFeatures;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
@@ -27,6 +28,7 @@ use dotthz::DotthzMetaData;
 use ndarray::{Array1, Array2, Array3};
 use preferences::{AppInfo, Preferences};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -80,6 +82,8 @@ fn autosave_on_exit(
 
 // --- Main ---
 fn main() {
+    egui_logger::builder().init().unwrap();
+
     let mut gui_settings = GuiSettingsContainer::new();
     let prefs_key = "config/gui";
     let load_result = GuiSettingsContainer::load(&APP_INFO, prefs_key);
@@ -104,6 +108,7 @@ fn main() {
     )));
 
     gui_settings.meta_data_edit = false;
+    gui_settings.selected_path = PathBuf::default();
     gui_settings.meta_data_unlocked = false;
 
     if gui_settings.chart_scale <= 0.0 {
@@ -288,7 +293,8 @@ fn main() {
                     }),
                     exit_condition: ExitCondition::OnPrimaryClosed,
                     close_when_requested: true,
-                }),
+                })
+                .disable::<LogPlugin>(),
         )
         .add_plugins(EguiPlugin {
             enable_multipass_for_primary_context: false,

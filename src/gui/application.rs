@@ -11,16 +11,18 @@ use crate::gui::left_panel::left_panel;
 use crate::gui::matrix_plot::{ColorBarState, ImageState, SelectedPixel, ROI};
 use crate::gui::right_panel::right_panel;
 use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage, SceneVisibility};
+use crate::gui::utils::truncate_filename;
 use crate::math_tools::FftWindowType;
 use bevy::prelude::*;
 use bevy_egui::egui::ThemePreference;
-use bevy_egui::EguiContexts;
+use bevy_egui::{egui, EguiContexts};
 use bevy_voxel_plot::InstanceMaterialData;
 use core::f64;
 use egui_file_dialog::FileDialog;
 use egui_plot::PlotPoint;
 use home::home_dir;
 use self_update::update::Release;
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -51,7 +53,7 @@ pub enum FileDialogState {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Tab {
     Pulse,
-    RefractiveIndex,
+    OpticalProperties,
     ThreeD,
 }
 
@@ -61,8 +63,8 @@ impl Display for Tab {
             Tab::Pulse => {
                 write!(f, "Pulse")
             }
-            Tab::RefractiveIndex => {
-                write!(f, "Refractive Index")
+            Tab::OpticalProperties => {
+                write!(f, "Optical Properties")
             }
             Tab::ThreeD => {
                 write!(f, "3D")
@@ -75,7 +77,7 @@ impl Tab {
     pub fn to_arr(&self) -> [bool; 3] {
         match self {
             Tab::Pulse => [true, false, false],
-            Tab::RefractiveIndex => [false, true, false],
+            Tab::OpticalProperties => [false, true, false],
             Tab::ThreeD => [false, false, true],
         }
     }
@@ -224,6 +226,118 @@ pub fn update_gui(
     let left_panel_width = 300.0;
     let right_panel_width = 500.0;
 
+    let text_height = ctx.fonts(|f| f.row_height(&egui::FontId::default()));
+    let bottom_panel_height = text_height + 16.0; // Add some padding
+
+    // Add bottom panel
+    egui::TopBottomPanel::bottom("bottom_panel")
+        .exact_height(bottom_panel_height)
+        .show(ctx, |ui| {
+            ui.horizontal_centered(|ui| {
+                let path = thread_communication.gui_settings.selected_path.clone();
+
+                // Create breadcrumb-style path display with max 3 levels
+                let mut path_display = String::new();
+                let components: Vec<_> = path
+                    .components()
+                    .filter_map(|c| {
+                        if let std::path::Component::Normal(name) = c {
+                            let name_path = std::path::Path::new(name);
+                            Some(truncate_filename(ui, name_path, left_panel_width))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                if components.len() > 3 {
+                    path_display.push_str("... > ");
+                    path_display.push_str(&components[components.len() - 3..].join(" > "));
+                } else {
+                    path_display.push_str(&components.join(" > "));
+                }
+
+                ui.label(path_display);
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let (has_warnings_or_errors, last_error_or_warning) =
+                        if let Ok(logger) = egui_logger::LOGGER.lock() {
+                            let last_entry = logger.logs.iter().rev().find(|record| {
+                                matches!(record.level, log::Level::Warn | log::Level::Error)
+                            });
+
+                            let has_errors = last_entry.is_some();
+                            let last_message =
+                                last_entry.map(|record| (record.level, record.message.to_string()));
+
+                            (has_errors, last_message)
+                        } else {
+                            (false, None)
+                        };
+
+                    if has_warnings_or_errors {
+                        // Create a unique ID for this filter's info popup
+                        let popup_id = ui.make_persistent_id(format!("error_popup"));
+
+                        // Show info icon and handle clicks
+                        let info_button = ui.label(
+                            egui::RichText::new(format!(
+                                "{}",
+                                egui_phosphor::regular::WARNING_CIRCLE
+                            ))
+                            .heading()
+                            .color(egui::Color32::RED),
+                        );
+
+                        if info_button.clicked() {
+                            ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                        }
+
+                        egui::popup_below_widget(
+                            ui,
+                            popup_id,
+                            &info_button,
+                            egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+                            |ui: &mut egui::Ui| {
+                                // Set max width for the popup
+                                ui.set_max_width(right_panel_width * 0.8);
+
+                                // Add text
+                                if let Some((level, message)) = last_error_or_warning {
+                                    let (prefix, color) = match level {
+                                        log::Level::Warn => ("Warning", egui::Color32::YELLOW),
+                                        log::Level::Error => ("Error", egui::Color32::RED),
+                                        _ => ("", egui::Color32::WHITE),
+                                    };
+                                    ui.label(
+                                        egui::RichText::new(format!("{}: {}", prefix, message))
+                                            .color(color),
+                                    );
+                                }
+                                ui.label("Check the logs for more information.");
+                            },
+                        );
+                    } else {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{}",
+                                egui_phosphor::regular::CHECK_CIRCLE
+                            ))
+                            .heading()
+                            .color(egui::Color32::GREEN),
+                        )
+                        .on_hover_text("No Errors!");
+                    }
+
+                    ui.add_space(10.0);
+                    let current_version =
+                        Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Version::new(0, 0, 1));
+
+                    ui.label(format!("Version: {}", current_version));
+                });
+            });
+        });
+
     center_panel(
         &mut meshes,
         &mut query,
@@ -275,7 +389,6 @@ pub fn update_gui(
 /// - `mid_point`: Midpoint value for certain calculations.
 /// - `bw`: Boolean for enabling black-and-white mode.
 /// - `water_vapour_lines`: Preloaded water vapor line frequencies for reference plots.
-/// - `wp`: An image object used in the right panel.
 /// - `data`: Contains the experiment or scan data.
 /// - `file_dialog_state`: Current state of the file dialog.
 /// - `file_dialog`: Instance of the file dialog used for file operations.
@@ -296,7 +409,6 @@ pub struct THzImageExplorer {
     pub(crate) mid_point: f32,
     pub(crate) bw: bool,
     pub(crate) water_vapour_lines: Vec<f64>,
-    pub(crate) wp: &'static [u8],
     pub(crate) data: PlotDataContainer,
     pub(crate) file_dialog_state: FileDialogState,
     pub(crate) file_dialog: FileDialog,
@@ -378,7 +490,6 @@ impl THzImageExplorer {
 
         Self {
             water_vapour_lines,
-            wp: include_bytes!("../../assets/images/WP-Logo.png"),
             data: PlotDataContainer::default(),
             file_dialog_state: FileDialogState::None,
             file_dialog,

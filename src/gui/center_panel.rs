@@ -553,7 +553,7 @@ pub fn pulse_tab(
     });
 }
 
-pub fn refractive_index_tab(
+pub fn optical_properties_tab(
     ui: &mut Ui,
     height: f32,
     width: f32,
@@ -833,10 +833,10 @@ pub fn center_panel(
                 thread_communication.gui_settings.tab = Tab::Pulse;
             }
             if ui
-                .selectable_label(tabs[1], Tab::RefractiveIndex.to_string())
+                .selectable_label(tabs[1], Tab::OpticalProperties.to_string())
                 .clicked()
             {
-                thread_communication.gui_settings.tab = Tab::RefractiveIndex;
+                thread_communication.gui_settings.tab = Tab::OpticalProperties;
                 thread_communication
                     .config_tx
                     .send(ConfigCommand::UpdateMaterialCalculation)
@@ -864,7 +864,7 @@ pub fn center_panel(
                     explorer,
                     thread_communication,
                 ),
-                Tab::RefractiveIndex => refractive_index_tab(
+                Tab::OpticalProperties => optical_properties_tab(
                     ui,
                     height * 0.95,
                     width,

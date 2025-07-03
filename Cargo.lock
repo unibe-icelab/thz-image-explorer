@@ -2714,7 +2714,7 @@ dependencies = [
 [[package]]
 name = "egui_logger"
 version = "0.6.2"
-source = "git+https://github.com/hacknus/egui_logger#7e07124a43aa9a17c596fded1344bfe1cc9118ad"
+source = "git+https://github.com/hacknus/egui_logger?branch=expose_logs#c42683a6e6ac94ce38a4feecedc4cde3a13a881b"
 dependencies = [
  "chrono",
  "egui",

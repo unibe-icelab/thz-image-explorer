@@ -2,33 +2,23 @@ use crate::config::ThreadCommunication;
 use crate::gui::application::{FileDialogState, THzImageExplorer};
 #[cfg(feature = "self_update")]
 use crate::update::{check_update, update};
+use crate::APP_INFO;
 use bevy_egui::egui;
-use bevy_egui::egui::{
-    vec2, Align2, Color32, ColorImage, InnerResponse, TextureOptions, Vec2, Visuals,
-};
-use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotPoint, PlotPoints};
+use bevy_egui::egui::{vec2, Align2, InnerResponse, Vec2, Visuals};
 use egui_theme_switch::ThemeSwitch;
-use ndarray::{Array1, Axis};
+use preferences::Preferences;
 #[cfg(feature = "self_update")]
 use self_update::restart::restart;
 #[cfg(feature = "self_update")]
 use semver::Version;
 
-fn gaussian(x: &Array1<f64>, params: &[f32]) -> Array1<f64> {
-    let x0 = params[0] as f64;
-    let w = params[1] as f64;
-    x.mapv(|xi| {
-        (2.0 * (-2.0 * (xi - x0).powf(2.0) / (w * w)) / (2.0 * std::f64::consts::PI).sqrt() * w)
-            .exp()
-    })
-}
 pub fn settings_window(
     ctx: &egui::Context,
     explorer: &mut THzImageExplorer,
     thread_communication: &mut ThreadCommunication,
 ) -> Option<InnerResponse<Option<()>>> {
     egui::Window::new("Settings")
-        .fixed_size(Vec2 { x: 600.0, y: 200.0 })
+        .fixed_size(Vec2 { x: 400.0, y: 1000.0 })
         .anchor(Align2::CENTER_CENTER, Vec2 { x: 0.0, y: 0.0 })
         .collapsible(false)
         .show(ctx, |ui| {
@@ -74,7 +64,7 @@ pub fn settings_window(
                         ui,
                         popup_id,
                         &info_button,
-                        egui::popup::PopupCloseBehavior::CloseOnClickOutside, // Add the missing parameter
+                        egui::popup::PopupCloseBehavior::CloseOnClickOutside,
                         |ui: &mut egui::Ui| {
                             // Set max width for the popup
                             ui.set_max_width(400.0);
@@ -119,95 +109,9 @@ pub fn settings_window(
                         );
                     }
                     ui.end_row();
-                    ui.end_row();
                 });
-
-            let signal_plot = Plot::new("signal");
-
-            // Assuming `beam_x` is of type `Array2<f64>`
-            let beam_x_array = thread_communication.gui_settings.clone().psf.popt_x;
-
-            let start = -5.0;
-            let end = 5.0;
-            let step = 0.5;
-
-            let values: Vec<f64> = (0..)
-                .map(|i| start + i as f64 * step)
-                .take_while(|&x| x <= end)
-                .collect();
-            let array = Array1::from(values);
-            if !beam_x_array.is_empty() {
-                let binding = beam_x_array.row(0);
-                let first_row = binding.as_slice().unwrap();
-
-                let beam_x_vec: Vec<[f64; 2]> = gaussian(&array, first_row)
-                    .iter()
-                    .zip(array.iter())
-                    .map(|(p, x)| [*x, *p])
-                    .collect();
-
-                signal_plot.show(ui, |signal_plot_ui| {
-                    signal_plot_ui.line(
-                        Line::new(PlotPoints::from(beam_x_vec))
-                            .color(egui::Color32::RED)
-                            .style(LineStyle::Solid)
-                            .width(2.0)
-                            .name("x"),
-                    );
-                });
-            }
 
             ui.end_row();
-
-            let plot_height = 100.0;
-            let plot_width = 100.0;
-            let data = &thread_communication.gui_settings.psf.popt_x;
-
-            let width = data.len_of(Axis(0));
-            let height = data.len_of(Axis(1));
-
-            let size = [plot_width / width as f64, plot_height / height as f64]
-                .iter()
-                .fold(f64::INFINITY, |ai, &bi| ai.min(bi));
-
-            let plot = Plot::new("image")
-                .height(0.75 * height as f32 * size as f32)
-                .width(0.75 * width as f32 * size as f32)
-                .show_axes([false, false])
-                .show_x(false)
-                .show_y(false)
-                .set_margin_fraction(Vec2 { x: 0.0, y: 0.0 })
-                .allow_drag(false);
-
-            let max = data
-                .iter()
-                .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi as f64));
-
-            let img = ColorImage::new([width, height], Color32::TRANSPARENT);
-            let mut intensity_matrix = vec![vec![0.0; height]; width];
-            let mut id_matrix = vec![vec!["".to_string(); height]; width];
-
-            for y in 0..height {
-                for x in 0..width {
-                    if let Some(i) = data.get((x, y)) {
-                        intensity_matrix[x][height - 1 - y] = *i as f64 / max * 100.0;
-                        id_matrix[x][height - 1 - y] = format!("{:05}-{:05}", x, y);
-                    }
-                }
-            }
-
-            let texture = ui
-                .ctx()
-                .load_texture("image", img.clone(), TextureOptions::NEAREST);
-            let im = PlotImage::new(
-                &texture,
-                PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
-                img.height() as f32 * vec2(texture.aspect_ratio(), 1.0),
-            );
-
-            let _plot_response = plot.show(ui, |plot_ui| {
-                plot_ui.image(im);
-            });
 
             ui.label("");
             #[cfg(feature = "self_update")]
@@ -218,7 +122,7 @@ pub fn settings_window(
                         explorer.new_release = check_update();
                     }
 
-                    let current_version = Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
+                    let current_version = Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Version::new(0, 0, 1));
                     ui.label(format!("Current version: {}", current_version));
 
                     ui.end_row();
@@ -251,15 +155,35 @@ pub fn settings_window(
                 });
             ui.label(explorer.update_text.clone());
 
+            ui.end_row();
+            ui.label("Logger");
+            ui.end_row();
+
+            ui.allocate_ui(vec2(300.0, 300.0), |ui| {
+                egui_logger::logger_ui().show(ui);
+            });
+            ui.end_row();
+            ui.separator();
+            ui.end_row();
+
             ui.horizontal(|ui| {
                 ui.horizontal(|ui| {
                     if !explorer.update_text.is_empty() {
                         ui.disable();
                     };
-                    if ui.button("Exit Settings").clicked() {
-                        explorer.settings_window_open = false;
-                        explorer.update_text = "".to_string();
-                    }
+                    let escape_key_pressed = ui.input(|i| i.key_pressed(egui::Key::Escape));
+                    ui.vertical_centered(|ui| {
+                        if ui.button("Close").clicked() || escape_key_pressed {
+                            explorer.settings_window_open = false;
+                            explorer.update_text = "".to_string();
+
+                            thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
+
+                            let _ = thread_communication
+                                .gui_settings
+                                .save(&APP_INFO, "config/gui");
+                        }
+                    });
                 });
 
                 #[cfg(feature = "self_update")]

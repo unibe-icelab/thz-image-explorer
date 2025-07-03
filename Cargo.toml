@@ -10,7 +10,7 @@ license = "GPL-3.0"
 egui_extras = { version = "0.31", features = ["all_loaders"] }
 egui-phosphor = "0.9.0"
 egui_plot = "0.31"
-egui_logger = { git = "https://github.com/hacknus/egui_logger" }
+egui_logger = { git = "https://github.com/hacknus/egui_logger", branch = "expose_logs" }
 egui-theme-switch = { git = "https://github.com/hacknus/egui-theme-switch" }
 egui-file-dialog = { git = "https://github.com/hacknus/egui-file-dialog", branch = "sort_by_metadata", features = ["information_view"] }
 egui_double_slider = "0.7.0"

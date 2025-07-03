@@ -11,7 +11,7 @@ use crate::update::check_update;
 use crate::PlotDataContainer;
 use bevy_egui::egui;
 use bevy_egui::egui::panel::Side;
-use bevy_egui::egui::{vec2, DragValue, Stroke, Vec2, Visuals};
+use bevy_egui::egui::{DragValue, Stroke, Vec2};
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
 use ndarray::Array1;
@@ -261,10 +261,6 @@ pub fn right_panel(
                         });
                     });
                     ui.separator();
-                    // ui.add_space(10.0);
-                    //
-                    // ui.heading("Frequency Domain Filter:");
-                    // ui.add_space(10.0);
 
                     // draw time domain filter after FFT
                     draw_filters(ui, thread_communication, FilterDomain::Frequency, *right_panel_width);
@@ -279,31 +275,11 @@ pub fn right_panel(
                     });
                     ui.separator();
 
-                    // ui.add_space(10.0);
-                    //
-                    // ui.separator();
-                    // ui.heading("Time Domain Filter: ");
-
                     // draw time domain filter after FFT
                     draw_filters(ui, thread_communication, FilterDomain::TimeAfterFFT, *right_panel_width);
                     draw_filters(ui, thread_communication, FilterDomain::TimeAfterFFTPrioLast, *right_panel_width);
                 });
                 ui.separator();
-                ui.add_space(20.0);
-
-                thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
-                ui.collapsing("Debug logs:", |ui| {
-                    ui.set_height(175.0);
-                    egui_logger::logger_ui().show(ui);
-                });
-
-                // let mut task_open = false;
-                // if task_open {
-                //     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
-                // } else {
-                //     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
-                // }
-
                 ui.add_space(20.0);
 
                 if ui
@@ -323,14 +299,7 @@ pub fn right_panel(
                 ui.add_space(5.0);
                 ui.separator();
 
-                let height = ui.available_size().y - 38.0 - 20.0;
-                ui.add_space(height);
-                ui.centered_and_justified(|ui| {
-                    ui.add(
-                        egui::Image::from_bytes("WP", explorer.wp)
-                            .fit_to_exact_size(vec2(80.0, 38.0)),
-                    );
-                });
+
             });
         });
 }

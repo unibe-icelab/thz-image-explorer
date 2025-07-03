@@ -547,7 +547,7 @@ pub fn draw_filters(
                             ui,
                             popup_id,
                             &info_button,
-                            egui::popup::PopupCloseBehavior::CloseOnClickOutside, // Add the missing parameter
+                            egui::popup::PopupCloseBehavior::CloseOnClickOutside,
                             |ui: &mut egui::Ui| {
                                 // Set max width for the popup
                                 ui.set_max_width(right_panel_width * 0.8);
