@@ -304,10 +304,10 @@ pub fn left_panel(
 
             match explorer.file_dialog_state {
                 FileDialogState::Open => {
+                    let thread_communication_clone = thread_communication.clone();
                     #[cfg(target_os = "macos")]
                     {
-                        // use RFD for macOS to be ablte to use the dotTHz plugin
-                        let thread_communication_clone = thread_communication.clone();
+                        // use RFD for macOS to be able to use the dotTHz plugin
                         std::thread::spawn(move || {
                             let task = rfd::AsyncFileDialog::new()
                                 .set_title("Open File")
@@ -345,10 +345,10 @@ pub fn left_panel(
                     }
                 }
                 FileDialogState::OpenRef => {
+                    let thread_communication_clone = thread_communication.clone();
                     #[cfg(target_os = "macos")]
                     {
-                        // use RFD for macOS to be ablte to use the dotTHz plugin
-                        let thread_communication_clone = thread_communication.clone();
+                        // use RFD for macOS to be able to use the dotTHz plugin
                         std::thread::spawn(move || {
                             let task = rfd::AsyncFileDialog::new()
                                 .set_title("Open File")
@@ -444,10 +444,10 @@ pub fn left_panel(
                     }
                 }
                 FileDialogState::SaveToVTU => {
+                    let thread_communication_clone = thread_communication.clone();
                     #[cfg(target_os = "macos")]
                     {
-                        // use RFD for macOS to be ablte to use the dotTHz plugin
-                        let thread_communication_clone = thread_communication.clone();
+                        // use RFD for macOS to be able to use the dotTHz plugin
                         std::thread::spawn(move || {
                             let task = rfd::AsyncFileDialog::new()
                                 .set_title("Save File")
