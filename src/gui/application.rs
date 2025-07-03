@@ -18,6 +18,10 @@ use bevy_egui::egui::ThemePreference;
 use bevy_egui::{egui, EguiContexts};
 use bevy_voxel_plot::InstanceMaterialData;
 use core::f64;
+#[cfg(not(target_os = "macos"))]
+use dotthz::DotthzFile;
+#[cfg(not(target_os = "macos"))]
+use egui_file_dialog::information_panel::InformationPanel;
 use egui_file_dialog::FileDialog;
 use egui_plot::PlotPoint;
 use home::home_dir;

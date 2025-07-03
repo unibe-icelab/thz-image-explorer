@@ -385,10 +385,10 @@ pub fn left_panel(
                     }
                 }
                 FileDialogState::OpenPSF => {
+                    let thread_communication_clone = thread_communication.clone();
                     #[cfg(target_os = "macos")]
                     {
-                        // use RFD for macOS to be ablte to use the dotTHz plugin
-                        let thread_communication_clone = thread_communication.clone();
+                        // use RFD for macOS to be able to use the dotTHz plugin
                         std::thread::spawn(move || {
                             let task = rfd::AsyncFileDialog::new()
                                 .set_title("Open File")
@@ -418,7 +418,7 @@ pub fn left_panel(
                         {
                             send_latest_config(
                                 &thread_communication_clone,
-                                ConfigCommand::OpenRef(file.path().to_path_buf()),
+                                ConfigCommand::OpenPSF(path.to_path_buf()),
                             );
                             explorer.file_dialog_state = FileDialogState::None;
                         }
@@ -470,7 +470,6 @@ pub fn left_panel(
                     #[cfg(not(target_os = "macos"))]
                     {
                         explorer.file_dialog.save_file();
-
                         if let Some(path) = explorer
                             .file_dialog
                             .update_with_right_panel_ui(ctx, &mut |ui, dia| {
@@ -480,7 +479,7 @@ pub fn left_panel(
                         {
                             send_latest_config(
                                 &thread_communication_clone,
-                                ConfigCommand::SaveVTU(file.path().to_path_buf()),
+                                ConfigCommand::SaveVTU(path.to_path_buf()),
                             );
                             explorer.file_dialog_state = FileDialogState::None;
                         }

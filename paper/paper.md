@@ -80,8 +80,7 @@ set in the GUI are sent to the Data thread
 via multiple-producer-multi-consumer (MPMC) channels.
 The Data thread then handles the computation of the applied filters.
 The output of the computation is then shared via mutexes with the GUI thread.
-The entire thread communication is handled with the `ThreadCommunication` struct. To
-extend the communication for additional data-types, these two structs need to be extended with `Arc<RwLock<T>>` or
+The entire thread communication is handled with the `ThreadCommunication` struct which holds many `Arc<RwLock<T>>` or
 `crossbeam_channel::Sender<T>`/`crossbeam_channel::Receiver<T>`.
 
 The structure of the software architecture is shown in figure \ref{fig:software-architecture}.
