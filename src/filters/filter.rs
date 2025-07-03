@@ -569,70 +569,58 @@ pub fn draw_filters(
                             },
                         );
                     });
-                    // Progress bar, abort button, and toggle are always enabled
-                    if let Some(progress) =
-                        thread_communication.gui_settings.progress_bars.get(uuid)
-                    {
-                        if let Some(p) = progress {
-                            if *p >= 0.0 {
-                                ui.add_space(
-                                    ui.available_width()
-                                        - ui.spacing().interact_size.y * 2.0
-                                        - 15.0
-                                        - 50.0
-                                        - 55.0,
-                                );
-                                ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
 
-                                if ui
-                                    .button(format!("{}", egui_phosphor::regular::X_SQUARE))
-                                    .on_hover_text("Abort the current calculation")
-                                    .clicked()
-                                {
-                                    thread_communication.abort_flag.store(true, Relaxed);
-                                }
-                                ui.label(format!("{} %", (p * 100.0) as u8));
-                            }
-                        } else {
-                            ui.add_space(
-                                ui.available_width()
-                                    - ui.spacing().interact_size.y * 2.0
-                                    - 15.0
-                                    - 50.0
-                                    - 55.0,
-                            );
-                            ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
-                        }
-                    } else {
-                        ui.add_space(
-                            ui.available_width() - ui.spacing().interact_size.y * 2.0 - 15.0 - 50.0,
-                        );
-                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
-                    }
+                        ui.add_space(20.0);
 
-                    // Enable only the toggle and computation time label
-                    if let Ok(mut filters_active) = thread_communication.filters_active_lock.write()
-                    {
-                        if let Ok(filter_computation_time) =
-                            thread_communication.filter_computation_time_lock.read()
+                        // Enable only the toggle and computation time label
+                        if let Ok(mut filters_active) = thread_communication.filters_active_lock.write()
                         {
-                            if let Some(t) = filter_computation_time.get(uuid) {
-                                if idx < filter_computation_time.len() {
-                                    ui.label(format!("{:.2} ms", t.as_millis()));
+                            if let Some(active) = filters_active.get_mut(uuid) {
+                                ui.add(toggle(active));
+                                filter_is_active = *active;
+                            }
+                            if let Ok(filter_computation_time) =
+                                thread_communication.filter_computation_time_lock.read()
+                            {
+                                if let Some(t) = filter_computation_time.get(uuid) {
+                                    if idx < filter_computation_time.len() {
+                                        ui.label(format!("{:.2} ms", t.as_millis()));
+                                    } else {
+                                        ui.label("N/A ms");
+                                    }
                                 } else {
                                     ui.label("N/A ms");
                                 }
                             } else {
                                 ui.label("N/A ms");
                             }
+                        }
+
+                        // Progress bar, abort button, and toggle are always enabled
+                        if let Some(progress) =
+                            thread_communication.gui_settings.progress_bars.get(uuid)
+                        {
+                            if let Some(p) = progress {
+                                if *p >= 0.0 {
+                                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
+
+                                    if ui
+                                        .button(format!("{}", egui_phosphor::regular::X_SQUARE))
+                                        .on_hover_text("Abort the current calculation")
+                                        .clicked()
+                                    {
+                                        thread_communication.abort_flag.store(true, Relaxed);
+                                    }
+                                    ui.label(format!("{} %", (p * 100.0) as u8));
+                                }
+                            } else {
+                                ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
+                            }
                         } else {
-                            ui.label("N/A ms");
+                            ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
                         }
-                        if let Some(active) = filters_active.get_mut(uuid) {
-                            ui.add(toggle(active));
-                            filter_is_active = *active;
-                        }
-                    }
+                    });
                 });
 
                 // Only enable the filter config UI if not busy for >0.5s and filter is active
