@@ -316,6 +316,11 @@ pub fn left_panel(
 
                             futures::executor::block_on(async {
                                 if let Some(file) = task.await {
+                                    if let Ok(mut path_guard) =
+                                        thread_communication_clone.macos_path_lock.write()
+                                    {
+                                        *path_guard = file.path().to_path_buf();
+                                    }
                                     send_latest_config(
                                         &thread_communication_clone,
                                         ConfigCommand::OpenFile(file.path().to_path_buf()),
@@ -323,8 +328,6 @@ pub fn left_panel(
                                 }
                             });
                         });
-
-                        // TODO update thread_communication with the selected path
 
                         explorer.file_dialog_state = FileDialogState::None;
                     }
@@ -487,7 +490,14 @@ pub fn left_panel(
                         }
                     }
                 }
-                FileDialogState::None => {}
+                FileDialogState::None => {
+                    #[cfg(target_os = "macos")]
+                    {
+                        if let Ok(path_guard) = thread_communication.macos_path_lock.read() {
+                            thread_communication.gui_settings.selected_path = path_guard.clone();
+                        }
+                    }
+                }
             }
 
             let logo_height = 100.0;

@@ -199,6 +199,11 @@ impl Default for ConfigContainer {
 /// and sharing data locks between the GUI and the main processing thread.
 #[derive(Resource, Clone)]
 pub struct ThreadCommunication {
+
+    /// Lock for the Path of the async file dialog on macOS..
+    #[cfg(target_os = "macos")]
+    pub macos_path_lock: Arc<RwLock<PathBuf>>,
+
     /// Atomic flag used to signal threads to abort their current processing.
     pub abort_flag: Arc<AtomicBool>,
 

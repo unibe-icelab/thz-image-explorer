@@ -215,6 +215,8 @@ fn main() {
     let filter_data_pipeline_lock = Arc::new(RwLock::new(filter_data_pipeline));
     let filters_active_lock = Arc::new(RwLock::new(filters_active));
 
+    #[cfg(target_os = "macos")]
+    let macos_path_lock = Arc::new(RwLock::new(PathBuf::new()));
     let data_lock = Arc::new(RwLock::new(PlotDataContainer::default()));
     let img_lock = Arc::new(RwLock::new(Array2::from_shape_fn((1, 1), |(_, _)| 0.0)));
     let filtered_data_lock = Arc::new(RwLock::new(Array3::from_shape_fn(
@@ -244,6 +246,8 @@ fn main() {
     let filter_computation_time_lock = Arc::new(RwLock::new(filter_computation_time));
 
     let thread_communication = ThreadCommunication {
+        #[cfg(target_os = "macos")]
+        macos_path_lock: macos_path_lock.clone(),
         abort_flag: abort_flag.clone(),
         md_lock: md_lock.clone(),
         data_lock: data_lock.clone(),
