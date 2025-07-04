@@ -545,6 +545,11 @@ pub fn main_thread(
                                             ("Reference File".to_string(), phases.clone()),
                                         );
                                     }
+                                    // create an empty dummy ROI.
+                                    input.rois.insert(
+                                        ref_uuid.to_string(),
+                                        ("Reference File".to_string(), vec![]),
+                                    );
                                     input.roi_data.insert(
                                         ref_uuid.to_string(),
                                         ("Reference File".to_string(), reference),

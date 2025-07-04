@@ -405,6 +405,8 @@ pub fn three_dimensional_plot_ui(
                 }
             }
 
+            // TODO: add kernel parameter control
+
             ui.add_space(10.0);
 
             ui.horizontal(|ui| {

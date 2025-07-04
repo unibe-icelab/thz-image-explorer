@@ -324,6 +324,8 @@ pub fn left_panel(
                             });
                         });
 
+                        // TODO update thread_communication with the selected path
+
                         explorer.file_dialog_state = FileDialogState::None;
                     }
 

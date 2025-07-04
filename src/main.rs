@@ -111,13 +111,12 @@ fn main() {
         gui_settings.psf.clone(),
     )));
 
+    // reset some settings on startup
     gui_settings.meta_data_edit = false;
     gui_settings.selected_path = PathBuf::default();
+    gui_settings.selected_sample = "".to_string();
+    gui_settings.selected_reference = "".to_string();
     gui_settings.meta_data_unlocked = false;
-
-    if gui_settings.chart_scale <= 0.0 {
-        gui_settings.chart_scale = 1.0;
-    }
 
     let mut filter_data_pipeline = vec![];
     filter_data_pipeline.push(ScannedImageFilterData::default());

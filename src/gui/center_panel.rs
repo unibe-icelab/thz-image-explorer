@@ -573,40 +573,31 @@ pub fn optical_properties_tab(
                 .push("Selected Pixel".to_string());
         } else {
             // If no ROIs are available yet
-            explorer.data.available_references = vec!["--------------".to_string()];
-            explorer.data.available_samples = vec!["--------------".to_string()];
+            explorer.data.available_references = vec![];
+            explorer.data.available_samples = vec![];
         }
     }
-
-    // currently the user has to select a reference and sample actively, even though it might seem that
-    // by default the first ROI is selected. this is not very user-friendly for now..
-    // TODO : make this more intuitive.
+    
     ui.vertical(|ui| {
         // Signal selection controls
         ui.horizontal(|ui| {
             ui.label("Reference:");
             egui::ComboBox::from_id_salt("reference_selection")
-                .selected_text(
-                    explorer.data.available_references
-                        [thread_communication.gui_settings.reference_index]
-                        .clone(),
-                )
+                .selected_text(thread_communication.gui_settings.selected_reference.clone())
                 .width(120.0)
                 .show_ui(ui, |ui| {
-                    for i in 0..explorer.data.available_references.len() {
+                    for av_ref in explorer.data.available_references.iter() {
                         if ui
-                            .selectable_label(
-                                thread_communication.gui_settings.reference_index == i,
-                                explorer.data.available_references[i].clone(),
+                            .selectable_value(
+                                &mut thread_communication.gui_settings.selected_reference,
+                                av_ref.to_string(),
+                                av_ref,
                             )
                             .clicked()
                         {
-                            thread_communication.gui_settings.reference_index = i;
                             thread_communication
                                 .config_tx
-                                .send(ConfigCommand::SetReference(
-                                    explorer.data.available_references[i].clone(),
-                                ))
+                                .send(ConfigCommand::SetReference(av_ref.clone()))
                                 .unwrap();
                         }
                     }
@@ -616,26 +607,21 @@ pub fn optical_properties_tab(
 
             ui.label("Sample:");
             egui::ComboBox::from_id_salt("sample_selection")
-                .selected_text(
-                    explorer.data.available_samples[thread_communication.gui_settings.sample_index]
-                        .clone(),
-                )
+                .selected_text(thread_communication.gui_settings.selected_sample.clone())
                 .width(120.0)
                 .show_ui(ui, |ui| {
-                    for i in 0..explorer.data.available_samples.len() {
+                    for av_sample in explorer.data.available_samples.iter() {
                         if ui
-                            .selectable_label(
-                                thread_communication.gui_settings.sample_index == i,
-                                explorer.data.available_samples[i].clone(),
+                            .selectable_value(
+                                &mut thread_communication.gui_settings.selected_sample,
+                                av_sample.to_string(),
+                                av_sample,
                             )
                             .clicked()
                         {
-                            thread_communication.gui_settings.sample_index = i;
                             thread_communication
                                 .config_tx
-                                .send(ConfigCommand::SetSample(
-                                    explorer.data.available_samples[i].clone(),
-                                ))
+                                .send(ConfigCommand::SetSample(av_sample.clone()))
                                 .unwrap();
                         }
                     }

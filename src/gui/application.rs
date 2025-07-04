@@ -93,6 +93,8 @@ impl Tab {
 /// file paths, resolution parameters, and debug options.
 ///
 /// # Fields
+/// - `selected_reference`: The currently selected reference for optical properties calculation.
+/// - `selected_sample`: The currently selected sample for optical properties calculation.
 /// - `selected_path`: The currently selected file path.
 /// - `log_plot`: Whether log scale for plots is enabled.
 /// - `down_scaling`: Downscaling factor for visualizations.
@@ -114,8 +116,8 @@ impl Tab {
 /// - `psf`: The point spread function represented as a 2D array.
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Resource)]
 pub struct GuiSettingsContainer {
-    pub reference_index: usize,
-    pub sample_index: usize,
+    pub selected_reference: String,
+    pub selected_sample: String,
     pub sample_thickness: f32,
     pub selected_path: PathBuf,
     pub log_plot: bool,
@@ -135,11 +137,6 @@ pub struct GuiSettingsContainer {
     pub y: f32,
     pub tab: Tab,
     pub animation_enabled: bool,
-    pub chart_pitch: f32,
-    pub chart_yaw: f32,
-    pub chart_scale: f32,
-    pub chart_pitch_vel: f32,
-    pub chart_yaw_vel: f32,
     pub last_progress_bar_update: HashMap<String, i64>,
     pub progress_bars: HashMap<String, Option<f32>>,
     pub progress_start_time: HashMap<String, i64>,
@@ -162,8 +159,8 @@ impl GuiSettingsContainer {
     /// - Default file paths set to the user's home directory or `/`.
     pub fn new() -> GuiSettingsContainer {
         GuiSettingsContainer {
-            reference_index: 0,
-            sample_index: 0,
+            selected_reference: "".to_string(),
+            selected_sample: "".to_string(),
             sample_thickness: 1.0,
             selected_path: home_dir().unwrap_or_else(|| PathBuf::from("/")),
             log_plot: true,
@@ -182,11 +179,6 @@ impl GuiSettingsContainer {
             x: 1600.0,
             y: 900.0,
             animation_enabled: true,
-            chart_pitch: 0.3,
-            chart_yaw: 0.9,
-            chart_scale: 0.9,
-            chart_pitch_vel: 0.0,
-            chart_yaw_vel: 0.0,
             opacity_threshold: 0.1,
             last_progress_bar_update: HashMap::new(),
             progress_bars: HashMap::new(),
