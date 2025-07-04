@@ -281,26 +281,29 @@ pub fn left_panel(
 
             explorer.file_dialog.set_right_panel_width(300.0);
 
-            let mut repaint = false;
             ctx.input(|i| {
                 // Check if files were dropped
                 if let Some(dropped_file) = i.raw.dropped_files.last() {
                     let path = dropped_file.clone().path.unwrap();
-                    explorer.other_files = find_files_with_same_extension(&path).unwrap();
-                    explorer.selected_file_name =
-                        path.file_name().unwrap().to_str().unwrap().to_string();
-                    explorer.scroll_to_selection = true;
-                    explorer.file_dialog.config_mut().initial_directory = path.clone();
-                    thread_communication.gui_settings.selected_path = path.clone();
-                    send_latest_config(thread_communication, ConfigCommand::OpenFile(path));
-                    repaint = true;
+
+                    if let Some(ext) = path.extension() {
+                        if ext == "npz" {
+                            send_latest_config(
+                                &thread_communication,
+                                ConfigCommand::OpenPSF(path.clone()),
+                            );
+                        } else {
+                            explorer.other_files = find_files_with_same_extension(&path).unwrap();
+                            explorer.selected_file_name =
+                                path.file_name().unwrap().to_str().unwrap().to_string();
+                            explorer.scroll_to_selection = true;
+                            explorer.file_dialog.config_mut().initial_directory = path.clone();
+                            thread_communication.gui_settings.selected_path = path.clone();
+                            send_latest_config(thread_communication, ConfigCommand::OpenFile(path));
+                        }
+                    }
                 }
             });
-
-            // Update GUI if we dropped a file
-            if repaint {
-                ctx.request_repaint();
-            }
 
             match explorer.file_dialog_state {
                 FileDialogState::Open => {

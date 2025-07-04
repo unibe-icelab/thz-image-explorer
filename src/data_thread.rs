@@ -763,6 +763,7 @@ pub fn main_thread(
                         thread_communication.gui_settings.psf = psf.clone();
                         thread_communication.gui_settings.beam_shape_path = path.to_path_buf();
                         if let Ok(mut psf_guard) = thread_communication.psf_lock.write() {
+                            log::info!("loaded PSF: {:?}", path);
                             *psf_guard = (path.to_path_buf(), psf);
                         }
                         if let Err(e) = thread_communication
