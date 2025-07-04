@@ -353,7 +353,7 @@ pub fn left_panel(
                         let thread_communication_clone = thread_communication.clone();
                         std::thread::spawn(move || {
                             let task = rfd::AsyncFileDialog::new()
-                                .set_title("Open File")
+                                .set_title("Open Reference File")
                                 .add_filter("thz", &["thz"])
                                 .pick_file();
 

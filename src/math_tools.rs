@@ -471,68 +471,70 @@ pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
 
     // Process all ROIs after handling the average signal
     for (roi_uuid, (roi_name, polygon)) in &input.rois {
-        // Time domain ROI processing (direct spatial averaging)
-        if !config.avg_in_fourier_space {
-            let roi_signal = average_polygon_roi(&input.data, polygon, input.scaling);
+        if let Some(polygon) = polygon {
+            // Time domain ROI processing (direct spatial averaging)
+            if !config.avg_in_fourier_space {
+                let roi_signal = average_polygon_roi(&input.data, polygon, input.scaling);
+                output
+                    .roi_data
+                    .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
+            }
+
+            // Frequency domain processing (for visualization)
+            let roi_signal_fft = average_polygon_roi(&input.amplitudes, polygon, input.scaling);
+            let roi_phase_fft = average_polygon_roi(&input.phases, polygon, input.scaling);
+
+            // Store frequency domain results
             output
-                .roi_data
-                .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
-        }
+                .roi_signal_fft
+                .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal_fft.clone()));
+            output
+                .roi_phase_fft
+                .insert(roi_uuid.clone(), (roi_name.clone(), roi_phase_fft.clone()));
 
-        // Frequency domain processing (for visualization)
-        let roi_signal_fft = average_polygon_roi(&input.amplitudes, polygon, input.scaling);
-        let roi_phase_fft = average_polygon_roi(&input.phases, polygon, input.scaling);
+            // In the ifft method where ROIs are processed:
+            if config.avg_in_fourier_space {
+                if let Some(c2r) = &output.c2r {
+                    // Create a complex spectrum from ROI amplitude and phase
+                    let mut spectrum = vec![Complex32::new(0.0, 0.0); input.frequency.len()];
 
-        // Store frequency domain results
-        output
-            .roi_signal_fft
-            .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal_fft.clone()));
-        output
-            .roi_phase_fft
-            .insert(roi_uuid.clone(), (roi_name.clone(), roi_phase_fft.clone()));
-
-        // In the ifft method where ROIs are processed:
-        if config.avg_in_fourier_space {
-            if let Some(c2r) = &output.c2r {
-                // Create a complex spectrum from ROI amplitude and phase
-                let mut spectrum = vec![Complex32::new(0.0, 0.0); input.frequency.len()];
-
-                for (i, (&amp, &phase)) in
-                    roi_signal_fft.iter().zip(roi_phase_fft.iter()).enumerate()
-                {
-                    // Convert from polar form (amplitude, phase) to complex
-                    spectrum[i] = Complex32::from_polar(amp, phase);
-                }
-
-                // Enforce constraints for realfft compatibility:
-                // 1. First element must have zero imaginary part
-                if !spectrum.is_empty() {
-                    spectrum[0] = Complex32::new(spectrum[0].re, 0.0);
-                }
-
-                let mut real_output = vec![0.0; input.time.len()];
-
-                // Error handling instead of unwrap
-                match c2r.process(&mut spectrum, &mut real_output) {
-                    Ok(_) => {
-                        // Normalize the result
-                        let length = real_output.len();
-                        let normalized: Vec<f32> =
-                            real_output.iter().map(|&v| v / length as f32).collect();
-
-                        // Store the reconstructed time domain signal
-                        let roi_signal = Array1::from_vec(normalized);
-                        output
-                            .roi_data
-                            .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
+                    for (i, (&amp, &phase)) in
+                        roi_signal_fft.iter().zip(roi_phase_fft.iter()).enumerate()
+                    {
+                        // Convert from polar form (amplitude, phase) to complex
+                        spectrum[i] = Complex32::from_polar(amp, phase);
                     }
-                    Err(e) => {
-                        log::error!("IFFT error for ROI {}: {}", roi_name, e);
-                        // Fall back to time-domain averaging if IFFT fails
-                        let roi_signal = average_polygon_roi(&input.data, polygon, input.scaling);
-                        output
-                            .roi_data
-                            .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
+
+                    // Enforce constraints for realfft compatibility:
+                    // 1. First element must have zero imaginary part
+                    if !spectrum.is_empty() {
+                        spectrum[0] = Complex32::new(spectrum[0].re, 0.0);
+                    }
+
+                    let mut real_output = vec![0.0; input.time.len()];
+
+                    // Error handling instead of unwrap
+                    match c2r.process(&mut spectrum, &mut real_output) {
+                        Ok(_) => {
+                            // Normalize the result
+                            let length = real_output.len();
+                            let normalized: Vec<f32> =
+                                real_output.iter().map(|&v| v / length as f32).collect();
+
+                            // Store the reconstructed time domain signal
+                            let roi_signal = Array1::from_vec(normalized);
+                            output
+                                .roi_data
+                                .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
+                        }
+                        Err(e) => {
+                            log::error!("IFFT error for ROI {}: {}", roi_name, e);
+                            // Fall back to time-domain averaging if IFFT fails
+                            let roi_signal = average_polygon_roi(&input.data, polygon, input.scaling);
+                            output
+                                .roi_data
+                                .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
+                        }
                     }
                 }
             }

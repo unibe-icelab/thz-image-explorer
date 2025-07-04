@@ -121,15 +121,17 @@ fn update_metadata_rois(md: &mut DotthzMetaData, input: &ScannedImageFilterData)
             if i > 0 {
                 roi_labels.push(',');
             }
-            roi_labels.push_str(label);
-            md.md.insert(
-                format!("ROI {}", i),
-                coords
-                    .iter()
-                    .map(|(x, y)| format!("[{},{}]", x, y))
-                    .collect::<Vec<String>>()
-                    .join(","),
-            );
+            if let Some(coords) = coords {
+                roi_labels.push_str(label);
+                md.md.insert(
+                    format!("ROI {}", i),
+                    coords
+                        .iter()
+                        .map(|(x, y)| format!("[{},{}]", x, y))
+                        .collect::<Vec<String>>()
+                        .join(","),
+                );
+            }
         }
         md.md.insert("ROI Labels".to_string(), roi_labels);
     } else {
@@ -163,7 +165,7 @@ pub fn main_thread(
             log::info!("Aborting main thread loop, clearing all config commands from the queue");
             while !thread_communication.config_rx.is_empty() {
                 let r = thread_communication.config_rx.recv();
-                dbg!(&r);
+                log::debug!("cleared cmd: {r:?}");
             }
             thread_communication
                 .abort_flag
@@ -228,15 +230,17 @@ pub fn main_thread(
                                                                 roi_uuid.to_string(),
                                                                 (
                                                                     label.to_string(),
-                                                                    polygon
-                                                                        .iter()
-                                                                        .map(|v| {
-                                                                            (
-                                                                                v[0] as usize,
-                                                                                v[1] as usize,
-                                                                            )
-                                                                        })
-                                                                        .collect(),
+                                                                    Some(
+                                                                        polygon
+                                                                            .iter()
+                                                                            .map(|v| {
+                                                                                (
+                                                                                    v[0] as usize,
+                                                                                    v[1] as usize,
+                                                                                )
+                                                                            })
+                                                                            .collect(),
+                                                                    ),
                                                                 ),
                                                             );
                                                         }
@@ -527,43 +531,52 @@ pub fn main_thread(
 
                                     let ref_uuid = uuid::Uuid::new_v4();
 
+                                    let ref_count = input
+                                        .rois
+                                        .iter()
+                                        .filter(|(_uuid, (name, _roi))| {
+                                            name.contains("Reference File")
+                                        })
+                                        .count();
+
+                                    let ref_name = if ref_count > 0 {
+                                        format!("Reference File {}", ref_count)
+                                    } else {
+                                        "Reference File".to_string()
+                                    };
+
                                     if let Ok(mut data) = thread_communication.data_lock.write() {
-                                        data.available_references
-                                            .push("Reference File".to_string());
-                                        data.available_samples.push("Reference File".to_string());
+                                        data.available_references.push(ref_name.clone());
+                                        data.available_samples.push(ref_name.clone());
 
                                         data.roi_signal.insert(
                                             ref_uuid.to_string(),
-                                            ("Reference File".to_string(), reference.to_vec()),
+                                            (ref_name.clone(), reference.to_vec()),
                                         );
                                         data.roi_signal_fft.insert(
                                             ref_uuid.to_string(),
-                                            ("Reference File".to_string(), amplitudes.clone()),
+                                            (ref_name.clone(), amplitudes.clone()),
                                         );
                                         data.roi_phase.insert(
                                             ref_uuid.to_string(),
-                                            ("Reference File".to_string(), phases.clone()),
+                                            (ref_name.clone(), phases.clone()),
                                         );
                                     }
                                     // create an empty dummy ROI.
-                                    input.rois.insert(
-                                        ref_uuid.to_string(),
-                                        ("Reference File".to_string(), vec![]),
-                                    );
+                                    input
+                                        .rois
+                                        .insert(ref_uuid.to_string(), (ref_name.clone(), None));
                                     input.roi_data.insert(
                                         ref_uuid.to_string(),
-                                        ("Reference File".to_string(), reference),
+                                        (ref_name.clone(), reference),
                                     );
                                     input.roi_signal_fft.insert(
                                         ref_uuid.to_string(),
-                                        (
-                                            "Reference File".to_string(),
-                                            Array1::from_vec(amplitudes),
-                                        ),
+                                        (ref_name.clone(), Array1::from_vec(amplitudes)),
                                     );
                                     input.roi_phase_fft.insert(
                                         ref_uuid.to_string(),
-                                        ("Reference File".to_string(), Array1::from_vec(phases)),
+                                        (ref_name.clone(), Array1::from_vec(phases)),
                                     );
                                 }
                             }
@@ -655,7 +668,7 @@ pub fn main_thread(
                                                             roi_uuid.to_string(),
                                                             (
                                                                 label.to_string(),
-                                                                polygon
+                                                                Some(polygon
                                                                     .iter()
                                                                     .map(|v| {
                                                                         (
@@ -663,7 +676,7 @@ pub fn main_thread(
                                                                             v[1] as usize,
                                                                         )
                                                                     })
-                                                                    .collect(),
+                                                                    .collect()),
                                                             ),
                                                         );
                                                     }
@@ -870,10 +883,10 @@ pub fn main_thread(
                                 roi_uuid.to_string(),
                                 (
                                     roi.name,
-                                    roi.polygon
+                                    Some(roi.polygon
                                         .iter()
                                         .map(|v| (v[0] as usize, v[1] as usize))
-                                        .collect(),
+                                        .collect()),
                                 ),
                             );
                         }
@@ -889,10 +902,10 @@ pub fn main_thread(
                                 roi_uuid.to_string(),
                                 (
                                     roi.name,
-                                    roi.polygon
+                                    Some(roi.polygon
                                         .iter()
                                         .map(|v| (v[0] as usize, v[1] as usize))
-                                        .collect(),
+                                        .collect()),
                                 ),
                             );
                         }
@@ -1369,45 +1382,43 @@ pub fn main_thread(
 
                                 // Update ROIs data using average_polygon_roi
                                 if !filtered.rois.is_empty() {
-                                    // Clear existing ROI data
-                                    data.roi_signal.clear();
-                                    data.roi_signal_fft.clear();
-                                    data.roi_phase.clear();
 
                                     // Process each ROI
                                     for (roi_uuid, (roi_name, polygon)) in &filtered.rois {
-                                        // Time domain ROI averaging
-                                        let roi_signal = average_polygon_roi(
-                                            &filtered.data,
-                                            polygon,
-                                            filtered.scaling,
-                                        );
-                                        data.roi_signal.insert(
-                                            roi_uuid.to_string(),
-                                            (roi_name.clone(), roi_signal.to_vec()),
-                                        );
+                                        if let Some(polygon) = polygon {
+                                            // Time domain ROI averaging
+                                            let roi_signal = average_polygon_roi(
+                                                &filtered.data,
+                                                polygon,
+                                                filtered.scaling,
+                                            );
+                                            data.roi_signal.insert(
+                                                roi_uuid.to_string(),
+                                                (roi_name.clone(), roi_signal.to_vec()),
+                                            );
 
-                                        // Frequency domain ROI averaging (amplitudes)
-                                        let roi_signal_fft = average_polygon_roi(
-                                            &filtered.amplitudes,
-                                            polygon,
-                                            filtered.scaling,
-                                        );
-                                        data.roi_signal_fft.insert(
-                                            roi_uuid.to_string(),
-                                            (roi_name.clone(), roi_signal_fft.to_vec()),
-                                        );
+                                            // Frequency domain ROI averaging (amplitudes)
+                                            let roi_signal_fft = average_polygon_roi(
+                                                &filtered.amplitudes,
+                                                polygon,
+                                                filtered.scaling,
+                                            );
+                                            data.roi_signal_fft.insert(
+                                                roi_uuid.to_string(),
+                                                (roi_name.clone(), roi_signal_fft.to_vec()),
+                                            );
 
-                                        // Frequency domain ROI averaging (phases)
-                                        let roi_phase = average_polygon_roi(
-                                            &filtered.phases,
-                                            polygon,
-                                            filtered.scaling,
-                                        );
-                                        data.roi_phase.insert(
-                                            roi_uuid.to_string(),
-                                            (roi_name.clone(), roi_phase.to_vec()),
-                                        );
+                                            // Frequency domain ROI averaging (phases)
+                                            let roi_phase = average_polygon_roi(
+                                                &filtered.phases,
+                                                polygon,
+                                                filtered.scaling,
+                                            );
+                                            data.roi_phase.insert(
+                                                roi_uuid.to_string(),
+                                                (roi_name.clone(), roi_phase.to_vec()),
+                                            );
+                                        }
                                     }
 
                                     if config.avg_in_fourier_space {

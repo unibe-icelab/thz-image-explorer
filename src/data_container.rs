@@ -128,7 +128,7 @@ pub struct ScannedImageFilterData {
     /// FFT planner for complex-to-real transforms.
     pub c2r: Option<Arc<dyn ComplexToReal<f32>>>,
     /// Map of ROI names to pixel coordinates.
-    pub rois: HashMap<String, (String, Vec<(usize, usize)>)>,
+    pub rois: HashMap<String, (String, Option<Vec<(usize, usize)>>)>,
     /// Time axis data for the scan.
     pub time: Array1<f32>,
     /// 2D intensity image derived from the scan.
