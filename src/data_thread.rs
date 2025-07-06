@@ -809,8 +809,8 @@ pub fn main_thread(
                     thread_communication.gui_settings.kernel_sigma = sigma;
                     update = UpdateType::Image;
                 }
-                ConfigCommand::SetKernelPower(power) => {
-                    thread_communication.gui_settings.kernel_power = power;
+                ConfigCommand::Set3DContrast(contrast) => {
+                    thread_communication.gui_settings.contrast_3d = contrast;
                     update = UpdateType::Image;
                 }
                 ConfigCommand::SetSelectedPixel(pixel) => {

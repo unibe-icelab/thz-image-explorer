@@ -84,6 +84,8 @@ pub enum ConfigCommand {
     /// The file is identified using a `PathBuf`.
     UpdateMetaData(PathBuf),
 
+    /// Command to save Regions of Interest (ROIs) to the meta-data of the `.thz` file.
+    /// The file is identified using a `PathBuf`.
     SaveROIs(PathBuf),
 
     /// Command to set the lower bound of the FFT window.
@@ -112,10 +114,16 @@ pub enum ConfigCommand {
     /// This affects the resolution of the processed image and data.
     SetDownScaling(usize),
 
-    SetKernelPower(f32),
+    /// Command to adjust the 3D contrast for image processing.
+    /// This affects the visibility of features in 3D visualizations. It is the exponent of the intensity to opacity mapping
+    Set3DContrast(f32),
 
+    /// Command to adjust the kernel sigma for 3D image processing.
+    /// This affects the smoothing applied to the image data.
     SetKernelSigma(f32),
 
+    /// Command to adjust the kernel radius for 3D image processing.
+    /// This affects the size of the kernel used in filtering operations.
     SetKernelRadius(usize),
 
     /// Command to update the currently selected pixel in the image.
@@ -165,6 +173,8 @@ pub struct ConfigContainer {
     /// See [`FftWindowType`] for details.
     pub fft_window_type: FftWindowType,
 
+    /// Downscaling factor for the data processing.
+    /// This factor determines how much the data is downsampled.
     pub scale_factor: usize,
 
     /// Flag indicating whether to use logarithmic plotting for FFT results.
@@ -205,7 +215,6 @@ impl Default for ConfigContainer {
 /// and sharing data locks between the GUI and the main processing thread.
 #[derive(Resource, Clone)]
 pub struct ThreadCommunication {
-
     /// Lock for the Path of the async file dialog on macOS..
     #[cfg(target_os = "macos")]
     pub macos_path_lock: Arc<RwLock<PathBuf>>,
@@ -249,9 +258,9 @@ pub struct ThreadCommunication {
     /// Maps filter UUIDs to their processing duration.
     pub filter_computation_time_lock: Arc<RwLock<HashMap<String, Duration>>>,
 
-
+    /// Lock for the opacity threshold used in filtering.
+    /// This threshold determines the minimum opacity for visualizing filtered data.
     pub opacity_threshold_lock: Arc<RwLock<f32>>,
-
 
     /// Lock for storing the data processed by each filter.
     /// Contains a vector of filter output data for each step in the chain/pipeline.

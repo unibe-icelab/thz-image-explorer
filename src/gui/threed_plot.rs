@@ -12,10 +12,12 @@ use bevy_panorbit_camera::{ActiveCameraData, PanOrbitCamera};
 use bevy_voxel_plot::{InstanceData, InstanceMaterialData};
 use ndarray::{Array1, Array3, ArrayView1, Axis};
 use rayon::prelude::*;
-use std::f32::consts::TAU;
 
 #[derive(Resource)]
 pub struct OpacityThreshold(pub f32);
+
+#[derive(Resource, Clone)]
+pub struct InstanceContainer(pub Vec<InstanceData>, pub f32, pub f32, pub f32);
 
 #[derive(Deref, Resource)]
 pub struct RenderImage(Handle<Image>);
@@ -32,22 +34,45 @@ pub fn update_instance_buffer_system(
     mut meshes: ResMut<Assets<Mesh>>,
     thread_communication: Res<ThreadCommunication>,
     opacity_threshold: Res<OpacityThreshold>,
+    mut instances: ResMut<InstanceContainer>,
 ) {
     if !visibility.0 {
         return;
     }
 
-    if let Ok(read_guard) = thread_communication.voxel_plot_instances_lock.read() {
-        let (instances, cube_width, cube_height, cube_depth) = read_guard.clone();
-        let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
+    if let Ok(instances_temp) = thread_communication.voxel_plot_instances_lock.try_read() {
+        instances.0 = instances_temp.0.clone();
+        instances.1 = instances_temp.1;
+        instances.2 = instances_temp.2;
+        instances.3 = instances_temp.3;
+    }
 
-        if let Ok((mut instance_data, mut mesh3d)) = query.single_mut() {
-            instance_data.instances = instances;
-            mesh3d.0 = new_mesh;
-            instance_data
-                .instances
-                .retain(|instance| instance.color[3] >= opacity_threshold.0);
-        }
+    let cube_width = instances.1;
+    let cube_height = instances.2;
+    let cube_depth = instances.3;
+
+    let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
+
+    if let Ok((mut instance_data, mut mesh3d)) = query.single_mut() {
+        instance_data.instances = instances.0.clone();
+        mesh3d.0 = new_mesh;
+        instance_data.instances.retain_mut(|instance| {
+            if instance.color[3] >= opacity_threshold.0 {
+                // Recalculate colormap for remaining instances
+                // Normalize the opacity value relative to the threshold range
+                let normalized_opacity =
+                    (instance.color[3] - opacity_threshold.0) / (1.0 - opacity_threshold.0);
+                let (r, g, b) = jet_colormap(normalized_opacity);
+
+                // Update the color while keeping the original opacity
+                instance.color =
+                    LinearRgba::from(Color::srgba(r, g, b, normalized_opacity)).to_f32_array();
+
+                true
+            } else {
+                false
+            }
+        });
     }
 }
 
@@ -75,7 +100,7 @@ fn gaussian_kernel1d(sigma: f32, radius: usize) -> Vec<f32> {
 }
 
 // Apply 1D convolution (valid for edge-safe Gaussian)
-fn convolve1d(data: &ArrayView1<f32>, kernel: &[f32], power: f32) -> Array1<f32> {
+fn convolve1d(data: &ArrayView1<f32>, kernel: &[f32], contrast: f32) -> Array1<f32> {
     let radius = kernel.len() / 2;
     let mut output = Array1::<f32>::zeros(data.len());
 
@@ -87,7 +112,7 @@ fn convolve1d(data: &ArrayView1<f32>, kernel: &[f32], power: f32) -> Array1<f32>
                 acc += data[j as usize] * coeff;
             }
         }
-        *out = acc.powf(power);
+        *out = acc.powf(contrast);
     }
 
     output
@@ -110,7 +135,7 @@ pub(crate) fn instance_from_data(
     thread_communication: &ThreadCommunication,
 ) -> (Vec<InstanceData>, f32, f32, f32) {
     let opacity_threshold = thread_communication.gui_settings.opacity_threshold;
-    let power = thread_communication.gui_settings.kernel_power;
+    let contrast = thread_communication.gui_settings.contrast_3d;
     let sigma = thread_communication.gui_settings.kernel_sigma;
     let radius = thread_communication.gui_settings.kernel_radius;
 
@@ -136,48 +161,54 @@ pub(crate) fn instance_from_data(
 
     let kernel = gaussian_kernel1d(sigma, radius);
 
+    // Apply convolution
     dataset
         .axis_iter_mut(Axis(0))
         .into_par_iter()
         .for_each(|mut plane| {
             for mut line in plane.axis_iter_mut(Axis(0)) {
                 line.mapv_inplace(|v| v.powi(2));
-                let envelope = convolve1d(&line.view(), &kernel, power);
+                let envelope = convolve1d(&line.view(), &kernel, contrast);
                 line.assign(&envelope);
             }
         });
 
-        // normalize per line (each pixel along the time/z axis)
+    // Filter lines by maximum value, then normalize remaining lines
     dataset
         .axis_iter_mut(Axis(0))
         .into_par_iter()
         .for_each(|mut plane| {
             for mut line in plane.axis_iter_mut(Axis(0)) {
-                let min = line.fold(f32::INFINITY, |a, &b| a.min(b));
+                // Check if line's maximum value meets threshold
                 let max = line.fold(f32::NEG_INFINITY, |a, &b| a.max(b));
 
-                if (max - min).abs() > 1e-6 {
-                    line.mapv_inplace(|v| (v - min) / (max - min));
-                } else {
+                if max < opacity_threshold {
+                    // Zero out the entire line if it doesn't meet threshold
                     line.fill(0.0);
+                } else {
+                    // Normalize the line if it meets threshold
+                    let min = line.fold(f32::INFINITY, |a, &b| a.min(b));
+
+                    if (max - min).abs() > 1e-6 {
+                        line.mapv_inplace(|v| (v - min) / (max - min));
+                    } else {
+                        line.fill(0.0);
+                    }
                 }
             }
         });
 
     let dataset_slice = dataset.as_slice().unwrap();
-
-    // Calculate final opacity values (squared AND above original threshold)
     let mut final_opacities: Vec<f32> = Vec::from(dataset_slice);
 
-    // Determine dynamic threshold to limit instances to 2,000,000
+    // Dynamic threshold for instance count limiting
     let max_instances = 2_000_000;
     let effective_threshold = if final_opacities.len() > max_instances {
-        // Use select_nth_unstable to find the 2M-th largest element without sorting the entire array
         let (_, nth_element, _) = final_opacities
             .select_nth_unstable_by(max_instances - 1, |a, b| b.partial_cmp(a).unwrap());
         *nth_element
     } else {
-        opacity_threshold
+        0.0 // Since we already filtered, use 0.0 as effective threshold
     };
 
     if let Ok(mut thrs) = thread_communication.opacity_threshold_lock.write() {
@@ -207,7 +238,8 @@ pub(crate) fn instance_from_data(
                     continue;
                 }
 
-                let (r, g, b) = jet_colormap(opacity);
+                let (r, g, b) =
+                    jet_colormap((opacity - effective_threshold) / (1.0 - effective_threshold));
 
                 let position = Vec3::new(
                     y as f32 * spacing_height - half_height,
@@ -319,7 +351,7 @@ pub fn setup(
             },
             PanOrbitCamera {
                 allow_upside_down: true,
-                pitch: Some(0.0_f32.to_radians()),
+                pitch: Some(30.0_f32.to_radians()),
                 yaw: Some(0.0_f32.to_radians()),
                 ..default()
             },
@@ -361,9 +393,6 @@ pub fn animate(
         for mut pan_orbit in pan_orbit_query.iter_mut() {
             // Must set target values, not yaw/pitch directly
             pan_orbit.target_yaw += 7f32.to_radians() * time.delta_secs();
-            pan_orbit.target_pitch = time.elapsed_secs_wrapped().sin() * TAU * 0.05;
-            // pan_orbit.radius =
-            //     Some((((time.elapsed_secs_wrapped()).cos() + 1.0) * 0.5) * 2.0 + 4.0);
 
             // Force camera to update its transform
             pan_orbit.force_update = true;
@@ -373,141 +402,120 @@ pub fn animate(
 }
 
 pub fn three_dimensional_plot_ui(
-    meshes: &mut ResMut<Assets<Mesh>>,
     cube_preview_texture_id: &epaint::TextureId,
     width: f32,
     mut height: f32,
     ui: &mut Ui,
-    query: &mut Query<(&mut InstanceMaterialData, &mut Mesh3d)>,
     opacity_threshold: &mut ResMut<OpacityThreshold>,
     cam_input: &mut ResMut<CameraInputAllowed>,
     thread_communication: &mut ResMut<ThreadCommunication>,
     explorer: &mut THzImageExplorer,
 ) {
-    height -= 200.0;
+    height -= 210.0;
     let available_size = egui::vec2(width.min(height), width.min(height));
 
     // need to do this to take it out of the next closure, we will put it back later
     let mut animation_enabled = thread_communication.gui_settings.animation_enabled;
     let mut kernel_radius = thread_communication.gui_settings.kernel_radius;
     let mut kernel_sigma = thread_communication.gui_settings.kernel_sigma;
-    let mut kernel_power = thread_communication.gui_settings.kernel_power;
+    let mut constrast = thread_communication.gui_settings.contrast_3d;
 
     let mut minimum_threshold = 0.01;
-    if let Ok(thrs) = thread_communication.opacity_threshold_lock.read() {
+    if let Ok(thrs) = thread_communication.opacity_threshold_lock.try_read() {
         minimum_threshold = *thrs;
     }
 
-    if let Ok(read_guard) = thread_communication.voxel_plot_instances_lock.try_read() {
-        let (instances, cube_width, cube_height, cube_depth) = read_guard.clone();
+    ui.vertical(|ui| {
+        ui.add_space(10.0);
 
-        let new_mesh = meshes.add(Cuboid::new(cube_width, cube_height, cube_depth));
+        ui.allocate_ui(available_size, |ui| {
+            ui.image(egui::load::SizedTexture::new(
+                *cube_preview_texture_id,
+                available_size,
+            ));
 
-        ui.vertical(|ui| {
-            ui.add_space(10.0);
+            let rect = ui.max_rect();
 
-            ui.allocate_ui(available_size, |ui| {
-                ui.image(egui::load::SizedTexture::new(
-                    *cube_preview_texture_id,
-                    available_size,
-                ));
+            let response = ui.interact(
+                rect,
+                egui::Id::new("sense"),
+                egui::Sense::drag() | egui::Sense::hover(),
+            );
 
-                let rect = ui.max_rect();
-
-                let response = ui.interact(
-                    rect,
-                    egui::Id::new("sense"),
-                    egui::Sense::drag() | egui::Sense::hover(),
-                );
-
-                if response.dragged() || response.hovered() {
-                    cam_input.0 = true;
-                } else {
-                    cam_input.0 = false;
-                }
-            });
-
-            ui.style_mut().spacing.slider_width = 300.0;
-
-            ui.label(format!("Number of Voxels: {}/2000000", instances.len()));
-
-            if ui
-                .add(
-                    egui::Slider::new(&mut opacity_threshold.0, minimum_threshold..=1.0)
-                        .text("Opacity Threshold"),
-                )
-                .changed()
-            {
-                if let Ok((mut instance_data, mut mesh3d)) = query.single_mut() {
-                    instance_data.instances = instances;
-                    mesh3d.0 = new_mesh;
-                    instance_data
-                        .instances
-                        .retain(|instance| instance.color[3] >= opacity_threshold.0);
-                }
-            }
-
-            ui.add_space(10.0);
-
-            if ui
-                .add(
-                    egui::Slider::new(&mut kernel_power, 0.01..=5.0)
-                        .step_by(0.01)
-                        .text("Intensity Power Value"),
-                )
-                .changed()
-            {
-                send_latest_config(
-                    thread_communication,
-                    ConfigCommand::SetKernelPower(kernel_power),
-                );
-            }
-
-            ui.add_space(10.0);
-
-            if ui
-                .add(egui::Slider::new(&mut kernel_radius, 1..=20).text("Kernel Radius"))
-                .changed()
-            {
-                send_latest_config(
-                    thread_communication,
-                    ConfigCommand::SetKernelRadius(kernel_radius),
-                );
-            }
-
-            ui.add_space(10.0);
-
-            if ui
-                .add(egui::Slider::new(&mut kernel_sigma, 0.1..=10.0).text("Kernel Sigma"))
-                .changed()
-            {
-                send_latest_config(
-                    thread_communication,
-                    ConfigCommand::SetKernelSigma(kernel_sigma),
-                );
-            }
-
-            ui.add_space(10.0);
-
-            ui.horizontal(|ui| {
-                ui.label("Animate Camera:");
-                ui.add(toggle(&mut animation_enabled));
-            });
-
-            ui.add_space(10.0);
-
-            if ui
-                .button(egui::RichText::new(format!(
-                    "{} Export VTU",
-                    egui_phosphor::regular::FLOPPY_DISK
-                )))
-                .clicked()
-            {
-                explorer.file_dialog_state = FileDialogState::SaveToVTU;
-                explorer.file_dialog.save_file();
+            if response.dragged() || response.hovered() {
+                cam_input.0 = true;
+            } else {
+                cam_input.0 = false;
             }
         });
-    }
+
+        ui.style_mut().spacing.slider_width = 300.0;
+
+        ui.add(
+            egui::Slider::new(&mut opacity_threshold.0, minimum_threshold..=1.0)
+                .text("Opacity Threshold"),
+        );
+
+        ui.add_space(10.0);
+
+        if ui
+            .add(
+                egui::Slider::new(&mut constrast, 0.01..=5.0)
+                    .step_by(0.01)
+                    .text("Contrast"),
+            )
+            .changed()
+        {
+            send_latest_config(
+                thread_communication,
+                ConfigCommand::Set3DContrast(constrast),
+            );
+        }
+
+        ui.add_space(10.0);
+
+        if ui
+            .add(egui::Slider::new(&mut kernel_radius, 1..=20).text("Kernel Radius"))
+            .changed()
+        {
+            send_latest_config(
+                thread_communication,
+                ConfigCommand::SetKernelRadius(kernel_radius),
+            );
+        }
+
+        ui.add_space(10.0);
+
+        if ui
+            .add(egui::Slider::new(&mut kernel_sigma, 0.1..=10.0).text("Kernel Sigma"))
+            .changed()
+        {
+            send_latest_config(
+                thread_communication,
+                ConfigCommand::SetKernelSigma(kernel_sigma),
+            );
+        }
+
+        ui.add_space(10.0);
+
+        ui.horizontal(|ui| {
+            ui.label("Animate Camera:");
+            ui.add(toggle(&mut animation_enabled));
+        });
+
+        ui.add_space(10.0);
+
+        if ui
+            .button(egui::RichText::new(format!(
+                "{} Export VTU",
+                egui_phosphor::regular::FLOPPY_DISK
+            )))
+            .clicked()
+        {
+            explorer.file_dialog_state = FileDialogState::SaveToVTU;
+            explorer.file_dialog.save_file();
+        }
+    });
 
     thread_communication.gui_settings.opacity_threshold = opacity_threshold.0;
 
@@ -515,5 +523,5 @@ pub fn three_dimensional_plot_ui(
     thread_communication.gui_settings.animation_enabled = animation_enabled;
     thread_communication.gui_settings.kernel_radius = kernel_radius;
     thread_communication.gui_settings.kernel_sigma = kernel_sigma;
-    thread_communication.gui_settings.kernel_power = kernel_power;
+    thread_communication.gui_settings.contrast_3d = constrast;
 }
