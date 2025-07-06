@@ -242,7 +242,7 @@ impl Filter for FrequencyDomainBandPass {
         for (i, freq) in self.freq_axis.iter().enumerate() {
             if i < self.signal_axis.len() {
                 let amplitude = self.signal_axis[i];
-                spectrum_vals.push([self.low + *freq as f64, amplitude as f64]);
+                spectrum_vals.push([*freq as f64, amplitude as f64]);
             }
         }
 
