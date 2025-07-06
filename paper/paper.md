@@ -458,8 +458,7 @@ coordinates are saved for each ROI with label "ROI {i}" as a list, e.g.:
 
 while the label of the ROI is saved in the "ROI Labels" meta-data field as a comma-separated list.
 The file can then be opened with Python using the `pydotthz` package
-to further process the data. The `dotthz` package provides a convenient way to read and write dotTHz files and with the
-following code one can easily extract and average the region of interest.
+to further process the data.
 A Python code snipped for ROI extraction and the PSF generation script can be found in the `scripts` directory of the repository.
 
 # Summary
