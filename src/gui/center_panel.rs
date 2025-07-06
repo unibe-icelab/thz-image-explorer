@@ -573,7 +573,7 @@ pub fn optical_properties_tab(
         } else {
             // If no ROIs are available yet
             explorer.data.available_references = vec![];
-            explorer.data.available_samples = vec![];
+            explorer.data.available_samples = vec!["Selected Pixel".to_string()];
         }
     }
 
@@ -625,6 +625,27 @@ pub fn optical_properties_tab(
                         }
                     }
                 });
+
+            ui.add_space(20.0);
+
+            // Create a unique ID for this filter's info popup
+            let popup_id = ui.make_persistent_id("info_popup_optical_properties");
+            // Show info icon and handle clicks
+            let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
+            if info_button.clicked() {
+                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+            }
+
+            egui::popup_below_widget(
+                ui,
+                popup_id,
+                &info_button,
+                egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+                |ui: &mut egui::Ui| {
+                    ui.set_max_width(300.0);
+                    ui.label("Select a reference and a sample to plot the optical properties. If no options are available, please load either a reference dataset and/or create at least one region of interest (ROI) in the 2D viewer.");
+                },
+            );
         });
 
         ui.add_space(spacing / 2.0);
@@ -743,9 +764,9 @@ pub fn optical_properties_tab(
                         &mut thread_communication.gui_settings.sample_thickness,
                         0.01..=20.0,
                     )
-                    .min_decimals(2)
-                    .max_decimals(2)
-                    .suffix(" mm"),
+                        .min_decimals(2)
+                        .max_decimals(2)
+                        .suffix(" mm"),
                 )
                 .changed()
             {

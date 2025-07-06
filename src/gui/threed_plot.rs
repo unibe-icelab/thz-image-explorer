@@ -456,6 +456,7 @@ pub fn three_dimensional_plot_ui(
                 egui::Slider::new(&mut opacity_threshold.0, minimum_threshold..=1.0)
                     .text("Opacity Threshold"),
             );
+
             // Create a unique ID for this filter's info popup
             let popup_id = ui.make_persistent_id("info_popup_opacity");
             // Show info icon and handle clicks
