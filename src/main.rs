@@ -4,7 +4,10 @@ use crate::data_thread::main_thread;
 use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::ROI;
-use crate::gui::threed_plot::{animate, set_enable_camera_controls_system, setup, update_instance_buffer_system, CameraInputAllowed, InstanceContainer, OpacityThreshold, SceneVisibility};
+use crate::gui::threed_plot::{
+    animate, set_enable_camera_controls_system, setup, update_instance_buffer_system,
+    CameraInputAllowed, InstanceContainer, OpacityThreshold, SceneVisibility,
+};
 use bevy::app::AppExit;
 use bevy::ecs::event::EventReader;
 use bevy::log::LogPlugin;
@@ -308,7 +311,7 @@ fn main() {
         .add_plugins((VoxelMaterialPlugin, PanOrbitCameraPlugin))
         .insert_resource(thread_communication.clone())
         .insert_resource(OpacityThreshold(0.1))
-        .insert_resource(InstanceContainer(vec![], 1.0,1.0,1.0)) // voxel_plot_instances
+        .insert_resource(InstanceContainer(vec![], 1.0, 1.0, 1.0)) // voxel_plot_instances
         .insert_resource(CameraInputAllowed(false))
         .insert_non_send_resource(THzImageExplorer::new(thread_communication))
         .insert_resource(SceneVisibility(false))

@@ -92,7 +92,7 @@ fn update_intensity_image(
                 scan.data.clone(),
                 scaling,
                 original_dims,
-                thread_communication
+                thread_communication,
             );
         write_guard.0 = instances;
         write_guard.1 = cube_width;
@@ -667,15 +667,17 @@ pub fn main_thread(
                                                             roi_uuid.to_string(),
                                                             (
                                                                 label.to_string(),
-                                                                Some(polygon
-                                                                    .iter()
-                                                                    .map(|v| {
-                                                                        (
-                                                                            v[0] as usize,
-                                                                            v[1] as usize,
-                                                                        )
-                                                                    })
-                                                                    .collect()),
+                                                                Some(
+                                                                    polygon
+                                                                        .iter()
+                                                                        .map(|v| {
+                                                                            (
+                                                                                v[0] as usize,
+                                                                                v[1] as usize,
+                                                                            )
+                                                                        })
+                                                                        .collect(),
+                                                                ),
                                                             ),
                                                         );
                                                     }
@@ -895,10 +897,12 @@ pub fn main_thread(
                                 roi_uuid.to_string(),
                                 (
                                     roi.name,
-                                    Some(roi.polygon
-                                        .iter()
-                                        .map(|v| (v[0] as usize, v[1] as usize))
-                                        .collect()),
+                                    Some(
+                                        roi.polygon
+                                            .iter()
+                                            .map(|v| (v[0] as usize, v[1] as usize))
+                                            .collect(),
+                                    ),
                                 ),
                             );
                         }
@@ -914,10 +918,12 @@ pub fn main_thread(
                                 roi_uuid.to_string(),
                                 (
                                     roi.name,
-                                    Some(roi.polygon
-                                        .iter()
-                                        .map(|v| (v[0] as usize, v[1] as usize))
-                                        .collect()),
+                                    Some(
+                                        roi.polygon
+                                            .iter()
+                                            .map(|v| (v[0] as usize, v[1] as usize))
+                                            .collect(),
+                                    ),
                                 ),
                             );
                         }
@@ -1394,7 +1400,6 @@ pub fn main_thread(
 
                                 // Update ROIs data using average_polygon_roi
                                 if !filtered.rois.is_empty() {
-
                                     // Process each ROI
                                     for (roi_uuid, (roi_name, polygon)) in &filtered.rois {
                                         if let Some(polygon) = polygon {

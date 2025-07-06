@@ -577,7 +577,7 @@ pub fn optical_properties_tab(
             explorer.data.available_samples = vec![];
         }
     }
-    
+
     ui.vertical(|ui| {
         // Signal selection controls
         ui.horizontal(|ui| {

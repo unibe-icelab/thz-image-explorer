@@ -530,7 +530,8 @@ pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> Scanned
                         Err(e) => {
                             log::error!("IFFT error for ROI {}: {}", roi_name, e);
                             // Fall back to time-domain averaging if IFFT fails
-                            let roi_signal = average_polygon_roi(&input.data, polygon, input.scaling);
+                            let roi_signal =
+                                average_polygon_roi(&input.data, polygon, input.scaling);
                             output
                                 .roi_data
                                 .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
