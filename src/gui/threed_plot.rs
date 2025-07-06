@@ -451,50 +451,144 @@ pub fn three_dimensional_plot_ui(
 
         ui.style_mut().spacing.slider_width = 300.0;
 
-        ui.add(
-            egui::Slider::new(&mut opacity_threshold.0, minimum_threshold..=1.0)
-                .text("Opacity Threshold"),
-        );
+        ui.horizontal(|ui| {
+            ui.add(
+                egui::Slider::new(&mut opacity_threshold.0, minimum_threshold..=1.0)
+                    .text("Opacity Threshold"),
+            );
+            // Create a unique ID for this filter's info popup
+            let popup_id = ui.make_persistent_id("info_popup_opacity");
+            // Show info icon and handle clicks
+            let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
+            if info_button.clicked() {
+                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+            }
+
+            egui::popup_below_widget(
+                ui,
+                popup_id,
+                &info_button,
+                egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+                |ui: &mut egui::Ui| {
+                    ui.set_max_width(300.0);
+                    ui.label("This sets the threshold below which instances are not rendered. \"
+                                \nThe value is relative to the maximum opacity of the dataset, \
+                                so a value of 0.5 means that only instances with at least 50% opacity will be rendered.");
+                },
+            );
+        });
 
         ui.add_space(10.0);
 
-        if ui
-            .add(
-                egui::Slider::new(&mut constrast, 0.01..=5.0)
-                    .step_by(0.01)
-                    .text("Contrast"),
-            )
-            .changed()
-        {
-            send_latest_config(
-                thread_communication,
-                ConfigCommand::Set3DContrast(constrast),
+        ui.horizontal(|ui| {
+
+            if ui
+                .add(
+                    egui::Slider::new(&mut constrast, 0.01..=5.0)
+                        .step_by(0.01)
+                        .text("Contrast"),
+                )
+                .changed()
+            {
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::Set3DContrast(constrast),
+                );
+            }
+
+            // Create a unique ID for this filter's info popup
+            let popup_id = ui.make_persistent_id("info_popup_contrast");
+            // Show info icon and handle clicks
+            let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
+            if info_button.clicked() {
+                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+            }
+
+            egui::popup_below_widget(
+                ui,
+                popup_id,
+                &info_button,
+                egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+                |ui: &mut egui::Ui| {
+                    ui.set_max_width(300.0);
+                    ui.label("This sets the contrast below of the 3D render. \"
+                                \nIt adjusts the exponent of the intensity to opacity mapping, \
+                                so a value of 2.0 means opacity = intensity ** 2.0 .");
+                },
             );
-        }
+        });
 
         ui.add_space(10.0);
 
-        if ui
-            .add(egui::Slider::new(&mut kernel_radius, 1..=20).text("Kernel Radius"))
-            .changed()
-        {
-            send_latest_config(
-                thread_communication,
-                ConfigCommand::SetKernelRadius(kernel_radius),
+        ui.horizontal(|ui| {
+
+            if ui
+                .add(egui::Slider::new(&mut kernel_radius, 1..=20).text("Kernel Radius"))
+                .changed()
+            {
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::SetKernelRadius(kernel_radius),
+                );
+            }
+
+            // Create a unique ID for this filter's info popup
+            let popup_id = ui.make_persistent_id("info_popup_radius");
+            // Show info icon and handle clicks
+            let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
+            if info_button.clicked() {
+                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+            }
+
+            egui::popup_below_widget(
+                ui,
+                popup_id,
+                &info_button,
+                egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+                |ui: &mut egui::Ui| {
+                    ui.set_max_width(300.0);
+                    ui.label("This sets the radius of the 1D Kernel. \");
+                                \nIt defines how many neighboring points are considered for the Gaussian convolution. \
+                                \nA larger radius means more smoothing, but also more computation.");
+                },
             );
-        }
+        });
 
         ui.add_space(10.0);
 
-        if ui
-            .add(egui::Slider::new(&mut kernel_sigma, 0.1..=10.0).text("Kernel Sigma"))
-            .changed()
-        {
-            send_latest_config(
-                thread_communication,
-                ConfigCommand::SetKernelSigma(kernel_sigma),
+        ui.horizontal(|ui| {
+
+            if ui
+                .add(egui::Slider::new(&mut kernel_sigma, 0.1..=10.0).text("Kernel Sigma"))
+                .changed()
+            {
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::SetKernelSigma(kernel_sigma),
+                );
+            }
+
+            // Create a unique ID for this filter's info popup
+            let popup_id = ui.make_persistent_id("info_popup_sigma");
+            // Show info icon and handle clicks
+            let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
+            if info_button.clicked() {
+                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+            }
+
+            egui::popup_below_widget(
+                ui,
+                popup_id,
+                &info_button,
+                egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+                |ui: &mut egui::Ui| {
+                    ui.set_max_width(300.0);
+                    ui.label("This sets the sigma of the 1D Kernel. \"
+                                \nIt defines the standard deviation of the Gaussian function used for smoothing. \
+                                \nA larger sigma means more smoothing, but also more computation.");
+                },
             );
-        }
+        });
 
         ui.add_space(10.0);
 
@@ -505,16 +599,38 @@ pub fn three_dimensional_plot_ui(
 
         ui.add_space(10.0);
 
-        if ui
-            .button(egui::RichText::new(format!(
-                "{} Export VTU",
-                egui_phosphor::regular::FLOPPY_DISK
-            )))
-            .clicked()
-        {
-            explorer.file_dialog_state = FileDialogState::SaveToVTU;
-            explorer.file_dialog.save_file();
-        }
+        ui.horizontal(|ui| {
+
+            if ui
+                .button(egui::RichText::new(format!(
+                    "{} Export VTU",
+                    egui_phosphor::regular::FLOPPY_DISK
+                )))
+                .clicked()
+            {
+                explorer.file_dialog_state = FileDialogState::SaveToVTU;
+                explorer.file_dialog.save_file();
+            }
+
+            // Create a unique ID for this filter's info popup
+            let popup_id = ui.make_persistent_id("info_popup_vtu");
+            // Show info icon and handle clicks
+            let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
+            if info_button.clicked() {
+                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+            }
+
+            egui::popup_below_widget(
+                ui,
+                popup_id,
+                &info_button,
+                egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+                |ui: &mut egui::Ui| {
+                    ui.set_max_width(300.0);
+                    ui.label("Export to a .vtu file (VTK Unstructured Grid File) for further 3D analysis. (e.g. ParaView)");
+                },
+            );
+        });
     });
 
     thread_communication.gui_settings.opacity_threshold = opacity_threshold.0;
