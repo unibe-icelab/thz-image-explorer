@@ -472,7 +472,7 @@ pub fn three_dimensional_plot_ui(
                 egui::popup::PopupCloseBehavior::CloseOnClickOutside,
                 |ui: &mut egui::Ui| {
                     ui.set_max_width(300.0);
-                    ui.label("This sets the threshold below which instances are not rendered. \"
+                    ui.label("This sets the threshold below which instances are not rendered. Note that this might also change the color mapping.\"
                                 \nThe value is relative to the maximum opacity of the dataset, \
                                 so a value of 0.5 means that only instances with at least 50% opacity will be rendered.");
                 },
