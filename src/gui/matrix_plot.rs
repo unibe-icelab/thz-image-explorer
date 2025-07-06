@@ -549,11 +549,6 @@ pub fn plot_matrix(
                     // If last ROI is closed, start a new one
                     let mut roi = ROI::default();
                     roi.name = format!("ROI {}", explorer.rois.len() + 1);
-                    roi.polygon.push([
-                        explorer.pixel_selected.y as f64,
-                        width as f64 - explorer.pixel_selected.x as f64,
-                    ]);
-                    roi.polygon.push([plot_x, plot_y]);
                     explorer.pixel_selected.open_roi = Some(roi);
                 }
 
@@ -576,43 +571,42 @@ pub fn plot_matrix(
                         }
                     }
                 }
-                pixel_clicked = true;
             } else {
                 if let Some(current_roi) = &mut explorer.pixel_selected.open_roi {
                     if !current_roi.closed {
                         explorer.pixel_selected.open_roi = None;
                     }
                 }
-                // Handle single pixel selection
-                // plot_x -> original y
-                let pixel_y = explorer.val.x.floor() as usize;
-                // plot_y -> original x (inverted)
-                let pixel_x = (img.height() - 1) - explorer.val.y.floor() as usize;
-
-                if explorer.pixel_selected.x == pixel_x
-                    && explorer.pixel_selected.y == pixel_y
-                    && explorer.pixel_selected.selected
-                {
-                    explorer.pixel_selected.selected = false;
-                } else {
-                    explorer.pixel_selected.selected = true;
-                    let rect_x = explorer.val.x.floor();
-                    let rect_y = explorer.val.y.floor();
-                    explorer.pixel_selected.rect = vec![
-                        [rect_x, rect_y],
-                        [rect_x + 1.0, rect_y],
-                        [rect_x + 1.0, rect_y + 1.0],
-                        [rect_x, rect_y + 1.0],
-                        [rect_x, rect_y],
-                    ];
-                    explorer.pixel_selected.x = pixel_x;
-                    explorer.pixel_selected.y = pixel_y;
-                    if pixel_x < id_matrix.len() && pixel_y < id_matrix[0].len() {
-                        explorer.pixel_selected.id = id_matrix[pixel_x][pixel_y].clone();
-                    }
-                }
-                pixel_clicked = true;
             }
+            // Handle single pixel selection
+            // plot_x -> original y
+            let pixel_y = explorer.val.x.floor() as usize;
+            // plot_y -> original x (inverted)
+            let pixel_x = (img.height() - 1) - explorer.val.y.floor() as usize;
+
+            if explorer.pixel_selected.x == pixel_x
+                && explorer.pixel_selected.y == pixel_y
+                && explorer.pixel_selected.selected
+            {
+                explorer.pixel_selected.selected = false;
+            } else {
+                explorer.pixel_selected.selected = true;
+                let rect_x = explorer.val.x.floor();
+                let rect_y = explorer.val.y.floor();
+                explorer.pixel_selected.rect = vec![
+                    [rect_x, rect_y],
+                    [rect_x + 1.0, rect_y],
+                    [rect_x + 1.0, rect_y + 1.0],
+                    [rect_x, rect_y + 1.0],
+                    [rect_x, rect_y],
+                ];
+                explorer.pixel_selected.x = pixel_x;
+                explorer.pixel_selected.y = pixel_y;
+                if pixel_x < id_matrix.len() && pixel_y < id_matrix[0].len() {
+                    explorer.pixel_selected.id = id_matrix[pixel_x][pixel_y].clone();
+                }
+            }
+            pixel_clicked = true;
         }
 
         ui.add_space(0.01 * &(height as f32 * size as f32));

@@ -315,7 +315,9 @@ pub fn update_gui(
                                             .color(color),
                                     );
                                 }
-                                ui.label("Check the logs in the Settings Window for more information.");
+                                ui.label(
+                                    "Check the logs in the Settings Window for more information.",
+                                );
                             },
                         );
                     } else {
