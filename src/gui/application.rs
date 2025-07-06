@@ -202,7 +202,6 @@ impl GuiSettingsContainer {
 
 pub fn update_gui(
     mut scene_visibility: ResMut<SceneVisibility>,
-    mut meshes: ResMut<Assets<Mesh>>,
     mut query: Query<(&mut InstanceMaterialData, &mut Mesh3d)>,
     cube_preview_image: Res<RenderImage>,
     mut contexts: EguiContexts,
@@ -341,8 +340,6 @@ pub fn update_gui(
         });
 
     center_panel(
-        &mut meshes,
-        &mut query,
         &cube_preview_texture_id,
         &ctx,
         &right_panel_width,

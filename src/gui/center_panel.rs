@@ -6,7 +6,6 @@ use crate::vec2;
 use bevy::prelude::*;
 use bevy_egui::egui::epaint;
 use bevy_egui::egui::{self, Checkbox, DragValue, Slider, Stroke, Ui};
-use bevy_voxel_plot::InstanceMaterialData;
 use egui_plot::{GridMark, Legend, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 use std::ops::RangeInclusive;
 
@@ -797,8 +796,6 @@ pub fn optical_properties_tab(
 
 #[allow(clippy::too_many_arguments)]
 pub fn center_panel(
-    meshes: &mut ResMut<Assets<Mesh>>,
-    query: &mut Query<(&mut InstanceMaterialData, &mut Mesh3d)>,
     cube_preview_texture_id: &epaint::TextureId,
     ctx: &egui::Context,
     right_panel_width: &f32,
@@ -865,12 +862,10 @@ pub fn center_panel(
                 ),
                 Tab::ThreeD => {
                     three_dimensional_plot_ui(
-                        meshes,
                         cube_preview_texture_id,
                         width,
                         window_height,
                         ui,
-                        query,
                         opacity_threshold,
                         cam_input,
                         thread_communication,
