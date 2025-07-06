@@ -8,6 +8,7 @@ use crate::gui::threed_plot::{
     animate, set_enable_camera_controls_system, setup, update_instance_buffer_system,
     CameraInputAllowed, InstanceContainer, OpacityThreshold, SceneVisibility,
 };
+use crate::update::check_for_software_updates;
 use bevy::app::AppExit;
 use bevy::ecs::event::EventReader;
 use bevy::log::LogPlugin;
@@ -273,6 +274,10 @@ fn main() {
         roi_tx,
         roi_rx,
     };
+
+    if let Some(release) = check_for_software_updates() {
+        log::warn!("New release available: {}", release.version);
+    }
 
     let mut wgpu_features = WgpuFeatures::default();
     wgpu_features.set(WgpuFeatures::VERTEX_WRITABLE_STORAGE, true);

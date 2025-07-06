@@ -1,7 +1,7 @@
 use crate::config::ThreadCommunication;
 use crate::gui::application::{FileDialogState, THzImageExplorer};
 #[cfg(feature = "self_update")]
-use crate::update::{check_update, update};
+use crate::update::{check_for_software_updates, update};
 use crate::APP_INFO;
 use bevy_egui::egui;
 use bevy_egui::egui::{vec2, Align2, InnerResponse, Vec2, Visuals};
@@ -119,7 +119,7 @@ pub fn settings_window(
                 .striped(true)
                 .show(ui, |ui| {
                     if ui.button("Check for Updates").clicked() {
-                        explorer.new_release = check_update();
+                        explorer.new_release = check_for_software_updates();
                     }
 
                     let current_version = Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Version::new(0, 0, 1));

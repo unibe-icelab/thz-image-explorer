@@ -85,7 +85,7 @@ fn copy_dir(src: &Path, dest: &Path, binary_name: &str) -> io::Result<()> {
 ///     println!("New update available: {}", latest_release.version);
 /// }
 /// ```
-pub fn check_update() -> Option<Release> {
+pub fn check_for_software_updates() -> Option<Release> {
     if let Ok(builder) = self_update::backends::github::ReleaseList::configure()
         .repo_owner(REPO_OWNER)
         .repo_name(REPO_NAME)

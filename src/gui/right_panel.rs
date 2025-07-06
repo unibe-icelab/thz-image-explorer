@@ -7,7 +7,7 @@ use crate::math_tools::{
     apply_adapted_blackman_window, apply_blackman, apply_flat_top, apply_hamming, apply_hanning,
     FftWindowType,
 };
-use crate::update::check_update;
+use crate::update::check_for_software_updates;
 use crate::PlotDataContainer;
 use bevy_egui::egui;
 use bevy_egui::egui::panel::Side;
@@ -288,7 +288,7 @@ pub fn right_panel(
                 {
                     #[cfg(feature = "self_update")]
                     {
-                        explorer.new_release = check_update();
+                        explorer.new_release = check_for_software_updates();
                     }
                     explorer.settings_window_open = true;
                 }
