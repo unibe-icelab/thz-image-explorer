@@ -29,7 +29,6 @@ use std::time::Instant;
 pub enum UpdateType {
     None,
     Filter(usize),
-    #[allow(dead_code)]
     Image,
     Plot,
 }
@@ -91,9 +90,9 @@ fn update_intensity_image(
             crate::gui::threed_plot::instance_from_data(
                 time_span,
                 scan.data.clone(),
-                thread_communication.gui_settings.opacity_threshold,
                 scaling,
                 original_dims,
+                thread_communication
             );
         write_guard.0 = instances;
         write_guard.1 = cube_width;
@@ -801,6 +800,18 @@ pub fn main_thread(
                 ConfigCommand::SetDownScaling(scaling) => {
                     config.scale_factor = scaling;
                     update = UpdateType::Filter(1);
+                }
+                ConfigCommand::SetKernelRadius(radius) => {
+                    thread_communication.gui_settings.kernel_radius = radius;
+                    update = UpdateType::Image;
+                }
+                ConfigCommand::SetKernelSigma(sigma) => {
+                    thread_communication.gui_settings.kernel_sigma = sigma;
+                    update = UpdateType::Image;
+                }
+                ConfigCommand::SetKernelPower(power) => {
+                    thread_communication.gui_settings.kernel_power = power;
+                    update = UpdateType::Image;
                 }
                 ConfigCommand::SetSelectedPixel(pixel) => {
                     if let Ok(mut filter_data) =

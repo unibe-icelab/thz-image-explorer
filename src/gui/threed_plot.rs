@@ -1,4 +1,4 @@
-use crate::config::ThreadCommunication;
+use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
 use crate::gui::application::{FileDialogState, THzImageExplorer, Tab};
 use crate::gui::toggle_widget::toggle;
 use bevy::render::camera::{ImageRenderTarget, RenderTarget};
@@ -75,7 +75,7 @@ fn gaussian_kernel1d(sigma: f32, radius: usize) -> Vec<f32> {
 }
 
 // Apply 1D convolution (valid for edge-safe Gaussian)
-fn convolve1d(data: &ArrayView1<f32>, kernel: &[f32]) -> Array1<f32> {
+fn convolve1d(data: &ArrayView1<f32>, kernel: &[f32], power: f32) -> Array1<f32> {
     let radius = kernel.len() / 2;
     let mut output = Array1::<f32>::zeros(data.len());
 
@@ -87,7 +87,7 @@ fn convolve1d(data: &ArrayView1<f32>, kernel: &[f32]) -> Array1<f32> {
                 acc += data[j as usize] * coeff;
             }
         }
-        *out = acc;
+        *out = acc.powf(power);
     }
 
     output
@@ -105,10 +105,15 @@ fn jet_colormap(value: f32) -> (f32, f32, f32) {
 pub(crate) fn instance_from_data(
     time_span: f32,
     mut dataset: Array3<f32>,
-    opacity_threshold: f32,
     scaling: usize,
     original_dimensions: (usize, usize, usize),
+    thread_communication: &ThreadCommunication,
 ) -> (Vec<InstanceData>, f32, f32, f32) {
+    let opacity_threshold = thread_communication.gui_settings.opacity_threshold;
+    let power = thread_communication.gui_settings.kernel_power;
+    let sigma = thread_communication.gui_settings.kernel_sigma;
+    let radius = thread_communication.gui_settings.kernel_radius;
+
     let grid_width = dataset.shape()[0];
     let grid_height = dataset.shape()[1];
     let grid_depth = dataset.shape()[2];
@@ -119,7 +124,7 @@ pub(crate) fn instance_from_data(
     let cube_height = base_cube_size;
 
     let c = 300_000_000.0;
-    let cube_depth = base_cube_size / (time_span * c / 1.0e9 * 1.0);
+    let cube_depth = base_cube_size / (time_span * c / 1.0e9 * 2.0);
 
     // Use original dimensions for consistent spacing
     let (orig_width, orig_height, orig_depth) = original_dimensions;
@@ -129,8 +134,7 @@ pub(crate) fn instance_from_data(
     let spacing_height = (orig_height as f32 * cube_height) / grid_height as f32;
     let spacing_depth = (orig_depth as f32 * cube_depth) / grid_depth as f32;
 
-    // Rest of your processing code...
-    let kernel = gaussian_kernel1d(3.0, 9);
+    let kernel = gaussian_kernel1d(sigma, radius);
 
     dataset
         .axis_iter_mut(Axis(0))
@@ -138,11 +142,12 @@ pub(crate) fn instance_from_data(
         .for_each(|mut plane| {
             for mut line in plane.axis_iter_mut(Axis(0)) {
                 line.mapv_inplace(|v| v.powi(2));
-                let envelope = convolve1d(&line.view(), &kernel);
+                let envelope = convolve1d(&line.view(), &kernel, power);
                 line.assign(&envelope);
             }
         });
 
+        // normalize per line (each pixel along the time/z axis)
     dataset
         .axis_iter_mut(Axis(0))
         .into_par_iter()
@@ -159,10 +164,29 @@ pub(crate) fn instance_from_data(
             }
         });
 
-    let total_instances = grid_width * grid_height * grid_depth;
-    let mut instances = Vec::with_capacity(total_instances);
+    let dataset_slice = dataset.as_slice().unwrap();
 
-    // Use original dimensions with base cube size for total plot size
+    // Calculate final opacity values (squared AND above original threshold)
+    let mut final_opacities: Vec<f32> = Vec::from(dataset_slice);
+
+    // Determine dynamic threshold to limit instances to 2,000,000
+    let max_instances = 2_000_000;
+    let effective_threshold = if final_opacities.len() > max_instances {
+        // Use select_nth_unstable to find the 2M-th largest element without sorting the entire array
+        let (_, nth_element, _) = final_opacities
+            .select_nth_unstable_by(max_instances - 1, |a, b| b.partial_cmp(a).unwrap());
+        *nth_element
+    } else {
+        opacity_threshold
+    };
+
+    if let Ok(mut thrs) = thread_communication.opacity_threshold_lock.write() {
+        *thrs = effective_threshold;
+    }
+
+    let total_instances = grid_width * grid_height * grid_depth;
+    let mut instances = Vec::with_capacity(total_instances.min(max_instances));
+
     let total_plot_width = orig_width as f32 * base_cube_size;
     let total_plot_height = orig_height as f32 * base_cube_size;
     let total_plot_depth = orig_depth as f32 * cube_depth;
@@ -171,25 +195,20 @@ pub(crate) fn instance_from_data(
     let half_height = total_plot_height / 2.0;
     let half_depth = total_plot_depth / 2.0;
 
-    let dataset_slice = dataset.as_slice().unwrap();
-
-    // Scaling factor for individual cubes
     let cube_scale = scaling as f32;
 
     for x in 0..grid_width {
         for y in 0..grid_height {
             for z in 0..grid_depth {
                 let flat_index = x * grid_height * grid_depth + y * grid_depth + z;
-                let mut opacity = dataset_slice[flat_index];
-                opacity = opacity * opacity;
+                let opacity = dataset_slice[flat_index];
 
-                if opacity < opacity_threshold {
+                if opacity < effective_threshold {
                     continue;
                 }
 
                 let (r, g, b) = jet_colormap(opacity);
 
-                // flip (x/y) axis to line up with the 2D scan
                 let position = Vec3::new(
                     y as f32 * spacing_height - half_height,
                     half_width - x as f32 * spacing_width,
@@ -287,7 +306,17 @@ pub fn setup(
                 target: RenderTarget::Image(ImageRenderTarget::from(image_handle.clone())),
                 ..default()
             },
-            Transform::from_translation(Vec3::new(0.0, 120.0, 0.0)),
+            Transform::from_translation(Vec3::new(0.0, 0.1, 0.0)),
+            Projection::Orthographic {
+                0: OrthographicProjection {
+                    scaling_mode: bevy::render::camera::ScalingMode::Fixed {
+                        width: 512.0,
+                        height: 512.0,
+                    },
+                    scale: 1.0,
+                    ..OrthographicProjection::default_3d()
+                },
+            },
             PanOrbitCamera {
                 allow_upside_down: true,
                 pitch: Some(0.0_f32.to_radians()),
@@ -355,11 +384,19 @@ pub fn three_dimensional_plot_ui(
     thread_communication: &mut ResMut<ThreadCommunication>,
     explorer: &mut THzImageExplorer,
 ) {
-    height -= 120.0;
+    height -= 200.0;
     let available_size = egui::vec2(width.min(height), width.min(height));
 
     // need to do this to take it out of the next closure, we will put it back later
     let mut animation_enabled = thread_communication.gui_settings.animation_enabled;
+    let mut kernel_radius = thread_communication.gui_settings.kernel_radius;
+    let mut kernel_sigma = thread_communication.gui_settings.kernel_sigma;
+    let mut kernel_power = thread_communication.gui_settings.kernel_power;
+
+    let mut minimum_threshold = 0.01;
+    if let Ok(thrs) = thread_communication.opacity_threshold_lock.read() {
+        minimum_threshold = *thrs;
+    }
 
     if let Ok(read_guard) = thread_communication.voxel_plot_instances_lock.try_read() {
         let (instances, cube_width, cube_height, cube_depth) = read_guard.clone();
@@ -389,9 +426,14 @@ pub fn three_dimensional_plot_ui(
                     cam_input.0 = false;
                 }
             });
+
+            ui.style_mut().spacing.slider_width = 300.0;
+
+            ui.label(format!("Number of Voxels: {}/2000000", instances.len()));
+
             if ui
                 .add(
-                    egui::Slider::new(&mut opacity_threshold.0, 0.01..=1.0)
+                    egui::Slider::new(&mut opacity_threshold.0, minimum_threshold..=1.0)
                         .text("Opacity Threshold"),
                 )
                 .changed()
@@ -405,7 +447,45 @@ pub fn three_dimensional_plot_ui(
                 }
             }
 
-            // TODO: add kernel parameter control
+            ui.add_space(10.0);
+
+            if ui
+                .add(
+                    egui::Slider::new(&mut kernel_power, 0.01..=5.0)
+                        .step_by(0.01)
+                        .text("Intensity Power Value"),
+                )
+                .changed()
+            {
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::SetKernelPower(kernel_power),
+                );
+            }
+
+            ui.add_space(10.0);
+
+            if ui
+                .add(egui::Slider::new(&mut kernel_radius, 1..=20).text("Kernel Radius"))
+                .changed()
+            {
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::SetKernelRadius(kernel_radius),
+                );
+            }
+
+            ui.add_space(10.0);
+
+            if ui
+                .add(egui::Slider::new(&mut kernel_sigma, 0.1..=10.0).text("Kernel Sigma"))
+                .changed()
+            {
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::SetKernelSigma(kernel_sigma),
+                );
+            }
 
             ui.add_space(10.0);
 
@@ -429,7 +509,11 @@ pub fn three_dimensional_plot_ui(
         });
     }
 
+    thread_communication.gui_settings.opacity_threshold = opacity_threshold.0;
+
     // put it back
     thread_communication.gui_settings.animation_enabled = animation_enabled;
-    thread_communication.gui_settings.opacity_threshold = opacity_threshold.0;
+    thread_communication.gui_settings.kernel_radius = kernel_radius;
+    thread_communication.gui_settings.kernel_sigma = kernel_sigma;
+    thread_communication.gui_settings.kernel_power = kernel_power;
 }

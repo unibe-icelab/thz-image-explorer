@@ -244,6 +244,7 @@ fn main() {
     let abort_flag = Arc::new(AtomicBool::new(false));
 
     let filter_computation_time_lock = Arc::new(RwLock::new(filter_computation_time));
+    let opacity_threshold_lock = Arc::new(RwLock::new(0.01));
 
     let thread_communication = ThreadCommunication {
         #[cfg(target_os = "macos")]
@@ -259,6 +260,7 @@ fn main() {
         scaling_index,
         fft_index,
         ifft_index,
+        opacity_threshold_lock: opacity_threshold_lock.clone(),
         filter_computation_time_lock: filter_computation_time_lock.clone(),
         filter_chain_lock: filter_chain_lock.clone(),
         filter_uuid_to_index_lock: filter_uuid_to_index_lock.clone(),

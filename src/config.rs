@@ -112,6 +112,12 @@ pub enum ConfigCommand {
     /// This affects the resolution of the processed image and data.
     SetDownScaling(usize),
 
+    SetKernelPower(f32),
+
+    SetKernelSigma(f32),
+
+    SetKernelRadius(usize),
+
     /// Command to update the currently selected pixel in the image.
     /// The selected pixel is represented by the [`SelectedPixel`] structure.
     SetSelectedPixel(SelectedPixel),
@@ -242,6 +248,10 @@ pub struct ThreadCommunication {
     /// Lock for tracking computation time of each filter.
     /// Maps filter UUIDs to their processing duration.
     pub filter_computation_time_lock: Arc<RwLock<HashMap<String, Duration>>>,
+
+
+    pub opacity_threshold_lock: Arc<RwLock<f32>>,
+
 
     /// Lock for storing the data processed by each filter.
     /// Contains a vector of filter output data for each step in the chain/pipeline.
