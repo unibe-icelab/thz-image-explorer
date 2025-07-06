@@ -105,7 +105,6 @@ pub fn left_panel(
     color_bar_state: &mut ColorBarState,
     thread_communication: &mut ThreadCommunication,
 ) {
-    let gauge_size = left_panel_width / 3.0;
     let mut data = PlotDataContainer::default();
     if let Ok(read_guard) = thread_communication.data_lock.read() {
         data = read_guard.clone();
@@ -127,10 +126,368 @@ pub fn left_panel(
         .resizable(false)
         .show(ctx, |ui| {
             ui.add_enabled_ui(true, |ui| {
+                ui.heading("Data Source");
+                ui.add_space(10.0);
                 ui.horizontal(|ui| {
-                    ui.heading("Housekeeping");
+                    if ui
+                        .button(egui::RichText::new(format!(
+                            "{} Load Scan",
+                            egui_phosphor::regular::FOLDER_OPEN
+                        )))
+                        .clicked()
+                    {
+                        explorer.file_dialog_state = FileDialogState::Open;
+                        explorer.file_dialog.pick_file();
+                    };
+                    if ui
+                        .button(egui::RichText::new(format!(
+                            "{} Load Reference",
+                            egui_phosphor::regular::FOLDER_OPEN
+                        )))
+                        .clicked()
+                    {
+                        explorer.file_dialog_state = FileDialogState::OpenRef;
+                        explorer.file_dialog.pick_file();
+                    };
                 });
+
+                if !explorer.other_files.is_empty() {
+                    ui.add_space(5.0);
+                    ui.label("Files in same directory:");
+                    let row_height = ui
+                        .style()
+                        .text_styles
+                        .get(&TextStyle::Body)
+                        .map_or(15.0, |font_id| 1.0 + ui.fonts(|f| f.row_height(font_id)));
+
+                    let mut table_builder = TableBuilder::new(ui)
+                        .sense(egui::Sense::click())
+                        .striped(true)
+                        .resizable(false)
+                        .max_scroll_height(row_height * 5.0)
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
+                    if explorer.scroll_to_selection {
+                        if let Some(selected_index) = explorer.other_files.iter().position(|path| {
+                            path.file_name().unwrap().to_str().unwrap()
+                                == explorer.selected_file_name
+                        }) {
+                            table_builder = table_builder
+                                .scroll_to_row(selected_index, Some(egui::Align::Center));
+                        }
+                        explorer.scroll_to_selection = false;
+                    }
+                    let table = table_builder
+                        .column(Column::remainder().at_least(120.0)) // "Date Modified"
+                        .header(row_height, |_header| {});
+                    table.body(|body| {
+                        body.rows(row_height, explorer.other_files.len(), |mut row| {
+                            if let Some(item) = &mut explorer.other_files.get(row.index()) {
+                                let selected = item.file_name().unwrap().to_str().unwrap()
+                                    == explorer.selected_file_name;
+                                row.set_selected(selected);
+
+                                row.col(|ui| {
+                                    let text_width = calc_text_width(
+                                        ui,
+                                        item.file_name().unwrap().to_str().unwrap(),
+                                    );
+
+                                    // Calc available width for the file name and include a small margin
+                                    let available_width = ui.available_width() - 15.0;
+
+                                    let text = if available_width < text_width {
+                                        truncate_filename(ui, item, available_width)
+                                    } else {
+                                        item.file_name().unwrap().to_str().unwrap().to_string()
+                                    };
+                                    let display_name = text.to_string();
+                                    let name_response =
+                                        ui.add(egui::Label::new(display_name).selectable(false));
+                                    if available_width < text_width {
+                                        name_response.on_hover_text(
+                                            item.file_name().unwrap().to_str().unwrap(),
+                                        );
+                                    }
+                                });
+                                if row.response().clicked() {
+                                    explorer.selected_file_name =
+                                        item.file_name().unwrap().to_str().unwrap().to_string();
+                                    thread_communication.gui_settings.selected_path =
+                                        item.to_path_buf();
+
+                                    send_latest_config(
+                                        thread_communication,
+                                        ConfigCommand::OpenFile(item.to_path_buf()),
+                                    );
+                                }
+                            }
+                        });
+                    });
+                    if let Some(selected_index) = explorer.other_files.iter().position(|path| {
+                        path.file_name().unwrap().to_str().unwrap() == explorer.selected_file_name
+                    }) {
+                        if ui.input(|i| i.key_pressed(egui::Key::ArrowDown))
+                            && selected_index < explorer.other_files.len() - 1
+                        {
+                            let item = explorer.other_files[selected_index + 1].clone();
+                            explorer.selected_file_name =
+                                item.file_name().unwrap().to_str().unwrap().to_string();
+                            thread_communication.gui_settings.selected_path = item.to_path_buf();
+                            send_latest_config(
+                                thread_communication,
+                                ConfigCommand::OpenFile(item.to_path_buf()),
+                            );
+                            explorer.scroll_to_selection = true;
+                        }
+                        if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) && selected_index > 0 {
+                            let item = explorer.other_files[selected_index - 1].clone();
+                            explorer.selected_file_name =
+                                item.file_name().unwrap().to_str().unwrap().to_string();
+                            thread_communication.gui_settings.selected_path = item.to_path_buf();
+
+                            send_latest_config(
+                                thread_communication,
+                                ConfigCommand::OpenFile(item.to_path_buf()),
+                            );
+                            explorer.scroll_to_selection = true;
+                        }
+                    }
+                }
+
+                explorer.file_dialog.set_right_panel_width(300.0);
+
+                ctx.input(|i| {
+                    // Check if files were dropped
+                    if let Some(dropped_file) = i.raw.dropped_files.last() {
+                        let path = dropped_file.clone().path.unwrap();
+
+                        if let Some(ext) = path.extension() {
+                            if ext == "npz" {
+                                send_latest_config(
+                                    &thread_communication,
+                                    ConfigCommand::OpenPSF(path.clone()),
+                                );
+                            } else {
+                                explorer.other_files =
+                                    find_files_with_same_extension(&path).unwrap();
+                                explorer.selected_file_name =
+                                    path.file_name().unwrap().to_str().unwrap().to_string();
+                                explorer.scroll_to_selection = true;
+                                explorer.file_dialog.config_mut().initial_directory = path.clone();
+                                thread_communication.gui_settings.selected_path = path.clone();
+                                send_latest_config(
+                                    thread_communication,
+                                    ConfigCommand::OpenFile(path),
+                                );
+                            }
+                        }
+                    }
+                });
+
+                match explorer.file_dialog_state {
+                    FileDialogState::Open => {
+                        #[cfg(target_os = "macos")]
+                        {
+                            // use RFD for macOS to be able to use the dotTHz plugin
+                            let thread_communication_clone = thread_communication.clone();
+                            std::thread::spawn(move || {
+                                let task = rfd::AsyncFileDialog::new()
+                                    .set_title("Open File")
+                                    .add_filter("thz", &["thz", "thzimg", "thzswp"])
+                                    .pick_file();
+
+                                futures::executor::block_on(async {
+                                    if let Some(file) = task.await {
+                                        if let Ok(mut path_guard) =
+                                            thread_communication_clone.macos_path_lock.write()
+                                        {
+                                            *path_guard = file.path().to_path_buf();
+                                        }
+                                        send_latest_config(
+                                            &thread_communication_clone,
+                                            ConfigCommand::OpenFile(file.path().to_path_buf()),
+                                        );
+                                    }
+                                });
+                            });
+
+                            explorer.file_dialog_state = FileDialogState::None;
+                        }
+
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            if let Some(path) = explorer
+                                .file_dialog
+                                .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                    explorer.information_panel.ui(ui, dia);
+                                })
+                                .picked()
+                            {
+                                explorer.file_dialog_state = FileDialogState::None;
+                                send_latest_config(
+                                    thread_communication,
+                                    ConfigCommand::OpenFile(path.to_path_buf()),
+                                );
+                            }
+                        }
+                    }
+                    FileDialogState::OpenRef => {
+                        #[cfg(target_os = "macos")]
+                        {
+                            // use RFD for macOS to be able to use the dotTHz plugin
+                            let thread_communication_clone = thread_communication.clone();
+                            std::thread::spawn(move || {
+                                let task = rfd::AsyncFileDialog::new()
+                                    .set_title("Open Reference File")
+                                    .add_filter("thz", &["thz"])
+                                    .pick_file();
+
+                                futures::executor::block_on(async {
+                                    if let Some(file) = task.await {
+                                        send_latest_config(
+                                            &thread_communication_clone,
+                                            ConfigCommand::OpenRef(file.path().to_path_buf()),
+                                        );
+                                    }
+                                });
+                            });
+
+                            explorer.file_dialog_state = FileDialogState::None;
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            if let Some(path) = explorer
+                                .file_dialog
+                                .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                    explorer.information_panel.ui(ui, dia);
+                                })
+                                .picked()
+                            {
+                                explorer.file_dialog_state = FileDialogState::None;
+                                send_latest_config(
+                                    thread_communication,
+                                    ConfigCommand::OpenRef(path.to_path_buf()),
+                                );
+                            }
+                        }
+                    }
+                    FileDialogState::OpenPSF => {
+                        #[cfg(target_os = "macos")]
+                        {
+                            // use RFD for macOS to be able to use the dotTHz plugin
+                            let thread_communication_clone = thread_communication.clone();
+                            std::thread::spawn(move || {
+                                let task = rfd::AsyncFileDialog::new()
+                                    .set_title("Open File")
+                                    .add_filter("npz", &["npz"])
+                                    .pick_file();
+
+                                futures::executor::block_on(async {
+                                    if let Some(file) = task.await {
+                                        send_latest_config(
+                                            &thread_communication_clone,
+                                            ConfigCommand::OpenPSF(file.path().to_path_buf()),
+                                        );
+                                    }
+                                });
+                            });
+
+                            explorer.file_dialog_state = FileDialogState::None;
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            if let Some(path) = explorer
+                                .file_dialog
+                                .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                    explorer.information_panel.ui(ui, dia);
+                                })
+                                .picked()
+                            {
+                                send_latest_config(
+                                    &thread_communication,
+                                    ConfigCommand::OpenPSF(path.to_path_buf()),
+                                );
+                                explorer.file_dialog_state = FileDialogState::None;
+                            }
+                        }
+                    }
+                    FileDialogState::Save => {
+                        if let Some(_path) = explorer.file_dialog.update(ctx).picked() {
+                            explorer.file_dialog_state = FileDialogState::None;
+                            // match tera_flash_conf.filetype {
+                            //     FileType::Csv => {
+                            //         picked_path.set_extension("csv");
+                            //     }
+                            //     FileType::Binary => {
+                            //         picked_path.set_extension("npy");
+                            //     }
+                            //     FileType::DotTHz => {
+                            //         picked_path.set_extension("thz");
+                            //     }
+                            // }
+                            // if let Err(e) = save_tx.send(picked_path.clone()) {
+                            //
+                            // }
+                        }
+                    }
+                    FileDialogState::SaveToVTU => {
+                        #[cfg(target_os = "macos")]
+                        {
+                            // use RFD for macOS to be able to use the dotTHz plugin
+                            let thread_communication_clone = thread_communication.clone();
+                            std::thread::spawn(move || {
+                                let task = rfd::AsyncFileDialog::new()
+                                    .set_title("Save File")
+                                    .set_file_name("thz_scan.vtu")
+                                    .save_file();
+
+                                futures::executor::block_on(async {
+                                    if let Some(file) = task.await {
+                                        send_latest_config(
+                                            &thread_communication_clone,
+                                            ConfigCommand::SaveVTU(file.path().to_path_buf()),
+                                        );
+                                    }
+                                });
+                            });
+
+                            explorer.file_dialog_state = FileDialogState::None;
+                        }
+                        explorer.file_dialog.save_file();
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            explorer.file_dialog.save_file();
+                            if let Some(path) = explorer
+                                .file_dialog
+                                .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                    explorer.information_panel.ui(ui, dia);
+                                })
+                                .picked()
+                            {
+                                send_latest_config(
+                                    &thread_communication,
+                                    ConfigCommand::SaveVTU(path.to_path_buf()),
+                                );
+                                explorer.file_dialog_state = FileDialogState::None;
+                            }
+                        }
+                    }
+                    FileDialogState::None => {
+                        #[cfg(target_os = "macos")]
+                        {
+                            if let Ok(path_guard) = thread_communication.macos_path_lock.read() {
+                                thread_communication.gui_settings.selected_path =
+                                    path_guard.clone();
+                            }
+                        }
+                    }
+                }
+
                 ui.separator();
+                ui.heading("Housekeeping");
+                ui.separator();
+
+                let gauge_size = left_panel_width / 4.0;
 
                 ui.horizontal(|ui| {
                     ui.add_space((left_panel_width - 2.0 * gauge_size) / 3.0);
@@ -154,359 +511,10 @@ pub fn left_panel(
                 });
             });
             ui.separator();
-            ui.heading("Data Source");
-            ui.horizontal(|ui| {
-                if ui
-                    .button(egui::RichText::new(format!(
-                        "{} Load Scan",
-                        egui_phosphor::regular::FOLDER_OPEN
-                    )))
-                    .clicked()
-                {
-                    explorer.file_dialog_state = FileDialogState::Open;
-                    explorer.file_dialog.pick_file();
-                };
-                if ui
-                    .button(egui::RichText::new(format!(
-                        "{} Load Reference",
-                        egui_phosphor::regular::FOLDER_OPEN
-                    )))
-                    .clicked()
-                {
-                    explorer.file_dialog_state = FileDialogState::OpenRef;
-                    explorer.file_dialog.pick_file();
-                };
-            });
 
-            if !explorer.other_files.is_empty() {
-                ui.add_space(5.0);
-                ui.label("Files in same directory:");
-                let row_height = ui
-                    .style()
-                    .text_styles
-                    .get(&TextStyle::Body)
-                    .map_or(15.0, |font_id| 1.0 + ui.fonts(|f| f.row_height(font_id)));
+            let bottom_height = 100.0;
+            let height = ui.available_size().y - bottom_height - 20.0;
 
-                let mut table_builder = TableBuilder::new(ui)
-                    .sense(egui::Sense::click())
-                    .striped(true)
-                    .resizable(false)
-                    .max_scroll_height(row_height * 5.0)
-                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
-                if explorer.scroll_to_selection {
-                    if let Some(selected_index) = explorer.other_files.iter().position(|path| {
-                        path.file_name().unwrap().to_str().unwrap() == explorer.selected_file_name
-                    }) {
-                        table_builder =
-                            table_builder.scroll_to_row(selected_index, Some(egui::Align::Center));
-                    }
-                    explorer.scroll_to_selection = false;
-                }
-                let table = table_builder
-                    .column(Column::remainder().at_least(120.0)) // "Date Modified"
-                    .header(row_height, |_header| {});
-                table.body(|body| {
-                    body.rows(row_height, explorer.other_files.len(), |mut row| {
-                        if let Some(item) = &mut explorer.other_files.get(row.index()) {
-                            let selected = item.file_name().unwrap().to_str().unwrap()
-                                == explorer.selected_file_name;
-                            row.set_selected(selected);
-
-                            row.col(|ui| {
-                                let text_width = calc_text_width(
-                                    ui,
-                                    item.file_name().unwrap().to_str().unwrap(),
-                                );
-
-                                // Calc available width for the file name and include a small margin
-                                let available_width = ui.available_width() - 15.0;
-
-                                let text = if available_width < text_width {
-                                    truncate_filename(ui, item, available_width)
-                                } else {
-                                    item.file_name().unwrap().to_str().unwrap().to_string()
-                                };
-                                let display_name = text.to_string();
-                                let name_response =
-                                    ui.add(egui::Label::new(display_name).selectable(false));
-                                if available_width < text_width {
-                                    name_response
-                                        .on_hover_text(item.file_name().unwrap().to_str().unwrap());
-                                }
-                            });
-                            if row.response().clicked() {
-                                explorer.selected_file_name =
-                                    item.file_name().unwrap().to_str().unwrap().to_string();
-                                thread_communication.gui_settings.selected_path =
-                                    item.to_path_buf();
-
-                                send_latest_config(
-                                    thread_communication,
-                                    ConfigCommand::OpenFile(item.to_path_buf()),
-                                );
-                            }
-                        }
-                    });
-                });
-                if let Some(selected_index) = explorer.other_files.iter().position(|path| {
-                    path.file_name().unwrap().to_str().unwrap() == explorer.selected_file_name
-                }) {
-                    if ui.input(|i| i.key_pressed(egui::Key::ArrowDown))
-                        && selected_index < explorer.other_files.len() - 1
-                    {
-                        let item = explorer.other_files[selected_index + 1].clone();
-                        explorer.selected_file_name =
-                            item.file_name().unwrap().to_str().unwrap().to_string();
-                        thread_communication.gui_settings.selected_path = item.to_path_buf();
-                        send_latest_config(
-                            thread_communication,
-                            ConfigCommand::OpenFile(item.to_path_buf()),
-                        );
-                        explorer.scroll_to_selection = true;
-                    }
-                    if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) && selected_index > 0 {
-                        let item = explorer.other_files[selected_index - 1].clone();
-                        explorer.selected_file_name =
-                            item.file_name().unwrap().to_str().unwrap().to_string();
-                        thread_communication.gui_settings.selected_path = item.to_path_buf();
-
-                        send_latest_config(
-                            thread_communication,
-                            ConfigCommand::OpenFile(item.to_path_buf()),
-                        );
-                        explorer.scroll_to_selection = true;
-                    }
-                }
-            }
-
-            explorer.file_dialog.set_right_panel_width(300.0);
-
-            ctx.input(|i| {
-                // Check if files were dropped
-                if let Some(dropped_file) = i.raw.dropped_files.last() {
-                    let path = dropped_file.clone().path.unwrap();
-
-                    if let Some(ext) = path.extension() {
-                        if ext == "npz" {
-                            send_latest_config(
-                                &thread_communication,
-                                ConfigCommand::OpenPSF(path.clone()),
-                            );
-                        } else {
-                            explorer.other_files = find_files_with_same_extension(&path).unwrap();
-                            explorer.selected_file_name =
-                                path.file_name().unwrap().to_str().unwrap().to_string();
-                            explorer.scroll_to_selection = true;
-                            explorer.file_dialog.config_mut().initial_directory = path.clone();
-                            thread_communication.gui_settings.selected_path = path.clone();
-                            send_latest_config(thread_communication, ConfigCommand::OpenFile(path));
-                        }
-                    }
-                }
-            });
-
-            match explorer.file_dialog_state {
-                FileDialogState::Open => {
-                    #[cfg(target_os = "macos")]
-                    {
-                        // use RFD for macOS to be able to use the dotTHz plugin
-                        let thread_communication_clone = thread_communication.clone();
-                        std::thread::spawn(move || {
-                            let task = rfd::AsyncFileDialog::new()
-                                .set_title("Open File")
-                                .add_filter("thz", &["thz", "thzimg", "thzswp"])
-                                .pick_file();
-
-                            futures::executor::block_on(async {
-                                if let Some(file) = task.await {
-                                    if let Ok(mut path_guard) =
-                                        thread_communication_clone.macos_path_lock.write()
-                                    {
-                                        *path_guard = file.path().to_path_buf();
-                                    }
-                                    send_latest_config(
-                                        &thread_communication_clone,
-                                        ConfigCommand::OpenFile(file.path().to_path_buf()),
-                                    );
-                                }
-                            });
-                        });
-
-                        explorer.file_dialog_state = FileDialogState::None;
-                    }
-
-                    #[cfg(not(target_os = "macos"))]
-                    {
-                        if let Some(path) = explorer
-                            .file_dialog
-                            .update_with_right_panel_ui(ctx, &mut |ui, dia| {
-                                explorer.information_panel.ui(ui, dia);
-                            })
-                            .picked()
-                        {
-                            explorer.file_dialog_state = FileDialogState::None;
-                            send_latest_config(
-                                thread_communication,
-                                ConfigCommand::OpenFile(path.to_path_buf()),
-                            );
-                        }
-                    }
-                }
-                FileDialogState::OpenRef => {
-                    #[cfg(target_os = "macos")]
-                    {
-                        // use RFD for macOS to be able to use the dotTHz plugin
-                        let thread_communication_clone = thread_communication.clone();
-                        std::thread::spawn(move || {
-                            let task = rfd::AsyncFileDialog::new()
-                                .set_title("Open Reference File")
-                                .add_filter("thz", &["thz"])
-                                .pick_file();
-
-                            futures::executor::block_on(async {
-                                if let Some(file) = task.await {
-                                    send_latest_config(
-                                        &thread_communication_clone,
-                                        ConfigCommand::OpenRef(file.path().to_path_buf()),
-                                    );
-                                }
-                            });
-                        });
-
-                        explorer.file_dialog_state = FileDialogState::None;
-                    }
-                    #[cfg(not(target_os = "macos"))]
-                    {
-                        if let Some(path) = explorer
-                            .file_dialog
-                            .update_with_right_panel_ui(ctx, &mut |ui, dia| {
-                                explorer.information_panel.ui(ui, dia);
-                            })
-                            .picked()
-                        {
-                            explorer.file_dialog_state = FileDialogState::None;
-                            send_latest_config(
-                                thread_communication,
-                                ConfigCommand::OpenRef(path.to_path_buf()),
-                            );
-                        }
-                    }
-                }
-                FileDialogState::OpenPSF => {
-                    #[cfg(target_os = "macos")]
-                    {
-                        // use RFD for macOS to be able to use the dotTHz plugin
-                        let thread_communication_clone = thread_communication.clone();
-                        std::thread::spawn(move || {
-                            let task = rfd::AsyncFileDialog::new()
-                                .set_title("Open File")
-                                .add_filter("npz", &["npz"])
-                                .pick_file();
-
-                            futures::executor::block_on(async {
-                                if let Some(file) = task.await {
-                                    send_latest_config(
-                                        &thread_communication_clone,
-                                        ConfigCommand::OpenPSF(file.path().to_path_buf()),
-                                    );
-                                }
-                            });
-                        });
-
-                        explorer.file_dialog_state = FileDialogState::None;
-                    }
-                    #[cfg(not(target_os = "macos"))]
-                    {
-                        if let Some(path) = explorer
-                            .file_dialog
-                            .update_with_right_panel_ui(ctx, &mut |ui, dia| {
-                                explorer.information_panel.ui(ui, dia);
-                            })
-                            .picked()
-                        {
-                            send_latest_config(
-                                &thread_communication,
-                                ConfigCommand::OpenPSF(path.to_path_buf()),
-                            );
-                            explorer.file_dialog_state = FileDialogState::None;
-                        }
-                    }
-                }
-                FileDialogState::Save => {
-                    if let Some(_path) = explorer.file_dialog.update(ctx).picked() {
-                        explorer.file_dialog_state = FileDialogState::None;
-                        // match tera_flash_conf.filetype {
-                        //     FileType::Csv => {
-                        //         picked_path.set_extension("csv");
-                        //     }
-                        //     FileType::Binary => {
-                        //         picked_path.set_extension("npy");
-                        //     }
-                        //     FileType::DotTHz => {
-                        //         picked_path.set_extension("thz");
-                        //     }
-                        // }
-                        // if let Err(e) = save_tx.send(picked_path.clone()) {
-                        //
-                        // }
-                    }
-                }
-                FileDialogState::SaveToVTU => {
-                    #[cfg(target_os = "macos")]
-                    {
-                        // use RFD for macOS to be able to use the dotTHz plugin
-                        let thread_communication_clone = thread_communication.clone();
-                        std::thread::spawn(move || {
-                            let task = rfd::AsyncFileDialog::new()
-                                .set_title("Save File")
-                                .set_file_name("thz_scan.vtu")
-                                .save_file();
-
-                            futures::executor::block_on(async {
-                                if let Some(file) = task.await {
-                                    send_latest_config(
-                                        &thread_communication_clone,
-                                        ConfigCommand::SaveVTU(file.path().to_path_buf()),
-                                    );
-                                }
-                            });
-                        });
-
-                        explorer.file_dialog_state = FileDialogState::None;
-                    }
-                    explorer.file_dialog.save_file();
-                    #[cfg(not(target_os = "macos"))]
-                    {
-                        explorer.file_dialog.save_file();
-                        if let Some(path) = explorer
-                            .file_dialog
-                            .update_with_right_panel_ui(ctx, &mut |ui, dia| {
-                                explorer.information_panel.ui(ui, dia);
-                            })
-                            .picked()
-                        {
-                            send_latest_config(
-                                &thread_communication,
-                                ConfigCommand::SaveVTU(path.to_path_buf()),
-                            );
-                            explorer.file_dialog_state = FileDialogState::None;
-                        }
-                    }
-                }
-                FileDialogState::None => {
-                    #[cfg(target_os = "macos")]
-                    {
-                        if let Ok(path_guard) = thread_communication.macos_path_lock.read() {
-                            thread_communication.gui_settings.selected_path = path_guard.clone();
-                        }
-                    }
-                }
-            }
-
-            let logo_height = 100.0;
-            let height = ui.available_size().y - logo_height - 20.0;
-
-            ui.separator();
             ui.heading("Scan");
             let mut img_data = make_dummy();
             if let Ok(read_guard) = thread_communication.img_lock.read() {

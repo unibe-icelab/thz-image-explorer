@@ -158,7 +158,7 @@ pub fn gauge_ui(
                     rect.center(),
                     Align2::CENTER_CENTER,
                     format!("{:.1e}", value),
-                    FontId::new(20.0, FontFamily::Monospace),
+                    FontId::new(14.0, FontFamily::Monospace),
                     color,
                 )
                 .size()
@@ -168,7 +168,7 @@ pub fn gauge_ui(
                     rect.center(),
                     Align2::CENTER_CENTER,
                     format!("{:.1}", value),
-                    FontId::new(20.0, FontFamily::Monospace),
+                    FontId::new(14.0, FontFamily::Monospace),
                     color,
                 )
                 .size()
@@ -179,7 +179,7 @@ pub fn gauge_ui(
             suffix_pos,
             Align2::CENTER_CENTER,
             suffix.to_string(),
-            FontId::new(15.0, FontFamily::Monospace),
+            FontId::new(12.0, FontFamily::Monospace),
             color,
         );
 
@@ -188,7 +188,7 @@ pub fn gauge_ui(
             text_pos,
             Align2::CENTER_CENTER,
             text,
-            FontId::new(15.0, FontFamily::Monospace),
+            FontId::new(12.0, FontFamily::Monospace),
             color,
         );
     }
