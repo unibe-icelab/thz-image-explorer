@@ -41,6 +41,7 @@ pub fn right_panel(
 
                 egui::Grid::new("upper")
                     .num_columns(2)
+                    .min_row_height(22.0)
                     .striped(true)
                     .show(ui, |ui| {
                         ui.label("Log Mode: ");
@@ -69,24 +70,22 @@ pub fn right_panel(
 
                         ui.style_mut().spacing.slider_width = 100.0;
 
-                        ui.vertical(|ui| {
-                            if ui
-                                .add(egui::Slider::new(
-                                    &mut thread_communication.gui_settings.down_scaling,
-                                    1..=10,
-                                ))
-                                .changed()
-                            {
-                                send_latest_config(thread_communication, ConfigCommand::SetDownScaling(thread_communication.gui_settings.down_scaling));
-                            }
-                        });
+                        if ui
+                            .add(egui::Slider::new(
+                                &mut thread_communication.gui_settings.down_scaling,
+                                1..=10,
+                            ))
+                            .changed()
+                        {
+                            send_latest_config(thread_communication, ConfigCommand::SetDownScaling(thread_communication.gui_settings.down_scaling));
+                        }
                     });
 
-                ui.add_space(10.0);
+                ui.add_space(5.0);
                 if ui.button("Calculate All Filters").clicked() {
                     send_latest_config(thread_communication, ConfigCommand::UpdateFilters);
                 }
-                ui.add_space(10.0);
+                ui.add_space(5.0);
                 ui.separator();
 
                 egui::ScrollArea::vertical().max_height(ui.available_height() - 60.0).show(ui, |ui| {
