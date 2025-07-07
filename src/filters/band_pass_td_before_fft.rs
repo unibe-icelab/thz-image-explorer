@@ -6,7 +6,7 @@
 use crate::config::ThreadCommunication;
 use crate::data_container::ScannedImageFilterData;
 use crate::filters::filter::{CopyStaticFieldsTrait, Filter, FilterConfig, FilterDomain};
-use crate::gui::application::GuiSettingsContainer;
+use crate::gui::application::{GuiSettingsContainer, SAFETY_ORANGE};
 use crate::math_tools::apply_adapted_blackman_window;
 use bevy_egui::egui::{self, Ui};
 use bevy_egui::egui::{DragValue, Stroke, Vec2};
@@ -281,6 +281,7 @@ impl Filter for TimeDomainBandPassBeforeFFT {
                         &mut time_window_upper_bound,
                         lower..=upper,
                     )
+                    .stroke(Stroke::new(7.0, SAFETY_ORANGE))
                     .vertical_scroll(false)
                     .zoom_factor(zoom_factor)
                     .separation_distance(1.0)

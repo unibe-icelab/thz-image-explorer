@@ -1,6 +1,6 @@
 use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
 use crate::filters::filter::{draw_filters, FilterDomain};
-use crate::gui::application::THzImageExplorer;
+use crate::gui::application::{THzImageExplorer, SAFETY_ORANGE};
 use crate::gui::settings_window::settings_window;
 use crate::gui::toggle_widget::toggle;
 use crate::math_tools::{
@@ -219,6 +219,7 @@ pub fn right_panel(
                                             &mut fft_upper_bound,
                                             0.0..=range,
                                         )
+                                            .stroke(Stroke::new(7.0,SAFETY_ORANGE))
                                             .vertical_scroll(false)
                                             .zoom_factor(2.0)
                                             .scroll_factor(0.005)

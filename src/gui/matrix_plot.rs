@@ -1,4 +1,4 @@
-use crate::gui::application::THzImageExplorer;
+use crate::gui::application::{THzImageExplorer, SAFETY_ORANGE};
 use bevy_egui::egui;
 use bevy_egui::egui::TextureHandle;
 use bevy_egui::egui::{
@@ -359,6 +359,7 @@ pub fn plot_matrix(
         if ui
             .add(
                 DoubleSlider::new(&mut cut_off_low, &mut cut_off_high, 0.0..=100.0)
+                    .stroke(Stroke::new(7.0, SAFETY_ORANGE))
                     .separation_distance(1.0)
                     .width((*plot_width as f32) * 0.95),
             )
