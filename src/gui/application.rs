@@ -223,7 +223,7 @@ pub fn update_gui(
 
     let cube_preview_texture_id = contexts.image_id(&cube_preview_image).unwrap();
 
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().unwrap();
 
     let left_panel_width = 300.0;
     let right_panel_width = 500.0;
