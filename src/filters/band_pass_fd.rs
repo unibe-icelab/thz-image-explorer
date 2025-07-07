@@ -390,7 +390,7 @@ impl Filter for FrequencyDomainBandPass {
             let val1_changed = ui
                 .add(
                     DragValue::new(&mut self.low)
-                        .suffix("THz")
+                        .suffix(" THz")
                         .speed(0.01)
                         .range(0.0..=self.high),
                 )
@@ -401,7 +401,7 @@ impl Filter for FrequencyDomainBandPass {
                     ui.add_space(20.0);
                     ui.add(
                         DragValue::new(&mut self.high)
-                            .suffix("THz")
+                            .suffix(" THz")
                             .speed(0.01)
                             .range(self.low..=*self.freq_axis.last().unwrap_or(&10.0) as f64),
                     )

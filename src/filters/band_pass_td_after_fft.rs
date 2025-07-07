@@ -311,12 +311,14 @@ impl Filter for TimeDomainBandPassAfterFFT {
 
         // Add numeric input fields for precise boundary control
         ui.horizontal(|ui| {
-            let val1_changed = ui.add(DragValue::new(&mut self.low).suffix("ps")).changed();
+            let val1_changed = ui
+                .add(DragValue::new(&mut self.low).suffix(" ps"))
+                .changed();
 
             let val2_changed = ui
                 .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add_space(20.0);
-                    ui.add(DragValue::new(&mut self.high).suffix("ps"))
+                    ui.add(DragValue::new(&mut self.high).suffix(" ps"))
                         .changed()
                 })
                 .inner;
