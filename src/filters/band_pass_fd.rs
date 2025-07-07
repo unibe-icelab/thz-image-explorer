@@ -75,6 +75,12 @@ impl Filter for FrequencyDomainBandPass {
         // Extract spectrum for the selected pixel (for visualization)
 
         let shape = data.fft.dim();
+
+        if shape.0 == 0 || shape.1 == 0 || shape.2 == 0 {
+            // Dataset is empty, return early or handle gracefully
+            return;
+        }
+
         let h = shape.0;
         let w = shape.1;
 
@@ -381,25 +387,27 @@ impl Filter for FrequencyDomainBandPass {
 
         // Add numeric input fields for precise cutoff control
         ui.horizontal(|ui| {
-            ui.label("Low cutoff:");
             let val1_changed = ui
                 .add(
                     DragValue::new(&mut self.low)
+                        .suffix("THz")
                         .speed(0.01)
                         .range(0.0..=self.high),
                 )
                 .changed();
 
-            ui.add_space(0.5 * panel_width);
-
-            ui.label("High cutoff:");
             let val2_changed = ui
-                .add(
-                    DragValue::new(&mut self.high)
-                        .speed(0.01)
-                        .range(self.low..=*self.freq_axis.last().unwrap_or(&10.0) as f64),
-                )
-                .changed();
+                .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add_space(20.0);
+                    ui.add(
+                        DragValue::new(&mut self.high)
+                            .suffix("THz")
+                            .speed(0.01)
+                            .range(self.low..=*self.freq_axis.last().unwrap_or(&10.0) as f64),
+                    )
+                    .changed()
+                })
+                .inner;
 
             // Ensure cutoffs don't overlap
             if slider_changed.inner || val1_changed || val2_changed {

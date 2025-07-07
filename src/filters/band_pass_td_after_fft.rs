@@ -79,6 +79,11 @@ impl Filter for TimeDomainBandPassAfterFFT {
     fn show_data(&mut self, data: &ScannedImageFilterData) {
         let shape = data.data.dim();
 
+        if shape.0 == 0 || shape.1 == 0 || shape.2 == 0 {
+            // Dataset is empty, return early or handle gracefully
+            return;
+        }
+
         // Store the time axis for UI visualization
         self.time_axis = data.time.to_vec();
 
@@ -306,12 +311,15 @@ impl Filter for TimeDomainBandPassAfterFFT {
 
         // Add numeric input fields for precise boundary control
         ui.horizontal(|ui| {
-            let val1_changed = ui.add(DragValue::new(&mut self.low)).changed();
+            let val1_changed = ui.add(DragValue::new(&mut self.low).suffix("ps")).changed();
 
-            ui.add_space(0.75 * panel_width);
-
-            let val2_changed = ui.add(DragValue::new(&mut self.high)).changed();
-
+            let val2_changed = ui
+                .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add_space(20.0);
+                    ui.add(DragValue::new(&mut self.high).suffix("ps"))
+                        .changed()
+                })
+                .inner;
             // Reset if values are invalid (equal)
             if slider_changed.inner || val1_changed || val2_changed {
                 if self.low == self.high {

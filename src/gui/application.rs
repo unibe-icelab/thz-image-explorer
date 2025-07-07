@@ -25,6 +25,7 @@ use egui_file_dialog::information_panel::InformationPanel;
 use egui_file_dialog::FileDialog;
 use egui_plot::PlotPoint;
 use home::home_dir;
+use log::Level;
 use self_update::update::Release;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -261,50 +262,75 @@ pub fn update_gui(
                 ui.label(path_display);
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let (has_warnings_or_errors, last_error_or_warning) =
+                    let (has_warnings, _has_errors, last_error_or_warning) =
                         if let Ok(logger) = egui_logger::LOGGER.lock() {
                             let last_entry = logger.logs.iter().rev().find(|record| {
                                 matches!(record.level, log::Level::Warn | log::Level::Error)
                             });
 
-                            let has_errors = last_entry.is_some();
+                            let has_warnings = if let Some(entry) = last_entry {
+                                matches!(entry.level, log::Level::Warn)
+                            } else {
+                                false
+                            };
+
+                            let has_errors = if let Some(entry) = last_entry {
+                                matches!(entry.level, log::Level::Error)
+                            } else {
+                                false
+                            };
+
                             let last_message =
                                 last_entry.map(|record| (record.level, record.message.to_string()));
 
-                            (has_errors, last_message)
+                            (has_warnings, has_errors, last_message)
                         } else {
-                            (false, None)
+                            (false, false, None)
                         };
+                    if let Some(message) = last_error_or_warning {
+                        if message != explorer.last_error_message {
 
-                    if has_warnings_or_errors {
-                        // Create a unique ID for this filter's info popup
-                        let popup_id = ui.make_persistent_id(format!("error_popup"));
+                            // Create a unique ID for this filter's info popup
+                            let popup_id = ui.make_persistent_id(format!("error_popup"));
 
-                        // Show info icon and handle clicks
-                        let info_button = ui.label(
-                            egui::RichText::new(format!(
-                                "{}",
-                                egui_phosphor::regular::WARNING_CIRCLE
-                            ))
-                            .heading()
-                            .color(egui::Color32::RED),
-                        );
+                            // Show info icon and handle clicks
+                            let info_button = if has_warnings {
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{}",
+                                        egui_phosphor::regular::WARNING_CIRCLE
+                                    ))
+                                        .heading()
+                                        .color(egui::Color32::YELLOW),
+                                )
+                            } else {
+                                // has errors
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{}",
+                                        egui_phosphor::regular::WARNING_CIRCLE
+                                    ))
+                                        .heading()
+                                        .color(egui::Color32::RED),
+                                )
+                            };
 
-                        if info_button.clicked() {
-                            ui.memory_mut(|mem| mem.toggle_popup(popup_id));
-                        }
+                            if info_button.clicked() {
+                                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                            }
 
-                        egui::popup_below_widget(
-                            ui,
-                            popup_id,
-                            &info_button,
-                            egui::popup::PopupCloseBehavior::CloseOnClickOutside,
-                            |ui: &mut egui::Ui| {
-                                // Set max width for the popup
-                                ui.set_max_width(right_panel_width * 0.8);
+                            let is_popup_open = egui::popup_below_widget(
+                                ui,
+                                popup_id,
+                                &info_button,
+                                egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+                                |ui: &mut egui::Ui| {
+                                    // Set max width for the popup
+                                    ui.set_max_width(right_panel_width * 0.8);
 
-                                // Add text
-                                if let Some((level, message)) = last_error_or_warning {
+                                    // Add text
+                                    let (level, message) = message.clone();
+
                                     let (prefix, color) = match level {
                                         log::Level::Warn => ("Warning", egui::Color32::YELLOW),
                                         log::Level::Error => ("Error", egui::Color32::RED),
@@ -314,22 +340,41 @@ pub fn update_gui(
                                         egui::RichText::new(format!("{}: {}", prefix, message))
                                             .color(color),
                                     );
-                                }
-                                ui.label(
-                                    "Check the logs in the Settings Window for more information.",
-                                );
-                            },
-                        );
+
+                                    ui.label(
+                                        "Check the logs in the Settings Window for more information.",
+                                    );
+                                },
+                            );
+
+                            // Clear warnings/errors when popup is closed
+                            if explorer.error_window_was_open && !is_popup_open.is_some() {
+                                // clear it
+                                explorer.last_error_message = message;
+                            }
+
+                            explorer.error_window_was_open = is_popup_open.is_some();
+                        } else {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{}",
+                                    egui_phosphor::regular::CHECK_CIRCLE
+                                ))
+                                    .heading()
+                                    .color(egui::Color32::GREEN),
+                            )
+                                .on_hover_text("No Errors!");
+                        }
                     } else {
                         ui.label(
                             egui::RichText::new(format!(
                                 "{}",
                                 egui_phosphor::regular::CHECK_CIRCLE
                             ))
-                            .heading()
-                            .color(egui::Color32::GREEN),
+                                .heading()
+                                .color(egui::Color32::GREEN),
                         )
-                        .on_hover_text("No Errors!");
+                            .on_hover_text("No Errors!");
                     }
 
                     ui.add_space(10.0);
@@ -419,6 +464,8 @@ pub struct THzImageExplorer {
     pub(crate) selected_file_name: String,
     pub(crate) scroll_to_selection: bool,
     pub(crate) settings_window_open: bool,
+    pub(crate) last_error_message: (Level, String),
+    pub(crate) error_window_was_open: bool,
     pub(crate) update_text: String,
     #[cfg(feature = "self_update")]
     pub(crate) new_release: Option<Release>,
@@ -546,6 +593,8 @@ impl THzImageExplorer {
             mid_point: 50.0,
             bw: false,
             settings_window_open: false,
+            last_error_message: (Level::Error, "".to_string()),
+            error_window_was_open: false,
             update_text: "".to_string(),
             #[cfg(feature = "self_update")]
             new_release: None,
