@@ -182,24 +182,21 @@ pub fn right_panel(
                             ui.vertical_centered(|ui| {
                                 fft_window_plot.show(ui, |window_plot_ui| {
                                     window_plot_ui.line(
-                                        Line::new(PlotPoints::from(window_vals))
+                                        Line::new("Window".to_string(), PlotPoints::from(window_vals))
                                             .color(egui::Color32::RED)
                                             .style(LineStyle::Solid)
-                                            .name("Window"),
                                     );
                                     window_plot_ui.vline(
-                                        VLine::new(
+                                        VLine::new("Lower Bound".to_string(),
                                             data.time.first().unwrap_or(&1000.0) + explorer.fft_bounds[0],
                                         )
                                             .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                                            .name("Lower Bound"),
                                     );
                                     window_plot_ui.vline(
-                                        VLine::new(
+                                        VLine::new("Upper Bound".to_string(),
                                             data.time.last().unwrap_or(&1050.0) - explorer.fft_bounds[1],
                                         )
                                             .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                                            .name("Upper Bound"),
                                     );
                                 });
                             });

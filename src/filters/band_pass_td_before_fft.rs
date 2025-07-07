@@ -229,29 +229,25 @@ impl Filter for TimeDomainBandPassBeforeFFT {
             time_window_plot.show(ui, |window_plot_ui| {
                 // Plot the original input signal
                 window_plot_ui.line(
-                    Line::new(PlotPoints::from(input_signal))
+                    Line::new("Input Pulse".to_string(), PlotPoints::from(input_signal))
                         .color(egui::Color32::RED)
-                        .style(LineStyle::Solid)
-                        .name("Input Pulse"),
+                        .style(LineStyle::Solid),
                 );
                 // Plot the filtered signal
                 window_plot_ui.line(
-                    Line::new(PlotPoints::from(window_vals))
+                    Line::new("Filtered Pulse".to_string(), PlotPoints::from(window_vals))
                         .color(egui::Color32::BLUE)
-                        .style(LineStyle::Solid)
-                        .name("Filtered Pulse"),
+                        .style(LineStyle::Solid),
                 );
                 // Add vertical lines for the window bounds
                 window_plot_ui.vline(
                     // TODO: adjust this
-                    VLine::new(self.low)
-                        .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                        .name("Lower Bound"),
+                    VLine::new("Lower Bound".to_string(), self.low)
+                        .stroke(Stroke::new(1.0, egui::Color32::GRAY)),
                 );
                 window_plot_ui.vline(
-                    VLine::new(self.high)
-                        .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                        .name("Upper Bound"),
+                    VLine::new("Upper Bound".to_string(), self.high)
+                        .stroke(Stroke::new(1.0, egui::Color32::GRAY)),
                 );
             })
         });

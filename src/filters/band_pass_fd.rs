@@ -304,38 +304,33 @@ impl Filter for FrequencyDomainBandPass {
             freq_plot.show(ui, |plot_ui| {
                 // Plot the spectrum
                 plot_ui.line(
-                    Line::new(PlotPoints::from(spectrum_vals))
+                    Line::new("Spectrum".to_string(), PlotPoints::from(spectrum_vals))
                         .color(egui::Color32::RED)
-                        .style(LineStyle::Solid)
-                        .name("Spectrum"),
+                        .style(LineStyle::Solid),
                 );
 
                 // Plot the rectangular filter shape
                 plot_ui.line(
-                    Line::new(PlotPoints::from(filter_vals))
+                    Line::new("Filter".to_string(), PlotPoints::from(filter_vals))
                         .color(egui::Color32::BLUE)
-                        .style(LineStyle::Solid)
-                        .name("Filter"),
+                        .style(LineStyle::Solid),
                 );
 
                 // Add vertical lines for cutoffs
                 plot_ui.vline(
-                    VLine::new(self.low)
-                        .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                        .name("Low Cutoff"),
+                    VLine::new("Low Cutoff".to_string(), self.low)
+                        .stroke(Stroke::new(1.0, egui::Color32::GRAY)),
                 );
                 plot_ui.vline(
-                    VLine::new(self.high)
-                        .stroke(Stroke::new(1.0, egui::Color32::GRAY))
-                        .name("High Cutoff"),
+                    VLine::new("High Cutoff".to_string(), self.high)
+                        .stroke(Stroke::new(1.0, egui::Color32::GRAY)),
                 );
 
                 // Plot the actual window function shape
                 plot_ui.line(
-                    Line::new(PlotPoints::from(window_line))
+                    Line::new("Window".to_string(), PlotPoints::from(window_line))
                         .style(LineStyle::Solid)
-                        .stroke(Stroke::new(1.0, egui::Color32::WHITE))
-                        .name("Window"),
+                        .stroke(Stroke::new(1.0, egui::Color32::WHITE)),
                 );
             })
         });
