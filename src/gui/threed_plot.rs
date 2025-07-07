@@ -109,10 +109,10 @@ fn convolve1d(data: &ArrayView1<f32>, kernel: &[f32], contrast: f32) -> Array1<f
         for (k, &coeff) in kernel.iter().enumerate() {
             let j = i as isize + k as isize - radius as isize;
             if (0..data.len() as isize).contains(&j) {
-                acc += data[j as usize] * coeff;
+                acc += data[j as usize].powf(contrast) * coeff;
             }
         }
-        *out = acc.powf(contrast);
+        *out = acc;
     }
 
     output
@@ -514,7 +514,7 @@ pub fn three_dimensional_plot_ui(
                     ui.set_max_width(300.0);
                     ui.label("This sets the contrast below of the 3D render. \"
                                 \nIt adjusts the exponent of the intensity to opacity mapping, \
-                                so a value of 2.0 means opacity = intensity ** 2.0 .");
+                                so a value of 2.0 means opacity = intensity ** 2.0.");
                 },
             );
         });
@@ -524,7 +524,7 @@ pub fn three_dimensional_plot_ui(
         ui.horizontal(|ui| {
 
             if ui
-                .add(egui::Slider::new(&mut kernel_radius, 1..=20).text("Kernel Radius"))
+                .add(egui::Slider::new(&mut kernel_radius, 1..=50).text("Kernel Radius"))
                 .changed()
             {
                 send_latest_config(
@@ -560,7 +560,7 @@ pub fn three_dimensional_plot_ui(
         ui.horizontal(|ui| {
 
             if ui
-                .add(egui::Slider::new(&mut kernel_sigma, 0.1..=10.0).text("Kernel Sigma"))
+                .add(egui::Slider::new(&mut kernel_sigma, 0.1..=50.0).text("Kernel Sigma"))
                 .changed()
             {
                 send_latest_config(
