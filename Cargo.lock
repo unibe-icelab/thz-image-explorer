@@ -2687,9 +2687,9 @@ dependencies = [
 
 [[package]]
 name = "egui_double_slider"
-version = "0.7.3"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d97c273473a7cd81b10ae9f7d54118542a94e9ce1c9eae1c163eac2e9566aac0"
+checksum = "1a87a6bfe78ac657eaacf5a2c1fc35c75223ce4d6d2c12636062ebbcdd0a19d2"
 dependencies = [
  "egui",
 ]
@@ -2725,9 +2725,9 @@ dependencies = [
 
 [[package]]
 name = "egui_plot"
-version = "0.31.0"
+version = "0.32.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1794c66fb727dac28dffed2e4b548e5118d1cccc331d368a35411d68725dde71"
+checksum = "14ae092b46ea532f6c69d3e71036fb3b688fd00fd09c2a1e43d17051a8ae43e6"
 dependencies = [
  "ahash",
  "egui",

@@ -183,6 +183,7 @@ fn colorbar_with_midpoint_slider(
         };
 
         let im = PlotImage::new(
+            "Colorbar Plot".to_string(),
             color_bar_texture,
             PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
             img.height() as f32 * vec2(color_bar_texture.aspect_ratio(), 1.0),
@@ -374,11 +375,13 @@ pub fn plot_matrix(
     ui.horizontal(|ui| {
         ui.add(DragValue::new(&mut cut_off_low).suffix("%"));
 
-        ui.add_space((0.6 * *plot_width) as f32);
-
-        ui.add(DragValue::new(&mut cut_off_high).suffix("%"));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add(DragValue::new(&mut cut_off_high).suffix("%"));
+        });
     });
     explorer.cut_off = [cut_off_low, cut_off_high];
+
+    ui.add_space(5.0);
 
     let width = data.len_of(Axis(0));
     let height = data.len_of(Axis(1));
@@ -427,6 +430,7 @@ pub fn plot_matrix(
 
     // Correct the size vector for the PlotImage
     let im = PlotImage::new(
+        "Image Plot".to_string(),
         img_texture,
         PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
         vec2(img.width() as f32, img.height() as f32),
@@ -452,15 +456,18 @@ pub fn plot_matrix(
             // Draw selected single pixel
             if explorer.pixel_selected.selected {
                 plot_ui.line(
-                    Line::new(PlotPoints::from(explorer.pixel_selected.rect.clone()))
-                        .highlight(true)
-                        .color(Color32::GRAY),
+                    Line::new(
+                        "Selected Pixel".to_string(),
+                        PlotPoints::from(explorer.pixel_selected.rect.clone()),
+                    )
+                    .highlight(true)
+                    .color(Color32::GRAY),
                 );
             }
 
             // Draw all ROIs
             if let Some(roi) = &explorer.pixel_selected.open_roi {
-                let line = Line::new(PlotPoints::from(roi.polygon.clone()))
+                let line = Line::new(roi.name.clone(), PlotPoints::from(roi.polygon.clone()))
                     .color(Color32::WHITE)
                     .width(2.0);
                 plot_ui.line(line);
@@ -485,7 +492,7 @@ pub fn plot_matrix(
 
                 let screen_points: Vec<[f64; 2]> = roi.polygon.clone();
                 plot_ui.polygon(
-                    Polygon::new(PlotPoints::from(screen_points.clone()))
+                    Polygon::new(roi.name.clone(), PlotPoints::from(screen_points.clone()))
                         .fill_color(Color32::TRANSPARENT)
                         .highlight(false)
                         .style(LineStyle::Solid)
@@ -500,7 +507,7 @@ pub fn plot_matrix(
 
             // Draw open ROI if any
             if let Some(roi) = &explorer.pixel_selected.open_roi {
-                let line = Line::new(PlotPoints::from(roi.polygon.clone()))
+                let line = Line::new(roi.name.clone(), PlotPoints::from(roi.polygon.clone()))
                     .color(Color32::WHITE)
                     .width(2.0);
                 plot_ui.line(line);
