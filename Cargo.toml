@@ -13,7 +13,7 @@ egui_plot = "0.32"
 egui_logger = { git = "https://github.com/hacknus/egui_logger", branch = "expose_logs" }
 egui-theme-switch = { git = "https://github.com/hacknus/egui-theme-switch" }
 egui-file-dialog = { git = "https://github.com/hacknus/egui-file-dialog", branch = "sort_by_metadata", features = ["information_view"] }
-egui_double_slider = "0.7.0"
+egui_double_slider = "0.8.0"
 bevy_egui = { version = "0.34", features = ["serde"] }
 bevy = { version = "0.16", default-features = false, features = [
     "std",

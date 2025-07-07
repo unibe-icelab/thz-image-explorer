@@ -375,11 +375,13 @@ pub fn plot_matrix(
     ui.horizontal(|ui| {
         ui.add(DragValue::new(&mut cut_off_low).suffix("%"));
 
-        ui.add_space((0.6 * *plot_width) as f32);
-
-        ui.add(DragValue::new(&mut cut_off_high).suffix("%"));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add(DragValue::new(&mut cut_off_high).suffix("%"));
+        });
     });
     explorer.cut_off = [cut_off_low, cut_off_high];
+
+    ui.add_space(5.0);
 
     let width = data.len_of(Axis(0));
     let height = data.len_of(Axis(1));
