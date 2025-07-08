@@ -255,8 +255,11 @@ $$
 I(x,y,t) = |s(x,y,t)|^2 * G_{\sigma}(t)
 $$
 
-where $G_{\sigma}(t)$ is a normalized 1D Gaussian kernel with standard deviation $\sigma = 3.0$ and radius of 9 samples,
-applied via convolution to smooth the squared signal and extract the envelope.
+where $G_{\sigma}(t)$ is a normalized 1D Gaussian kernel with standard deviation $\sigma = 6.0$ and radius of 12 samples,
+applied via convolution to smooth the squared signal and extract the envelope as shon in figure \ref{fig:envelope}.
+
+![The convoluted envelope of the signal. All datapoints below the indicated threshold are treated as transparent. \label{fig:envelope}](convolution_example.pdf)
+
 
 The time axis is converted to a spatial distance coordinate by assuming a refractive index of $n=1$ and using the
 relation $z = ct/2$, where $c$ is the speed of light and the factor of 2 accounts for the round-trip propagation. This

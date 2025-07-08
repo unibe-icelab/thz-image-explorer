@@ -49,7 +49,6 @@ pub fn settings_window(
                         .clicked()
                     {
                         explorer.file_dialog_state = FileDialogState::OpenPSF;
-                        explorer.file_dialog.pick_file();
                     }
                     // Create a unique ID for this filter's info popup
                     let popup_id = ui.make_persistent_id(format!("PSF info_popup"));

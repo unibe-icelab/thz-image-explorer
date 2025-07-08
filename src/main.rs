@@ -242,8 +242,10 @@ fn main() {
     }
     let (config_tx, config_rx): (Sender<ConfigCommand>, Receiver<ConfigCommand>) =
         crossbeam_channel::bounded(1);
-    let (roi_tx, roi_rx): (Sender<(String, ROI)>, Receiver<(String, ROI)>) =
-        crossbeam_channel::unbounded();
+    let (roi_tx, roi_rx): (
+        Sender<Option<(String, ROI)>>,
+        Receiver<Option<(String, ROI)>>,
+    ) = crossbeam_channel::unbounded();
     let abort_flag = Arc::new(AtomicBool::new(false));
 
     let filter_computation_time_lock = Arc::new(RwLock::new(filter_computation_time));

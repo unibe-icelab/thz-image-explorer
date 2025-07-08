@@ -183,6 +183,10 @@ pub fn main_thread(
                                     {
                                         if let Some(input) = filter_data.first_mut() {
                                             if let Some(labels) = meta_data.md.get("ROI Labels") {
+                                                thread_communication
+                                                    .roi_tx
+                                                    .send(None)
+                                                    .expect("send ROI error");
                                                 let roi_labels: Vec<&str> =
                                                     labels.split(',').collect();
                                                 for (i, label) in roi_labels.iter().enumerate() {
@@ -216,14 +220,14 @@ pub fn main_thread(
                                                             let roi_uuid = uuid::Uuid::new_v4();
                                                             thread_communication
                                                                 .roi_tx
-                                                                .send((
+                                                                .send(Some((
                                                                     roi_uuid.to_string(),
                                                                     ROI {
                                                                         polygon: polygon.clone(),
                                                                         closed: true,
                                                                         name: label.to_string(),
                                                                     },
-                                                                ))
+                                                                )))
                                                                 .expect("send ROI error");
                                                             input.rois.insert(
                                                                 roi_uuid.to_string(),
@@ -624,6 +628,10 @@ pub fn main_thread(
 
                                         if let Some(labels) = meta_data.md.get("ROI Labels") {
                                             let roi_labels: Vec<&str> = labels.split(',').collect();
+                                            thread_communication
+                                                .roi_tx
+                                                .send(None)
+                                                .expect("send ROI error");
                                             for (i, label) in roi_labels.iter().enumerate() {
                                                 if let Some(roi_data) =
                                                     meta_data.md.get(&format!("ROI {}", i))
@@ -654,14 +662,14 @@ pub fn main_thread(
                                                         let roi_uuid = uuid::Uuid::new_v4();
                                                         thread_communication
                                                             .roi_tx
-                                                            .send((
+                                                            .send(Some((
                                                                 roi_uuid.to_string(),
                                                                 ROI {
                                                                     polygon: polygon.clone(),
                                                                     closed: true,
                                                                     name: label.to_string(),
                                                                 },
-                                                            ))
+                                                            )))
                                                             .expect("send ROI error");
                                                         input.rois.insert(
                                                             roi_uuid.to_string(),

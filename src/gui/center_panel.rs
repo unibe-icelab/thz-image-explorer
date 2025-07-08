@@ -153,27 +153,27 @@ pub fn pulse_tab(
 
         signal_plot.show(ui, |signal_plot_ui| {
             signal_plot_ui.line(
-                Line::new(PlotPoints::from(signal_1))
+                Line::new("Signal".to_string(), PlotPoints::from(signal_1))
                     .color(egui::Color32::RED)
                     .style(LineStyle::Solid)
-                    .width(2.0)
-                    .name("signal"),
+                    .width(2.0),
             );
 
             signal_plot_ui.line(
-                Line::new(PlotPoints::from(filtered_signal_1))
-                    .color(egui::Color32::BLUE)
-                    .style(LineStyle::Solid)
-                    .width(2.0)
-                    .name("filtered signal"),
+                Line::new(
+                    "Filtered Signal".to_string(),
+                    PlotPoints::from(filtered_signal_1),
+                )
+                .color(egui::Color32::BLUE)
+                .style(LineStyle::Solid)
+                .width(2.0),
             );
 
             signal_plot_ui.line(
-                Line::new(PlotPoints::from(avg_signal_1))
+                Line::new("Avg Signal".to_string(), PlotPoints::from(avg_signal_1))
                     .color(egui::Color32::YELLOW)
                     .style(LineStyle::Solid)
-                    .width(2.0)
-                    .name("avg signal"),
+                    .width(2.0),
             );
 
             // Plot each ROI with its own color
@@ -181,11 +181,10 @@ pub fn pulse_tab(
                 let color_idx = i % ROI_COLORS.len();
 
                 signal_plot_ui.line(
-                    Line::new(PlotPoints::from(roi_points.clone()))
+                    Line::new(roi_name.to_string(), PlotPoints::from(roi_points.clone()))
                         .color(ROI_COLORS[color_idx])
                         .style(LineStyle::Solid)
-                        .width(2.0)
-                        .name(roi_name),
+                        .width(2.0),
                 );
             }
         });
@@ -208,7 +207,7 @@ pub fn pulse_tab(
             .iter()
             .zip(explorer.data.signal_fft.iter())
             .map(|(x, y)| {
-                let fft = if thread_communication.gui_settings.log_plot {
+                let fft = if thread_communication.gui_settings.fft_log_plot {
                     if *y < floor_value {
                         20.0 * (floor_value).log10()
                     } else {
@@ -226,7 +225,7 @@ pub fn pulse_tab(
             .iter()
             .zip(explorer.data.filtered_signal_fft.iter())
             .map(|(x, y)| {
-                let fft = if thread_communication.gui_settings.log_plot {
+                let fft = if thread_communication.gui_settings.fft_log_plot {
                     if *y < floor_value {
                         20.0 * (floor_value).log10()
                     } else {
@@ -244,7 +243,7 @@ pub fn pulse_tab(
             .iter()
             .zip(explorer.data.avg_signal_fft.iter())
             .map(|(x, y)| {
-                let fft = if thread_communication.gui_settings.log_plot {
+                let fft = if thread_communication.gui_settings.fft_log_plot {
                     if *y < floor_value {
                         20.0 * (floor_value).log10()
                     } else {
@@ -293,7 +292,7 @@ pub fn pulse_tab(
                     .iter()
                     .zip(roi_signal_fft.iter())
                     .map(|(x, y)| {
-                        let fft = if thread_communication.gui_settings.log_plot {
+                        let fft = if thread_communication.gui_settings.fft_log_plot {
                             if *y < floor_value {
                                 20.0 * (floor_value).log10()
                             } else {
@@ -330,7 +329,7 @@ pub fn pulse_tab(
             max_fft_signals = -200.0;
         }
 
-        let log_plot = thread_communication.gui_settings.log_plot;
+        let log_plot = thread_communication.gui_settings.fft_log_plot;
         let phases_visible = thread_communication.gui_settings.phases_visible;
 
         let a_fmt = move |y: GridMark, _range: &RangeInclusive<f64>| {
@@ -382,65 +381,67 @@ pub fn pulse_tab(
         fft_plot.show(ui, |fft_plot_ui| {
             if !thread_communication.gui_settings.phases_visible {
                 fft_plot_ui.line(
-                    Line::new(PlotPoints::from(signal_1_fft))
+                    Line::new("Amplitude".to_string(), PlotPoints::from(signal_1_fft))
                         .color(egui::Color32::RED)
                         .style(LineStyle::Solid)
-                        .width(2.0)
-                        .name("amplitude"),
+                        .width(2.0),
                 );
             } else {
                 fft_plot_ui.line(
-                    Line::new(PlotPoints::from(phase_1_fft))
+                    Line::new("Phase".to_string(), PlotPoints::from(phase_1_fft))
                         .color(egui::Color32::RED)
                         .style(LineStyle::Solid)
-                        .width(2.0)
-                        .name("phase"),
+                        .width(2.0),
                 );
             }
 
             if !thread_communication.gui_settings.phases_visible {
                 fft_plot_ui.line(
-                    Line::new(PlotPoints::from(filtered_signal_1_fft))
-                        .color(egui::Color32::BLUE)
-                        .style(LineStyle::Solid)
-                        .width(2.0)
-                        .name("filtered amplitude"),
+                    Line::new(
+                        "Filtered Amplitude".to_string(),
+                        PlotPoints::from(filtered_signal_1_fft),
+                    )
+                    .color(egui::Color32::BLUE)
+                    .style(LineStyle::Solid)
+                    .width(2.0),
                 )
             } else {
                 fft_plot_ui.line(
-                    Line::new(PlotPoints::from(filtered_phase_1_fft))
-                        .color(egui::Color32::BLUE)
-                        .style(LineStyle::Solid)
-                        .width(2.0)
-                        .name("filtered phase"),
+                    Line::new(
+                        "Filtered Phase".to_string(),
+                        PlotPoints::from(filtered_phase_1_fft),
+                    )
+                    .color(egui::Color32::BLUE)
+                    .style(LineStyle::Solid)
+                    .width(2.0),
                 );
             }
 
             if !thread_communication.gui_settings.phases_visible {
                 fft_plot_ui.line(
-                    Line::new(PlotPoints::from(avg_signal_1_fft))
-                        .color(egui::Color32::YELLOW)
-                        .style(LineStyle::Solid)
-                        .width(2.0)
-                        .name("avg amplitude"),
+                    Line::new(
+                        "Avg Amplitude".to_string(),
+                        PlotPoints::from(avg_signal_1_fft),
+                    )
+                    .color(egui::Color32::YELLOW)
+                    .style(LineStyle::Solid)
+                    .width(2.0),
                 )
             } else {
                 fft_plot_ui.line(
-                    Line::new(PlotPoints::from(avg_phase_1_fft))
+                    Line::new("Avg Phase".to_string(), PlotPoints::from(avg_phase_1_fft))
                         .color(egui::Color32::YELLOW)
                         .style(LineStyle::Solid)
-                        .width(2.0)
-                        .name("avg phase"),
+                        .width(2.0),
                 );
             }
 
             if thread_communication.gui_settings.water_lines_visible {
                 for line in explorer.water_vapour_lines.iter() {
                     fft_plot_ui.vline(
-                        VLine::new(*line)
+                        VLine::new("Water Vapour".to_string(), *line)
                             .stroke(Stroke::new(1.0, egui::Color32::BLUE))
-                            .width(2.0)
-                            .name("water vapour"),
+                            .width(2.0),
                     );
                 }
             }
@@ -451,19 +452,20 @@ pub fn pulse_tab(
 
                 if !thread_communication.gui_settings.phases_visible {
                     fft_plot_ui.line(
-                        Line::new(PlotPoints::from(roi_amplitude.clone()))
-                            .color(ROI_COLORS[color_idx])
-                            .style(LineStyle::Solid)
-                            .width(2.0)
-                            .name(roi_name),
+                        Line::new(
+                            roi_name.to_string(),
+                            PlotPoints::from(roi_amplitude.clone()),
+                        )
+                        .color(ROI_COLORS[color_idx])
+                        .style(LineStyle::Solid)
+                        .width(2.0),
                     );
                 } else {
                     fft_plot_ui.line(
-                        Line::new(PlotPoints::from(roi_phase.clone()))
+                        Line::new(roi_name.to_string(), PlotPoints::from(roi_phase.clone()))
                             .color(ROI_COLORS[color_idx])
                             .style(LineStyle::Solid)
-                            .width(2.0)
-                            .name(roi_name),
+                            .width(2.0),
                     );
                 }
             }
@@ -507,7 +509,7 @@ pub fn pulse_tab(
                 ))
                 .changed()
             {
-                thread_communication.gui_settings.log_plot =
+                thread_communication.gui_settings.fft_log_plot =
                     !thread_communication.gui_settings.phases_visible;
             };
             ui.label("Phases");
@@ -701,11 +703,10 @@ pub fn optical_properties_tab(
 
         n_plot.show(ui, |plot_ui| {
             plot_ui.line(
-                Line::new(PlotPoints::from(refractive_index))
+                Line::new("Refractive Index (n)".to_string(), PlotPoints::from(refractive_index))
                     .color(egui::Color32::RED)
                     .style(LineStyle::Solid)
                     .width(2.0)
-                    .name("Refractive Index (n)"),
             );
         });
 
@@ -726,28 +727,25 @@ pub fn optical_properties_tab(
 
         absorption_plot.show(ui, |plot_ui| {
             plot_ui.line(
-                Line::new(PlotPoints::from(absorption))
+                Line::new("Absorption (α)".to_string(), PlotPoints::from(absorption))
                     .color(egui::Color32::GREEN)
                     .style(LineStyle::Solid)
                     .width(2.0)
-                    .name("Absorption (α)"),
             );
 
             plot_ui.line(
-                Line::new(PlotPoints::from(extinction_coefficient))
+                Line::new("Extinction Coefficient (k)".to_string(), PlotPoints::from(extinction_coefficient))
                     .color(egui::Color32::BLUE)
                     .style(LineStyle::Solid)
                     .width(2.0)
-                    .name("Extinction Coefficient (k)"),
             );
 
             if thread_communication.gui_settings.water_lines_visible {
                 for line in explorer.water_vapour_lines.iter() {
                     plot_ui.vline(
-                        VLine::new(*line)
+                        VLine::new("Water Vapour".to_string(), *line)
                             .stroke(Stroke::new(1.0, egui::Color32::BLUE))
                             .width(2.0)
-                            .name("water vapour"),
                     );
                 }
             }

@@ -109,6 +109,16 @@ pub fn left_panel(
     if let Ok(read_guard) = thread_communication.data_lock.read() {
         data = read_guard.clone();
     }
+    if let Ok(roi) = thread_communication.roi_rx.try_recv() {
+        match roi {
+            Some(roi) => {
+                explorer.rois.insert(roi.0, roi.1);
+            }
+            None => {
+                explorer.rois.clear();
+            }
+        };
+    }
     let mut meta_data = DotthzMetaData::default();
     if let Ok(md) = thread_communication.md_lock.read() {
         meta_data = md.clone();
@@ -137,7 +147,6 @@ pub fn left_panel(
                         .clicked()
                     {
                         explorer.file_dialog_state = FileDialogState::Open;
-                        explorer.file_dialog.pick_file();
                     };
                     if ui
                         .button(egui::RichText::new(format!(
@@ -147,7 +156,6 @@ pub fn left_panel(
                         .clicked()
                     {
                         explorer.file_dialog_state = FileDialogState::OpenRef;
-                        explorer.file_dialog.pick_file();
                     };
                 });
 
@@ -215,6 +223,8 @@ pub fn left_panel(
                                     thread_communication.gui_settings.selected_path =
                                         item.to_path_buf();
 
+                                    explorer.new_meta_data = vec![("".to_string(), "".to_string())];
+
                                     send_latest_config(
                                         thread_communication,
                                         ConfigCommand::OpenFile(item.to_path_buf()),
@@ -233,6 +243,7 @@ pub fn left_panel(
                             explorer.selected_file_name =
                                 item.file_name().unwrap().to_str().unwrap().to_string();
                             thread_communication.gui_settings.selected_path = item.to_path_buf();
+                            explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                             send_latest_config(
                                 thread_communication,
                                 ConfigCommand::OpenFile(item.to_path_buf()),
@@ -244,7 +255,7 @@ pub fn left_panel(
                             explorer.selected_file_name =
                                 item.file_name().unwrap().to_str().unwrap().to_string();
                             thread_communication.gui_settings.selected_path = item.to_path_buf();
-
+                            explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                             send_latest_config(
                                 thread_communication,
                                 ConfigCommand::OpenFile(item.to_path_buf()),
@@ -253,8 +264,10 @@ pub fn left_panel(
                         }
                     }
                 }
-
-                explorer.file_dialog.set_right_panel_width(300.0);
+                #[cfg(not(target_os = "macos"))]
+                {
+                    explorer.file_dialog.set_right_panel_width(300.0);
+                }
 
                 ctx.input(|i| {
                     // Check if files were dropped
@@ -273,12 +286,26 @@ pub fn left_panel(
                                 explorer.selected_file_name =
                                     path.file_name().unwrap().to_str().unwrap().to_string();
                                 explorer.scroll_to_selection = true;
-                                explorer.file_dialog.config_mut().initial_directory = path.clone();
+                                #[cfg(not(target_os = "macos"))]
+                                {
+                                    explorer.file_dialog.config_mut().initial_directory =
+                                        path.clone();
+                                }
                                 thread_communication.gui_settings.selected_path = path.clone();
+                                explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                                 send_latest_config(
                                     thread_communication,
                                     ConfigCommand::OpenFile(path),
                                 );
+                                #[cfg(target_os = "macos")]
+                                {
+                                    if let Ok(mut path_guard) =
+                                        thread_communication.macos_path_lock.write()
+                                    {
+                                        *path_guard =
+                                            thread_communication.gui_settings.selected_path.clone();
+                                    }
+                                }
                             }
                         }
                     }
@@ -316,6 +343,7 @@ pub fn left_panel(
 
                         #[cfg(not(target_os = "macos"))]
                         {
+                            explorer.file_dialog.pick_file();
                             if let Some(path) = explorer
                                 .file_dialog
                                 .update_with_right_panel_ui(ctx, &mut |ui, dia| {
@@ -324,6 +352,7 @@ pub fn left_panel(
                                 .picked()
                             {
                                 explorer.file_dialog_state = FileDialogState::None;
+                                explorer.new_metadata = vec![("".to_string(), "".to_string())];
                                 send_latest_config(
                                     thread_communication,
                                     ConfigCommand::OpenFile(path.to_path_buf()),
@@ -356,6 +385,7 @@ pub fn left_panel(
                         }
                         #[cfg(not(target_os = "macos"))]
                         {
+                            explorer.file_dialog.pick_file();
                             if let Some(path) = explorer
                                 .file_dialog
                                 .update_with_right_panel_ui(ctx, &mut |ui, dia| {
@@ -396,6 +426,7 @@ pub fn left_panel(
                         }
                         #[cfg(not(target_os = "macos"))]
                         {
+                            explorer.file_dialog.pick_file();
                             if let Some(path) = explorer
                                 .file_dialog
                                 .update_with_right_panel_ui(ctx, &mut |ui, dia| {
@@ -412,23 +443,9 @@ pub fn left_panel(
                         }
                     }
                     FileDialogState::Save => {
-                        if let Some(_path) = explorer.file_dialog.update(ctx).picked() {
-                            explorer.file_dialog_state = FileDialogState::None;
-                            // match tera_flash_conf.filetype {
-                            //     FileType::Csv => {
-                            //         picked_path.set_extension("csv");
-                            //     }
-                            //     FileType::Binary => {
-                            //         picked_path.set_extension("npy");
-                            //     }
-                            //     FileType::DotTHz => {
-                            //         picked_path.set_extension("thz");
-                            //     }
-                            // }
-                            // if let Err(e) = save_tx.send(picked_path.clone()) {
-                            //
-                            // }
-                        }
+                        // if let Some(_path) = explorer.file_dialog.update(ctx).picked() {
+                        //     explorer.file_dialog_state = FileDialogState::None;
+                        // }
                     }
                     FileDialogState::SaveToVTU => {
                         #[cfg(target_os = "macos")]
@@ -453,7 +470,6 @@ pub fn left_panel(
 
                             explorer.file_dialog_state = FileDialogState::None;
                         }
-                        explorer.file_dialog.save_file();
                         #[cfg(not(target_os = "macos"))]
                         {
                             explorer.file_dialog.save_file();
@@ -476,6 +492,9 @@ pub fn left_panel(
                         #[cfg(target_os = "macos")]
                         {
                             if let Ok(path_guard) = thread_communication.macos_path_lock.read() {
+                                if thread_communication.gui_settings.selected_path != *path_guard {
+                                    explorer.new_meta_data = vec![("".to_string(), "".to_string())];
+                                }
                                 thread_communication.gui_settings.selected_path =
                                     path_guard.clone();
                             }
@@ -660,9 +679,10 @@ pub fn left_panel(
 
             ui.separator();
             ui.heading("Meta Data");
+            ui.add_space(5.0);
             ui.horizontal(|ui| {
                 let text = if thread_communication.gui_settings.meta_data_edit {
-                    "Save"
+                    "Cancel"
                 } else {
                     "Edit"
                 };
@@ -673,14 +693,6 @@ pub fn left_panel(
                     )
                     .clicked()
                 {
-                    if thread_communication.gui_settings.meta_data_edit {
-                        send_latest_config(
-                            thread_communication,
-                            ConfigCommand::UpdateMetaData(
-                                thread_communication.gui_settings.selected_path.clone(),
-                            ),
-                        );
-                    }
                     thread_communication.gui_settings.meta_data_edit =
                         !thread_communication.gui_settings.meta_data_edit;
                 }
@@ -693,6 +705,7 @@ pub fn left_panel(
                         )))
                         .clicked()
                     {
+                        explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                         thread_communication.gui_settings.meta_data_edit = false;
                         thread_communication.gui_settings.meta_data_unlocked = false;
                         send_latest_config(
@@ -702,165 +715,263 @@ pub fn left_panel(
                             ),
                         );
                     }
-                    if ui.button(egui::RichText::new("Cancel")).clicked() {
+                    if ui
+                        .button(egui::RichText::new(format!(
+                            "{} Save",
+                            egui_phosphor::regular::FLOPPY_DISK
+                        )))
+                        .clicked()
+                    {
+                        if thread_communication.gui_settings.meta_data_edit {
+                            for (key, val) in explorer.new_meta_data.iter() {
+                                if !key.is_empty() && !val.is_empty() {
+                                    meta_data.md.insert(key.clone(), val.clone());
+                                }
+                            }
+
+                            if let Ok(mut md) = thread_communication.md_lock.write() {
+                                *md = meta_data.clone();
+                            }
+
+                            send_latest_config(
+                                thread_communication,
+                                ConfigCommand::UpdateMetaData(
+                                    thread_communication.gui_settings.selected_path.clone(),
+                                ),
+                            );
+                        }
                         thread_communication.gui_settings.meta_data_edit = false;
                         thread_communication.gui_settings.meta_data_unlocked = false;
                     }
                 }
             });
             egui::ScrollArea::both().show(ui, |ui| {
-                egui::Grid::new("meta_data").striped(true).show(ui, |ui| {
-                    // this is an aesthetic hack to draw the empty meta-data grid to full width
-                    if meta_data.md.is_empty() {
-                        ui.label("Data");
-                        ui.label(format!("{:50}", " "));
-                        ui.end_row();
-                    }
-                    let mut attributes_to_delete = vec![];
-                    for (name, value) in meta_data.md.iter_mut() {
-                        ui.label(name);
-                        ui.horizontal(|ui| {
-                            if thread_communication.gui_settings.meta_data_edit {
-                                if ui
-                                    .selectable_label(
-                                        false,
-                                        egui::RichText::new(format!(
-                                            "{}",
-                                            egui_phosphor::regular::TRASH
-                                        )),
-                                    )
-                                    .clicked()
-                                {
-                                    attributes_to_delete.push(name.clone());
-                                }
-                                let lock = if thread_communication.gui_settings.meta_data_unlocked {
-                                    egui::RichText::new(format!(
-                                        "{}",
-                                        egui_phosphor::regular::LOCK_OPEN
-                                    ))
-                                } else {
-                                    egui::RichText::new(format!("{}", egui_phosphor::regular::LOCK))
-                                };
-                                if ui
-                                    .selectable_label(
-                                        thread_communication.gui_settings.meta_data_unlocked,
-                                        lock,
-                                    )
-                                    .clicked()
-                                {
-                                    thread_communication.gui_settings.meta_data_unlocked =
-                                        !thread_communication.gui_settings.meta_data_unlocked;
-                                }
-                                if thread_communication.gui_settings.meta_data_unlocked {
+                egui::Grid::new("meta_data")
+                    .striped(true)
+                    .min_row_height(20.0)
+                    .show(ui, |ui| {
+                        // this is an aesthetic hack to draw the empty meta-data grid to full width
+                        if meta_data.md.is_empty() {
+                            ui.label("Attributes:");
+                            ui.label(format!("{:75}", " "));
+                            ui.end_row();
+                        }
+                        if thread_communication.gui_settings.meta_data_edit {
+                            let mut add_new_metdata = false;
+                            if let Some((key, val)) = explorer.new_meta_data.last_mut() {
+                                ui.horizontal(|ui| {
+                                    ui.horizontal(|ui| {
+                                        if key == "" {
+                                            ui.disable();
+                                        }
+                                        if ui
+                                            .button(format!("{}", egui_phosphor::regular::PLUS))
+                                            .on_hover_text("Add a new Metadata Attribute.")
+                                            .clicked()
+                                        {
+                                            add_new_metdata = true;
+                                        }
+                                    });
                                     ui.add(
-                                        egui::TextEdit::singleline(value)
+                                        egui::TextEdit::singleline(key)
+                                            .interactive(true)
                                             .desired_width(ui.available_width()),
                                     );
+                                });
+                                ui.add(
+                                    egui::TextEdit::singleline(val)
+                                        .desired_width(ui.available_width()),
+                                );
+                            }
+                            if add_new_metdata {
+                                explorer.new_meta_data.push(("".to_string(), "".to_string()));
+                            }
+                            ui.end_row();
+
+                            let mut keys_to_remove = vec![];
+
+                            for i in 0..explorer.new_meta_data.len() - 1 {
+                                ui.horizontal(|ui| {
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut explorer.new_meta_data[i].0)
+                                            .desired_width(ui.available_width()),
+                                    );
+                                });
+                                ui.horizontal(|ui| {
+                                    if ui
+                                        .selectable_label(
+                                            false,
+                                            egui::RichText::new(format!(
+                                                "{}",
+                                                egui_phosphor::regular::TRASH
+                                            )),
+                                        )
+                                        .clicked()
+                                    {
+                                        keys_to_remove.push(explorer.new_meta_data[i].0.clone());
+                                    }
+
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut explorer.new_meta_data[i].1)
+                                            .desired_width(ui.available_width()),
+                                    );
+                                });
+                                ui.end_row();
+                            }
+
+                            for key in keys_to_remove.iter() {
+                                explorer.new_meta_data.retain(|(k, _)| k != key);
+                            }
+                        }
+                        let mut attributes_to_delete = vec![];
+                        for (name, value) in meta_data.md.iter_mut() {
+                            ui.label(name);
+                            ui.horizontal(|ui| {
+                                if thread_communication.gui_settings.meta_data_edit {
+                                    if ui
+                                        .selectable_label(
+                                            false,
+                                            egui::RichText::new(format!(
+                                                "{}",
+                                                egui_phosphor::regular::TRASH
+                                            )),
+                                        )
+                                        .clicked()
+                                    {
+                                        attributes_to_delete.push(name.clone());
+                                    }
+                                    let lock =
+                                        if thread_communication.gui_settings.meta_data_unlocked {
+                                            egui::RichText::new(format!(
+                                                "{}",
+                                                egui_phosphor::regular::LOCK_OPEN
+                                            ))
+                                        } else {
+                                            egui::RichText::new(format!(
+                                                "{}",
+                                                egui_phosphor::regular::LOCK
+                                            ))
+                                        };
+                                    if ui
+                                        .selectable_label(
+                                            thread_communication.gui_settings.meta_data_unlocked,
+                                            lock,
+                                        )
+                                        .clicked()
+                                    {
+                                        thread_communication.gui_settings.meta_data_unlocked =
+                                            !thread_communication.gui_settings.meta_data_unlocked;
+                                    }
+                                    if thread_communication.gui_settings.meta_data_unlocked {
+                                        ui.add(
+                                            egui::TextEdit::singleline(value)
+                                                .desired_width(ui.available_width()),
+                                        );
+                                    } else {
+                                        ui.label(value.clone());
+                                    }
                                 } else {
                                     ui.label(value.clone());
                                 }
-                            } else {
-                                ui.label(value.clone());
-                            }
-                        });
-                        ui.end_row()
-                    }
+                            });
+                            ui.end_row()
+                        }
 
-                    for attr in attributes_to_delete.iter() {
-                        meta_data.md.swap_remove(attr);
-                    }
+                        for attr in attributes_to_delete.iter() {
+                            meta_data.md.swap_remove(attr);
+                        }
 
-                    ui.label("User:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.user)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.user.clone());
-                    }
-                    ui.end_row();
-                    ui.label("E-mail:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.email)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.email.clone());
-                    }
-                    ui.end_row();
-                    ui.label("ORCID:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.orcid)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.orcid.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Institution:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.institution)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.institution.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Instrument:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.instrument)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.instrument.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Version:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.version)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.version.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Mode:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.mode)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.mode.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Date:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.date)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.date.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Time:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.time)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.time.clone());
-                    }
-                    ui.end_row();
-                });
+                        ui.label("User:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.user)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.user.clone());
+                        }
+                        ui.end_row();
+                        ui.label("E-mail:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.email)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.email.clone());
+                        }
+                        ui.end_row();
+                        ui.label("ORCID:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.orcid)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.orcid.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Institution:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.institution)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.institution.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Instrument:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.instrument)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.instrument.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Version:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.version)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.version.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Mode:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.mode)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.mode.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Date:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.date)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.date.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Time:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.time)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.time.clone());
+                        }
+                        ui.end_row();
+                    });
             });
             if thread_communication.gui_settings.meta_data_edit {
                 if let Ok(mut md) = thread_communication.md_lock.write() {
