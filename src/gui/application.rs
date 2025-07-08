@@ -447,6 +447,7 @@ pub fn update_gui(
 /// - `update_text`: Text displayed for updates.
 /// - `new_release`: Optional field for new software updates (only used with "self_update" feature).
 pub struct THzImageExplorer {
+    pub(crate) new_metadata: Vec<(String, String)>,
     pub(crate) cut_off: [f32; 2],
     pub(crate) fft_bounds: [f32; 2],
     pub(crate) fft_window_type: FftWindowType,
@@ -537,6 +538,7 @@ impl THzImageExplorer {
         // }
 
         Self {
+            new_metadata: vec![("".to_string(), "".to_string())],
             water_vapour_lines,
             data: PlotDataContainer::default(),
             file_dialog_state: FileDialogState::None,

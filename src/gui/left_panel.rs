@@ -289,6 +289,15 @@ pub fn left_panel(
                                     thread_communication,
                                     ConfigCommand::OpenFile(path),
                                 );
+                                #[cfg(target_os = "macos")]
+                                {
+                                    if let Ok(mut path_guard) =
+                                        thread_communication.macos_path_lock.write()
+                                    {
+                                        *path_guard =
+                                            thread_communication.gui_settings.selected_path.clone();
+                                    }
+                                }
                             }
                         }
                     }
@@ -672,7 +681,7 @@ pub fn left_panel(
             ui.heading("Meta Data");
             ui.horizontal(|ui| {
                 let text = if thread_communication.gui_settings.meta_data_edit {
-                    "Save"
+                    "Cancel"
                 } else {
                     "Edit"
                 };
@@ -683,14 +692,6 @@ pub fn left_panel(
                     )
                     .clicked()
                 {
-                    if thread_communication.gui_settings.meta_data_edit {
-                        send_latest_config(
-                            thread_communication,
-                            ConfigCommand::UpdateMetaData(
-                                thread_communication.gui_settings.selected_path.clone(),
-                            ),
-                        );
-                    }
                     thread_communication.gui_settings.meta_data_edit =
                         !thread_communication.gui_settings.meta_data_edit;
                 }
@@ -703,6 +704,7 @@ pub fn left_panel(
                         )))
                         .clicked()
                     {
+                        explorer.new_metadata = vec![("".to_string(), "".to_string())];
                         thread_communication.gui_settings.meta_data_edit = false;
                         thread_communication.gui_settings.meta_data_unlocked = false;
                         send_latest_config(
@@ -712,7 +714,25 @@ pub fn left_panel(
                             ),
                         );
                     }
-                    if ui.button(egui::RichText::new("Cancel")).clicked() {
+                    if ui.button(egui::RichText::new("Save")).clicked() {
+                        if thread_communication.gui_settings.meta_data_edit {
+                            for (key, val) in explorer.new_metadata.iter() {
+                                if !key.is_empty() && !val.is_empty() {
+                                    meta_data.md.insert(key.clone(), val.clone());
+                                }
+                            }
+
+                            if let Ok(mut md) = thread_communication.md_lock.write() {
+                                *md = meta_data.clone();
+                            }
+
+                            send_latest_config(
+                                thread_communication,
+                                ConfigCommand::UpdateMetaData(
+                                    thread_communication.gui_settings.selected_path.clone(),
+                                ),
+                            );
+                        }
                         thread_communication.gui_settings.meta_data_edit = false;
                         thread_communication.gui_settings.meta_data_unlocked = false;
                     }
@@ -725,6 +745,71 @@ pub fn left_panel(
                         ui.label("Data");
                         ui.label(format!("{:50}", " "));
                         ui.end_row();
+                    }
+                    if thread_communication.gui_settings.meta_data_edit {
+                        let mut add_new_metdata = false;
+                        if let Some((key, val)) = explorer.new_metadata.last_mut() {
+                            ui.horizontal(|ui| {
+                                ui.horizontal(|ui| {
+                                    if key == "" {
+                                        ui.disable();
+                                    }
+                                    if ui
+                                        .button(format!("{}", egui_phosphor::regular::PLUS))
+                                        .clicked()
+                                    {
+                                        add_new_metdata = true;
+                                    }
+                                });
+                                ui.add(
+                                    egui::TextEdit::singleline(key)
+                                        .interactive(true)
+                                        .desired_width(ui.available_width()),
+                                );
+                            });
+                            ui.add(
+                                egui::TextEdit::singleline(val).desired_width(ui.available_width()),
+                            );
+                        }
+                        if add_new_metdata {
+                            explorer.new_metadata.push(("".to_string(), "".to_string()));
+                        }
+                        ui.end_row();
+
+                        let mut keys_to_remove = vec![];
+
+                        for i in 0..explorer.new_metadata.len() - 1 {
+                            ui.horizontal(|ui| {
+                                ui.add(
+                                    egui::TextEdit::singleline(&mut explorer.new_metadata[i].0)
+                                        .desired_width(ui.available_width()),
+                                );
+                            });
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .selectable_label(
+                                        false,
+                                        egui::RichText::new(format!(
+                                            "{}",
+                                            egui_phosphor::regular::TRASH
+                                        )),
+                                    )
+                                    .clicked()
+                                {
+                                    keys_to_remove.push(explorer.new_metadata[i].0.clone());
+                                }
+
+                                ui.add(
+                                    egui::TextEdit::singleline(&mut explorer.new_metadata[i].1)
+                                        .desired_width(ui.available_width()),
+                                );
+                            });
+                            ui.end_row();
+                        }
+
+                        for key in keys_to_remove.iter() {
+                            explorer.new_metadata.retain(|(k, _)| k != key);
+                        }
                     }
                     let mut attributes_to_delete = vec![];
                     for (name, value) in meta_data.md.iter_mut() {
