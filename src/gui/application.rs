@@ -430,7 +430,7 @@ pub fn update_gui(
 /// visualizations and includes methods for rendering the main GUI panels.
 ///
 /// # Fields
-/// - `new_metadata`: Vector of key-value pairs for new metadata entries.
+/// - `new_meta_data`: Vector of key-value pairs for new meta-data entries.
 /// - `cut_off`: Range values for signal cut-off filtering.
 /// - `fft_bounds`: Bounds for the FFT visualization.
 /// - `fft_window_type`: Selected FFT window type.
@@ -453,7 +453,7 @@ pub fn update_gui(
 /// - `new_release`: Optional field for new software updates (only used with "self_update" feature).
 /// - `rois`: HashMap of named regions of interest (ROI) for analysis.
 pub struct THzImageExplorer {
-    pub(crate) new_metadata: Vec<(String, String)>,
+    pub(crate) new_meta_data: Vec<(String, String)>,
     pub(crate) cut_off: [f32; 2],
     pub(crate) fft_bounds: [f32; 2],
     pub(crate) fft_window_type: FftWindowType,
@@ -544,7 +544,7 @@ impl THzImageExplorer {
         // }
 
         Self {
-            new_metadata: vec![("".to_string(), "".to_string())],
+            new_meta_data: vec![("".to_string(), "".to_string())],
             water_vapour_lines,
             data: PlotDataContainer::default(),
             file_dialog_state: FileDialogState::None,

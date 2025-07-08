@@ -223,7 +223,7 @@ pub fn left_panel(
                                     thread_communication.gui_settings.selected_path =
                                         item.to_path_buf();
 
-                                    explorer.new_metadata = vec![("".to_string(), "".to_string())];
+                                    explorer.new_meta_data = vec![("".to_string(), "".to_string())];
 
                                     send_latest_config(
                                         thread_communication,
@@ -243,7 +243,7 @@ pub fn left_panel(
                             explorer.selected_file_name =
                                 item.file_name().unwrap().to_str().unwrap().to_string();
                             thread_communication.gui_settings.selected_path = item.to_path_buf();
-                            explorer.new_metadata = vec![("".to_string(), "".to_string())];
+                            explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                             send_latest_config(
                                 thread_communication,
                                 ConfigCommand::OpenFile(item.to_path_buf()),
@@ -255,7 +255,7 @@ pub fn left_panel(
                             explorer.selected_file_name =
                                 item.file_name().unwrap().to_str().unwrap().to_string();
                             thread_communication.gui_settings.selected_path = item.to_path_buf();
-                            explorer.new_metadata = vec![("".to_string(), "".to_string())];
+                            explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                             send_latest_config(
                                 thread_communication,
                                 ConfigCommand::OpenFile(item.to_path_buf()),
@@ -292,7 +292,7 @@ pub fn left_panel(
                                         path.clone();
                                 }
                                 thread_communication.gui_settings.selected_path = path.clone();
-                                explorer.new_metadata = vec![("".to_string(), "".to_string())];
+                                explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                                 send_latest_config(
                                     thread_communication,
                                     ConfigCommand::OpenFile(path),
@@ -493,7 +493,7 @@ pub fn left_panel(
                         {
                             if let Ok(path_guard) = thread_communication.macos_path_lock.read() {
                                 if thread_communication.gui_settings.selected_path != *path_guard {
-                                    explorer.new_metadata = vec![("".to_string(), "".to_string())];
+                                    explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                                 }
                                 thread_communication.gui_settings.selected_path =
                                     path_guard.clone();
@@ -705,7 +705,7 @@ pub fn left_panel(
                         )))
                         .clicked()
                     {
-                        explorer.new_metadata = vec![("".to_string(), "".to_string())];
+                        explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                         thread_communication.gui_settings.meta_data_edit = false;
                         thread_communication.gui_settings.meta_data_unlocked = false;
                         send_latest_config(
@@ -723,7 +723,7 @@ pub fn left_panel(
                         .clicked()
                     {
                         if thread_communication.gui_settings.meta_data_edit {
-                            for (key, val) in explorer.new_metadata.iter() {
+                            for (key, val) in explorer.new_meta_data.iter() {
                                 if !key.is_empty() && !val.is_empty() {
                                     meta_data.md.insert(key.clone(), val.clone());
                                 }
@@ -758,7 +758,7 @@ pub fn left_panel(
                         }
                         if thread_communication.gui_settings.meta_data_edit {
                             let mut add_new_metdata = false;
-                            if let Some((key, val)) = explorer.new_metadata.last_mut() {
+                            if let Some((key, val)) = explorer.new_meta_data.last_mut() {
                                 ui.horizontal(|ui| {
                                     ui.horizontal(|ui| {
                                         if key == "" {
@@ -784,16 +784,16 @@ pub fn left_panel(
                                 );
                             }
                             if add_new_metdata {
-                                explorer.new_metadata.push(("".to_string(), "".to_string()));
+                                explorer.new_meta_data.push(("".to_string(), "".to_string()));
                             }
                             ui.end_row();
 
                             let mut keys_to_remove = vec![];
 
-                            for i in 0..explorer.new_metadata.len() - 1 {
+                            for i in 0..explorer.new_meta_data.len() - 1 {
                                 ui.horizontal(|ui| {
                                     ui.add(
-                                        egui::TextEdit::singleline(&mut explorer.new_metadata[i].0)
+                                        egui::TextEdit::singleline(&mut explorer.new_meta_data[i].0)
                                             .desired_width(ui.available_width()),
                                     );
                                 });
@@ -808,11 +808,11 @@ pub fn left_panel(
                                         )
                                         .clicked()
                                     {
-                                        keys_to_remove.push(explorer.new_metadata[i].0.clone());
+                                        keys_to_remove.push(explorer.new_meta_data[i].0.clone());
                                     }
 
                                     ui.add(
-                                        egui::TextEdit::singleline(&mut explorer.new_metadata[i].1)
+                                        egui::TextEdit::singleline(&mut explorer.new_meta_data[i].1)
                                             .desired_width(ui.available_width()),
                                     );
                                 });
@@ -820,7 +820,7 @@ pub fn left_panel(
                             }
 
                             for key in keys_to_remove.iter() {
-                                explorer.new_metadata.retain(|(k, _)| k != key);
+                                explorer.new_meta_data.retain(|(k, _)| k != key);
                             }
                         }
                         let mut attributes_to_delete = vec![];
