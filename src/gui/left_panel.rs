@@ -109,6 +109,16 @@ pub fn left_panel(
     if let Ok(read_guard) = thread_communication.data_lock.read() {
         data = read_guard.clone();
     }
+    if let Ok(roi) = thread_communication.roi_rx.try_recv() {
+        match roi {
+            Some(roi) => {
+                explorer.rois.insert(roi.0, roi.1);
+            }
+            None => {
+                explorer.rois.clear();
+            }
+        };
+    }
     let mut meta_data = DotthzMetaData::default();
     if let Ok(md) = thread_communication.md_lock.read() {
         meta_data = md.clone();

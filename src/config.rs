@@ -290,10 +290,10 @@ pub struct ThreadCommunication {
     pub config_rx: Receiver<ConfigCommand>,
 
     /// Channel for sending configuration ROI to the GUI thread.
-    pub roi_tx: Sender<(String, ROI)>,
+    pub roi_tx: Sender<Option<(String, ROI)>>,
 
     /// Channel for receiving configuration ROI in the GUI thread.
-    pub roi_rx: Receiver<(String, ROI)>,
+    pub roi_rx: Receiver<Option<(String, ROI)>>,
 
     /// Lock for tracking filter processing progress.
     /// Maps filter UUIDs to their current progress (0.0 to 1.0, or None if inactive).
