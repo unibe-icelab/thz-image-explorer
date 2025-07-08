@@ -679,6 +679,7 @@ pub fn left_panel(
 
             ui.separator();
             ui.heading("Meta Data");
+            ui.add_space(5.0);
             ui.horizontal(|ui| {
                 let text = if thread_communication.gui_settings.meta_data_edit {
                     "Cancel"
@@ -745,224 +746,232 @@ pub fn left_panel(
                 }
             });
             egui::ScrollArea::both().show(ui, |ui| {
-                egui::Grid::new("meta_data").striped(true).show(ui, |ui| {
-                    // this is an aesthetic hack to draw the empty meta-data grid to full width
-                    if meta_data.md.is_empty() {
-                        ui.label("Data");
-                        ui.label(format!("{:50}", " "));
-                        ui.end_row();
-                    }
-                    if thread_communication.gui_settings.meta_data_edit {
-                        let mut add_new_metdata = false;
-                        if let Some((key, val)) = explorer.new_metadata.last_mut() {
-                            ui.horizontal(|ui| {
-                                ui.horizontal(|ui| {
-                                    if key == "" {
-                                        ui.disable();
-                                    }
-                                    if ui
-                                        .button(format!("{}", egui_phosphor::regular::PLUS))
-                                        .on_hover_text("Add a new Metadata Attribute.")
-                                        .clicked()
-                                    {
-                                        add_new_metdata = true;
-                                    }
-                                });
-                                ui.add(
-                                    egui::TextEdit::singleline(key)
-                                        .interactive(true)
-                                        .desired_width(ui.available_width()),
-                                );
-                            });
-                            ui.add(
-                                egui::TextEdit::singleline(val).desired_width(ui.available_width()),
-                            );
-                        }
-                        if add_new_metdata {
-                            explorer.new_metadata.push(("".to_string(), "".to_string()));
-                        }
-                        ui.end_row();
-
-                        let mut keys_to_remove = vec![];
-
-                        for i in 0..explorer.new_metadata.len() - 1 {
-                            ui.horizontal(|ui| {
-                                ui.add(
-                                    egui::TextEdit::singleline(&mut explorer.new_metadata[i].0)
-                                        .desired_width(ui.available_width()),
-                                );
-                            });
-                            ui.horizontal(|ui| {
-                                if ui
-                                    .selectable_label(
-                                        false,
-                                        egui::RichText::new(format!(
-                                            "{}",
-                                            egui_phosphor::regular::TRASH
-                                        )),
-                                    )
-                                    .clicked()
-                                {
-                                    keys_to_remove.push(explorer.new_metadata[i].0.clone());
-                                }
-
-                                ui.add(
-                                    egui::TextEdit::singleline(&mut explorer.new_metadata[i].1)
-                                        .desired_width(ui.available_width()),
-                                );
-                            });
+                egui::Grid::new("meta_data")
+                    .striped(true)
+                    .min_row_height(20.0)
+                    .show(ui, |ui| {
+                        // this is an aesthetic hack to draw the empty meta-data grid to full width
+                        if meta_data.md.is_empty() {
+                            ui.label("Attributes:");
+                            ui.label(format!("{:75}", " "));
                             ui.end_row();
                         }
-
-                        for key in keys_to_remove.iter() {
-                            explorer.new_metadata.retain(|(k, _)| k != key);
-                        }
-                    }
-                    let mut attributes_to_delete = vec![];
-                    for (name, value) in meta_data.md.iter_mut() {
-                        ui.label(name);
-                        ui.horizontal(|ui| {
-                            if thread_communication.gui_settings.meta_data_edit {
-                                if ui
-                                    .selectable_label(
-                                        false,
-                                        egui::RichText::new(format!(
-                                            "{}",
-                                            egui_phosphor::regular::TRASH
-                                        )),
-                                    )
-                                    .clicked()
-                                {
-                                    attributes_to_delete.push(name.clone());
-                                }
-                                let lock = if thread_communication.gui_settings.meta_data_unlocked {
-                                    egui::RichText::new(format!(
-                                        "{}",
-                                        egui_phosphor::regular::LOCK_OPEN
-                                    ))
-                                } else {
-                                    egui::RichText::new(format!("{}", egui_phosphor::regular::LOCK))
-                                };
-                                if ui
-                                    .selectable_label(
-                                        thread_communication.gui_settings.meta_data_unlocked,
-                                        lock,
-                                    )
-                                    .clicked()
-                                {
-                                    thread_communication.gui_settings.meta_data_unlocked =
-                                        !thread_communication.gui_settings.meta_data_unlocked;
-                                }
-                                if thread_communication.gui_settings.meta_data_unlocked {
+                        if thread_communication.gui_settings.meta_data_edit {
+                            let mut add_new_metdata = false;
+                            if let Some((key, val)) = explorer.new_metadata.last_mut() {
+                                ui.horizontal(|ui| {
+                                    ui.horizontal(|ui| {
+                                        if key == "" {
+                                            ui.disable();
+                                        }
+                                        if ui
+                                            .button(format!("{}", egui_phosphor::regular::PLUS))
+                                            .on_hover_text("Add a new Metadata Attribute.")
+                                            .clicked()
+                                        {
+                                            add_new_metdata = true;
+                                        }
+                                    });
                                     ui.add(
-                                        egui::TextEdit::singleline(value)
+                                        egui::TextEdit::singleline(key)
+                                            .interactive(true)
                                             .desired_width(ui.available_width()),
                                     );
+                                });
+                                ui.add(
+                                    egui::TextEdit::singleline(val)
+                                        .desired_width(ui.available_width()),
+                                );
+                            }
+                            if add_new_metdata {
+                                explorer.new_metadata.push(("".to_string(), "".to_string()));
+                            }
+                            ui.end_row();
+
+                            let mut keys_to_remove = vec![];
+
+                            for i in 0..explorer.new_metadata.len() - 1 {
+                                ui.horizontal(|ui| {
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut explorer.new_metadata[i].0)
+                                            .desired_width(ui.available_width()),
+                                    );
+                                });
+                                ui.horizontal(|ui| {
+                                    if ui
+                                        .selectable_label(
+                                            false,
+                                            egui::RichText::new(format!(
+                                                "{}",
+                                                egui_phosphor::regular::TRASH
+                                            )),
+                                        )
+                                        .clicked()
+                                    {
+                                        keys_to_remove.push(explorer.new_metadata[i].0.clone());
+                                    }
+
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut explorer.new_metadata[i].1)
+                                            .desired_width(ui.available_width()),
+                                    );
+                                });
+                                ui.end_row();
+                            }
+
+                            for key in keys_to_remove.iter() {
+                                explorer.new_metadata.retain(|(k, _)| k != key);
+                            }
+                        }
+                        let mut attributes_to_delete = vec![];
+                        for (name, value) in meta_data.md.iter_mut() {
+                            ui.label(name);
+                            ui.horizontal(|ui| {
+                                if thread_communication.gui_settings.meta_data_edit {
+                                    if ui
+                                        .selectable_label(
+                                            false,
+                                            egui::RichText::new(format!(
+                                                "{}",
+                                                egui_phosphor::regular::TRASH
+                                            )),
+                                        )
+                                        .clicked()
+                                    {
+                                        attributes_to_delete.push(name.clone());
+                                    }
+                                    let lock =
+                                        if thread_communication.gui_settings.meta_data_unlocked {
+                                            egui::RichText::new(format!(
+                                                "{}",
+                                                egui_phosphor::regular::LOCK_OPEN
+                                            ))
+                                        } else {
+                                            egui::RichText::new(format!(
+                                                "{}",
+                                                egui_phosphor::regular::LOCK
+                                            ))
+                                        };
+                                    if ui
+                                        .selectable_label(
+                                            thread_communication.gui_settings.meta_data_unlocked,
+                                            lock,
+                                        )
+                                        .clicked()
+                                    {
+                                        thread_communication.gui_settings.meta_data_unlocked =
+                                            !thread_communication.gui_settings.meta_data_unlocked;
+                                    }
+                                    if thread_communication.gui_settings.meta_data_unlocked {
+                                        ui.add(
+                                            egui::TextEdit::singleline(value)
+                                                .desired_width(ui.available_width()),
+                                        );
+                                    } else {
+                                        ui.label(value.clone());
+                                    }
                                 } else {
                                     ui.label(value.clone());
                                 }
-                            } else {
-                                ui.label(value.clone());
-                            }
-                        });
-                        ui.end_row()
-                    }
+                            });
+                            ui.end_row()
+                        }
 
-                    for attr in attributes_to_delete.iter() {
-                        meta_data.md.swap_remove(attr);
-                    }
+                        for attr in attributes_to_delete.iter() {
+                            meta_data.md.swap_remove(attr);
+                        }
 
-                    ui.label("User:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.user)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.user.clone());
-                    }
-                    ui.end_row();
-                    ui.label("E-mail:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.email)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.email.clone());
-                    }
-                    ui.end_row();
-                    ui.label("ORCID:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.orcid)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.orcid.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Institution:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.institution)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.institution.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Instrument:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.instrument)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.instrument.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Version:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.version)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.version.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Mode:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.mode)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.mode.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Date:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.date)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.date.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Time:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.time)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.time.clone());
-                    }
-                    ui.end_row();
-                });
+                        ui.label("User:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.user)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.user.clone());
+                        }
+                        ui.end_row();
+                        ui.label("E-mail:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.email)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.email.clone());
+                        }
+                        ui.end_row();
+                        ui.label("ORCID:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.orcid)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.orcid.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Institution:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.institution)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.institution.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Instrument:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.instrument)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.instrument.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Version:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.version)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.version.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Mode:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.mode)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.mode.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Date:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.date)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.date.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Time:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.time)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.time.clone());
+                        }
+                        ui.end_row();
+                    });
             });
             if thread_communication.gui_settings.meta_data_edit {
                 if let Ok(mut md) = thread_communication.md_lock.write() {
