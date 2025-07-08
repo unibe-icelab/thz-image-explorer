@@ -722,7 +722,13 @@ pub fn left_panel(
                             ),
                         );
                     }
-                    if ui.button(egui::RichText::new("Save")).clicked() {
+                    if ui
+                        .button(egui::RichText::new(format!(
+                            "{} Save",
+                            egui_phosphor::regular::FLOPPY_DISK
+                        )))
+                        .clicked()
+                    {
                         if thread_communication.gui_settings.meta_data_edit {
                             for (key, val) in explorer.new_metadata.iter() {
                                 if !key.is_empty() && !val.is_empty() {
@@ -764,6 +770,7 @@ pub fn left_panel(
                                     }
                                     if ui
                                         .button(format!("{}", egui_phosphor::regular::PLUS))
+                                        .on_hover_text("Add a new Metadata Attribute.")
                                         .clicked()
                                     {
                                         add_new_metdata = true;
