@@ -225,6 +225,8 @@ pub fn left_panel(
                                     thread_communication.gui_settings.selected_path =
                                         item.to_path_buf();
 
+                                    explorer.new_metadata = vec![("".to_string(), "".to_string())];
+
                                     send_latest_config(
                                         thread_communication,
                                         ConfigCommand::OpenFile(item.to_path_buf()),
@@ -243,6 +245,7 @@ pub fn left_panel(
                             explorer.selected_file_name =
                                 item.file_name().unwrap().to_str().unwrap().to_string();
                             thread_communication.gui_settings.selected_path = item.to_path_buf();
+                            explorer.new_metadata = vec![("".to_string(), "".to_string())];
                             send_latest_config(
                                 thread_communication,
                                 ConfigCommand::OpenFile(item.to_path_buf()),
@@ -254,7 +257,7 @@ pub fn left_panel(
                             explorer.selected_file_name =
                                 item.file_name().unwrap().to_str().unwrap().to_string();
                             thread_communication.gui_settings.selected_path = item.to_path_buf();
-
+                            explorer.new_metadata = vec![("".to_string(), "".to_string())];
                             send_latest_config(
                                 thread_communication,
                                 ConfigCommand::OpenFile(item.to_path_buf()),
@@ -285,6 +288,7 @@ pub fn left_panel(
                                 explorer.scroll_to_selection = true;
                                 explorer.file_dialog.config_mut().initial_directory = path.clone();
                                 thread_communication.gui_settings.selected_path = path.clone();
+                                explorer.new_metadata = vec![("".to_string(), "".to_string())];
                                 send_latest_config(
                                     thread_communication,
                                     ConfigCommand::OpenFile(path),
@@ -343,6 +347,7 @@ pub fn left_panel(
                                 .picked()
                             {
                                 explorer.file_dialog_state = FileDialogState::None;
+                                explorer.new_metadata = vec![("".to_string(), "".to_string())];
                                 send_latest_config(
                                     thread_communication,
                                     ConfigCommand::OpenFile(path.to_path_buf()),
@@ -495,6 +500,9 @@ pub fn left_panel(
                         #[cfg(target_os = "macos")]
                         {
                             if let Ok(path_guard) = thread_communication.macos_path_lock.read() {
+                                if thread_communication.gui_settings.selected_path != *path_guard {
+                                    explorer.new_metadata = vec![("".to_string(), "".to_string())];
+                                }
                                 thread_communication.gui_settings.selected_path =
                                     path_guard.clone();
                             }
