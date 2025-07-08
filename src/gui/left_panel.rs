@@ -288,7 +288,8 @@ pub fn left_panel(
                                 explorer.scroll_to_selection = true;
                                 #[cfg(not(target_os = "macos"))]
                                 {
-                                    explorer.file_dialog.config_mut().initial_directory = path.clone();
+                                    explorer.file_dialog.config_mut().initial_directory =
+                                        path.clone();
                                 }
                                 thread_communication.gui_settings.selected_path = path.clone();
                                 explorer.new_metadata = vec![("".to_string(), "".to_string())];

@@ -44,13 +44,13 @@ pub fn right_panel(
                     .min_row_height(22.0)
                     .striped(true)
                     .show(ui, |ui| {
-                        ui.label("Log Mode: ");
+                        ui.label("FFT Log Plot: ");
                         if ui
-                            .add(toggle(&mut thread_communication.gui_settings.log_plot))
+                            .add(toggle(&mut thread_communication.gui_settings.fft_log_plot))
                             .changed()
                         {
                             send_latest_config(thread_communication, ConfigCommand::SetFFTLogPlot(
-                                thread_communication.gui_settings.log_plot,
+                                thread_communication.gui_settings.fft_log_plot,
                             ));
                         }
                         ui.end_row();

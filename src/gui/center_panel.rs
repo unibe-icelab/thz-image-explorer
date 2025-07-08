@@ -207,7 +207,7 @@ pub fn pulse_tab(
             .iter()
             .zip(explorer.data.signal_fft.iter())
             .map(|(x, y)| {
-                let fft = if thread_communication.gui_settings.log_plot {
+                let fft = if thread_communication.gui_settings.fft_log_plot {
                     if *y < floor_value {
                         20.0 * (floor_value).log10()
                     } else {
@@ -225,7 +225,7 @@ pub fn pulse_tab(
             .iter()
             .zip(explorer.data.filtered_signal_fft.iter())
             .map(|(x, y)| {
-                let fft = if thread_communication.gui_settings.log_plot {
+                let fft = if thread_communication.gui_settings.fft_log_plot {
                     if *y < floor_value {
                         20.0 * (floor_value).log10()
                     } else {
@@ -243,7 +243,7 @@ pub fn pulse_tab(
             .iter()
             .zip(explorer.data.avg_signal_fft.iter())
             .map(|(x, y)| {
-                let fft = if thread_communication.gui_settings.log_plot {
+                let fft = if thread_communication.gui_settings.fft_log_plot {
                     if *y < floor_value {
                         20.0 * (floor_value).log10()
                     } else {
@@ -292,7 +292,7 @@ pub fn pulse_tab(
                     .iter()
                     .zip(roi_signal_fft.iter())
                     .map(|(x, y)| {
-                        let fft = if thread_communication.gui_settings.log_plot {
+                        let fft = if thread_communication.gui_settings.fft_log_plot {
                             if *y < floor_value {
                                 20.0 * (floor_value).log10()
                             } else {
@@ -329,7 +329,7 @@ pub fn pulse_tab(
             max_fft_signals = -200.0;
         }
 
-        let log_plot = thread_communication.gui_settings.log_plot;
+        let log_plot = thread_communication.gui_settings.fft_log_plot;
         let phases_visible = thread_communication.gui_settings.phases_visible;
 
         let a_fmt = move |y: GridMark, _range: &RangeInclusive<f64>| {
@@ -509,7 +509,7 @@ pub fn pulse_tab(
                 ))
                 .changed()
             {
-                thread_communication.gui_settings.log_plot =
+                thread_communication.gui_settings.fft_log_plot =
                     !thread_communication.gui_settings.phases_visible;
             };
             ui.label("Phases");
