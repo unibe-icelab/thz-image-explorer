@@ -14,7 +14,7 @@ use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage,
 use crate::gui::utils::truncate_filename;
 use crate::math_tools::FftWindowType;
 use bevy::prelude::*;
-use bevy_egui::egui::ThemePreference;
+use bevy_egui::egui::{Color32, ThemePreference};
 use bevy_egui::{egui, EguiContexts};
 use bevy_voxel_plot::InstanceMaterialData;
 use core::f64;
@@ -37,6 +37,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+
+pub const SAFETY_ORANGE: Color32 = Color32::from_rgb(255, 95, 21);
 
 /// Represents the state of the file dialog for opening, saving, or working with PSF files.
 #[derive(Clone)]

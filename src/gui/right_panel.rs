@@ -1,6 +1,6 @@
 use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
 use crate::filters::filter::{draw_filters, FilterDomain};
-use crate::gui::application::THzImageExplorer;
+use crate::gui::application::{THzImageExplorer, SAFETY_ORANGE};
 use crate::gui::settings_window::settings_window;
 use crate::gui::toggle_widget::toggle;
 use crate::math_tools::{
@@ -41,6 +41,7 @@ pub fn right_panel(
 
                 egui::Grid::new("upper")
                     .num_columns(2)
+                    .min_row_height(22.0)
                     .striped(true)
                     .show(ui, |ui| {
                         ui.label("Log Mode: ");
@@ -69,24 +70,22 @@ pub fn right_panel(
 
                         ui.style_mut().spacing.slider_width = 100.0;
 
-                        ui.vertical(|ui| {
-                            if ui
-                                .add(egui::Slider::new(
-                                    &mut thread_communication.gui_settings.down_scaling,
-                                    1..=10,
-                                ))
-                                .changed()
-                            {
-                                send_latest_config(thread_communication, ConfigCommand::SetDownScaling(thread_communication.gui_settings.down_scaling));
-                            }
-                        });
+                        if ui
+                            .add(egui::Slider::new(
+                                &mut thread_communication.gui_settings.down_scaling,
+                                1..=10,
+                            ))
+                            .changed()
+                        {
+                            send_latest_config(thread_communication, ConfigCommand::SetDownScaling(thread_communication.gui_settings.down_scaling));
+                        }
                     });
 
-                ui.add_space(10.0);
+                ui.add_space(5.0);
                 if ui.button("Calculate All Filters").clicked() {
                     send_latest_config(thread_communication, ConfigCommand::UpdateFilters);
                 }
-                ui.add_space(10.0);
+                ui.add_space(5.0);
                 ui.separator();
 
                 egui::ScrollArea::vertical().max_height(ui.available_height() - 60.0).show(ui, |ui| {
@@ -219,6 +218,7 @@ pub fn right_panel(
                                             &mut fft_upper_bound,
                                             0.0..=range,
                                         )
+                                            .stroke(Stroke::new(7.0,SAFETY_ORANGE))
                                             .vertical_scroll(false)
                                             .zoom_factor(2.0)
                                             .scroll_factor(0.005)
