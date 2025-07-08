@@ -22,6 +22,7 @@ use core::f64;
 use dotthz::DotthzFile;
 #[cfg(not(target_os = "macos"))]
 use egui_file_dialog::information_panel::InformationPanel;
+#[cfg(not(target_os = "macos"))]
 use egui_file_dialog::FileDialog;
 use egui_plot::PlotPoint;
 use home::home_dir;
@@ -32,6 +33,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
+#[cfg(not(target_os = "macos"))]
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -426,10 +428,10 @@ pub fn update_gui(
 /// visualizations and includes methods for rendering the main GUI panels.
 ///
 /// # Fields
+/// - `new_metadata`: Vector of key-value pairs for new metadata entries.
+/// - `cut_off`: Range values for signal cut-off filtering.
 /// - `fft_bounds`: Bounds for the FFT visualization.
 /// - `fft_window_type`: Selected FFT window type.
-/// - `filter_bounds`: Bounds for filter application.
-/// - `time_window`: Time window for analysis.
 /// - `pixel_selected`: Struct representing the currently selected pixel in the image.
 /// - `val`: Coordinates of the current plot point.
 /// - `mid_point`: Midpoint value for certain calculations.
@@ -437,15 +439,17 @@ pub fn update_gui(
 /// - `water_vapour_lines`: Preloaded water vapor line frequencies for reference plots.
 /// - `data`: Contains the experiment or scan data.
 /// - `file_dialog_state`: Current state of the file dialog.
-/// - `file_dialog`: Instance of the file dialog used for file operations.
-/// - `information_panel`: Instance of the file information panel.
+/// - `file_dialog`: Instance of the file dialog used for file operations (not available on macOS).
+/// - `information_panel`: Instance of the file information panel (not available on macOS).
 /// - `other_files`: List of other detected files for the file dialog.
 /// - `selected_file_name`: Name of the currently selected file.
 /// - `scroll_to_selection`: Boolean to indicate whether to scroll to the file selection.
-/// - `thread_communication`: Shared thread communication object for GUI interactions.
 /// - `settings_window_open`: Boolean indicating whether the settings window is open.
+/// - `last_error_message`: Last error or warning message with its log level.
+/// - `error_window_was_open`: Boolean tracking if error popup window was previously open.
 /// - `update_text`: Text displayed for updates.
 /// - `new_release`: Optional field for new software updates (only used with "self_update" feature).
+/// - `rois`: HashMap of named regions of interest (ROI) for analysis.
 pub struct THzImageExplorer {
     pub(crate) new_metadata: Vec<(String, String)>,
     pub(crate) cut_off: [f32; 2],
@@ -458,6 +462,7 @@ pub struct THzImageExplorer {
     pub(crate) water_vapour_lines: Vec<f64>,
     pub(crate) data: PlotDataContainer,
     pub(crate) file_dialog_state: FileDialogState,
+    #[cfg(not(target_os = "macos"))]
     pub(crate) file_dialog: FileDialog,
     #[cfg(not(target_os = "macos"))]
     pub(crate) information_panel: InformationPanel,
@@ -477,20 +482,19 @@ impl THzImageExplorer {
     /// Creates a new instance of `THzImageExplorer`.
     ///
     /// # Arguments
-    /// - `cc`: The creation context for the application instance.
     /// - `thread_communication`: An instance of `ThreadCommunication` for managing
     ///   threaded GUI settings.
     ///
     /// # Returns
     /// A new `THzImageExplorer` struct with default settings and preloaded water vapor lines.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, unused_variables)]
     pub fn new(thread_communication: ThreadCommunication) -> Self {
         let mut water_vapour_lines: Vec<f64> = Vec::new();
         let buffered = include_str!("../../assets/water_lines.csv");
         for line in buffered.lines() {
             water_vapour_lines.push(line.trim().parse().unwrap());
         }
-
+        #[cfg(not(target_os = "macos"))]
         let file_dialog = FileDialog::default()
             //.initial_directory(PathBuf::from("/path/to/app"))
             .default_file_name("measurement.thz")
@@ -542,6 +546,7 @@ impl THzImageExplorer {
             water_vapour_lines,
             data: PlotDataContainer::default(),
             file_dialog_state: FileDialogState::None,
+            #[cfg(not(target_os = "macos"))]
             file_dialog,
             #[cfg(not(target_os = "macos"))]
             information_panel: InformationPanel::default()

@@ -610,7 +610,6 @@ pub fn three_dimensional_plot_ui(
                 .clicked()
             {
                 explorer.file_dialog_state = FileDialogState::SaveToVTU;
-                explorer.file_dialog.save_file();
             }
 
             // Create a unique ID for this filter's info popup

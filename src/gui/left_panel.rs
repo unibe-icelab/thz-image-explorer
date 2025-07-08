@@ -147,7 +147,6 @@ pub fn left_panel(
                         .clicked()
                     {
                         explorer.file_dialog_state = FileDialogState::Open;
-                        explorer.file_dialog.pick_file();
                     };
                     if ui
                         .button(egui::RichText::new(format!(
@@ -157,7 +156,6 @@ pub fn left_panel(
                         .clicked()
                     {
                         explorer.file_dialog_state = FileDialogState::OpenRef;
-                        explorer.file_dialog.pick_file();
                     };
                 });
 
@@ -266,8 +264,10 @@ pub fn left_panel(
                         }
                     }
                 }
-
-                explorer.file_dialog.set_right_panel_width(300.0);
+                #[cfg(not(target_os = "macos"))]
+                {
+                    explorer.file_dialog.set_right_panel_width(300.0);
+                }
 
                 ctx.input(|i| {
                     // Check if files were dropped
@@ -286,7 +286,10 @@ pub fn left_panel(
                                 explorer.selected_file_name =
                                     path.file_name().unwrap().to_str().unwrap().to_string();
                                 explorer.scroll_to_selection = true;
-                                explorer.file_dialog.config_mut().initial_directory = path.clone();
+                                #[cfg(not(target_os = "macos"))]
+                                {
+                                    explorer.file_dialog.config_mut().initial_directory = path.clone();
+                                }
                                 thread_communication.gui_settings.selected_path = path.clone();
                                 explorer.new_metadata = vec![("".to_string(), "".to_string())];
                                 send_latest_config(
@@ -339,6 +342,7 @@ pub fn left_panel(
 
                         #[cfg(not(target_os = "macos"))]
                         {
+                            explorer.file_dialog.pick_file();
                             if let Some(path) = explorer
                                 .file_dialog
                                 .update_with_right_panel_ui(ctx, &mut |ui, dia| {
@@ -380,6 +384,7 @@ pub fn left_panel(
                         }
                         #[cfg(not(target_os = "macos"))]
                         {
+                            explorer.file_dialog.pick_file();
                             if let Some(path) = explorer
                                 .file_dialog
                                 .update_with_right_panel_ui(ctx, &mut |ui, dia| {
@@ -420,6 +425,7 @@ pub fn left_panel(
                         }
                         #[cfg(not(target_os = "macos"))]
                         {
+                            explorer.file_dialog.pick_file();
                             if let Some(path) = explorer
                                 .file_dialog
                                 .update_with_right_panel_ui(ctx, &mut |ui, dia| {
@@ -436,23 +442,9 @@ pub fn left_panel(
                         }
                     }
                     FileDialogState::Save => {
-                        if let Some(_path) = explorer.file_dialog.update(ctx).picked() {
-                            explorer.file_dialog_state = FileDialogState::None;
-                            // match tera_flash_conf.filetype {
-                            //     FileType::Csv => {
-                            //         picked_path.set_extension("csv");
-                            //     }
-                            //     FileType::Binary => {
-                            //         picked_path.set_extension("npy");
-                            //     }
-                            //     FileType::DotTHz => {
-                            //         picked_path.set_extension("thz");
-                            //     }
-                            // }
-                            // if let Err(e) = save_tx.send(picked_path.clone()) {
-                            //
-                            // }
-                        }
+                        // if let Some(_path) = explorer.file_dialog.update(ctx).picked() {
+                        //     explorer.file_dialog_state = FileDialogState::None;
+                        // }
                     }
                     FileDialogState::SaveToVTU => {
                         #[cfg(target_os = "macos")]
@@ -477,7 +469,6 @@ pub fn left_panel(
 
                             explorer.file_dialog_state = FileDialogState::None;
                         }
-                        explorer.file_dialog.save_file();
                         #[cfg(not(target_os = "macos"))]
                         {
                             explorer.file_dialog.save_file();
