@@ -43,6 +43,7 @@ bevy = { version = "0.16", default-features = false, features = [
 ] }
 bevy_voxel_plot = { git = "https://github.com/hacknus/bevy_voxel_plot" }
 bevy_panorbit_camera = { version = "0.26" }
+bevy_framepace = "0.19.1"
 crossbeam-channel = "0.5"
 log = "0.4.22"
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "gif", "png", "tiff", "rayon"] }

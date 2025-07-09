@@ -315,7 +315,11 @@ fn main() {
         .add_plugins(EguiPlugin {
             enable_multipass_for_primary_context: false,
         })
-        .add_plugins((VoxelMaterialPlugin, PanOrbitCameraPlugin))
+        .add_plugins((
+            bevy_framepace::FramepacePlugin,
+            VoxelMaterialPlugin,
+            PanOrbitCameraPlugin,
+        ))
         .insert_resource(thread_communication.clone())
         .insert_resource(OpacityThreshold(0.1))
         .insert_resource(InstanceContainer(vec![], 1.0, 1.0, 1.0)) // voxel_plot_instances
