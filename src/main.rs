@@ -20,8 +20,8 @@ use bevy::render::{RenderDebugFlags, RenderPlugin};
 use bevy::window::ExitCondition;
 use bevy::winit::EventLoopProxyWrapper;
 use bevy::winit::WinitSettings;
-use bevy_egui::egui;
 use bevy_egui::egui::{vec2, Visuals};
+use bevy_egui::{egui, EguiPrimaryContextPass, EguiStartupSet};
 use bevy_egui::{EguiContexts, EguiPlugin};
 use bevy_panorbit_camera::PanOrbitCameraPlugin;
 use bevy_voxel_plot::VoxelMaterialPlugin;
@@ -62,12 +62,18 @@ fn spawn_data_thread(
     });
 }
 
+fn setup_camera(mut commands: Commands) {
+    commands.spawn(Camera2d);
+}
+
 fn setup_fonts(mut contexts: EguiContexts) {
     let mut fonts = egui::FontDefinitions::default();
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
-    contexts.ctx_mut().set_fonts(fonts);
-    egui_extras::install_image_loaders(&contexts.ctx_mut());
-    contexts.ctx_mut().set_visuals(Visuals::dark());
+    if let Ok(ctx_mut) = contexts.ctx_mut() {
+        ctx_mut.set_fonts(fonts);
+        egui_extras::install_image_loaders(&ctx_mut);
+        ctx_mut.set_visuals(Visuals::dark());
+    }
 }
 
 fn autosave_on_exit(
@@ -313,28 +319,26 @@ fn main() {
                 })
                 .disable::<LogPlugin>(),
         )
-        .add_plugins(EguiPlugin {
-            enable_multipass_for_primary_context: false,
-        })
-        .add_plugins((
-            bevy_framepace::FramepacePlugin,
-            VoxelMaterialPlugin,
-            PanOrbitCameraPlugin,
-        ))
+        .add_plugins(EguiPlugin::default())
+        .add_plugins((bevy_framepace::FramepacePlugin, VoxelMaterialPlugin, PanOrbitCameraPlugin))
         .insert_resource(thread_communication.clone())
         .insert_resource(OpacityThreshold(0.1))
-        .insert_resource(InstanceContainer(vec![], 1.0, 1.0, 1.0)) // voxel_plot_instances
+        .insert_resource(InstanceContainer(vec![], 1.0, 1.0, 1.0))
         .insert_resource(CameraInputAllowed(false))
         .insert_non_send_resource(THzImageExplorer::new(thread_communication))
         .insert_resource(SceneVisibility(false))
+        .add_systems(Startup, setup_fonts)
+        .add_systems(
+            PreStartup,
+            setup_camera.before(EguiStartupSet::InitContexts),
+        )
         .add_systems(Startup, setup)
         .add_systems(
             Update,
             update_instance_buffer_system.run_if(|vis: Res<SceneVisibility>| vis.0),
         )
         .add_systems(Startup, spawn_data_thread)
-        .add_systems(Startup, setup_fonts)
-        .add_systems(Update, update_gui)
+        .add_systems(EguiPrimaryContextPass, update_gui)
         .add_systems(Last, autosave_on_exit)
         .add_systems(Update, animate)
         .add_systems(Update, set_enable_camera_controls_system)
