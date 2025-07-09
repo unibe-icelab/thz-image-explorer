@@ -834,18 +834,23 @@ pub fn left_panel(
                             ui.label(name);
                             ui.horizontal(|ui| {
                                 if thread_communication.gui_settings.meta_data_edit {
-                                    if ui
-                                        .selectable_label(
-                                            false,
-                                            egui::RichText::new(format!(
-                                                "{}",
-                                                egui_phosphor::regular::TRASH
-                                            )),
-                                        )
-                                        .clicked()
-                                    {
-                                        attributes_to_delete.push(name.clone());
-                                    }
+                                    ui.add_enabled_ui(
+                                        thread_communication.gui_settings.meta_data_unlocked,
+                                        |ui| {
+                                            if ui
+                                                .selectable_label(
+                                                    false,
+                                                    egui::RichText::new(format!(
+                                                        "{}",
+                                                        egui_phosphor::regular::TRASH
+                                                    )),
+                                                )
+                                                .clicked()
+                                            {
+                                                attributes_to_delete.push(name.clone());
+                                            }
+                                        },
+                                    );
                                     let lock =
                                         if thread_communication.gui_settings.meta_data_unlocked {
                                             egui::RichText::new(format!(
