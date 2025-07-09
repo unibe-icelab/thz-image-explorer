@@ -147,7 +147,7 @@ On Linux you need to first run:
 ```shell
 sudo apt-get install -y libclang-dev libgtk-3-dev \
   libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-  libxkbcommon-dev libssl-dev
+  libxkbcommon-dev libssl-dev libasound2-dev
 ```
 
 To create bundles `cargo-bundle` needs to be installed (macOS, Linux):
