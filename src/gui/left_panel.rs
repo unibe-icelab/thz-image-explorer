@@ -352,7 +352,7 @@ pub fn left_panel(
                                 .picked()
                             {
                                 explorer.file_dialog_state = FileDialogState::None;
-                                explorer.new_metadata = vec![("".to_string(), "".to_string())];
+                                explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                                 send_latest_config(
                                     thread_communication,
                                     ConfigCommand::OpenFile(path.to_path_buf()),
