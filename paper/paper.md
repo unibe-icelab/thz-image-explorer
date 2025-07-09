@@ -206,6 +206,13 @@ reasonably close to the first one (< 5 % of width/height of the image). This ROI
 the dotTHz file for future analysis. The full averaged scan as well as the averages of all selected ROIs can be
 displayed in the center plot.
 
+## Meta Data Editor
+
+The meta-data editor allows the user to edit the meta-data of the loaded scan. The meta-data is stored in the `.thz`
+file. Certain fields are mandatory as per the dotTHz standard [@lee_dotthz_2023], and cannot be deleted. But any further
+attributes can be added, modified and deleted.
+
+
 ## Optical Properties
 
 The optical properties can be computed from the frequency domain spectrum using the following
@@ -248,18 +255,19 @@ the center plot.
 A THz time domain scan produces a 3D data array with dimensions $n_x \times n_y \times n_t$, where $(n_x, n_y)$
 represent the spatial coordinates and $n_t$ represents the time axis.
 
-Scans performed in reflection can be visualized in 3D. First, we transform each time trace into an intensity value by computing
+Scans performed in reflection can be visualized in 3D. First, we transform each time trace into an intensity value by
+computing
 the squared amplitude and
 applying a Gaussian envelope function:
 $$
 I(x,y,t) = |s(x,y,t)|^2 * G_{\sigma}(t)
 $$
 
-where $G_{\sigma}(t)$ is a normalized 1D Gaussian kernel with standard deviation $\sigma = 6.0$ and radius of 12 samples,
+where $G_{\sigma}(t)$ is a normalized 1D Gaussian kernel with standard deviation $\sigma = 6.0$ and radius of 12
+samples,
 applied via convolution to smooth the squared signal and extract the envelope as shon in figure \ref{fig:envelope}.
 
 ![The convoluted envelope of the signal. All datapoints below the indicated threshold are treated as transparent. \label{fig:envelope}](convolution_example.pdf)
-
 
 The time axis is converted to a spatial distance coordinate by assuming a refractive index of $n=1$ and using the
 relation $z = ct/2$, where $c$ is the speed of light and the factor of 2 accounts for the round-trip propagation. This
@@ -275,19 +283,18 @@ crate: [bevy_voxel_plot](https://github.com/hacknus/bevy_voxel_plot).
 
 ## Filtering pipeline
 
-The filtering process is a simple linear pipeline, where the output of one filter is the input of the next filter. The
-structure is shown in figure \ref{fig:software-architecture}.
+The filtering process is a simple linear pipeline, where the output of one filter is the input of the next filter.
 
 ### Time Domain Before FFT
 
 Before applying the Fast-Fourier-Transform (FFT), a tilt-compensation can be applied to the time domain trace to
-compensate any misalignment's along the $x$ axis and/or $y$ axis.
+compensate any misalignment along the $x$ axis and/or $y$ axis.
 Additionally, a simple band-pass filter can be applied to exclude secondary peaks.
 
 ### FFT
 
-To reduce artefacts in the frequency domain, a window is multiplied to the time domain before applying the
-Fast-Fourier-Transform (FFT). By default, the adapted Blackman
+To reduce artefacts in frequency domain, a window is multiplied to the time domain signal before applying the
+Fast-Fourier-Transform (FFT). By default, an adapted Blackman
 window is applied, but the user can also select other windows:
 
 - Adapted Blackman (default)
@@ -332,7 +339,8 @@ python scripts/generate_psf.py \
   --path_y sample_data/example_beam_width/measurement_y/data/1750163177.929295_data.thz
   ```
 
-to generate a `psf.npz` file that can be loaded in the settings of THz-image-explorer to remove the PSF blur.
+to generate a `psf.npz` file that can be loaded in the settings of THz Image Explorer to remove the PSF blur by applying
+the deconvolution filter.
 
 The Richardson-Lucy algorithm is defined as
 
@@ -462,7 +470,8 @@ coordinates are saved for each ROI with label "ROI {i}" as a list, e.g.:
 while the label of the ROI is saved in the "ROI Labels" meta-data field as a comma-separated list.
 The file can then be opened with Python using the `pydotthz` package
 to further process the data.
-A Python code snipped for ROI extraction and the PSF generation script can be found in the `scripts` directory of the repository.
+A Python code snipped for ROI extraction and the PSF generation script can be found in the `scripts` directory of the
+repository.
 
 # Summary
 

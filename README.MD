@@ -56,6 +56,90 @@ It can be compiled and run on all platforms.
 
 For files larger than 100 x 100 x 2000 datapoints, it is recommended to use `downscaling` to improve responsiveness.
 
+The user can edit the meta-data of the `.thz` files in the Meta Data Editor:
+![Meta Data Editor](paper/metadata.png)
+
+In the 2D view, the user can select a region of interest (ROI) to zoom in on the data.
+![Region Of Interest (ROI) in the 2D scan.](paper/roi.png)
+
+The application provides a 3D view of the data, which can be rotated and zoomed in/out.
+![3D View of a scan](paper/3d_scan.png)
+
+Furthermore, a reference dataset can be loaded and the user can select a reference pulse to be used for the calculation
+of the optical properties. Alternatively, different regions of interest (ROIs) can be compared.
+
+## Custom Filters
+
+The code-base can easily be extended with custom filters. The user needs to create a custom file in the `src/filters`
+directory with a struct that implements the `Filter` trait. The file needs to be attached to the `mod.rs` file in the
+`src/filters` directory, so that it is included in the compilation.
+By defining the `config()` function, the user can supply a name, description and specify in which domain the filter
+operates (time or frequency).
+The math of the filter needs to be placed in the `filter()` function and the user-interface (UI) in the `ui()` function
+the using `egui` library.
+`Clone`, `Debug` and `CopyStaticFields` need to be derived.
+Additionally, the `#[register_filter]` procedural macro
+needs to added to the custom filter struct to automatically add it to the application and the user does not need to
+adapt any other files.
+
+Loops that require a lot of computation can be parallelized using the `rayon` crate, which is already included in the
+project dependencies. It is recommended to use the  `cancellable_loops` crate to allow the user to abort long
+running computations. This crate provides a convenient way to check for an abort flag and handle progress updates in the
+GUI.
+
+```rust
+use crate::filters::filter::{Filter, GuiSettingsContainer, ScannedImageFilterData};
+
+#[register_filter]
+#[derive(Clone, Debug, CopyStaticFields)]
+struct ExampleFilter;
+
+impl Filter for ExampleFilter {
+    fn new() -> Self { ExampleFilter }
+
+    fn reset(&mut self, time: &Array1<f32>, shape: &[usize]) {
+        // Reset any internal state if necessary
+    }
+
+    fn show_data(&mut self, data: &ScannedImageFilterData) {
+        // Display any data in the GUI if needed
+    }
+
+    fn filter(
+        &mut self,
+        input_data: &ScannedImageFilterData,
+        gui_settings: &mut GuiSettingsContainer,
+        progress_lock: &mut Arc<RwLock<Option<f32>>>,
+        abort_flag: &Arc<AtomicBool>,
+    ) -> ScannedImageFilterData {
+        // Apply filter logic here
+        input_data.clone() // Placeholder, replace with actual filtering logic
+    }
+
+
+    fn config(&self) -> FilterConfig {
+        FilterConfig {
+            name: "Example Filter".to_string(),
+            description: "Description of the example filter.".to_string(),
+            hyperlink: None, // Optional DOI or reference link
+            domain: FilterDomain::TimeBeforeFFT, // Specify the domain of the filter
+        }
+    }
+
+    fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        thread_communication: &mut ThreadCommunication,
+        panel_width: f32,
+    ) -> egui::Response {
+        // Render filter configuration UI here
+    }
+}
+```
+
+To implement more complex methods, further adaptations might be required, but the code structure has been set up with
+modularity and simplicity in mind.
+
 ## PSF file generation:
 
 You need to performa knife-edge scan and create a `.thz` file with all entries. An example can be found in the
