@@ -19,7 +19,7 @@ use bevy::render::{RenderDebugFlags, RenderPlugin};
 use bevy::window::ExitCondition;
 use bevy::winit::EventLoopProxyWrapper;
 use bevy::winit::WinitSettings;
-use bevy_egui::{egui, EguiPrimaryContextPass};
+use bevy_egui::{egui, EguiPrimaryContextPass, EguiStartupSet};
 use bevy_egui::egui::{vec2, Visuals};
 use bevy_egui::{EguiContexts, EguiPlugin};
 use bevy_panorbit_camera::PanOrbitCameraPlugin;
@@ -66,11 +66,9 @@ fn setup_camera(mut commands: Commands) {
 }
 
 fn setup_fonts(mut contexts: EguiContexts) {
-    println!("setting up fonts");
     let mut fonts = egui::FontDefinitions::default();
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
     if let Ok(ctx_mut) = contexts.ctx_mut() {
-        println!("acquired ctx mut");
         ctx_mut.set_fonts(fonts);
         egui_extras::install_image_loaders(&ctx_mut);
         ctx_mut.set_visuals(Visuals::dark());
@@ -328,15 +326,18 @@ fn main() {
         .insert_resource(CameraInputAllowed(false))
         .insert_non_send_resource(THzImageExplorer::new(thread_communication))
         .insert_resource(SceneVisibility(false))
-        .add_systems(EguiPrimaryContextPass, setup_fonts.run_if(run_once))
-        .add_systems(Startup, setup_camera)
+        .add_systems(Startup, setup_fonts)
+        .add_systems(
+            PreStartup,
+            setup_camera.before(EguiStartupSet::InitContexts),
+        )
         .add_systems(Startup, setup)
         .add_systems(
             Update,
             update_instance_buffer_system.run_if(|vis: Res<SceneVisibility>| vis.0),
         )
         .add_systems(Startup, spawn_data_thread)
-        .add_systems(Update, update_gui)
+        .add_systems(EguiPrimaryContextPass, update_gui)
         .add_systems(Last, autosave_on_exit)
         .add_systems(Update, animate)
         .add_systems(Update, set_enable_camera_controls_system)
