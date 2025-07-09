@@ -1,4 +1,4 @@
-#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")] // Hide console on Windows in release mode
 use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::data_container::{PlotDataContainer, ScannedImageFilterData};
 use crate::data_thread::main_thread;
@@ -56,13 +56,14 @@ fn spawn_data_thread(
 ) {
     let state = state.clone();
     let proxy = event_loop_proxy.clone();
-
+    // spawn the data processing thread
     thread::spawn(move || {
         main_thread(state, &proxy);
     });
 }
 
 fn setup_camera(mut commands: Commands) {
+    // camera required by bevy-egui
     commands.spawn(Camera2d);
 }
 
