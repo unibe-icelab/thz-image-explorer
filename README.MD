@@ -1,4 +1,4 @@
-# Explorer Software for the Data of THz time-domain imaging analysis
+# THz Image Explorer - An Interactive Cross-Platform Open-Source THz Image Analysis Tool
 
 <a href="https://github.com/unibe-icelab/thz-image-explorer/releases"><img src="assets/icons/icon.png" alt=“” width="100" height="100"> </img> </a>
 
@@ -14,9 +14,10 @@ A sample scan of a THz time-domain 2D imaging system can be found in the `sample
 
 ### Download pre-built executables
 
-[Binary bundles](https://github.com/unibe-icelab/thz-image-explorer/releases) are available for Linux, macOS and Windows.
+[Binary bundles](https://github.com/unibe-icelab/thz-image-explorer/releases) are available for Linux, macOS and
+Windows.
 
-Running the apple silicon (thz-image-explorer-aarch64-apple-darwin.app) binary may result to the message "THz Image
+Running the Apple Silicon (thz-image-explorer-aarch64-apple-darwin.app) binary may result to the message "THz Image
 Explorer is damaged and cannot be opened.", to get
 around this you first need to run:
 `xattr -rd com.apple.quarantine THz\ Image\ Explorer.app`
@@ -51,9 +52,14 @@ found [here](https://github.com/hacknus/DotTHzQL). Note: This plugin requires HD
 
 It can be compiled and run on all platforms.
 
+## Usage:
+
+For files larger than 100 x 100 x 2000 datapoints, it is recommended to use `downscaling` to improve responsiveness.
+
 ## PSF file generation:
 
-You need to performa knife-edge scan and create a `.thz` file with all entries. An example can be found in the `sample_data/example_beam_width/` directories.
+You need to performa knife-edge scan and create a `.thz` file with all entries. An example can be found in the
+`sample_data/example_beam_width/` directories.
 Then, use the following command (replace the paths with your own):
 
 ```shell
