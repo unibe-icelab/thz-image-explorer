@@ -35,8 +35,6 @@ use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 #[cfg(not(target_os = "macos"))]
 use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
 
 pub const SAFETY_ORANGE: Color32 = Color32::from_rgb(255, 95, 21);
 
@@ -416,8 +414,6 @@ pub fn update_gui(
         &right_panel_width,
         &mut thread_communication,
     );
-
-    thread::sleep(Duration::from_secs_f64(1.0 / 30.0));
 
     thread_communication.gui_settings.x = ctx.used_size().x;
     thread_communication.gui_settings.y = ctx.used_size().y;
