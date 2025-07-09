@@ -293,7 +293,6 @@ fn main() {
 
     // Start Bevy app
     App::new()
-        .insert_resource(WinitSettings::desktop_app())
         .add_plugins(
             DefaultPlugins
                 .set(RenderPlugin {
@@ -325,26 +324,27 @@ fn main() {
             VoxelMaterialPlugin,
             PanOrbitCameraPlugin,
         ))
+        .insert_resource(WinitSettings::desktop_app())
         .insert_resource(thread_communication.clone())
         .insert_resource(OpacityThreshold(0.1))
         .insert_resource(InstanceContainer(vec![], 1.0, 1.0, 1.0))
         .insert_resource(CameraInputAllowed(false))
         .insert_non_send_resource(THzImageExplorer::new(thread_communication))
         .insert_resource(SceneVisibility(false))
-        .add_systems(Startup, setup_fonts)
         .add_systems(
             PreStartup,
             setup_camera.before(EguiStartupSet::InitContexts),
         )
+        .add_systems(Startup, setup_fonts)
         .add_systems(Startup, setup)
+        .add_systems(Startup, spawn_data_thread)
+        .add_systems(EguiPrimaryContextPass, update_gui)
         .add_systems(
             Update,
             update_instance_buffer_system.run_if(|vis: Res<SceneVisibility>| vis.0),
         )
-        .add_systems(Startup, spawn_data_thread)
-        .add_systems(EguiPrimaryContextPass, update_gui)
-        .add_systems(Last, autosave_on_exit)
         .add_systems(Update, animate)
         .add_systems(Update, set_enable_camera_controls_system)
+        .add_systems(Last, autosave_on_exit)
         .run();
 }
