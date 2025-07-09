@@ -101,8 +101,10 @@ osx_plugins = ["assets/DotTHzQLExtension.appex"]
 dbg-build = false
 dbg-name = false
 name = "THz Image Explorer"
+product-name = "THz Image Explorer"
 no-build = false
 output = "target/wix/THzImageExplorerInstaller.msi"
+product-icon = "assets/icons/icon.ico"
 
 [profile.release]
 debug = 1

@@ -60,7 +60,7 @@ jobs:
 
       - name: Build .msi Package (Windows)
         if: contains(matrix.os, 'windows')
-        run: cargo wix
+        run: cargo wix -p thz-image-explorer
 
       # Compress for Linux Binary
       - name: Compress Output (Linux Binary)
