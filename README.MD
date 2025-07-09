@@ -57,10 +57,10 @@ It can be compiled and run on all platforms.
 For files larger than 100 x 100 x 2000 datapoints, it is recommended to use `downscaling` to improve responsiveness.
 
 The user can edit the meta-data of the `.thz` files in the Meta Data Editor:
-![Meta Data Editor](paper/metadata.png)
+<center><img src="paper/metadata.png" alt=“” width="250"> </img> </center>
 
 In the 2D view, the user can select a region of interest (ROI) to zoom in on the data.
-![Region Of Interest (ROI) in the 2D scan.](paper/roi.png)
+<center><img src="paper/roi.png" alt=“t” width="250"> </img> </center>
 
 The application provides a 3D view of the data, which can be rotated and zoomed in/out.
 ![3D View of a scan](paper/3d_scan.png)
