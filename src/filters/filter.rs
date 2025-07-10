@@ -249,9 +249,13 @@ pub enum FilterDomain {
 /// - `domain`: The working domain, represented as a `FilterDomain`.
 #[derive(Debug, Clone)]
 pub struct FilterConfig {
+    /// The name of the filter, used for identification and display.
     pub name: String,
+    /// A description of the filter, explaining its purpose and functionality.
     pub description: String,
+    /// An optional hyperlink to a DOI or reference, with an optional label.
     pub hyperlink: Option<(Option<String>, String)>, // (optional_label, url)
+    /// The domain in which the filter operates, represented by `FilterDomain`.
     pub domain: FilterDomain,
 }
 
