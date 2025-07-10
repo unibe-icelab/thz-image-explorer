@@ -3,6 +3,8 @@ use crate::gui::application::{FileDialogState, THzImageExplorer};
 #[cfg(feature = "self_update")]
 use crate::update::{check_for_software_updates, update};
 use crate::APP_INFO;
+use bevy::app::AppExit;
+use bevy::prelude::EventWriter;
 use bevy_egui::egui;
 use bevy_egui::egui::{vec2, Align2, InnerResponse, Vec2, Visuals};
 use egui_theme_switch::ThemeSwitch;
@@ -16,6 +18,7 @@ pub fn settings_window(
     ctx: &egui::Context,
     explorer: &mut THzImageExplorer,
     thread_communication: &mut ThreadCommunication,
+    exit: &mut EventWriter<AppExit>,
 ) -> Option<InnerResponse<Option<()>>> {
     egui::Window::new("Settings")
         .fixed_size(Vec2 { x: 400.0, y: 1000.0 })
@@ -165,13 +168,9 @@ pub fn settings_window(
             ui.separator();
             ui.end_row();
 
-            ui.horizontal(|ui| {
-                ui.horizontal(|ui| {
-                    if !explorer.update_text.is_empty() {
-                        ui.disable();
-                    };
-                    let escape_key_pressed = ui.input(|i| i.key_pressed(egui::Key::Escape));
-                    ui.vertical_centered(|ui| {
+            ui.vertical_centered(|ui| {
+                    let escape_key_pressed = ui.input(|i| i.key_pressed(egui::Key::Escape)) && explorer.update_text.is_empty();
+                    ui.add_enabled_ui(explorer.update_text.is_empty(), |ui| {
                         if ui.button("Close").clicked() || escape_key_pressed {
                             explorer.settings_window_open = false;
                             explorer.update_text = "".to_string();
@@ -183,13 +182,13 @@ pub fn settings_window(
                                 .save(&APP_INFO, "config/gui");
                         }
                     });
-                });
 
                 #[cfg(feature = "self_update")]
                 if !explorer.update_text.is_empty() && ui.button("Restart").clicked() {
                     restart();
                     ctx.request_repaint(); // Optional: Request repaint for immediate feedback
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                    exit.write(AppExit::Success);
                 }
             });
 

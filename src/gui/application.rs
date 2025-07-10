@@ -214,6 +214,7 @@ pub fn update_gui(
     mut opacity_threshold: ResMut<OpacityThreshold>,
     mut cam_input: ResMut<CameraInputAllowed>,
     mut thread_communication: ResMut<ThreadCommunication>,
+    mut exit: EventWriter<AppExit>,
 ) {
     if thread_communication.gui_settings.tab != Tab::ThreeD {
         if let Ok((mut instance_data, _)) = query.single_mut() {
@@ -413,6 +414,7 @@ pub fn update_gui(
         &mut explorer,
         &right_panel_width,
         &mut thread_communication,
+        &mut exit,
     );
 
     thread_communication.gui_settings.x = ctx.used_size().x;

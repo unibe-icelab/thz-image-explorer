@@ -9,6 +9,8 @@ use crate::math_tools::{
 };
 use crate::update::check_for_software_updates;
 use crate::PlotDataContainer;
+use bevy::app::AppExit;
+use bevy::prelude::EventWriter;
 use bevy_egui::egui;
 use bevy_egui::egui::panel::Side;
 use bevy_egui::egui::{DragValue, Stroke, Vec2};
@@ -22,6 +24,7 @@ pub fn right_panel(
     explorer: &mut THzImageExplorer,
     right_panel_width: &f32,
     thread_communication: &mut ThreadCommunication,
+    exit: &mut EventWriter<AppExit>,
 ) {
     let mut data = PlotDataContainer::default();
     if let Ok(read_guard) = thread_communication.data_lock.read() {
@@ -290,7 +293,7 @@ pub fn right_panel(
                     explorer.settings_window_open = true;
                 }
                 if explorer.settings_window_open {
-                    settings_window(ui.ctx(), explorer, thread_communication);
+                    settings_window(ui.ctx(), explorer, thread_communication, exit);
                 }
 
                 ui.add_space(5.0);
