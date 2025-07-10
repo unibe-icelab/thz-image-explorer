@@ -42,7 +42,9 @@ downcast_rs::impl_downcast!(CopyStaticFieldsTrait);
 ///
 /// **Example**:
 /// ```rust
-/// use crate::filters::filter::{Filter, ScannedImageFilterData, GuiSettingsContainer};
+/// use crate::filters::filter::Filter;
+/// use crate::data_container::ScannedImageFilterData;
+/// use crate::gui::application::GuiSettingsContainer;
 ///
 /// #[register_filter]
 /// #[derive(Clone, Debug, CopyStaticFields)]

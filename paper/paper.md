@@ -406,7 +406,9 @@ running computations. This crate provides a convenient way to check for an abort
 GUI.
 
 ```rust
-use crate::filters::filter::{Filter, GuiSettingsContainer, ScannedImageFilterData};
+use crate::filters::filter::Filter;
+use crate::data_container::ScannedImageFilterData;
+use crate::gui::application::GuiSettingsContainer;
 
 #[register_filter]
 #[derive(Clone, Debug, CopyStaticFields)]
