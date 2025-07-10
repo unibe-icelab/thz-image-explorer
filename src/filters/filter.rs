@@ -11,6 +11,7 @@ use chrono::Utc;
 #[allow(unused_imports)] // this dependency is required by the `register_filter` macro
 use ctor::ctor;
 use downcast_rs::Downcast;
+use egui_circular_progress_bar::CircularProgressBarExt;
 use ndarray::Array1;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
@@ -615,7 +616,6 @@ pub fn draw_filters(
                             if let Some(p) = progress {
                                 if *p >= 0.0 {
                                     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
-
                                     if ui
                                         .button(format!("{}", egui_phosphor::regular::X_SQUARE))
                                         .on_hover_text("Abort the current calculation")
@@ -624,6 +624,7 @@ pub fn draw_filters(
                                         thread_communication.abort_flag.store(true, Relaxed);
                                     }
                                     ui.label(format!("{} %", (p * 100.0) as u8));
+                                    ui.circular_progress_bar_with_size(*p, 15.0);
                                 }
                             } else {
                                 ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
@@ -647,34 +648,6 @@ pub fn draw_filters(
                     }
                 });
             });
-
-            // Draw progress bar below (optional)
-            if let Some(progress) = thread_communication.gui_settings.progress_bars.get(uuid) {
-                if let Some(p) = progress {
-                    if *p > 0.0 {
-                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Wait);
-                        ui.horizontal(|ui| {
-                            ui.add(
-                                egui::ProgressBar::new(*p)
-                                    .text(format!("{} %", (p * 100.0) as u8))
-                                    .desired_width(right_panel_width - 50.0),
-                            );
-                            if ui
-                                .button(format!("{}", egui_phosphor::regular::X_SQUARE))
-                                .on_hover_text("Abort the current calculation")
-                                .clicked()
-                            {
-                                thread_communication.abort_flag.store(true, Relaxed);
-                            }
-                        });
-                        ui.ctx().request_repaint();
-                    } else {
-                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
-                    }
-                } else {
-                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Default);
-                }
-            }
         }
     }
 }

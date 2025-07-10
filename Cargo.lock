@@ -2604,6 +2604,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui-circular-progress-bar"
+version = "0.1.0"
+source = "git+https://github.com/hacknus/egui-circular-progress-bar#35ed6cc8e9a7b4518278753012bf22121def1d5c"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "egui-phosphor"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6804,6 +6812,7 @@ dependencies = [
  "ctor",
  "dotthz",
  "downcast-rs 2.0.1",
+ "egui-circular-progress-bar",
  "egui-phosphor",
  "egui-theme-switch",
  "egui_double_slider",
