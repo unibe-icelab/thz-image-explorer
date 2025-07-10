@@ -2,7 +2,11 @@
 
 All notable changes to the `THz Image Explorer` project will be documented in this file.
 
-# Unreleased 0.4.X - X.X.2025
+# Unreleased 0.5.X - X.X.2025
+
+* ...
+
+# 0.5.0 - 10.7.2025
 
 * Updated dependencies
 * Minor bug fixes
