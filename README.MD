@@ -44,7 +44,8 @@ sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev lib
 After installing
 `cargo install cargo-bundle` on linux and macOS or `cargo install cargo-wix` on windows
 run
-`cargo bundle` on linux and macOS or `cargo wix` on windows to create platform-executable bundles.
+`cargo bundle --release` on linux and macOS or `cargo wix -p thz-image-explorer` on windows to create
+platform-executable bundles.
 
 On macOS the `DotTHzQLExtension.appex` Plugin will automatically be installed in the
 `THz Image Explorer.app/Contents/PlugIns` directory. The source code of the plugin can be

@@ -159,7 +159,7 @@ cargo bundle --release
 or `cargo-wix` on Windows:
 
 ```shell
-cargo wix --release
+cargo wix -p thz-image-explorer
 ```
 
 An update feature, which will download the latest release and upgrade the installed application, is implemented in the
