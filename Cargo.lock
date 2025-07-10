@@ -2606,7 +2606,8 @@ dependencies = [
 [[package]]
 name = "egui-circular-progress-bar"
 version = "0.1.0"
-source = "git+https://github.com/hacknus/egui-circular-progress-bar#35ed6cc8e9a7b4518278753012bf22121def1d5c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "180422c057d64424e62ad1c8fd244fcac1934ce9152bfd49e00416d0b5d41f14"
 dependencies = [
  "egui",
 ]

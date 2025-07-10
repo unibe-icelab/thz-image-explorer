@@ -12,7 +12,7 @@ egui-phosphor = "0.9.0"
 egui_plot = "0.32"
 egui_logger = { git = "https://github.com/hacknus/egui_logger", branch = "expose_logs" }
 egui-theme-switch = { git = "https://github.com/hacknus/egui-theme-switch" }
-egui-circular-progress-bar = { git = "https://github.com/hacknus/egui-circular-progress-bar" }
+egui-circular-progress-bar = "0.1.0"
 egui_double_slider = "0.8.0"
 bevy_egui = { version = "0.35.0", features = ["serde"] }
 bevy = { version = "0.16", default-features = false, features = [
