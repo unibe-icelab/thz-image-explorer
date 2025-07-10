@@ -228,10 +228,15 @@ pub trait Filter: Send + Sync + Debug + CloneBoxedFilter + CopyStaticFieldsTrait
 /// - `TimeAfterFFTPrioLast`: Time-domain filters that should run last after FFT.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FilterDomain {
+    /// Time-domain filters that should run first before FFT.
     TimeBeforeFFTPrioFirst,
+    /// Standard time-domain filters that run before FFT.
     TimeBeforeFFT,
+    /// Filters that operate in the frequency domain.
     Frequency,
+    /// Standard time-domain filters that run after FFT.
     TimeAfterFFT,
+    /// Time-domain filters that should run last after FFT.
     TimeAfterFFTPrioLast,
 }
 
