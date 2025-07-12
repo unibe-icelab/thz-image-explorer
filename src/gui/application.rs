@@ -318,10 +318,6 @@ pub fn update_gui(
                                 )
                             };
 
-                            if info_button.clicked() {
-                                Popup::toggle_id(ui.ctx(), popup_id);
-                            }
-
                             let is_popup_open = Popup::menu(&info_button)
                                 .id(popup_id)
                                 .close_behavior(PopupCloseBehavior::CloseOnClickOutside)

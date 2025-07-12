@@ -1,9 +1,9 @@
 use crate::gui::application::{THzImageExplorer, SAFETY_ORANGE};
 use bevy_egui::egui;
-use bevy_egui::egui::{PopupAnchor, TextureHandle};
 use bevy_egui::egui::{
     pos2, vec2, Color32, ColorImage, DragValue, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
 };
+use bevy_egui::egui::{PopupAnchor, TextureHandle};
 use egui::TextureOptions;
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotPoint, PlotPoints, Polygon};
@@ -544,7 +544,6 @@ pub fn plot_matrix(
                     tooltip.gap(12.0).show(|ui| {
                         ui.label(&roi.name);
                     });
-
                 }
             }
         }

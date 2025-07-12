@@ -58,9 +58,6 @@ pub fn settings_window(
 
                     // Show info icon and handle clicks
                     let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
-                    if info_button.clicked() {
-                        Popup::toggle_id(ui.ctx(), popup_id);
-                    }
 
                     Popup::menu(&info_button)
                         .id(popup_id)

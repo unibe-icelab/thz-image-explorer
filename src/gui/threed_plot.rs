@@ -466,9 +466,6 @@ pub fn three_dimensional_plot_ui(
             let popup_id = ui.make_persistent_id("info_popup_opacity");
             // Show info icon and handle clicks
             let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
-            if info_button.clicked() {
-                Popup::toggle_id(ui.ctx(), popup_id);
-            }
 
             Popup::menu(&info_button)
                 .id(popup_id)
@@ -505,9 +502,6 @@ pub fn three_dimensional_plot_ui(
             let popup_id = ui.make_persistent_id("info_popup_contrast");
             // Show info icon and handle clicks
             let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
-            if info_button.clicked() {
-                Popup::toggle_id(ui.ctx(), popup_id);
-            }
 
             Popup::menu(&info_button)
                 .id(popup_id)
@@ -540,9 +534,6 @@ pub fn three_dimensional_plot_ui(
             let popup_id = ui.make_persistent_id("info_popup_radius");
             // Show info icon and handle clicks
             let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
-            if info_button.clicked() {
-                Popup::toggle_id(ui.ctx(), popup_id);
-            }
 
             Popup::menu(&info_button)
                 .id(popup_id)
@@ -575,9 +566,6 @@ pub fn three_dimensional_plot_ui(
             let popup_id = ui.make_persistent_id("info_popup_sigma");
             // Show info icon and handle clicks
             let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
-            if info_button.clicked() {
-                Popup::toggle_id(ui.ctx(), popup_id);
-            }
 
             Popup::menu(&info_button)
                 .id(popup_id)
@@ -617,9 +605,6 @@ pub fn three_dimensional_plot_ui(
             let popup_id = ui.make_persistent_id("info_popup_vtu");
             // Show info icon and handle clicks
             let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
-            if info_button.clicked() {
-                Popup::toggle_id(ui.ctx(), popup_id);
-            }
 
             Popup::menu(&info_button)
                 .id(popup_id)

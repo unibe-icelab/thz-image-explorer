@@ -7,6 +7,7 @@ use crate::data_container::ScannedImageFilterData;
 use crate::gui::application::GuiSettingsContainer;
 use crate::gui::toggle_widget::toggle;
 use bevy_egui::egui;
+use bevy_egui::egui::{Popup, PopupCloseBehavior};
 use chrono::Utc;
 #[allow(unused_imports)] // this dependency is required by the `register_filter` macro
 use ctor::ctor;
@@ -19,7 +20,6 @@ use std::fmt::Debug;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Mutex, RwLock};
-use bevy_egui::egui::{Popup, PopupCloseBehavior};
 use uuid::Uuid;
 
 pub trait CopyStaticFieldsTrait: Downcast {
@@ -552,15 +552,11 @@ pub fn draw_filters(
 
                         // Show info icon and handle clicks
                         let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
-                        if info_button.clicked() {
-                            Popup::toggle_id(ui.ctx(), popup_id);
-                        }
 
                         Popup::menu(&info_button)
                             .id(popup_id)
                             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
-                            .show(
-                            |ui: &mut egui::Ui| {
+                            .show(|ui: &mut egui::Ui| {
                                 // Set max width for the popup
                                 ui.set_max_width(right_panel_width * 0.8);
 
@@ -578,8 +574,7 @@ pub fn draw_filters(
                                         ui.hyperlink_to(hyperlink_label, hyperlink);
                                     });
                                 }
-                            },
-                        );
+                            });
                     });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.add_space(20.0);

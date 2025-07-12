@@ -4,8 +4,8 @@ use crate::gui::threed_plot::{three_dimensional_plot_ui, CameraInputAllowed, Opa
 use crate::gui::toggle_widget::toggle;
 use crate::vec2;
 use bevy::prelude::*;
-use bevy_egui::egui::{epaint, Popup, PopupCloseBehavior};
 use bevy_egui::egui::{self, Checkbox, DragValue, Slider, Stroke, Ui};
+use bevy_egui::egui::{epaint, Popup, PopupCloseBehavior};
 use egui_plot::{GridMark, Legend, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 use std::ops::RangeInclusive;
 
@@ -634,9 +634,6 @@ pub fn optical_properties_tab(
             let popup_id = ui.make_persistent_id("info_popup_optical_properties");
             // Show info icon and handle clicks
             let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
-            if info_button.clicked() {
-                Popup::toggle_id(ui.ctx(), popup_id);
-            }
 
             Popup::menu(&info_button)
                 .id(popup_id)
