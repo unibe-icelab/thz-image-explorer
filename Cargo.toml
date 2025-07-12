@@ -11,10 +11,10 @@ egui_extras = { version = "0.31", features = ["all_loaders"] }
 egui-phosphor = "0.9.0"
 egui_plot = "0.32"
 egui_logger = { git = "https://github.com/hacknus/egui_logger", branch = "expose_logs" }
-egui-theme-switch = { git = "https://github.com/hacknus/egui-theme-switch" }
+egui-theme-switch = "0.3.0"
 egui-circular-progress-bar = "0.1.0"
 egui_double_slider = "0.8.0"
-bevy_egui = { version = "0.35.0", features = ["serde"] }
+bevy_egui = { version = "0.35", features = ["serde"] }
 bevy = { version = "0.16", default-features = false, features = [
     "std",
     "async_executor",
@@ -42,7 +42,7 @@ bevy = { version = "0.16", default-features = false, features = [
     "sysinfo_plugin",
     "x11",
 ] }
-bevy_voxel_plot = { git = "https://github.com/hacknus/bevy_voxel_plot" }
+bevy_voxel_plot = "2.1.0"
 bevy_panorbit_camera = { version = "0.27" }
 bevy_framepace = "0.19.1"
 crossbeam-channel = "0.5"
@@ -74,7 +74,7 @@ downcast-rs = "2.0.1"
 vtkio = "0.7.0-rc1"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-egui-file-dialog = { git = "https://github.com/hacknus/egui-file-dialog", branch = "sort_by_metadata", features = ["information_view"] }
+egui-file-dialog = { git = "https://github.com/hacknus/egui-file-dialog", rev = "801d29de22606020268a8553838ecac8f0e16461", features = ["information_view"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 rfd = "0.15"

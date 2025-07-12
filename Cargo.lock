@@ -800,7 +800,7 @@ dependencies = [
  "const-fnv1a-hash",
  "log",
  "serde",
- "sysinfo",
+ "sysinfo 0.34.2",
 ]
 
 [[package]]
@@ -1598,7 +1598,8 @@ dependencies = [
 [[package]]
 name = "bevy_voxel_plot"
 version = "2.1.0"
-source = "git+https://github.com/hacknus/bevy_voxel_plot#832727cdabcd158196b6e8e81c35c83b6a744d92"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de12ca4c887c5be3a2a93776eb5e987ae308a96ae09523d0ed437d56525810d8"
 dependencies = [
  "bevy",
  "bytemuck",
@@ -2498,7 +2499,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2678,18 +2679,17 @@ dependencies = [
 
 [[package]]
 name = "egui-file-dialog"
-version = "0.9.0"
-source = "git+https://github.com/hacknus/egui-file-dialog?branch=sort_by_metadata#f6e26ea7779bba20af6010cfa1ef1f80778d8bd4"
+version = "0.10.0"
+source = "git+https://github.com/hacknus/egui-file-dialog?rev=801d29de22606020268a8553838ecac8f0e16461#801d29de22606020268a8553838ecac8f0e16461"
 dependencies = [
  "chrono",
  "directories",
  "dunce",
  "egui",
- "egui_extras",
  "image-meta",
  "indexmap",
  "serde",
- "sysinfo",
+ "sysinfo 0.35.2",
 ]
 
 [[package]]
@@ -2703,8 +2703,9 @@ dependencies = [
 
 [[package]]
 name = "egui-theme-switch"
-version = "0.2.3"
-source = "git+https://github.com/hacknus/egui-theme-switch#d51fcc7ca199791014dddd03f0aecc9b5a229d94"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50d759e2fb1d575a650967f9e32582151b6d2edb060c70d94bc73e0573d6ab4b"
 dependencies = [
  "egui",
 ]
@@ -4995,6 +4996,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-io-kit"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71c1c64d6120e51cd86033f67176b1cb66780c2efe34dec55176f77befd93c0a"
+dependencies = [
+ "libc",
+ "objc2-core-foundation",
+]
+
+[[package]]
 name = "objc2-io-surface"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6869,6 +6880,18 @@ dependencies = [
  "ntapi",
  "objc2-core-foundation",
  "windows 0.57.0",
+]
+
+[[package]]
+name = "sysinfo"
+version = "0.35.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c3ffa3e4ff2b324a57f7aeb3c349656c7b127c3c189520251a648102a92496e"
+dependencies = [
+ "libc",
+ "objc2-core-foundation",
+ "objc2-io-kit",
+ "windows 0.61.3",
 ]
 
 [[package]]
