@@ -3,7 +3,7 @@ on:
   push:
     paths:
       - paper/**
-      - .github/workflows/peper.yml
+      - .github/workflows/paper.yml
 
 jobs:
   paper:
