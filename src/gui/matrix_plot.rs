@@ -1,6 +1,6 @@
 use crate::gui::application::{THzImageExplorer, SAFETY_ORANGE};
 use bevy_egui::egui;
-use bevy_egui::egui::TextureHandle;
+use bevy_egui::egui::{PopupAnchor, TextureHandle};
 use bevy_egui::egui::{
     pos2, vec2, Color32, ColorImage, DragValue, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
 };
@@ -136,7 +136,7 @@ fn colorbar_with_midpoint_slider(
             .show_x(false)
             .show_y(false);
 
-        let mut img = egui::ColorImage::new([1, 100], Color32::TRANSPARENT);
+        let mut img = ColorImage::new([1, 100], vec![Color32::TRANSPARENT; 100]);
 
         for y in 0..100 {
             let normalized_y = y as f32 / 100.0;
@@ -287,7 +287,7 @@ fn colorbar_with_midpoint_slider(
             let label_text = format!("{:.0}%", percentage); // Removed decimals
 
             // Create a fixed-size rectangle to hold the label at the correct height, using a constant x position
-            ui.allocate_new_ui(
+            ui.scope_builder(
                 UiBuilder::new().max_rect(egui::Rect::from_min_size(
                     egui::pos2(
                         label_x_offset + triangle_radius,
@@ -392,7 +392,7 @@ pub fn plot_matrix(
         .fold(f64::INFINITY, |ai, &bi| ai.min(bi));
 
     // Create image with swapped dimensions for rotation
-    let mut img = ColorImage::new([height, width], Color32::TRANSPARENT);
+    let mut img = ColorImage::new([height, width], vec![Color32::TRANSPARENT; height * width]);
     let mut intensity_matrix = vec![vec![0.0; height]; width];
     let mut id_matrix = vec![vec!["".to_string(); height]; width];
 
@@ -533,15 +533,18 @@ pub fn plot_matrix(
                         egui::Order::Foreground,
                         egui::Id::new(format!("roi_tooltip_layer_{}", uuid)),
                     );
-                    egui::show_tooltip_at(
-                        ui.ctx(),
+
+                    let tooltip = egui::Tooltip::always_open(
+                        ui.ctx().clone(),
                         layer_id,
                         egui::Id::new(format!("roi_tooltip_{}", uuid)),
-                        screen_pos,
-                        |ui| {
-                            ui.label(&roi.name);
-                        },
+                        PopupAnchor::Position(screen_pos),
                     );
+
+                    tooltip.gap(12.0).show(|ui| {
+                        ui.label(&roi.name);
+                    });
+
                 }
             }
         }

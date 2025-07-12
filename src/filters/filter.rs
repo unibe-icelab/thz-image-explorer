@@ -19,6 +19,7 @@ use std::fmt::Debug;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Mutex, RwLock};
+use bevy_egui::egui::{Popup, PopupCloseBehavior};
 use uuid::Uuid;
 
 pub trait CopyStaticFieldsTrait: Downcast {
@@ -552,14 +553,13 @@ pub fn draw_filters(
                         // Show info icon and handle clicks
                         let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
                         if info_button.clicked() {
-                            ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                            Popup::toggle_id(ui.ctx(), popup_id);
                         }
 
-                        egui::popup_below_widget(
-                            ui,
-                            popup_id,
-                            &info_button,
-                            egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+                        Popup::menu(&info_button)
+                            .id(popup_id)
+                            .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                            .show(
                             |ui: &mut egui::Ui| {
                                 // Set max width for the popup
                                 ui.set_max_width(right_panel_width * 0.8);

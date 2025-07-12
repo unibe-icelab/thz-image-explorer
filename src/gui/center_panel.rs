@@ -4,7 +4,7 @@ use crate::gui::threed_plot::{three_dimensional_plot_ui, CameraInputAllowed, Opa
 use crate::gui::toggle_widget::toggle;
 use crate::vec2;
 use bevy::prelude::*;
-use bevy_egui::egui::epaint;
+use bevy_egui::egui::{epaint, Popup, PopupCloseBehavior};
 use bevy_egui::egui::{self, Checkbox, DragValue, Slider, Stroke, Ui};
 use egui_plot::{GridMark, Legend, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
 use std::ops::RangeInclusive;
@@ -635,14 +635,13 @@ pub fn optical_properties_tab(
             // Show info icon and handle clicks
             let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
             if info_button.clicked() {
-                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                Popup::toggle_id(ui.ctx(), popup_id);
             }
 
-            egui::popup_below_widget(
-                ui,
-                popup_id,
-                &info_button,
-                egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+            Popup::menu(&info_button)
+                .id(popup_id)
+                .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                .show(
                 |ui: &mut egui::Ui| {
                     ui.set_max_width(300.0);
                     ui.label("Select a reference and a sample to plot the optical properties. If no options are available, please load either a reference dataset and/or create at least one region of interest (ROI) in the 2D viewer.");
