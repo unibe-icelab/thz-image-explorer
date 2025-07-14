@@ -14,7 +14,7 @@ use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage,
 use crate::gui::utils::truncate_filename;
 use crate::math_tools::FftWindowType;
 use bevy::prelude::*;
-use bevy_egui::egui::{Color32, ThemePreference};
+use bevy_egui::egui::{Color32, Popup, PopupCloseBehavior, ThemePreference};
 use bevy_egui::{egui, EguiContexts};
 use bevy_voxel_plot::InstanceMaterialData;
 use core::f64;
@@ -318,15 +318,10 @@ pub fn update_gui(
                                 )
                             };
 
-                            if info_button.clicked() {
-                                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
-                            }
-
-                            let is_popup_open = egui::popup_below_widget(
-                                ui,
-                                popup_id,
-                                &info_button,
-                                egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+                            let is_popup_open = Popup::menu(&info_button)
+                                .id(popup_id)
+                                .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                                .show(
                                 |ui: &mut egui::Ui| {
                                     // Set max width for the popup
                                     ui.set_max_width(right_panel_width * 0.8);

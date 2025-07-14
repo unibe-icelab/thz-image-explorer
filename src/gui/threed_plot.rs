@@ -6,7 +6,7 @@ use bevy::render::view::RenderLayers;
 use bevy::window::PrimaryWindow;
 use bevy::winit::EventLoopProxyWrapper;
 use bevy::{prelude::*, render::render_resource::*};
-use bevy_egui::egui::{epaint, Ui};
+use bevy_egui::egui::{epaint, Popup, PopupCloseBehavior, Ui};
 use bevy_egui::{egui, EguiUserTextures};
 use bevy_framepace::Limiter;
 use bevy_panorbit_camera::{ActiveCameraData, PanOrbitCamera};
@@ -466,15 +466,11 @@ pub fn three_dimensional_plot_ui(
             let popup_id = ui.make_persistent_id("info_popup_opacity");
             // Show info icon and handle clicks
             let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
-            if info_button.clicked() {
-                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
-            }
 
-            egui::popup_below_widget(
-                ui,
-                popup_id,
-                &info_button,
-                egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+            Popup::menu(&info_button)
+                .id(popup_id)
+                .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                .show(
                 |ui: &mut egui::Ui| {
                     ui.set_max_width(300.0);
                     ui.label("This sets the threshold below which instances are not rendered. Note that this might also change the color mapping.\"
@@ -506,15 +502,11 @@ pub fn three_dimensional_plot_ui(
             let popup_id = ui.make_persistent_id("info_popup_contrast");
             // Show info icon and handle clicks
             let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
-            if info_button.clicked() {
-                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
-            }
 
-            egui::popup_below_widget(
-                ui,
-                popup_id,
-                &info_button,
-                egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+            Popup::menu(&info_button)
+                .id(popup_id)
+                .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                .show(
                 |ui: &mut egui::Ui| {
                     ui.set_max_width(300.0);
                     ui.label("This sets the contrast below of the 3D render. \"
@@ -542,15 +534,11 @@ pub fn three_dimensional_plot_ui(
             let popup_id = ui.make_persistent_id("info_popup_radius");
             // Show info icon and handle clicks
             let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
-            if info_button.clicked() {
-                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
-            }
 
-            egui::popup_below_widget(
-                ui,
-                popup_id,
-                &info_button,
-                egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+            Popup::menu(&info_button)
+                .id(popup_id)
+                .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                .show(
                 |ui: &mut egui::Ui| {
                     ui.set_max_width(300.0);
                     ui.label("This sets the radius of the 1D Kernel. \");
@@ -578,15 +566,11 @@ pub fn three_dimensional_plot_ui(
             let popup_id = ui.make_persistent_id("info_popup_sigma");
             // Show info icon and handle clicks
             let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
-            if info_button.clicked() {
-                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
-            }
 
-            egui::popup_below_widget(
-                ui,
-                popup_id,
-                &info_button,
-                egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+            Popup::menu(&info_button)
+                .id(popup_id)
+                .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                .show(
                 |ui: &mut egui::Ui| {
                     ui.set_max_width(300.0);
                     ui.label("This sets the sigma of the 1D Kernel. \"
@@ -621,15 +605,11 @@ pub fn three_dimensional_plot_ui(
             let popup_id = ui.make_persistent_id("info_popup_vtu");
             // Show info icon and handle clicks
             let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
-            if info_button.clicked() {
-                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
-            }
 
-            egui::popup_below_widget(
-                ui,
-                popup_id,
-                &info_button,
-                egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+            Popup::menu(&info_button)
+                .id(popup_id)
+                .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                .show(
                 |ui: &mut egui::Ui| {
                     ui.set_max_width(300.0);
                     ui.label("Export to a .vtu file (VTK Unstructured Grid File) for further 3D analysis. (e.g. ParaView)");

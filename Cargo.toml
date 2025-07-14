@@ -7,14 +7,14 @@ description = "Explorer Software for THz TDS images."
 license = "GPL-3.0"
 
 [dependencies]
-egui_extras = { version = "0.31", features = ["all_loaders"] }
-egui-phosphor = "0.9.0"
-egui_plot = "0.32"
-egui_logger = { git = "https://github.com/hacknus/egui_logger", branch = "expose_logs" }
-egui-theme-switch = "0.3.0"
-egui-circular-progress-bar = "0.1.0"
-egui_double_slider = "0.8.0"
-bevy_egui = { version = "0.35", features = ["serde"] }
+egui_extras = { version = "0.32", features = ["all_loaders"] }
+egui-phosphor = "0.10"
+egui_plot = "0.33"
+egui_logger = { git = "https://github.com/hacknus/egui_logger", branch = "expose_logs_0.32" }
+egui-theme-switch = "0.4.0"
+egui-circular-progress-bar = "0.2.0"
+egui_double_slider = { git = "https://github.com/hacknus/egui_double_slider", branch="egui_0.32" }
+bevy_egui = { git = "https://github.com/hacknus/bevy_egui", branch = "egui_0.32", features = ["serde"] }
 bevy = { version = "0.16", default-features = false, features = [
     "std",
     "async_executor",
@@ -74,7 +74,7 @@ downcast-rs = "2.0.1"
 vtkio = "0.7.0-rc1"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-egui-file-dialog = { git = "https://github.com/hacknus/egui-file-dialog", rev = "801d29de22606020268a8553838ecac8f0e16461", features = ["information_view"] }
+egui-file-dialog = { git = "https://github.com/hacknus/egui-file-dialog", branch = "sort_by_metadata", features = ["information_view"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 rfd = "0.15"

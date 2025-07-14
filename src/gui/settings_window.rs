@@ -6,7 +6,7 @@ use crate::APP_INFO;
 use bevy::app::AppExit;
 use bevy::prelude::EventWriter;
 use bevy_egui::egui;
-use bevy_egui::egui::{vec2, Align2, InnerResponse, Vec2, Visuals};
+use bevy_egui::egui::{vec2, Align2, InnerResponse, Popup, PopupCloseBehavior, Vec2, Visuals};
 use egui_theme_switch::ThemeSwitch;
 use preferences::Preferences;
 #[cfg(feature = "self_update")]
@@ -58,15 +58,11 @@ pub fn settings_window(
 
                     // Show info icon and handle clicks
                     let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
-                    if info_button.clicked() {
-                        ui.memory_mut(|mem| mem.toggle_popup(popup_id));
-                    }
 
-                    egui::popup_below_widget(
-                        ui,
-                        popup_id,
-                        &info_button,
-                        egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+                    Popup::menu(&info_button)
+                        .id(popup_id)
+                        .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                        .show(
                         |ui: &mut egui::Ui| {
                             // Set max width for the popup
                             ui.set_max_width(400.0);
