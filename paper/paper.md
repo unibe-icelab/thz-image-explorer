@@ -150,18 +150,6 @@ sudo apt-get install -y libclang-dev libgtk-3-dev \
   libxkbcommon-dev libssl-dev libasound2-dev
 ```
 
-To create bundles `cargo-bundle` needs to be installed (macOS, Linux):
-
-```shell
-cargo bundle --release
-```
-
-or `cargo-wix` on Windows:
-
-```shell
-cargo wix -p thz-image-explorer
-```
-
 An update feature, which will download the latest release and upgrade the installed application, is implemented in the
 settings window.
 
@@ -191,8 +179,7 @@ browse through directories containing multiple scans.
 
 THz Image Explorer supports drag & drop of `.thz`, `.thzimg` and `.thzswp` files.
 
-The 3D structure can be exported as a `.vtu` file for further analysis (e.g.
-with [ParaView](https://www.paraview.org) ).
+The 3D structure can be exported as a `.vtu` file for further analysis.
 
 A reference file (standard `.thz`) can be loaded, which is used to compute the optical properties of the sample. The
 first
@@ -341,50 +328,6 @@ python scripts/generate_psf.py \
 
 to generate a `psf.npz` file that can be loaded in the settings of THz Image Explorer to remove the PSF blur by applying
 the deconvolution filter.
-
-The Richardson-Lucy algorithm is defined as
-
-$$
-\hat u_\xi^{(t)} = \hat u_\xi^{(t-1)} \cdot \frac{d_\xi}{\hat u_\xi^{(t-1)} * P_\xi} * P_\xi^{*},
-$$
-where $d$ is the observed scan composed of pixels, $\hat u$ is the reconstructed image, $P_\xi$ is the Point Spread
-Function (PSF) around the frequency $\xi$, and $P_\xi^{*}(x,y)=P_\xi(-x,-y)$ is the flipped PSF.
-
-In order to process the different frequency regions of the time traces, Linear phase FIR filters are designed such that,
-$$
-\begin{aligned}
-\mathbf s_i & = \sum_{\xi=0}^{M-1} \mathbf s _{i\xi}\\
-& =\sum_{\xi=0}^{M-1} \mathbf b _\xi * \mathbf s _{i},
-\end{aligned}
-$$
-where $\mathbf{b}_\xi$ and $\mathbf{s}_i$ are respectively the FIR filters and the time traces. $\xi=0,\dots, M-1$ is
-the index of the filter determining its center frequency and $\mathbf{s}_{i\xi}$ is the filtered time trace.
-
-Assuming that the PSF does not induce phase modifications on the underlying signal, an
-estimation $\mathbf{\hat s}_i^\prime$ of the underlying terahertz traces $\mathbf{s}_i^\prime$ for each pixel $i$ with
-intensity $\hat u_i = \sum_\xi \hat u_{i\xi}$ can be computed with,
-$$
-\begin{aligned}
-\mathbf{\hat s}_i^\prime & = \sum_{\xi=0}^{M-1} \mathbf{\hat s}_{i\xi}^\prime,\\
-& = \sum_{\xi=0}^{M-1} g_{i\xi} \cdot \mathbf b_\xi * \mathbf s_{i},\\
-& = \sum_{\xi=0}^{M-1} g_{i\xi} \cdot \mathbf s_{i\xi},
-\end{aligned}
-$$
-where $g_{i\xi}$ is a gain factor for the frequency range $\xi$ at the pixel $i$.
-
-The estimation of the underlying filtered intensity can be written,
-$$
-\begin{aligned}
-\hat u_{i\xi} & = | \mathbf {\hat s}_{i\xi}^\prime |^2,\\
-& = | g_{i\xi} \cdot \mathbf s_{i\xi} |^2 = g_{i\xi}^2 \cdot | \mathbf s_{i\xi} |^2,\\
-& = g_{i\xi}^2 \cdot d_{i\xi}.
-\end{aligned}
-$$
-Therefore, the gains can be computed with the output $\hat u_{i\xi}$ of the deconvolution algorithm applied on the
-filtered data using the frequency range dependent PSFs,
-$$
-g_{i\xi} = \sqrt{\frac{\hat u_{i\xi}}{d_{i\xi}}}.
-$$
 
 ### Custom Filters
 
