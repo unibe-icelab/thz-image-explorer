@@ -6966,7 +6966,7 @@ dependencies = [
 
 [[package]]
 name = "thz-image-explorer"
-version = "0.5.1"
+version = "1.0.0"
 dependencies = [
  "bevy",
  "bevy_egui",
