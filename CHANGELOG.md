@@ -6,6 +6,10 @@ All notable changes to the `THz Image Explorer` project will be documented in th
 
 * ...
 
+# 0.5.0 - 14.7.2025
+* Fixed a bug in the file dialog on Windows and Linux
+* Minor improvements / bug fixes
+
 # 0.5.0 - 10.7.2025
 
 * Updated dependencies
