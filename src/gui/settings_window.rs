@@ -51,6 +51,8 @@ pub fn settings_window(
                         .on_hover_text("The PSF raw data should be located in a directory.")
                         .clicked()
                     {
+                        #[cfg(not(target_os = "macos"))]
+                        explorer.file_dialog.pick_file();
                         explorer.file_dialog_state = FileDialogState::OpenPSF;
                     }
                     // Create a unique ID for this filter's info popup

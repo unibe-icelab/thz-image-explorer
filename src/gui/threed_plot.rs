@@ -598,6 +598,8 @@ pub fn three_dimensional_plot_ui(
                 )))
                 .clicked()
             {
+                #[cfg(not(target_os = "macos"))]
+                explorer.file_dialog.save_file();
                 explorer.file_dialog_state = FileDialogState::SaveToVTU;
             }
 

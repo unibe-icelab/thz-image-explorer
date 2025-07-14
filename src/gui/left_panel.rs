@@ -146,6 +146,8 @@ pub fn left_panel(
                         )))
                         .clicked()
                     {
+                        #[cfg(not(target_os = "macos"))]
+                        explorer.file_dialog.pick_file();
                         explorer.file_dialog_state = FileDialogState::Open;
                     };
                     if ui
@@ -155,6 +157,8 @@ pub fn left_panel(
                         )))
                         .clicked()
                     {
+                        #[cfg(not(target_os = "macos"))]
+                        explorer.file_dialog.pick_file();
                         explorer.file_dialog_state = FileDialogState::OpenRef;
                     };
                 });
@@ -343,7 +347,6 @@ pub fn left_panel(
 
                         #[cfg(not(target_os = "macos"))]
                         {
-                            explorer.file_dialog.pick_file();
                             if let Some(path) = explorer
                                 .file_dialog
                                 .update_with_right_panel_ui(ctx, &mut |ui, dia| {
@@ -385,7 +388,6 @@ pub fn left_panel(
                         }
                         #[cfg(not(target_os = "macos"))]
                         {
-                            explorer.file_dialog.pick_file();
                             if let Some(path) = explorer
                                 .file_dialog
                                 .update_with_right_panel_ui(ctx, &mut |ui, dia| {
@@ -426,7 +428,6 @@ pub fn left_panel(
                         }
                         #[cfg(not(target_os = "macos"))]
                         {
-                            explorer.file_dialog.pick_file();
                             if let Some(path) = explorer
                                 .file_dialog
                                 .update_with_right_panel_ui(ctx, &mut |ui, dia| {
@@ -472,7 +473,6 @@ pub fn left_panel(
                         }
                         #[cfg(not(target_os = "macos"))]
                         {
-                            explorer.file_dialog.save_file();
                             if let Some(path) = explorer
                                 .file_dialog
                                 .update_with_right_panel_ui(ctx, &mut |ui, dia| {
