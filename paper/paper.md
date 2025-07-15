@@ -32,9 +32,8 @@ bibliography: paper.bib
 THz time-domain spectroscopy (TDS) is a fast-growing field with applications to perform non-destructive studies of
 material properties [@neu_tutorial_2018].
 The pulses can either be measured after passing through (transmission spectrum) or after being reflected (reflection
-spectrum) by a sample and are recorded in the time domain. By transforming the
-acquired trace into frequency domain (Fourier space), the magnitude and phase can be extracted to
-investigate the complex refractive index and absorption coefficient of the sample.
+spectrum) by a sample and are recorded in the time domain. Through Fourier analysis (FFT), we can investigate the
+complex refractive index and absorption coefficient of the sample.
 By placing either the sample or the optical setup on a moving stage the sample can be imaged in 2D.
 
 ![THz Image Explorer icon.\label{fig:icon}](icon.png){#id .class width=20%}
@@ -68,22 +67,11 @@ The application is multithreaded with two main threads:
 - GUI thread
 - Data thread
 
-The GUI uses [egui](https://www.egui.rs), an immediate-mode GUI library for rust
-and [bevy](https://bevy.org) [@bevyengine], a game
-engine used for rendering.
-
-The configuration values set in the GUI are sent to the data thread
-via multiple-producer-multi-consumer (MPMC) channels.
-The data thread then handles the computation of the applied filters.
-The outputs of the computation are then shared via mutexes with the GUI thread.
-The entire thread communication is handled with the `ThreadCommunication` struct.
+The GUI uses [egui](https://www.egui.rs), an immediate-mode GUI library for rust.
 
 The structure of the software architecture is shown in figure \ref{fig:software-architecture}.
 
 ![Software Architecture.\label{fig:software-architecture}](thz-image-explorer.drawio.png){width=80% .center}
-
-For each filter, an entry in the `filter_data_pipeline` vector is created, which contains the dataset. Each filter is
-assigned an input and output index. This structure defines the processing pipeline in a clean and easily extendable way.
 
 # Usage
 
@@ -92,34 +80,19 @@ using the COCoNuT setup [@coconut_2025].
 
 ## Optical Properties Calculation
 
-The optical properties can be computed from the frequency domain spectrum using the following
-relations [@Jepsen2019]:
-
-### Refractive Index
-
-The refractive index $n(\omega)$ is calculated from the phase difference between sample and reference:
+The refractive index $n$ and absorption coefficient $\alpha$ can be computed using the relations from [@Jepsen2019]. The
+user can select a source and a reference for the calculation.
 
 $$n(\omega) = 1 + \frac{c \Delta\phi(\omega)}{\omega d}$$
+$$\alpha(\omega) = -\frac{2}{d} \ln\left(\frac{(n+1)^2}{4n} \cdot \frac{A_{\text{sample}}(\omega)}{A_{\text{reference}}(\omega)}\right)$$
 
 where:
 
 - $\Delta\phi(\omega) = \phi_{\text{sample}}(\omega) - \phi_{\text{reference}}(\omega)$ is the phase difference
+- $A_{\text{sample}}(\omega)$ and $A_{\text{reference}}(\omega)$ are the amplitude spectra
 - $c$ is the speed of light
 - $\omega = 2\pi f$ is the angular frequency
 - $d$ is the sample thickness
-
-### Absorption Coefficient
-
-The absorption coefficient $\alpha(\omega)$ is derived from the amplitude ratio:
-
-$$\alpha(\omega) = -\frac{2}{d} \ln\left(\frac{(n+1)^2}{4n} \cdot \frac{A_{\text{sample}}(\omega)}{A_{\text{reference}}(\omega)}\right)$$
-
-where $A_{\text{sample}}(\omega)$ and $A_{\text{reference}}(\omega)$ are the amplitude spectra of the sample and
-reference measurements, respectively.
-
-The refractive index and absorption coefficient are computed for the selected source and selected reference. The user
-can select a pixel or a ROI in the 2D plot to display the refractive index and absorption coefficient for that pixel in
-the center plot.
 
 ## Interactive 3D Viewer
 
@@ -175,17 +148,11 @@ in [@demion_frequency-dependent_2025].
 The code-base can easily be extended with custom filters. The user needs to create a custom file in the `src/filters`
 directory with a struct that implements the `Filter` trait.
 
-To implement more complex methods, further adaptations might be required, but the code structure has been set up with
-modularity and simplicity in mind.
-
 # Summary
 
 THz Image Explorer primarily serves as a performant data analysis tool for THz 2D images. The main focus lies on
-preliminary
-browsing of
-measurements, rough analysis of scans and identifying regions of interest in each scan. It is designed in a modular way
-to allow
-possible implementation of more thorough analysis features in the future.
+preliminary browsing of measurements, rough analysis of scans and identifying regions of interest in each scan. It is
+designed in a modular way to allow possible implementation of more thorough analysis features in the future.
 
 # Acknowledgements
 
