@@ -112,6 +112,13 @@ browse through directories containing multiple scans.
 
 THz Image Explorer supports drag & drop of `.thz`, `.thzimg` and `.thzswp` files.
 
+To comply with the dotTHz standard, the `.thzimg` file needs to contain two datasets:
+
+- time axis: 1D, shape `(n_t,)`
+- data: 3D, shape `(n_x, n_y, n_t)`
+
+The file should also contain at least the mandatory fields of the meta-data (e.g. user, date, thickness etc.).
+
 The 3D structure can be exported as a `.vtu` file for further analysis.
 
 A reference file (standard `.thz`) can be loaded, which is used to compute the optical properties of the sample. The
@@ -272,6 +279,7 @@ To run the deconvolution filter, a point spread function (PSF) file is required.
       --path_x sample_data/example_beam_width/measurement_x/data/1750085285.8557956_data.thz \
       --path_y sample_data/example_beam_width/measurement_y/data/1750163177.929295_data.thz
       ```
+
 This generates a `psf.npz` file for deblurring in THz Image Explorer.
 
 ---
