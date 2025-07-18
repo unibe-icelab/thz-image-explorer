@@ -1,5 +1,7 @@
 # THz Image Explorer - An Interactive Cross-Platform Open-Source THz Image Analysis Tool
 
+[![status](https://joss.theoj.org/papers/690071df7fe4b9bf97a6ea20c06c0de2/status.svg)](https://joss.theoj.org/papers/690071df7fe4b9bf97a6ea20c06c0de2)
+
 <a href="https://github.com/unibe-icelab/thz-image-explorer/releases"><img src="assets/icons/icon.png" alt=“” width="100" height="100"> </img> </a>
 
 This Application is written in Rust and the GUI is based on egui and bevy.
