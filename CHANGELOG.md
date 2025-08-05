@@ -4,6 +4,7 @@ All notable changes to the `THz Image Explorer` project will be documented in th
 
 # Unreleased 0.5.X - X.X.2025
 
+* fix polygon averaging (x/y)
 * ...
 
 # 0.5.0 - 14.7.2025

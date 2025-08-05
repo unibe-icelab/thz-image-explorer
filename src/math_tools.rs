@@ -607,8 +607,10 @@ pub fn average_polygon_roi(
         *x /= scaling;
         *y /= scaling;
     }
-    let x_size = data.shape()[0];
-    let y_size = data.shape()[1];
+
+    // x/y need to be swapped for correct alignment
+    let x_size = data.shape()[1];
+    let y_size = data.shape()[0];
     let z_size = data.shape()[2];
 
     // Create output array
@@ -641,7 +643,8 @@ pub fn average_polygon_roi(
             if point_in_polygon(x, y, &polygon) {
                 // Add the value to the average for each z-slice
                 for z in 0..z_size {
-                    result[z] += data[[x, y, z]];
+                    // x/y need to be swapped for correct alignment
+                    result[z] += data[[y_size - y, x, z]];
                     pixel_counts[z] += 1;
                 }
             }
