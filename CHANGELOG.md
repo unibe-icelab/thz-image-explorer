@@ -2,12 +2,13 @@
 
 All notable changes to the `THz Image Explorer` project will be documented in this file.
 
-# Unreleased 0.5.X - X.X.2025
+# Unreleased 1.0.X - X.X.2025
 
 * fix polygon averaging (x/y)
 * ...
 
-# 0.5.0 - 14.7.2025
+# 1.0.0 - 14.7.2025
+* Initial stable release (submitted to JOSS)
 * Fixed a bug in the file dialog on Windows and Linux
 * Minor improvements / bug fixes
 
