@@ -571,13 +571,18 @@ pub fn left_panel(
 
             ui.add_space(10.0);
             ui.horizontal(|ui| {
-                ui.label("Black/White");
+                ui.label("B/W");
                 toggle_ui(ui, &mut explorer.bw);
                 ui.add_space(5.0);
                 ui.label(format!(
                     "Pixel: {}/{}",
                     explorer.pixel_selected.x, explorer.pixel_selected.y
                 ));
+                let pos_x = explorer.data.hk.x_range[0]
+                    + explorer.data.hk.dx * explorer.pixel_selected.x as f32;
+                let pos_y = explorer.data.hk.y_range[0]
+                    + explorer.data.hk.dy * explorer.pixel_selected.y as f32;
+                ui.label(format!(" {:.2} mm /{:.2} mm", pos_x, pos_y));
             });
 
             ui.separator();

@@ -572,6 +572,14 @@ pub fn open_scan_from_thz(
         scan.dy = dy.parse::<f32>().ok();
     }
 
+    if let Some(x_min) = metadata.md.get("x_min [mm]") {
+        scan.x_min = x_min.parse::<f32>().ok();
+    }
+
+    if let Some(y_min) = metadata.md.get("y_min [mm]") {
+        scan.y_min = y_min.parse::<f32>().ok();
+    }
+
     let n = scan.time.len();
     let rng = scan.time[n - 1] - scan.time[0];
     let mut real_planner = RealFftPlanner::<f32>::new();

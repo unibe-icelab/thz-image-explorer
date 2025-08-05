@@ -616,6 +616,23 @@ pub fn main_thread(
 
                                         if let Ok(mut data) = thread_communication.data_lock.write()
                                         {
+                                            data.hk.dx = input.dx.unwrap_or(1.0);
+                                            data.hk.dy = input.dy.unwrap_or(1.0);
+                                            data.hk.x_range = [
+                                                input.x_min.unwrap_or(0.0),
+                                                input.x_min.unwrap_or(0.0)
+                                                    + input.width as f32 * data.hk.dx,
+                                            ];
+                                            data.hk.y_range = [
+                                                input.y_min.unwrap_or(0.0),
+                                                input.y_min.unwrap_or(0.0)
+                                                    + input.height as f32 * data.hk.dy,
+                                            ];
+                                            data.hk.range = input.time.last().unwrap_or(&1850.0)
+                                                - input.time.first().unwrap_or(&1800.0);
+                                            data.hk.t_begin =
+                                                *input.time.first().unwrap_or(&1800.0);
+
                                             data.roi_signal.clear();
                                             data.roi_signal_fft.clear();
                                             data.roi_phase.clear();
