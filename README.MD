@@ -59,7 +59,7 @@ xattr -rd com.apple.quarantine THz\ Image\ Explorer.app
 Install dependencies:
 
 ```sh
-sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libasound2-dev
+sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libasound2-dev libxkbcommon-x11-0 libx11-dev
 ```
 
 ---
@@ -67,14 +67,16 @@ sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev lib
 ### Compile from Source
 
 1. Install Rust and Cargo.
-2. Install dependencies (Linux only):
+2. Install Cmake.
+3. Install dependencies (Linux only):
    ```sh
-   sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libasound2-dev
+   sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0
    ```
-3. Install bundling tools:
+   Note: For Fedora and other distributions consult [bevy](https://github.com/bevyengine) and [egui](https://github.com/emilk/egui) documentation for the required dependencies.
+4. Install bundling tools:
     - Linux/macOS: `cargo install cargo-bundle`
     - Windows: `cargo install cargo-wix`
-4. Build:
+5. Build:
     - Linux/macOS: `cargo bundle --release`
     - Windows: `cargo wix -p thz-image-explorer`
 
