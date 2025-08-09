@@ -5,6 +5,8 @@ All notable changes to the `THz Image Explorer` project will be documented in th
 # Unreleased 1.0.X - X.X.2025
 
 * fix polygon averaging (x/y)
+* fix color mapping for 2D plots (red - hot, blue - cold, bw - grayscale)
+* add complete compilation instructions (dependencies for bevy and egui)
 * ...
 
 # 1.0.0 - 14.7.2025
