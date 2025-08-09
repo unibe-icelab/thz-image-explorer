@@ -644,7 +644,7 @@ pub fn average_polygon_roi(
                 // Add the value to the average for each z-slice
                 for z in 0..z_size {
                     // x/y need to be swapped for correct alignment
-                    result[z] += data[[y_size - y, x, z]];
+                    result[z] += data[[y_size - y - 1, x, z]];
                     pixel_counts[z] += 1;
                 }
             }
