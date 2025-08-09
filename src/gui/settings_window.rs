@@ -118,13 +118,18 @@ pub fn settings_window(
             egui::Grid::new("update settings")
                 .striped(true)
                 .show(ui, |ui| {
+
+                    let branch = option_env!("GIT_BRANCH").unwrap_or("(No Git Branch Found)");
+                    let commit = option_env!("GIT_HASH").unwrap_or("(No Git Hash Found)");
+                    ui.label(format!("Build: {} @ {}", branch, commit));
+                    ui.end_row();
+
                     if ui.button("Check for Updates").clicked() {
                         explorer.new_release = check_for_software_updates();
                     }
 
                     let current_version = Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Version::new(0, 0, 1));
                     ui.label(format!("Current version: {}", current_version));
-
                     ui.end_row();
 
                     if let Some(r) = &explorer.new_release {
