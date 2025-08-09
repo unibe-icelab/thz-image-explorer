@@ -84,23 +84,33 @@ pub fn color_from_intensity(
         (normalized_y - cut_off[0]) / (cut_off[1] - cut_off[0])
     };
 
-    // Reverse hue mapping: red → green → blue
-    let midpoint = *midpoint_position / 100.0;
-    let hue = if remapped_y <= midpoint {
-        (1.0 - (remapped_y / midpoint)) * 0.667 // Red to green
-    } else {
-        ((remapped_y - midpoint) / (1.0 - midpoint)) * 0.667 // Green to blue
-    };
-
     if *bw {
+        // Apply midpoint mapping to grayscale values
+        let midpoint = *midpoint_position / 100.0;
+        let grayscale_value = if remapped_y <= midpoint {
+            (remapped_y / midpoint) * 0.5
+        } else {
+            0.5 + ((remapped_y - midpoint) / (1.0 - midpoint)) * 0.5
+        };
+
         egui::ecolor::Hsva {
             h: 0.0,
             s: 0.0,
-            v: remapped_y,
+            v: grayscale_value,
             a: 1.0,
         }
         .into()
     } else {
+        // Fixed hue mapping: blue (cold) → green (mid) → red (hot)
+        let midpoint = *midpoint_position / 100.0;
+        let hue = if remapped_y <= midpoint {
+            // From blue (0.667) to green (0.333)
+            0.667 - (remapped_y / midpoint) * 0.334
+        } else {
+            // From green (0.333) to red (0.0)
+            0.333 - ((remapped_y - midpoint) / (1.0 - midpoint)) * 0.333
+        };
+
         egui::ecolor::Hsva {
             h: hue,
             s: 1.0,
