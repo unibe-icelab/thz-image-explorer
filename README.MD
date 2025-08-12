@@ -1,6 +1,9 @@
 # THz Image Explorer - An Interactive Cross-Platform Open-Source THz Image Analysis Tool
 
 [![status](https://joss.theoj.org/papers/690071df7fe4b9bf97a6ea20c06c0de2/status.svg)](https://joss.theoj.org/papers/690071df7fe4b9bf97a6ea20c06c0de2)
+[![Deployment](https://github.com/unibe-icelab/thz-image-explorer/actions/workflows/deployment.yml/badge.svg)](https://github.com/unibe-icelab/thz-image-explorer/actions/workflows/deployment.yml)
+[![SLOCs counter](https://tokei.rs/b1/github/unibe-icelab/thz-image-explorer?category=code)](https://github.com/XAMPPRocky/tokei)
+![GitHub License](https://img.shields.io/github/license/unibe-icelab/thz-image-explorer)
 
 <a href="https://github.com/unibe-icelab/thz-image-explorer/releases"><img src="assets/icons/icon.png" alt=“” width="100" height="100"> </img> </a>
 
