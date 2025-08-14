@@ -35,8 +35,8 @@ def extract_rois(path: Path, measurement_key: Optional[str] = None):
             roi_points = eval(roi_raw) if isinstance(roi_raw, str) else roi_raw  # Convert to list of lists
             roi_points = list(roi_points)  # Ensure it's a list
 
-            # Convert to image coordinate system (flip Y)
-            roi_points_corrected = [(x, height - y) for x, y in roi_points]
+            # Convert to image coordinate system (flip Y and swap x and y)
+            roi_points_corrected = [(width - 1 - y, x) for x, y in roi_points]
             polygon = Polygon(roi_points_corrected)
 
             # Find all pixels inside the ROI
