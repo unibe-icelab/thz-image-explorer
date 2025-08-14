@@ -7,6 +7,8 @@
 
 <a href="https://github.com/unibe-icelab/thz-image-explorer/releases"><img src="assets/icons/icon.png" alt=“” width="100" height="100"> </img> </a>
 
+THz Image Explorer is an interactive cross-platform open-source tool for analyzing THz time-domain imaging data. Its goal is to
+make the analysis of THz scans easier and more accessible to researchers by providing a user-friendly interface and a set of powerful features.
 This Application is written in Rust and the GUI is based on egui and bevy.
 
 <p align="center">
