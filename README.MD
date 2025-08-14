@@ -28,6 +28,7 @@ A sample scan of a THz time-domain 2D imaging system can be found in the `sample
 - [Custom Filters](#custom-filters)
 - [PSF File Generation](#psf-file-generation)
 - [Tested Platforms](#tested-platforms)
+- [Community Guidelines](#community-guidelines)
 
 ---
 
@@ -314,3 +315,24 @@ repository.
 - macOS 10.14.6 Mojave x86
 - Debian 12 (Testing) x86
 - Windows 10 x86
+
+---
+
+## Community Guidelines
+
+We welcome contributions and feedback from the community! Please follow these guidelines:
+
+1. **Contributing to the Software**
+   - Fork the repository and submit pull requests for new features, bug fixes, or improvements.
+   - Please ensure your code follows the existing style and includes relevant documentation.
+   - For major changes, open an issue first to discuss your proposal.
+
+2. **Reporting Issues or Problems**
+   - Use the [GitHub Issues](https://github.com/unibe-icelab/thz-image-explorer/issues) page to report bugs, request features, or suggest improvements.
+   - Provide as much detail as possible, including steps to reproduce, screenshots, and your operating system.
+
+3. **Seeking Support**
+   - For general questions or help, open a discussion in the [GitHub Discussions](https://github.com/unibe-icelab/thz-image-explorer/discussions) section.
+   - You may also contact the maintainers via email listed in the relevant publication.
+
+Thank you for helping us improve THz Image Explorer!
