@@ -376,3 +376,69 @@ impl Filter for TimeDomainBandPassBeforeFFT {
         final_response
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data_container::ScannedImageFilterData;
+    use crate::gui::application::GuiSettingsContainer;
+    use ndarray::{s, Array1, Array3};
+    use std::sync::atomic::AtomicBool;
+    use std::sync::{Arc, RwLock};
+
+    #[test]
+    fn test_filter_zeros_outside_band_and_keeps_data_inside() {
+        let n = 256usize;
+        let k = 9usize; // target frequency bin
+        let mut data = Array3::<f32>::zeros((1, 1, n));
+        for t in 0..n {
+            data[[0, 0, t]] =
+                (2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (n as f32)).sin();
+        }
+        let time = Array1::linspace(0.0, 1.0, n);
+
+        let mut input = ScannedImageFilterData::default();
+        input.time = time;
+        input.data = data;
+
+        let mut filter = TimeDomainBandPassBeforeFFT::new();
+        filter.window_width = 0.0;
+        filter.low = 0.25;
+        filter.high = 0.55;
+
+        // Run the filter
+        let mut gui = GuiSettingsContainer::new();
+        let mut progress = Arc::new(RwLock::new(None));
+        let abort = Arc::new(AtomicBool::new(false));
+        let output = filter.filter(&input, &mut gui, &mut progress, &abort);
+
+        // Shapes are preserved
+        assert_eq!(output.time.shape(), input.time.shape());
+        assert_eq!(output.data.shape(), input.data.shape());
+
+        // Recompute the filter's effective [lower, upper) indices as in the implementation
+        let safe_low = filter.low.max(0.0) as f32;
+        let safe_high = filter
+            .high
+            .min(output.time.last().copied().unwrap_or(10.0) as f64) as f32;
+        let lower = output.time.iter().position(|&f| f >= safe_low).unwrap_or(0);
+        let upper = output
+            .time
+            .iter()
+            .rposition(|&f| f <= safe_high)
+            .map(|i| i + 1)
+            .unwrap_or(output.time.len());
+
+        // Outside the passband must be zero
+        for i in 0..lower {
+            assert_eq!(output.data[[0, 0, i]], 0.0);
+        }
+        for i in upper..output.time.len() {
+            assert_eq!(output.data[[0, 0, i]], 0.0);
+        }
+
+        // Inside the passband there must be non-zero energy
+        let inside = output.data.slice(s![0, 0, lower..upper]);
+        assert!(inside.iter().any(|&v| v > 0.0));
+    }
+}

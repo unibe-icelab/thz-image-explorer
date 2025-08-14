@@ -458,3 +458,111 @@ impl Filter for FrequencyDomainBandPass {
         final_response
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ConfigContainer;
+    use crate::data_container::ScannedImageFilterData;
+    use crate::gui::application::GuiSettingsContainer;
+    use crate::math_tools::{fft, FftWindowType};
+    use ndarray::{s, Array1, Array3};
+    use realfft::RealFftPlanner;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::{Arc, RwLock};
+
+    #[test]
+    fn test_filter_zeros_outside_band_and_keeps_data_inside() {
+        let n = 256usize;
+        let k = 9usize; // target frequency bin
+        let mut data = Array3::<f32>::zeros((1, 1, n));
+        for t in 0..n {
+            data[[0, 0, t]] =
+                (2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (n as f32)).sin();
+        }
+        let time = Array1::linspace(0.0, 1.0, n);
+
+        let mut input = ScannedImageFilterData::default();
+        input.time = time;
+        input.data = data;
+        let mut real_planner = RealFftPlanner::<f32>::new();
+        let r2c = real_planner.plan_fft_forward(n);
+        let c2r = real_planner.plan_fft_inverse(n);
+        input.c2r = Some(c2r.clone());
+        input.r2c = Some(r2c.clone());
+        let spectrum = r2c.make_output_vec();
+        let freq = (0..spectrum.len()).map(|i| i as f32 / 50.0).collect();
+        input.frequency = freq;
+
+        input.phases = Array3::zeros((1, 1, input.frequency.len()));
+        input.amplitudes = Array3::zeros((1, 1, input.frequency.len()));
+        input.fft = Array3::zeros((1, 1, input.frequency.len()));
+
+        // Compute FFT using project API (window disabled)
+        let mut cfg = ConfigContainer::default();
+        cfg.fft_window_type = FftWindowType::AdaptedBlackman;
+        cfg.fft_window = [0.0, 0.0];
+        cfg.avg_in_fourier_space = false;
+        let input_fd = fft(&input, &cfg);
+
+        // Find dominant peak index for the only pixel
+        let mut peak_idx = 0usize;
+        let mut peak_val = -1.0f32;
+        for i in 0..input_fd.frequency.len() {
+            let v = input_fd.amplitudes[[0, 0, i]];
+            if v > peak_val {
+                peak_val = v;
+                peak_idx = i;
+            }
+        }
+
+        // Configure a narrow passband around the peak (±2 bins)
+        let freq = &input_fd.frequency;
+        let i_lo = peak_idx.saturating_sub(2);
+        let i_hi = (peak_idx + 2).min(freq.len() - 1);
+        let mut filter = FrequencyDomainBandPass::new();
+        filter.window_width = 0.0;
+        filter.low = freq[i_lo] as f64;
+        filter.high = freq[i_hi] as f64;
+
+        // Run the filter
+        let mut gui = GuiSettingsContainer::new();
+        let mut progress = Arc::new(RwLock::new(None));
+        let abort = Arc::new(AtomicBool::new(false));
+        let output = filter.filter(&input_fd, &mut gui, &mut progress, &abort);
+
+        // Shapes are preserved
+        assert_eq!(output.fft.shape(), input_fd.fft.shape());
+        assert_eq!(output.amplitudes.shape(), input_fd.amplitudes.shape());
+
+        // Recompute the filter's effective [lower, upper) indices as in the implementation
+        let safe_low = filter.low.max(0.0) as f32;
+        let safe_high = filter
+            .high
+            .min(output.frequency.last().copied().unwrap_or(10.0) as f64)
+            as f32;
+        let lower = output
+            .frequency
+            .iter()
+            .position(|&f| f >= safe_low)
+            .unwrap_or(0);
+        let upper = output
+            .frequency
+            .iter()
+            .rposition(|&f| f <= safe_high)
+            .map(|i| i + 1)
+            .unwrap_or(output.frequency.len());
+
+        // Outside the passband must be zero
+        for i in 0..lower {
+            assert_eq!(output.amplitudes[[0, 0, i]], 0.0);
+        }
+        for i in upper..output.frequency.len() {
+            assert_eq!(output.amplitudes[[0, 0, i]], 0.0);
+        }
+
+        // Inside the passband there must be non-zero energy
+        let inside = output.amplitudes.slice(s![0, 0, lower..upper]);
+        assert!(inside.iter().any(|&v| v > 0.0));
+    }
+}

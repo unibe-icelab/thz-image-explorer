@@ -847,3 +847,47 @@ impl Filter for Deconvolution {
         response
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::io::load_psf;
+    use ndarray::{Array1, Array3};
+    use std::path::Path;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::{Arc, RwLock};
+
+    #[test]
+    fn test_shape_preservation() {
+        let n = 64usize;
+        let dt = 0.05f32;
+        let width = 2usize;
+        let height = 2usize;
+        let impulse_idx = 12usize;
+
+        let mut data = Array3::<f32>::zeros((width, height, n));
+        data[[1, 1, impulse_idx]] = 1.0;
+
+        let time = Array1::linspace(0.0, dt * (n as f32 - 1.0), n);
+
+        let mut input = ScannedImageFilterData::default();
+        input.time = time;
+        input.data = data;
+
+        input.dx = Some(1.0);
+        input.dy = Some(1.0);
+
+        let mut filter = Deconvolution { n_iterations: 10 };
+
+        let mut gui_settings = GuiSettingsContainer::new();
+        gui_settings.psf = load_psf(&Path::new("sample_data/psf.npz").to_path_buf()).unwrap();
+
+        let mut progress = Arc::new(RwLock::new(None));
+        let abort = Arc::new(AtomicBool::new(false));
+
+        let output = filter.filter(&input, &mut gui_settings, &mut progress, &abort);
+
+        assert_eq!(output.time.len(), n);
+        assert_eq!(output.data.shape(), input.data.shape());
+    }
+}

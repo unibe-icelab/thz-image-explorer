@@ -699,3 +699,200 @@ pub fn calculate_optical_properties(
 
     (refractive_index, absorption_coeff, extinction_coeff)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gui::matrix_plot::color_from_intensity;
+    use approx::assert_abs_diff_eq;
+    use bevy_egui::egui;
+    use realfft::RealFftPlanner;
+
+    #[test]
+    fn test_color_from_intensity_bw_mode() {
+        let intensity = 50.0;
+        let max_intensity = 100.0;
+        let cut_off = [10.0, 90.0];
+        let midpoint = 50.0;
+        let bw = true;
+
+        let color = color_from_intensity(&intensity, &max_intensity, &cut_off, &midpoint, &bw);
+
+        // In BW mode, should be grayscale with proper midpoint mapping
+        assert!(color.r() == color.g() && color.g() == color.b());
+    }
+
+    #[test]
+    fn test_color_from_intensity_color_mode() {
+        let intensity = 0.0;
+        let max_intensity = 100.0;
+        let cut_off = [0.0, 100.0];
+        let midpoint = 50.0;
+        let bw = false;
+
+        let color = color_from_intensity(&intensity, &max_intensity, &cut_off, &midpoint, &bw);
+
+        // Cold regions should be blue-ish (high hue value)
+        // Test that it's not pure red (hue = 0)
+        let hsva: egui::ecolor::Hsva = color.into();
+        assert!(hsva.h > 0.5);
+    }
+
+    #[test]
+    fn test_color_from_intensity_hot_regions() {
+        let intensity = 100.0;
+        let max_intensity = 100.0;
+        let cut_off = [0.0, 100.0];
+        let midpoint = 50.0;
+        let bw = false;
+
+        let color = color_from_intensity(&intensity, &max_intensity, &cut_off, &midpoint, &bw);
+
+        // Hot regions should be red (hue close to 0)
+        let hsva: egui::ecolor::Hsva = color.into();
+        assert!(hsva.h < 0.1);
+    }
+
+    #[test]
+    fn test_window_functions_apply() {
+        use approx::assert_abs_diff_eq;
+        use ndarray::Array1;
+
+        let size = 128usize;
+        let time = Array1::linspace(0.0, 1.0, size);
+
+        // Blackman
+        let mut sig_blackman = Array1::<f32>::ones(size);
+        {
+            let mut view = sig_blackman.view_mut();
+            apply_blackman(&mut view, &time);
+        }
+
+        // Hanning
+        let mut sig_hann = Array1::<f32>::ones(size);
+        {
+            let mut view = sig_hann.view_mut();
+            apply_hanning(&mut view, &time);
+        }
+
+        // Hamming
+        let mut sig_hamm = Array1::<f32>::ones(size);
+        {
+            let mut view = sig_hamm.view_mut();
+            apply_hamming(&mut view, &time);
+        }
+
+        // Flat Top
+        let mut sig_flattop = Array1::<f32>::ones(size);
+        {
+            let mut view = sig_flattop.view_mut();
+            apply_flat_top(&mut view, &time);
+        }
+
+        // Adapted Blackman (edge taper only)
+        let mut sig_adapted = Array1::<f32>::ones(size);
+        let lower = 0.1f32;
+        let upper = 0.1f32;
+        {
+            let mut view = sig_adapted.view_mut();
+            apply_adapted_blackman_window(&mut view, &time, &lower, &upper);
+        }
+
+        // Endpoints
+        // Blackman, Hanning, FlatTop, Adapted: ~0 at ends
+        assert!(sig_blackman[0] <= 1e-5 && sig_blackman[size - 1] <= 1e-5);
+        assert!(sig_hann[0] <= 1e-5 && sig_hann[size - 1] <= 1e-5);
+        assert!(sig_flattop[0] <= 1e-5 && sig_flattop[size - 1] <= 1e-5);
+        assert!(sig_adapted[0] <= 1e-5 && sig_adapted[size - 1] <= 1e-5);
+
+        // Hamming: ~0.08 at ends
+        let expected_hamm_end = 0.54 - 0.46 * (2.0 * std::f32::consts::PI * 0.0).cos(); // 0.08
+        assert_abs_diff_eq!(sig_hamm[0], expected_hamm_end, epsilon = 1e-5);
+        assert_abs_diff_eq!(sig_hamm[size - 1], expected_hamm_end, epsilon = 1e-5);
+
+        // Symmetry for all windows
+        for k in 0..size {
+            let m = size - 1 - k;
+            assert_abs_diff_eq!(sig_blackman[k], sig_blackman[m], epsilon = 1e-5);
+            assert_abs_diff_eq!(sig_hann[k], sig_hann[m], epsilon = 1e-5);
+            assert_abs_diff_eq!(sig_hamm[k], sig_hamm[m], epsilon = 1e-5);
+            assert_abs_diff_eq!(sig_flattop[k], sig_flattop[m], epsilon = 1e-5);
+            assert_abs_diff_eq!(sig_adapted[k], sig_adapted[m], epsilon = 1e-5);
+        }
+
+        // Center dominance for all windows
+        let mid = size / 2;
+        assert!(
+            sig_blackman[mid] >= sig_blackman[mid - 1]
+                && sig_blackman[mid] >= sig_blackman[mid + 1]
+        );
+        assert!(sig_hann[mid] >= sig_hann[mid - 1] && sig_hann[mid] >= sig_hann[mid + 1]);
+        assert!(sig_hamm[mid] >= sig_hamm[mid - 1] && sig_hamm[mid] >= sig_hamm[mid + 1]);
+        assert!(
+            sig_flattop[mid] >= sig_flattop[mid - 1] && sig_flattop[mid] >= sig_flattop[mid + 1]
+        );
+        assert!(
+            sig_adapted[mid] >= sig_adapted[mid - 1] && sig_adapted[mid] >= sig_adapted[mid + 1]
+        );
+
+        // Adapted Blackman leaves the center region unchanged (input was ones)
+        assert_abs_diff_eq!(sig_adapted[mid], 1.0, epsilon = 1e-5);
+    }
+
+    #[test]
+    fn test_fft_roundtrip() {
+        use crate::config::ConfigContainer;
+        use crate::data_container::ScannedImageFilterData;
+        use crate::math_tools::{fft, ifft, FftWindowType};
+        use ndarray::{Array1, Array3};
+
+        let n = 128usize;
+        let k1 = 3usize;
+        let k2 = 7usize;
+        let mut data = Array3::<f32>::zeros((1, 1, n));
+
+        // Build a multi-tone real signal to avoid trivial symmetry
+        for t in 0..n {
+            let tt = t as f32 / n as f32;
+            data[[0, 0, t]] = (2.0 * std::f32::consts::PI * k1 as f32 * tt).sin()
+                + 0.5 * (2.0 * std::f32::consts::PI * k2 as f32 * tt).cos();
+        }
+        let time = Array1::linspace(0.0, 1.0, n);
+
+        let mut input = ScannedImageFilterData::default();
+        input.time = time;
+        input.data = data;
+        let mut real_planner = RealFftPlanner::<f32>::new();
+        let r2c = real_planner.plan_fft_forward(n);
+        let c2r = real_planner.plan_fft_inverse(n);
+        input.c2r = Some(c2r.clone());
+        input.r2c = Some(r2c.clone());
+        let spectrum = r2c.make_output_vec();
+        let freq = (0..spectrum.len()).map(|i| i as f32 / 50.0).collect();
+        input.frequency = freq;
+
+        input.phases = Array3::zeros((1, 1, input.frequency.len()));
+        input.amplitudes = Array3::zeros((1, 1, input.frequency.len()));
+        input.fft = Array3::zeros((1, 1, input.frequency.len()));
+
+        // Disable windowing to test pure FFT/IFFT roundtrip
+        let mut config = ConfigContainer::default();
+        config.fft_window_type = FftWindowType::AdaptedBlackman;
+        config.fft_window = [0.0, 0.0];
+        config.avg_in_fourier_space = false;
+
+        let after_fft = fft(&input, &config);
+
+        // Keep a copy of the time-domain data used for FFT (windowed version)
+        let expected_time = after_fft.data.clone();
+
+        let after_ifft = ifft(&after_fft, &config);
+
+        // Compare reconstructed time-domain data to the FFT input (within tolerance)
+        for t in 0..n {
+            let got = after_ifft.data[[0, 0, t]];
+            let exp = expected_time[[0, 0, t]];
+            assert_abs_diff_eq!(got, exp, epsilon = 1e-4);
+        }
+    }
+}

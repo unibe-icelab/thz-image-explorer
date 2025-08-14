@@ -6968,6 +6968,7 @@ dependencies = [
 name = "thz-image-explorer"
 version = "1.0.0"
 dependencies = [
+ "approx",
  "bevy",
  "bevy_egui",
  "bevy_framepace",

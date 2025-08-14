@@ -270,3 +270,121 @@ impl Filter for TiltCompensation {
         final_response
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::{s, Array1, Array3};
+    use std::sync::atomic::AtomicBool;
+    use std::sync::{Arc, RwLock};
+
+    fn compute_expected_num_steps(
+        width: usize,
+        height: usize,
+        dx: f32,
+        dy: f32,
+        tilt_x: f64,
+        tilt_y: f64,
+    ) -> usize {
+        let center_x = width as f32 / 2.0 * dx;
+        let center_y = height as f32 / 2.0 * dy;
+        let time_shift_x = tilt_x as f32 / 180.0 * std::f32::consts::PI;
+        let time_shift_y = tilt_y as f32 / 180.0 * std::f32::consts::PI;
+        let c = 0.299_792_458_f64;
+        let dt = 0.05_f32;
+
+        let max_offset_x = (center_x as f64 * time_shift_x.abs() as f64 / c) as f32;
+        let max_offset_y = (center_y as f64 * time_shift_y.abs() as f64 / c) as f32;
+        let extension = ((max_offset_x + max_offset_y) / dt).floor() * dt;
+        ((extension / dt).round()) as usize
+    }
+
+    #[test]
+    fn test_tilt_compensation_filter_extends_time_and_shifts_center_trace() {
+        // 2x2 image; center pixel is (1,1). Single impulse at t = 10.
+        let n = 64usize;
+        let dt = 0.05f32;
+        let width = 2usize;
+        let height = 2usize;
+        let impulse_idx = 10usize;
+
+        let mut data = Array3::<f32>::zeros((width, height, n));
+        data[[1, 1, impulse_idx]] = 1.0;
+
+        let time = Array1::linspace(0.0, dt * (n as f32 - 1.0), n);
+
+        let mut input = ScannedImageFilterData::default();
+        input.time = time;
+        input.data = data;
+
+        input.dx = Some(1.0);
+        input.dy = Some(1.0);
+
+        let mut filt = TiltCompensation {
+            tilt_x: 10.0,
+            tilt_y: 0.0,
+        };
+        let mut gui = GuiSettingsContainer::new();
+        let mut progress = Arc::new(RwLock::new(None));
+        let abort = Arc::new(AtomicBool::new(false));
+
+        let output = filt.filter(&input, &mut gui, &mut progress, &abort);
+
+        // Expect extension and corresponding shift for the center pixel
+        let expected_steps = compute_expected_num_steps(width, height, 1.0, 1.0, 10.0, 0.0);
+        assert_eq!(output.time.len(), n + 2 * expected_steps);
+
+        // Center pixel has zero geometric shift; impulse moves by +expected_steps
+        let center_trace = output.data.slice(s![1, 1, ..]);
+        let peak_idx = center_trace
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.total_cmp(b.1))
+            .map(|(i, _)| i)
+            .unwrap();
+        assert_eq!(peak_idx, impulse_idx + expected_steps);
+    }
+
+    #[test]
+    fn test_tilt_compensation_filter_no_tilt_no_extension() {
+        let n = 64usize;
+        let dt = 0.05f32;
+        let width = 2usize;
+        let height = 2usize;
+        let impulse_idx = 12usize;
+
+        let mut data = Array3::<f32>::zeros((width, height, n));
+        data[[1, 1, impulse_idx]] = 1.0;
+
+        let time = Array1::linspace(0.0, dt * (n as f32 - 1.0), n);
+
+        let mut input = ScannedImageFilterData::default();
+        input.time = time;
+        input.data = data;
+
+        input.dx = Some(1.0);
+        input.dy = Some(1.0);
+
+        let mut filt = TiltCompensation {
+            tilt_x: 0.0,
+            tilt_y: 0.0,
+        };
+        let mut gui = GuiSettingsContainer::new();
+        let mut progress = Arc::new(RwLock::new(None));
+        let abort = Arc::new(AtomicBool::new(false));
+
+        let output = filt.filter(&input, &mut gui, &mut progress, &abort);
+
+        // No tilt => no extension and impulse index unchanged
+        assert_eq!(output.time.len(), n);
+
+        let center_trace = output.data.slice(s![1, 1, ..]);
+        let peak_idx = center_trace
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.total_cmp(b.1))
+            .map(|(i, _)| i)
+            .unwrap();
+        assert_eq!(peak_idx, impulse_idx);
+    }
+}
