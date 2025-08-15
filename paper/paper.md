@@ -55,7 +55,7 @@ code cannot be adapted by the user, which is often essential in research environ
 the code.
 Solutions published by the scientific community are not available on all platforms, are only applicable on single pixel
 measurements and/or not focused on an interactive workflow [@peretti_thz-tds_2019; @loaiza_thztools_2024].
-With this application, we provide a performant solution written in Rust, that allows an interactive analysis of 2D THz
+With this application, we provide a high-performance solution written in Rust, that allows an interactive analysis of 2D THz
 scans with multiple filters and a 3D viewer.
 This work is open-source and pre-built bundles are available for Linux, macOS and Windows, thus available to the
 entire scientific community.
@@ -109,7 +109,7 @@ $$
 
 where $G_{\sigma}(t)$ is a normalized 1D Gaussian kernel with standard deviation $\sigma = 6.0$ and radius of 12
 samples,
-applied via convolution to smooth the squared signal and extract the envelope as shon in figure \ref{fig:envelope}.
+applied via convolution to smooth the squared signal and extract the envelope as shown in figure \ref{fig:envelope}.
 
 ![The convoluted envelope of the signal. All datapoints below the indicated threshold are treated as transparent. \label{fig:envelope}](convolution_example.pdf)
 
@@ -150,7 +150,7 @@ directory with a struct that implements the `Filter` trait.
 
 # Summary
 
-THz Image Explorer primarily serves as a performant data analysis tool for THz 2D images. The main focus lies on
+THz Image Explorer primarily serves as a high-performance data analysis tool for THz 2D images. The main focus lies on
 preliminary browsing of measurements, rough analysis of scans and identifying regions of interest in each scan. It is
 designed in a modular way to allow possible implementation of more thorough analysis features in the future.
 
