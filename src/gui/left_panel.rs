@@ -578,8 +578,12 @@ pub fn left_panel(
                     "Pixel: {}/{}",
                     explorer.pixel_selected.x, explorer.pixel_selected.y
                 ));
+                // flip x axis because of image coordinate system
                 let pos_x = explorer.data.hk.x_range[0]
-                    + explorer.data.hk.dx * explorer.pixel_selected.x as f32;
+                    + explorer.data.hk.dx
+                        * (((explorer.data.hk.x_range[1] - explorer.data.hk.x_range[0])
+                            / explorer.data.hk.dx) as usize
+                            - explorer.pixel_selected.x) as f32;
                 let pos_y = explorer.data.hk.y_range[0]
                     + explorer.data.hk.dy * explorer.pixel_selected.y as f32;
                 ui.label(format!(" {:.2} mm /{:.2} mm", pos_x, pos_y));
