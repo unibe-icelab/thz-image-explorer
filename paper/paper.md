@@ -121,7 +121,7 @@ Each element (voxel) in this cube represents the THz signal intensity at a speci
 visualization of reflections from internal interfaces and sub-surface structures. The computed intensities are mapped to
 voxel opacity values - regions with high intensity appear opaque while low-intensity regions become transparent.
 
-The 3D viewer is implemented using the `bevy` game engine with a custom WGSL shader, available as a separate
+The 3D viewer is implemented using the `bevy` game engine [@bevyengine] with a custom WGSL shader, available as a separate
 crate: [bevy_voxel_plot](https://github.com/hacknus/bevy_voxel_plot).
 
 ## Filtering pipeline
