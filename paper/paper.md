@@ -55,7 +55,8 @@ code cannot be adapted by the user, which is often essential in research environ
 the code.
 Solutions published by the scientific community are not available on all platforms, are only applicable on single pixel
 measurements and/or not focused on an interactive workflow [@peretti_thz-tds_2019; @loaiza_thztools_2024].
-With this application, we provide a high-performance solution written in Rust, that allows an interactive analysis of 2D THz
+With this application, we provide a high-performance solution written in Rust, that allows an interactive analysis of 2D
+THz
 scans with multiple filters and a 3D viewer.
 This work is open-source and pre-built bundles are available for Linux, macOS and Windows, thus available to the
 entire scientific community.
@@ -121,7 +122,8 @@ Each element (voxel) in this cube represents the THz signal intensity at a speci
 visualization of reflections from internal interfaces and sub-surface structures. The computed intensities are mapped to
 voxel opacity values - regions with high intensity appear opaque while low-intensity regions become transparent.
 
-The 3D viewer is implemented using the `bevy` game engine [@bevyengine] with a custom WGSL shader, available as a separate
+The 3D viewer is implemented using the `bevy` game engine [@bevyengine] with a custom WGSL shader, available as a
+separate
 crate: [bevy_voxel_plot](https://github.com/hacknus/bevy_voxel_plot).
 
 ## Filtering pipeline
@@ -153,6 +155,18 @@ directory with a struct that implements the `Filter` trait.
 THz Image Explorer primarily serves as a high-performance data analysis tool for THz 2D images. The main focus lies on
 preliminary browsing of measurements, rough analysis of scans and identifying regions of interest in each scan. It is
 designed in a modular way to allow possible implementation of more thorough analysis features in the future.
+
+# Declaration of the use of AI-based tools
+
+AI-based tools, including ChatGPT and GitHub Copilot, were used to support this work.
+These tools assisted with code generation but did not replace the author’s critical thinking or original contributions
+in any way.
+All content has been reviewed and validated by the author to ensure accuracy and integrity.
+
+| **AI-based tool** | **Model**                                                       | **Use Case**    | **Remarks**         |
+|-------------------|-----------------------------------------------------------------|-----------------|---------------------|
+| ChatGPT           | GPT-3, GPT-4, GPT-4o, GPT-5                                     | Code generation | Rust, Python        |
+| GitHub Copilot    | GPT-4o, GPT-5, Claude Sonnet 3.5, Claude Sonnet 3.7, Gemini 2.5 | Code generation | Rust, Python, Swift |
 
 # Acknowledgements
 
