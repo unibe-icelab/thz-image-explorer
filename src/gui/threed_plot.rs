@@ -227,6 +227,14 @@ pub(crate) fn instance_from_data(
     let half_height = total_plot_height / 2.0;
     let half_depth = total_plot_depth / 2.0;
 
+    dbg!(&total_plot_depth);
+    dbg!(&spacing_depth);
+    dbg!(&grid_depth);
+    dbg!(&half_depth);
+    dbg!(&cube_depth);
+    dbg!(&orig_depth);
+    dbg!(&time_span);
+
     let cube_scale = scaling as f32;
 
     for x in 0..grid_width {
@@ -245,7 +253,7 @@ pub(crate) fn instance_from_data(
                 let position = Vec3::new(
                     y as f32 * spacing_height - half_height,
                     half_width - x as f32 * spacing_width,
-                    z as f32 * spacing_depth - half_depth,
+                    half_depth - z as f32 * spacing_depth,
                 );
 
                 instances.push(InstanceData {
