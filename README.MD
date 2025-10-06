@@ -18,7 +18,8 @@ This Application is written in Rust and the GUI is based on egui and bevy.
   <img src="thz-image-explorer-gif-3d.gif" alt="3D render gif" width="400">
 </p>
 
-A sample scan of a THz time-domain 2D imaging system can be found in the `sample_data` directory.
+Sample scans of a THz time-domain 2D imaging system can be found in the `sample_data` directory. The `reference.thz`
+corresponds to the `l_alanine_sample.thzimg` file.
 
 ---
 
