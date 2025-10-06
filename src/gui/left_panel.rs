@@ -229,6 +229,8 @@ pub fn left_panel(
 
                                     explorer.new_meta_data = vec![("".to_string(), "".to_string())];
 
+                                    explorer.rois = HashMap::new();
+
                                     send_latest_config(
                                         thread_communication,
                                         ConfigCommand::OpenFile(item.to_path_buf()),
@@ -248,6 +250,7 @@ pub fn left_panel(
                                 item.file_name().unwrap().to_str().unwrap().to_string();
                             thread_communication.gui_settings.selected_path = item.to_path_buf();
                             explorer.new_meta_data = vec![("".to_string(), "".to_string())];
+                            explorer.rois = HashMap::new();
                             send_latest_config(
                                 thread_communication,
                                 ConfigCommand::OpenFile(item.to_path_buf()),
@@ -260,6 +263,7 @@ pub fn left_panel(
                                 item.file_name().unwrap().to_str().unwrap().to_string();
                             thread_communication.gui_settings.selected_path = item.to_path_buf();
                             explorer.new_meta_data = vec![("".to_string(), "".to_string())];
+                            explorer.rois = HashMap::new();
                             send_latest_config(
                                 thread_communication,
                                 ConfigCommand::OpenFile(item.to_path_buf()),
@@ -297,6 +301,7 @@ pub fn left_panel(
                                 }
                                 thread_communication.gui_settings.selected_path = path.clone();
                                 explorer.new_meta_data = vec![("".to_string(), "".to_string())];
+                                explorer.rois = HashMap::new();
                                 send_latest_config(
                                     thread_communication,
                                     ConfigCommand::OpenFile(path),
@@ -356,6 +361,7 @@ pub fn left_panel(
                             {
                                 explorer.file_dialog_state = FileDialogState::None;
                                 explorer.new_meta_data = vec![("".to_string(), "".to_string())];
+                                explorer.rois = HashMap::new();
                                 send_latest_config(
                                     thread_communication,
                                     ConfigCommand::OpenFile(path.to_path_buf()),
@@ -494,6 +500,7 @@ pub fn left_panel(
                             if let Ok(path_guard) = thread_communication.macos_path_lock.read() {
                                 if thread_communication.gui_settings.selected_path != *path_guard {
                                     explorer.new_meta_data = vec![("".to_string(), "".to_string())];
+                                    explorer.rois = HashMap::new();
                                 }
                                 thread_communication.gui_settings.selected_path =
                                     path_guard.clone();

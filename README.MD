@@ -7,8 +7,10 @@
 
 <a href="https://github.com/unibe-icelab/thz-image-explorer/releases"><img src="assets/icons/icon.png" alt=“” width="100" height="100"> </img> </a>
 
-THz Image Explorer is an interactive cross-platform open-source tool for analyzing THz time-domain imaging data. Its goal is to
-make the analysis of THz scans easier and more accessible to researchers by providing a user-friendly interface and a set of powerful features.
+THz Image Explorer is an interactive cross-platform open-source tool for analyzing THz time-domain imaging data. Its
+goal is to
+make the analysis of THz scans easier and more accessible to researchers by providing a user-friendly interface and a
+set of powerful features.
 This Application is written in Rust and the GUI is based on egui and bevy.
 
 <p align="center">
@@ -78,7 +80,8 @@ sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev lib
    ```sh
    sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0
    ```
-   Note: For Fedora and other distributions consult [bevy](https://github.com/bevyengine) and [egui](https://github.com/emilk/egui) documentation for the required dependencies.
+   Note: For Fedora and other distributions consult [bevy](https://github.com/bevyengine)
+   and [egui](https://github.com/emilk/egui) documentation for the required dependencies.
 4. Install bundling tools:
     - Linux/macOS: `cargo install cargo-bundle`
     - Windows: `cargo install cargo-wix`
@@ -135,6 +138,28 @@ A reference file (standard `.thz`) can be loaded, which is used to compute the o
 first
 entry will be used.
 
+### Interface
+
+The interface is split into three main sections: Pulse View (main), Optical Properties View and 3D View.
+New files can be opened either via the `Open File` Menu in the left panel or by drag & drop of `.thz` or `.thzimg`
+files.
+A Meta Data editor is located on the left side and a filter configuration panel on the right side. These panels are
+visible in all three views.
+The main view shows the time domain trace and frequency domain spectrum of the selected pixel, as well as the 2D
+intensity plot of the scan.
+
+  <p align="center">
+    <img src="paper/thz_image_explorer_screenshot2.png" alt="Main View" width="800">
+  </p>
+
+The Optical Properties View shows the refractive index and absorption coefficient
+calculated from the selected pixel and the reference scan (this can either be different ROIs, the selected Pixel or the
+reference file).
+
+  <p align="center">
+    <img src="paper/thz_image_explorer_screenshot1.png" alt="Optical Properties View" width="800">
+  </p>
+
 ### dotTHz Meta Data Editor
 
 The meta-data editor allows the user to edit the meta-data of the loaded scan. The meta-data is stored in the `.thz` (or
@@ -168,6 +193,13 @@ displayed in the center plot.
 ### Filtering Pipeline
 
 The filtering process is a simple linear pipeline, where the output of one filter is the input of the next filter.
+On top of the filtering pipeline/panel general settings are located:
+
+- FFT Log Plot (default: on), which shows the frequency spectrum in logarithmic scale
+- Average in Frequency domain (default: off), which averages the selected pixels (ROI) in frequency domain instead of
+  time domain, this is useful if averaging in time domain leads to destructive interferences.
+- Downscale Factor (default: 1), which downscales the 2D image by averaging pixel blocks of size
+  `Downscale Factor x Downscale Factor`
 
 #### Time Domain Before FFT
 
@@ -177,7 +209,7 @@ Additionally, a simple band-pass filter can be applied to exclude secondary peak
 
 #### FFT
 
-To reduce artefacts in frequency domain, a window is multiplied to the time domain signal before applying the
+To reduce artifacts in frequency domain, a window is multiplied to the time domain signal before applying the
 Fast-Fourier-Transform (FFT). By default, an adapted Blackman
 window is applied, but the user can also select other windows:
 
@@ -282,7 +314,9 @@ impl Filter for ExampleFilter {
 To run the deconvolution filter, a point spread function (PSF) file is required.
 
 1. Perform a knife-edge scan and create a `.thz` file (see `sample_data/example_beam_width/`).
-2. Run:
+2. Install the python dependencies in the `scripts` directory:
+   ```pip install -r requirements.txt```
+3. Run:
 
     ```shell
     python scripts/generate_psf.py \
@@ -307,7 +341,8 @@ while the label of the ROI is saved in the "ROI Labels" meta-data field as a com
 The file can then be opened with Python using the `pydotthz` package
 to further process the data.
 A Python code snipped for ROI extraction and the PSF generation script can be found in the `scripts` directory of the
-repository.
+repository, be sure to install `shapely` for python or just run:
+```pip install -r requirements.txt```
 
 ---
 
@@ -325,16 +360,18 @@ repository.
 We welcome contributions and feedback from the community! Please follow these guidelines:
 
 1. **Contributing to the Software**
-   - Fork the repository and submit pull requests for new features, bug fixes, or improvements.
-   - Please ensure your code follows the existing style and includes relevant documentation.
-   - For major changes, open an issue first to discuss your proposal.
+    - Fork the repository and submit pull requests for new features, bug fixes, or improvements.
+    - Please ensure your code follows the existing style and includes relevant documentation.
+    - For major changes, open an issue first to discuss your proposal.
 
 2. **Reporting Issues or Problems**
-   - Use the [GitHub Issues](https://github.com/unibe-icelab/thz-image-explorer/issues) page to report bugs, request features, or suggest improvements.
-   - Provide as much detail as possible, including steps to reproduce, screenshots, and your operating system.
+    - Use the [GitHub Issues](https://github.com/unibe-icelab/thz-image-explorer/issues) page to report bugs, request
+      features, or suggest improvements.
+    - Provide as much detail as possible, including steps to reproduce, screenshots, and your operating system.
 
 3. **Seeking Support**
-   - For general questions or help, open a discussion in the [GitHub Discussions](https://github.com/unibe-icelab/thz-image-explorer/discussions) section.
-   - You may also contact the maintainers via email listed in the relevant publication.
+    - For general questions or help, open a discussion in
+      the [GitHub Discussions](https://github.com/unibe-icelab/thz-image-explorer/discussions) section.
+    - You may also contact the maintainers via email listed in the relevant publication.
 
 Thank you for helping us improve THz Image Explorer!

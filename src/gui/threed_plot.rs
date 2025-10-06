@@ -227,13 +227,13 @@ pub(crate) fn instance_from_data(
     let half_height = total_plot_height / 2.0;
     let half_depth = total_plot_depth / 2.0;
 
-    dbg!(&total_plot_depth);
-    dbg!(&spacing_depth);
-    dbg!(&grid_depth);
-    dbg!(&half_depth);
-    dbg!(&cube_depth);
-    dbg!(&orig_depth);
-    dbg!(&time_span);
+    // dbg!(&total_plot_depth);
+    // dbg!(&spacing_depth);
+    // dbg!(&grid_depth);
+    // dbg!(&half_depth);
+    // dbg!(&cube_depth);
+    // dbg!(&orig_depth);
+    // dbg!(&time_span);
 
     let cube_scale = scaling as f32;
 

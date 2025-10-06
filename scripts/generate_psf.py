@@ -143,7 +143,7 @@ data = {
     '[y_0, w_y]': popt_ys  # ndarray: fitted y parameters, shape (n_filters, 2)
 }
 
-np.savez(os.path.join(script_path, "sample_data/psf.npz"), **data)
+np.savez(os.path.join(script_path, "../sample_data/psf.npz"), **data)
 print()
 print("* Data saved to sample_data/psf.npz")
 

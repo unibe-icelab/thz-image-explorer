@@ -501,7 +501,7 @@ pub fn pulse_tab(
                     ),
                 );
             }
-            ui.add_space(50.0);
+            ui.add_space(20.0);
             ui.label("FFT");
             if ui
                 .add(toggle(
@@ -513,7 +513,7 @@ pub fn pulse_tab(
                     !thread_communication.gui_settings.phases_visible;
             };
             ui.label("Phases");
-            ui.add_space(50.0);
+            ui.add_space(20.0);
             ui.add(Checkbox::new(
                 &mut thread_communication.gui_settings.water_lines_visible,
                 "",
@@ -521,7 +521,7 @@ pub fn pulse_tab(
             ui.colored_label(egui::Color32::BLUE, "— ");
             ui.label("Water Lines");
 
-            ui.add_space(ui.available_size().x - 250.0 - right_panel_width);
+            ui.add_space(ui.available_size().x - 180.0 - right_panel_width);
 
             // dynamic range:
             let length = explorer.data.signal_fft.len();
@@ -538,7 +538,7 @@ pub fn pulse_tab(
                 20.0 * (dr1.abs() + 1e-10).log(10.0) - max_fft_signals as f32,
             ));
 
-            ui.add_space(50.0);
+            ui.add_space(20.0);
 
             // peak to peak
             let ptp1 = if let (Some(min), Some(max)) = (
