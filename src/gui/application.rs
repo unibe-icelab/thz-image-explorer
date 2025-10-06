@@ -172,7 +172,7 @@ impl GuiSettingsContainer {
             fft_log_plot: true,
             down_scaling: 1,
             normalize_fft: false,
-            avg_in_fourier_space: true,
+            avg_in_fourier_space: false,
             water_lines_visible: false,
             phases_visible: false,
             frequency_resolution_temp: 0.001,

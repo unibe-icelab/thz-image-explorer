@@ -199,7 +199,7 @@ On top of the filtering pipeline/panel general settings are located:
 
 - FFT Log Plot (default: on), which shows the frequency spectrum in logarithmic scale
 - Average in Frequency domain (default: off), which averages the selected pixels (ROI) in frequency domain instead of
-  time domain, this is useful if averaging in time domain leads to destructive interferences.
+  time domain (after the iFFT). This is useful if averaging in time domain leads to destructive interferences.
 - Downscale Factor (default: 1), which downscales the 2D image by averaging pixel blocks of size
   `Downscale Factor x Downscale Factor`
 

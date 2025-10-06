@@ -203,7 +203,7 @@ impl Default for ConfigContainer {
             fft_window_type: FftWindowType::AdaptedBlackman,
             scale_factor: 1,
             fft_log_plot: false,
-            avg_in_fourier_space: true,
+            avg_in_fourier_space: false,
             fft_df: 1.0,
         }
     }

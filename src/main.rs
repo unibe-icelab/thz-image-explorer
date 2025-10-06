@@ -103,6 +103,7 @@ fn main() {
     match load_result {
         Ok(settings) => {
             gui_settings = settings;
+            gui_settings.avg_in_fourier_space = false;
         }
         Err(err) => {
             match gui_settings.save(&APP_INFO, prefs_key) {
