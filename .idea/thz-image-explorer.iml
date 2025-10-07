@@ -2,7 +2,7 @@
 <module type="CPP_MODULE" version="4">
   <component name="FacetManager">
     <facet type="Python" name="Python facet">
-      <configuration sdkName="Python 3.12 (thz-image-explorer)" />
+      <configuration sdkName="Python 3.13 (thz-image-explorer)" />
     </facet>
   </component>
   <component name="NewModuleRootManager">
@@ -13,10 +13,11 @@
       <excludeFolder url="file://$MODULE_DIR$/filter_macros/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/.venv1" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" name="Python 3.12 (thz-image-explorer) interpreter library" level="application" />
+    <orderEntry type="library" name="Python 3.13 (thz-image-explorer) interpreter library" level="application" />
   </component>
   <component name="PackageRequirementsSettings">
     <option name="requirementsPath" value="" />
