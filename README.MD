@@ -147,8 +147,14 @@ files.
 A Meta Data editor is located on the left side and a filter configuration panel on the right side. These panels are
 visible in all three views.
 The main view shows the time domain trace and frequency domain spectrum of the selected pixel, as well as the 2D
-intensity plot of the scan. The plots can be zoomed by right-clicking and dragging a rectangle, panning can be done by
-left-clicking and dragging the mouse. Double-clicking will reset the zoom and pan.
+intensity plot of the scan. To navigate the plots:
+- Pan: Left-drag
+- Horizontal pan: Shift + Scroll
+- Zoom: Cmd + Scroll
+- Horizontal zoom: Shift+Cmd + Scroll
+- Vertical zoom: Option+Cmd + Scroll
+- Box zoom: Right-drag (on macOS drag with two dingers on the trackpad)
+- Reset: Double-click
 
   <p align="center">
     <img src="paper/thz_image_explorer_screenshot2.png" alt="Main View" width="800">
@@ -345,6 +351,7 @@ to further process the data.
 A Python code snipped for ROI extraction and the PSF generation script can be found in the `scripts` directory of the
 repository, be sure to install `shapely` for python or just run:
 ```pip install -r requirements.txt```
+On macOS you might need to install geos first, e.g. via `brew install geos`.
 
 ---
 
