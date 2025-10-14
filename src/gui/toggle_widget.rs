@@ -1,8 +1,9 @@
 //! Source code example of how to create your own widget.
 //! This is meant to be read as a tutorial, hence the plethora of comments.
 
+use crate::gui::application::SAFETY_ORANGE;
 use bevy_egui::egui;
-use bevy_egui::egui::StrokeKind;
+use bevy_egui::egui::{Color32, StrokeKind};
 
 /// iOS-style toggle switch:
 ///
@@ -59,56 +60,36 @@ pub fn toggle_ui(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
         // All coordinates are in absolute screen coordinates so we use `rect` to place the elements.
         let rect = rect.expand(visuals.expansion);
         let radius = 0.5 * rect.height();
-        ui.painter().rect(
-            rect,
-            radius,
-            visuals.bg_fill,
-            visuals.bg_stroke,
-            StrokeKind::Middle,
-        );
+        if *on {
+            ui.painter().rect(
+                rect,
+                radius,
+                SAFETY_ORANGE,
+                visuals.bg_stroke,
+                StrokeKind::Middle,
+            );
+        } else {
+            ui.painter().rect(
+                rect,
+                radius,
+                visuals.bg_fill,
+                visuals.bg_stroke,
+                StrokeKind::Middle,
+            );
+        }
         // Paint the circle, animating it from left to right with `how_on`:
         let circle_x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), how_on);
         let center = egui::pos2(circle_x, rect.center().y);
-        ui.painter()
-            .circle(center, 0.75 * radius, visuals.bg_fill, visuals.fg_stroke);
+        ui.painter().circle(
+            center,
+            0.75 * radius,
+            Color32::LIGHT_GRAY,
+            visuals.fg_stroke,
+        );
     }
 
     // All done! Return the interaction response so the user can check what happened
     // (hovered, clicked, ...) and maybe show a tooltip:
-    response
-}
-
-/// Here is the same code again, but a bit more compact:
-#[allow(dead_code)]
-fn toggle_ui_compact(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
-    let desired_size = ui.spacing().interact_size.y * egui::vec2(2.0, 1.0);
-    let (rect, mut response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
-    if response.clicked() {
-        *on = !*on;
-        response.mark_changed();
-    }
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), *on, "")
-    });
-
-    if ui.is_rect_visible(rect) {
-        let how_on = ui.ctx().animate_bool(response.id, *on);
-        let visuals = ui.style().interact_selectable(&response, *on);
-        let rect = rect.expand(visuals.expansion);
-        let radius = 0.5 * rect.height();
-        ui.painter().rect(
-            rect,
-            radius,
-            visuals.bg_fill,
-            visuals.bg_stroke,
-            StrokeKind::Middle,
-        );
-        let circle_x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), how_on);
-        let center = egui::pos2(circle_x, rect.center().y);
-        ui.painter()
-            .circle(center, 0.75 * radius, visuals.bg_fill, visuals.fg_stroke);
-    }
-
     response
 }
 

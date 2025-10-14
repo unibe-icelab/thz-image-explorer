@@ -1,16 +1,37 @@
+//! Mathematical tools for terahertz time-domain spectroscopy signal processing.
+//!
 //! This module provides various windowing functions for signal processing, including Blackman, Hanning, Hamming,
-//! Flat Top windows, and an adapted Blackman window implementation. Additionally, it includes a utility for
-//! unwrapping phase ranges in periodic signals.
+//! and Flat Top windows. It features specialized implementations like the adapted Blackman window that selectively
+//! applies windowing to signal edges. Additionally, it includes utilities for spectral analysis, such as
+//! Fast Fourier Transform (FFT) operations and phase unwrapping for periodic signals.
+//!
+//! # Signal Processing Functions
+//!
+//! * **Windowing Functions**: Used to reduce spectral leakage during FFT operations by tapering
+//!   signal edges. Various window types offer different trade-offs between spectral resolution
+//!   and amplitude accuracy.
+//!
+//! * **FFT Operations**: Parallel implementations of forward and inverse FFT operations
+//!   with support for different windowing methods and automatic phase unwrapping.
+//!
+//! * **Phase Unwrapping**: Tools to remove 2π discontinuities in phase data, producing
+//!   continuous phase information across the spectrum.
 
-use ndarray::{Array1, ArrayViewMut, Ix1, Zip};
+use crate::config::ConfigContainer;
+use crate::data_container::ScannedImageFilterData;
+use ndarray::{Array1, Array3, ArrayView1, ArrayViewMut, Axis, Ix1, Zip};
+use rayon::iter::IntoParallelIterator;
+use rayon::iter::ParallelIterator;
 use realfft::num_complex::Complex32;
+use std::cmp::{max, min};
+use std::f32::consts::PI;
 use std::fmt::{Display, Formatter};
 
 /// Enum representing the different types of FFT window functions supported.
 ///
 /// These window functions can be applied to signals for spectral analysis.
 /// The type determines the nature of the windowing used during FFT computation.
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum FftWindowType {
     /// Adapted Blackman window with only the beginning and ending being altered.
     AdaptedBlackman,
@@ -97,36 +118,6 @@ pub fn apply_adapted_blackman_window(
             );
             *s *= bw;
         }
-    }
-}
-
-/// Applies a smooth bandpass filter with soft Blackman-style transitions to the spectrum.
-pub fn apply_soft_bandpass(
-    frequencies: &Array1<f32>,
-    spectrum: &mut Vec<Complex32>,
-    passband: (f32, f32),
-    transition_width: f32,
-) {
-    let (low, high) = passband;
-
-    for (i, f) in frequencies.iter().enumerate() {
-        let gain = if *f < low - transition_width || *f > high + transition_width {
-            0.0
-        } else if *f >= low && *f <= high {
-            1.0
-        } else if *f >= low - transition_width && *f < low {
-            // Fade in
-            let x = (low - *f) / transition_width;
-            blackman_window((1.0 - x) * transition_width, 2.0 * transition_width)
-        } else if *f > high && *f <= high + transition_width {
-            // Fade out
-            let x = (*f - high) / transition_width;
-            blackman_window((1.0 - x) * transition_width, 2.0 * transition_width)
-        } else {
-            0.0
-        };
-
-        spectrum[i] *= gain;
     }
 }
 
@@ -246,4 +237,662 @@ pub fn numpy_unwrap(x: &[f32], period: Option<f32>) -> Vec<f32> {
         unwrapped[i] = unwrapped_val;
     }
     unwrapped
+}
+
+pub fn scaling(input: &ScannedImageFilterData, config: &ConfigContainer) -> ScannedImageFilterData {
+    let scaling = config.scale_factor;
+    if scaling <= 1 {
+        return input.clone();
+    }
+
+    let mut output = input.clone();
+
+    let new_width = input.width / scaling;
+    let new_height = input.height / scaling;
+
+    if new_width == 0 || new_height == 0 {
+        // Scaling is too large, return original data
+        return input.clone();
+    }
+
+    // Update metadata for scaled data, but keep original width/height for display
+    output.width = new_width;
+    output.height = new_height;
+    output.scaling = scaling;
+    if let Some(dx) = output.dx {
+        output.dx = Some(dx * scaling as f32);
+    }
+    if let Some(dy) = output.dy {
+        output.dy = Some(dy * scaling as f32);
+    }
+
+    output.pixel_selected[0] /= scaling;
+    output.pixel_selected[1] /= scaling;
+
+    // Helper function to scale a 3D array by averaging blocks
+    fn scale_3d<T: Clone + Default + std::ops::AddAssign + std::ops::Div<f32, Output = T>>(
+        data: &Array3<T>,
+        new_width: usize,
+        new_height: usize,
+        scaling: usize,
+    ) -> Array3<T> {
+        let z_len = data.shape()[2];
+        let mut scaled_data = Array3::<T>::default((new_width, new_height, z_len));
+        let scaling_factor = (scaling * scaling) as f32;
+
+        for nx in 0..new_width {
+            for ny in 0..new_height {
+                for z in 0..z_len {
+                    let mut sum = T::default();
+                    for i in 0..scaling {
+                        for j in 0..scaling {
+                            let ox = nx * scaling + i;
+                            let oy = ny * scaling + j;
+                            if ox < data.shape()[0] && oy < data.shape()[1] {
+                                sum += data[[ox, oy, z]].clone();
+                            }
+                        }
+                    }
+                    scaled_data[[nx, ny, z]] = sum / scaling_factor;
+                }
+            }
+        }
+        scaled_data
+    }
+
+    // Scale 3D data arrays for faster backend processing
+    output.data = scale_3d(&input.data, new_width, new_height, scaling);
+    output.amplitudes = scale_3d(&input.amplitudes, new_width, new_height, scaling);
+    output.phases = scale_3d(&input.phases, new_width, new_height, scaling);
+    output.fft = scale_3d(&input.fft, new_width, new_height, scaling);
+
+    output
+}
+
+/// Performs Fast Fourier Transform (FFT) on time-domain data.
+///
+/// This function applies the selected windowing function to the time-domain data before
+/// transforming it to the frequency domain. It processes the data in parallel across
+/// spatial dimensions using Rayon's parallel iterator capabilities.
+///
+/// The function:
+/// 1. Applies the configured window function to the time-domain data
+/// 2. Performs the forward FFT transformation
+/// 3. Calculates amplitude and phase information from the complex spectrum
+/// 4. Unwraps the phase data to remove 2π discontinuities
+///
+/// # Arguments
+/// * `output` - The data container holding time-domain data to transform
+/// * `config` - Configuration settings including window type and parameters
+///
+/// # Returns
+/// A new `ScannedImageFilterData` instance with the FFT results
+pub fn fft(input: &ScannedImageFilterData, config: &ConfigContainer) -> ScannedImageFilterData {
+    let mut output = input.clone();
+    if let Some(r2c) = &output.r2c {
+        (
+            output.data.axis_iter_mut(Axis(0)),
+            output.phases.axis_iter_mut(Axis(0)),
+            output.amplitudes.axis_iter_mut(Axis(0)),
+            output.fft.axis_iter_mut(Axis(0)),
+        )
+            .into_par_iter()
+            .for_each(
+                |(
+                    mut data_columns,
+                    mut output_phases_columns,
+                    mut output_amplitude_columns,
+                    mut output_fft_columns,
+                )| {
+                    let mut input_vec = vec![0.0; output.time.len()];
+                    let mut spectrum = r2c.make_output_vec();
+                    for (((mut input_data, mut phases), mut amplitudes), mut fft) in data_columns
+                        .axis_iter_mut(Axis(0))
+                        .zip(output_phases_columns.axis_iter_mut(Axis(0)))
+                        .zip(output_amplitude_columns.axis_iter_mut(Axis(0)))
+                        .zip(output_fft_columns.axis_iter_mut(Axis(0)))
+                    {
+                        // Apply the selected window function to the time domain data
+                        match config.fft_window_type {
+                            FftWindowType::AdaptedBlackman => {
+                                apply_adapted_blackman_window(
+                                    &mut input_data,
+                                    &output.time,
+                                    &config.fft_window[0],
+                                    &config.fft_window[1],
+                                );
+                            }
+                            FftWindowType::Blackman => {
+                                apply_blackman(&mut input_data, &output.time)
+                            }
+                            FftWindowType::Hanning => apply_hanning(&mut input_data, &output.time),
+                            FftWindowType::Hamming => apply_hamming(&mut input_data, &output.time),
+                            FftWindowType::FlatTop => apply_flat_top(&mut input_data, &output.time),
+                        }
+
+                        // Forward transform the input data
+                        input_vec.clone_from_slice(input_data.as_slice().unwrap());
+                        r2c.process(&mut input_vec, &mut spectrum).unwrap();
+
+                        // Assign spectrum to fft
+                        fft.assign(&Array1::from_vec(spectrum.clone()));
+
+                        // Assign amplitudes
+                        amplitudes
+                            .iter_mut()
+                            .zip(spectrum.iter())
+                            .for_each(|(a, s)| *a = s.norm());
+
+                        // Assign phases (unwrap)
+                        let phase: Vec<f32> = spectrum.iter().map(|s| s.arg()).collect();
+                        let unwrapped = numpy_unwrap(&phase, Some(2.0 * PI));
+                        phases
+                            .iter_mut()
+                            .zip(unwrapped.iter())
+                            .for_each(|(p, v)| *p = *v);
+                    }
+                },
+            );
+    };
+    output
+}
+
+/// Performs Inverse Fast Fourier Transform (IFFT) on frequency-domain data.
+///
+/// This function transforms frequency-domain data back to the time domain using
+/// parallel processing. It operates on the complex spectral data stored in the FFT
+/// field of the input container.
+///
+/// The function:
+/// 1. Retrieves the complex spectrum for each pixel
+/// 2. Performs the inverse FFT operation
+/// 3. Normalizes the resulting time-domain signal
+/// 4. Updates the time-domain data field in the container
+///
+/// # Arguments
+/// * `output` - The data container holding frequency-domain data to transform
+/// * `config` - Configuration settings (unused in this function)
+///
+/// # Returns
+/// A new `ScannedImageFilterData` instance with the IFFT results
+pub fn ifft(input: &ScannedImageFilterData, config: &ConfigContainer) -> ScannedImageFilterData {
+    let mut output = input.clone();
+
+    output.avg_fft = output
+        .fft
+        .mean_axis(Axis(0))
+        .expect("Axis 2 mean failed")
+        .mean_axis(Axis(0))
+        .expect("Axis 1 mean failed");
+
+    output.avg_signal_fft = output
+        .amplitudes
+        .mean_axis(Axis(0))
+        .expect("Axis 2 mean failed")
+        .mean_axis(Axis(0))
+        .expect("Axis 1 mean failed");
+
+    output.avg_phase_fft = output
+        .phases
+        .mean_axis(Axis(0))
+        .expect("Axis 2 mean failed")
+        .mean_axis(Axis(0))
+        .expect("Axis 1 mean failed");
+
+    if config.avg_in_fourier_space {
+        // Reconstruct complex spectrum from average amplitude and phase
+        if let Some(c2r) = &output.c2r {
+            // Create a complex spectrum from the averaged amplitude and phase
+            let mut spectrum = vec![Complex32::new(0.0, 0.0); output.frequency.len()];
+
+            for (i, (&amp, &phase)) in output
+                .avg_signal_fft
+                .iter()
+                .zip(output.avg_phase_fft.iter())
+                .enumerate()
+            {
+                // Convert from polar form (amplitude, phase) to complex
+                spectrum[i] = Complex32::from_polar(amp, phase);
+            }
+
+            let mut real_output = vec![0.0; output.time.len()];
+
+            // Perform inverse FFT on the reconstructed spectrum
+            c2r.process(&mut spectrum, &mut real_output).unwrap();
+
+            // Normalize the result
+            let length = real_output.len();
+            let normalized: Vec<f32> = real_output.iter().map(|&v| v / length as f32).collect();
+
+            // Store the result in output.avg_data
+            output.avg_data = Array1::from_vec(normalized);
+        }
+    }
+
+    // Process all ROIs after handling the average signal
+    for (roi_uuid, (roi_name, polygon)) in &input.rois {
+        if let Some(polygon) = polygon {
+            // Time domain ROI processing (direct spatial averaging)
+            if !config.avg_in_fourier_space {
+                let roi_signal = average_polygon_roi(&input.data, polygon, input.scaling);
+                output
+                    .roi_data
+                    .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
+            }
+
+            // Frequency domain processing (for visualization)
+            let roi_signal_fft = average_polygon_roi(&input.amplitudes, polygon, input.scaling);
+            let roi_phase_fft = average_polygon_roi(&input.phases, polygon, input.scaling);
+
+            // Store frequency domain results
+            output
+                .roi_signal_fft
+                .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal_fft.clone()));
+            output
+                .roi_phase_fft
+                .insert(roi_uuid.clone(), (roi_name.clone(), roi_phase_fft.clone()));
+
+            // In the ifft method where ROIs are processed:
+            if config.avg_in_fourier_space {
+                if let Some(c2r) = &output.c2r {
+                    // Create a complex spectrum from ROI amplitude and phase
+                    let mut spectrum = vec![Complex32::new(0.0, 0.0); input.frequency.len()];
+
+                    for (i, (&amp, &phase)) in
+                        roi_signal_fft.iter().zip(roi_phase_fft.iter()).enumerate()
+                    {
+                        // Convert from polar form (amplitude, phase) to complex
+                        spectrum[i] = Complex32::from_polar(amp, phase);
+                    }
+
+                    // Enforce constraints for realfft compatibility:
+                    // 1. First element must have zero imaginary part
+                    if !spectrum.is_empty() {
+                        spectrum[0] = Complex32::new(spectrum[0].re, 0.0);
+                    }
+
+                    let mut real_output = vec![0.0; input.time.len()];
+
+                    // Error handling instead of unwrap
+                    match c2r.process(&mut spectrum, &mut real_output) {
+                        Ok(_) => {
+                            // Normalize the result
+                            let length = real_output.len();
+                            let normalized: Vec<f32> =
+                                real_output.iter().map(|&v| v / length as f32).collect();
+
+                            // Store the reconstructed time domain signal
+                            let roi_signal = Array1::from_vec(normalized);
+                            output
+                                .roi_data
+                                .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
+                        }
+                        Err(e) => {
+                            log::error!("IFFT error for ROI {}: {}", roi_name, e);
+                            // Fall back to time-domain averaging if IFFT fails
+                            let roi_signal =
+                                average_polygon_roi(&input.data, polygon, input.scaling);
+                            output
+                                .roi_data
+                                .insert(roi_uuid.clone(), (roi_name.clone(), roi_signal));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(c2r) = &output.c2r {
+        (
+            output.fft.axis_iter(Axis(0)),
+            output.data.axis_iter_mut(Axis(0)),
+        )
+            .into_par_iter()
+            .for_each(|(fft_columns, mut data_columns)| {
+                let mut spectrum = vec![Complex32::new(0.0, 0.0); output.frequency.len()];
+                let mut real_output = vec![0.0; output.time.len()];
+                for (fft, mut data) in fft_columns
+                    .axis_iter(Axis(0))
+                    .zip(data_columns.axis_iter_mut(Axis(0)))
+                {
+                    // Copy spectrum from fft view
+                    spectrum.clone_from_slice(fft.as_slice().unwrap());
+                    // Perform inverse FFT
+                    c2r.process(&mut spectrum, &mut real_output).unwrap();
+                    // Normalize if needed (realfft does not always normalize)
+                    let length = real_output.len();
+                    let normalized: Vec<f32> =
+                        real_output.iter().map(|&v| v / length as f32).collect();
+                    data.assign(&Array1::from_vec(normalized));
+                }
+            });
+    }
+    output
+}
+
+/// Check if a point is inside a polygon using the ray casting algorithm
+fn point_in_polygon(x: usize, y: usize, polygon: &[(usize, usize)]) -> bool {
+    let mut inside = false;
+    let mut j = polygon.len() - 1;
+
+    for i in 0..polygon.len() {
+        let (xi, yi) = polygon[i];
+        let (xj, yj) = polygon[j];
+
+        let intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+
+        if intersect {
+            inside = !inside;
+        }
+
+        j = i;
+    }
+    inside
+}
+
+/// Average values in a 3D array within a polygon-defined ROI
+///
+/// * `data` - 3D array with dimensions [z, y, x]
+/// * `polygon` - Vector of (x, y) coordinates defining the ROI boundary
+///
+/// Returns a 1D array with averages along the z-axis for the polygon region
+pub fn average_polygon_roi(
+    data: &Array3<f32>,
+    polygon: &Vec<(usize, usize)>,
+    scaling: usize,
+) -> Array1<f32> {
+    let mut polygon = polygon.clone();
+
+    for (x, y) in polygon.iter_mut() {
+        *x /= scaling;
+        *y /= scaling;
+    }
+
+    // x/y need to be swapped for correct alignment
+    let x_size = data.shape()[1];
+    let y_size = data.shape()[0];
+    let z_size = data.shape()[2];
+
+    // Create output array
+    let mut result = Array1::zeros(z_size);
+    let mut pixel_counts = vec![0; z_size];
+
+    // Find bounding box of polygon to reduce computation
+    let mut x_min = usize::MAX;
+    let mut y_min = usize::MAX;
+    let mut x_max = 0;
+    let mut y_max = 0;
+
+    for (x, y) in polygon.iter() {
+        x_min = min(x_min, *x);
+        y_min = min(y_min, *y);
+        x_max = max(x_max, *x);
+        y_max = max(y_max, *y);
+    }
+
+    // Clamp to array bounds
+    x_min = min(x_min, x_size - 1);
+    y_min = min(y_min, y_size - 1);
+    x_max = min(x_max, x_size - 1);
+    y_max = min(y_max, y_size - 1);
+
+    // For each pixel in the bounding box
+    for y in y_min..=y_max {
+        for x in x_min..=x_max {
+            // Check if the pixel is inside the polygon
+            if point_in_polygon(x, y, &polygon) {
+                // Add the value to the average for each z-slice
+                for z in 0..z_size {
+                    // x/y need to be swapped for correct alignment
+                    result[z] += data[[y_size - y - 1, x, z]];
+                    pixel_counts[z] += 1;
+                }
+            }
+        }
+    }
+
+    // Calculate average for each z-slice
+    for z in 0..z_size {
+        if pixel_counts[z] > 0 {
+            result[z] /= pixel_counts[z] as f32;
+        }
+    }
+    result
+}
+
+const C: f32 = 2.99792458e8_f32;
+
+pub fn calculate_optical_properties(
+    sample_amplitude: ArrayView1<f32>,
+    sample_phase: ArrayView1<f32>,
+    reference_amplitude: ArrayView1<f32>,
+    reference_phase: ArrayView1<f32>,
+    frequencies: ArrayView1<f32>,
+    sample_thickness: f32,
+) -> (Array1<f32>, Array1<f32>, Array1<f32>) {
+    let mut refractive_index = Array1::zeros(frequencies.len());
+    let mut absorption_coeff = Array1::zeros(frequencies.len());
+    let mut extinction_coeff = Array1::zeros(frequencies.len());
+
+    // Calculate for each frequency point
+    for i in 0..frequencies.len() {
+        // Convert frequency to Hz (from THz)
+        let frequency_hz = frequencies[i] * 1.0e12;
+        let delta_phi = sample_phase[i] - reference_phase[i];
+        let omega = 2.0 * PI * frequency_hz;
+        let n = 1.0 + C * delta_phi / (omega * sample_thickness);
+
+        // Avoid division by zero or log of non-positive
+        let amp = sample_amplitude[i].max(1e-12);
+        let amp_ref = reference_amplitude[i].max(1e-12);
+        let n_safe = n.max(1e-6);
+
+        let alpha = -2.0 / sample_thickness
+            * (((n_safe + 1.0).powi(2)) / (4.0 * n_safe) * amp / amp_ref).ln();
+
+        let kappa = alpha * C / (4.0 * PI * frequency_hz);
+
+        refractive_index[i] = n;
+        absorption_coeff[i] = alpha;
+        extinction_coeff[i] = kappa;
+    }
+
+    (refractive_index, absorption_coeff, extinction_coeff)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gui::matrix_plot::color_from_intensity;
+    use approx::assert_abs_diff_eq;
+    use bevy_egui::egui;
+    use realfft::RealFftPlanner;
+
+    #[test]
+    fn test_color_from_intensity_bw_mode() {
+        let intensity = 50.0;
+        let max_intensity = 100.0;
+        let cut_off = [10.0, 90.0];
+        let midpoint = 50.0;
+        let bw = true;
+
+        let color = color_from_intensity(&intensity, &max_intensity, &cut_off, &midpoint, &bw);
+
+        // In BW mode, should be grayscale with proper midpoint mapping
+        assert!(color.r() == color.g() && color.g() == color.b());
+    }
+
+    #[test]
+    fn test_color_from_intensity_color_mode() {
+        let intensity = 0.0;
+        let max_intensity = 100.0;
+        let cut_off = [0.0, 100.0];
+        let midpoint = 50.0;
+        let bw = false;
+
+        let color = color_from_intensity(&intensity, &max_intensity, &cut_off, &midpoint, &bw);
+
+        // Cold regions should be blue-ish (high hue value)
+        // Test that it's not pure red (hue = 0)
+        let hsva: egui::ecolor::Hsva = color.into();
+        assert!(hsva.h > 0.5);
+    }
+
+    #[test]
+    fn test_color_from_intensity_hot_regions() {
+        let intensity = 100.0;
+        let max_intensity = 100.0;
+        let cut_off = [0.0, 100.0];
+        let midpoint = 50.0;
+        let bw = false;
+
+        let color = color_from_intensity(&intensity, &max_intensity, &cut_off, &midpoint, &bw);
+
+        // Hot regions should be red (hue close to 0)
+        let hsva: egui::ecolor::Hsva = color.into();
+        assert!(hsva.h < 0.1);
+    }
+
+    #[test]
+    fn test_window_functions_apply() {
+        use approx::assert_abs_diff_eq;
+        use ndarray::Array1;
+
+        let size = 128usize;
+        let time = Array1::linspace(0.0, 1.0, size);
+
+        // Blackman
+        let mut sig_blackman = Array1::<f32>::ones(size);
+        {
+            let mut view = sig_blackman.view_mut();
+            apply_blackman(&mut view, &time);
+        }
+
+        // Hanning
+        let mut sig_hann = Array1::<f32>::ones(size);
+        {
+            let mut view = sig_hann.view_mut();
+            apply_hanning(&mut view, &time);
+        }
+
+        // Hamming
+        let mut sig_hamm = Array1::<f32>::ones(size);
+        {
+            let mut view = sig_hamm.view_mut();
+            apply_hamming(&mut view, &time);
+        }
+
+        // Flat Top
+        let mut sig_flattop = Array1::<f32>::ones(size);
+        {
+            let mut view = sig_flattop.view_mut();
+            apply_flat_top(&mut view, &time);
+        }
+
+        // Adapted Blackman (edge taper only)
+        let mut sig_adapted = Array1::<f32>::ones(size);
+        let lower = 0.1f32;
+        let upper = 0.1f32;
+        {
+            let mut view = sig_adapted.view_mut();
+            apply_adapted_blackman_window(&mut view, &time, &lower, &upper);
+        }
+
+        // Endpoints
+        // Blackman, Hanning, FlatTop, Adapted: ~0 at ends
+        assert!(sig_blackman[0] <= 1e-5 && sig_blackman[size - 1] <= 1e-5);
+        assert!(sig_hann[0] <= 1e-5 && sig_hann[size - 1] <= 1e-5);
+        assert!(sig_flattop[0] <= 1e-5 && sig_flattop[size - 1] <= 1e-5);
+        assert!(sig_adapted[0] <= 1e-5 && sig_adapted[size - 1] <= 1e-5);
+
+        // Hamming: ~0.08 at ends
+        let expected_hamm_end = 0.54 - 0.46 * (2.0 * std::f32::consts::PI * 0.0).cos(); // 0.08
+        assert_abs_diff_eq!(sig_hamm[0], expected_hamm_end, epsilon = 1e-5);
+        assert_abs_diff_eq!(sig_hamm[size - 1], expected_hamm_end, epsilon = 1e-5);
+
+        // Symmetry for all windows
+        for k in 0..size {
+            let m = size - 1 - k;
+            assert_abs_diff_eq!(sig_blackman[k], sig_blackman[m], epsilon = 1e-5);
+            assert_abs_diff_eq!(sig_hann[k], sig_hann[m], epsilon = 1e-5);
+            assert_abs_diff_eq!(sig_hamm[k], sig_hamm[m], epsilon = 1e-5);
+            assert_abs_diff_eq!(sig_flattop[k], sig_flattop[m], epsilon = 1e-5);
+            assert_abs_diff_eq!(sig_adapted[k], sig_adapted[m], epsilon = 1e-5);
+        }
+
+        // Center dominance for all windows
+        let mid = size / 2;
+        assert!(
+            sig_blackman[mid] >= sig_blackman[mid - 1]
+                && sig_blackman[mid] >= sig_blackman[mid + 1]
+        );
+        assert!(sig_hann[mid] >= sig_hann[mid - 1] && sig_hann[mid] >= sig_hann[mid + 1]);
+        assert!(sig_hamm[mid] >= sig_hamm[mid - 1] && sig_hamm[mid] >= sig_hamm[mid + 1]);
+        assert!(
+            sig_flattop[mid] >= sig_flattop[mid - 1] && sig_flattop[mid] >= sig_flattop[mid + 1]
+        );
+        assert!(
+            sig_adapted[mid] >= sig_adapted[mid - 1] && sig_adapted[mid] >= sig_adapted[mid + 1]
+        );
+
+        // Adapted Blackman leaves the center region unchanged (input was ones)
+        assert_abs_diff_eq!(sig_adapted[mid], 1.0, epsilon = 1e-5);
+    }
+
+    #[test]
+    fn test_fft_roundtrip() {
+        use crate::config::ConfigContainer;
+        use crate::data_container::ScannedImageFilterData;
+        use crate::math_tools::{fft, ifft, FftWindowType};
+        use ndarray::{Array1, Array3};
+
+        let n = 128usize;
+        let k1 = 3usize;
+        let k2 = 7usize;
+        let mut data = Array3::<f32>::zeros((1, 1, n));
+
+        // Build a multi-tone real signal to avoid trivial symmetry
+        for t in 0..n {
+            let tt = t as f32 / n as f32;
+            data[[0, 0, t]] = (2.0 * std::f32::consts::PI * k1 as f32 * tt).sin()
+                + 0.5 * (2.0 * std::f32::consts::PI * k2 as f32 * tt).cos();
+        }
+        let time = Array1::linspace(0.0, 1.0, n);
+
+        let mut input = ScannedImageFilterData::default();
+        input.time = time;
+        input.data = data;
+        let mut real_planner = RealFftPlanner::<f32>::new();
+        let r2c = real_planner.plan_fft_forward(n);
+        let c2r = real_planner.plan_fft_inverse(n);
+        input.c2r = Some(c2r.clone());
+        input.r2c = Some(r2c.clone());
+        let spectrum = r2c.make_output_vec();
+        let freq = (0..spectrum.len()).map(|i| i as f32 / 50.0).collect();
+        input.frequency = freq;
+
+        input.phases = Array3::zeros((1, 1, input.frequency.len()));
+        input.amplitudes = Array3::zeros((1, 1, input.frequency.len()));
+        input.fft = Array3::zeros((1, 1, input.frequency.len()));
+
+        // Disable windowing to test pure FFT/IFFT roundtrip
+        let mut config = ConfigContainer::default();
+        config.fft_window_type = FftWindowType::AdaptedBlackman;
+        config.fft_window = [0.0, 0.0];
+        config.avg_in_fourier_space = false;
+
+        let after_fft = fft(&input, &config);
+
+        // Keep a copy of the time-domain data used for FFT (windowed version)
+        let expected_time = after_fft.data.clone();
+
+        let after_ifft = ifft(&after_fft, &config);
+
+        // Compare reconstructed time-domain data to the FFT input (within tolerance)
+        for t in 0..n {
+            let got = after_ifft.data[[0, 0, t]];
+            let exp = expected_time[[0, 0, t]];
+            assert_abs_diff_eq!(got, exp, epsilon = 1e-4);
+        }
+    }
 }

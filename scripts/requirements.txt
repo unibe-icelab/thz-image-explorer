@@ -1,0 +1,5 @@
+numpy
+tqdm
+thz-deconvolution>=1.0.4
+matplotlib
+shapely

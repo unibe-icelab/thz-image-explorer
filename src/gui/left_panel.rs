@@ -1,15 +1,16 @@
-use crate::config::{ConfigCommand, ThreadCommunication};
+use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
 use crate::gui::application::{FileDialogState, THzImageExplorer};
 use crate::gui::gauge_widget::gauge;
-use crate::gui::matrix_plot::{make_dummy, plot_matrix, ImageState, ROI};
+use crate::gui::matrix_plot::{make_dummy, plot_matrix, ColorBarState, ImageState};
 use crate::gui::toggle_widget::toggle_ui;
-use crate::io::{find_files_with_same_extension, load_psf};
-use crate::DataPoint;
+use crate::io::find_files_with_same_extension;
+use crate::PlotDataContainer;
 use bevy_egui::egui;
 use bevy_egui::egui::panel::Side;
 use bevy_egui::egui::TextStyle;
 use dotthz::DotthzMetaData;
 use egui_extras::{Column, TableBuilder};
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// Calculates the width of a single char.
@@ -101,12 +102,22 @@ pub fn left_panel(
     explorer: &mut THzImageExplorer,
     left_panel_width: &f32,
     image_state: &mut ImageState,
+    color_bar_state: &mut ColorBarState,
     thread_communication: &mut ThreadCommunication,
 ) {
-    let gauge_size = left_panel_width / 3.0;
-    let mut data = DataPoint::default();
+    let mut data = PlotDataContainer::default();
     if let Ok(read_guard) = thread_communication.data_lock.read() {
         data = read_guard.clone();
+    }
+    if let Ok(roi) = thread_communication.roi_rx.try_recv() {
+        match roi {
+            Some(roi) => {
+                explorer.rois.insert(roi.0, roi.1);
+            }
+            None => {
+                explorer.rois.clear();
+            }
+        };
     }
     let mut meta_data = DotthzMetaData::default();
     if let Ok(md) = thread_communication.md_lock.read() {
@@ -125,10 +136,384 @@ pub fn left_panel(
         .resizable(false)
         .show(ctx, |ui| {
             ui.add_enabled_ui(true, |ui| {
+                ui.heading("Data Source");
+                ui.add_space(10.0);
                 ui.horizontal(|ui| {
-                    ui.heading("Housekeeping");
+                    if ui
+                        .button(egui::RichText::new(format!(
+                            "{} Load Scan",
+                            egui_phosphor::regular::FOLDER_OPEN
+                        )))
+                        .clicked()
+                    {
+                        #[cfg(not(target_os = "macos"))]
+                        explorer.file_dialog.pick_file();
+                        explorer.file_dialog_state = FileDialogState::Open;
+                    };
+                    if ui
+                        .button(egui::RichText::new(format!(
+                            "{} Load Reference",
+                            egui_phosphor::regular::FOLDER_OPEN
+                        )))
+                        .clicked()
+                    {
+                        #[cfg(not(target_os = "macos"))]
+                        explorer.file_dialog.pick_file();
+                        explorer.file_dialog_state = FileDialogState::OpenRef;
+                    };
                 });
+
+                if !explorer.other_files.is_empty() {
+                    ui.add_space(5.0);
+                    ui.label("Files in same directory:");
+                    let row_height = ui
+                        .style()
+                        .text_styles
+                        .get(&TextStyle::Body)
+                        .map_or(15.0, |font_id| 1.0 + ui.fonts(|f| f.row_height(font_id)));
+
+                    let mut table_builder = TableBuilder::new(ui)
+                        .sense(egui::Sense::click())
+                        .striped(true)
+                        .resizable(false)
+                        .max_scroll_height(row_height * 5.0)
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
+                    if explorer.scroll_to_selection {
+                        if let Some(selected_index) = explorer.other_files.iter().position(|path| {
+                            path.file_name().unwrap().to_str().unwrap()
+                                == explorer.selected_file_name
+                        }) {
+                            table_builder = table_builder
+                                .scroll_to_row(selected_index, Some(egui::Align::Center));
+                        }
+                        explorer.scroll_to_selection = false;
+                    }
+                    let table = table_builder
+                        .column(Column::remainder().at_least(120.0)) // "Date Modified"
+                        .header(row_height, |_header| {});
+                    table.body(|body| {
+                        body.rows(row_height, explorer.other_files.len(), |mut row| {
+                            if let Some(item) = &mut explorer.other_files.get(row.index()) {
+                                let selected = item.file_name().unwrap().to_str().unwrap()
+                                    == explorer.selected_file_name;
+                                row.set_selected(selected);
+
+                                row.col(|ui| {
+                                    let text_width = calc_text_width(
+                                        ui,
+                                        item.file_name().unwrap().to_str().unwrap(),
+                                    );
+
+                                    // Calc available width for the file name and include a small margin
+                                    let available_width = ui.available_width() - 15.0;
+
+                                    let text = if available_width < text_width {
+                                        truncate_filename(ui, item, available_width)
+                                    } else {
+                                        item.file_name().unwrap().to_str().unwrap().to_string()
+                                    };
+                                    let display_name = text.to_string();
+                                    let name_response =
+                                        ui.add(egui::Label::new(display_name).selectable(false));
+                                    if available_width < text_width {
+                                        name_response.on_hover_text(
+                                            item.file_name().unwrap().to_str().unwrap(),
+                                        );
+                                    }
+                                });
+                                if row.response().clicked() {
+                                    explorer.selected_file_name =
+                                        item.file_name().unwrap().to_str().unwrap().to_string();
+                                    thread_communication.gui_settings.selected_path =
+                                        item.to_path_buf();
+
+                                    explorer.new_meta_data = vec![("".to_string(), "".to_string())];
+
+                                    explorer.rois = HashMap::new();
+
+                                    send_latest_config(
+                                        thread_communication,
+                                        ConfigCommand::OpenFile(item.to_path_buf()),
+                                    );
+                                }
+                            }
+                        });
+                    });
+                    if let Some(selected_index) = explorer.other_files.iter().position(|path| {
+                        path.file_name().unwrap().to_str().unwrap() == explorer.selected_file_name
+                    }) {
+                        if ui.input(|i| i.key_pressed(egui::Key::ArrowDown))
+                            && selected_index < explorer.other_files.len() - 1
+                        {
+                            let item = explorer.other_files[selected_index + 1].clone();
+                            explorer.selected_file_name =
+                                item.file_name().unwrap().to_str().unwrap().to_string();
+                            thread_communication.gui_settings.selected_path = item.to_path_buf();
+                            explorer.new_meta_data = vec![("".to_string(), "".to_string())];
+                            explorer.rois = HashMap::new();
+                            send_latest_config(
+                                thread_communication,
+                                ConfigCommand::OpenFile(item.to_path_buf()),
+                            );
+                            explorer.scroll_to_selection = true;
+                        }
+                        if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) && selected_index > 0 {
+                            let item = explorer.other_files[selected_index - 1].clone();
+                            explorer.selected_file_name =
+                                item.file_name().unwrap().to_str().unwrap().to_string();
+                            thread_communication.gui_settings.selected_path = item.to_path_buf();
+                            explorer.new_meta_data = vec![("".to_string(), "".to_string())];
+                            explorer.rois = HashMap::new();
+                            send_latest_config(
+                                thread_communication,
+                                ConfigCommand::OpenFile(item.to_path_buf()),
+                            );
+                            explorer.scroll_to_selection = true;
+                        }
+                    }
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    explorer.file_dialog.set_right_panel_width(300.0);
+                }
+
+                ctx.input(|i| {
+                    // Check if files were dropped
+                    if let Some(dropped_file) = i.raw.dropped_files.last() {
+                        let path = dropped_file.clone().path.unwrap();
+
+                        if let Some(ext) = path.extension() {
+                            if ext == "npz" {
+                                send_latest_config(
+                                    &thread_communication,
+                                    ConfigCommand::OpenPSF(path.clone()),
+                                );
+                            } else {
+                                explorer.other_files =
+                                    find_files_with_same_extension(&path).unwrap();
+                                explorer.selected_file_name =
+                                    path.file_name().unwrap().to_str().unwrap().to_string();
+                                explorer.scroll_to_selection = true;
+                                #[cfg(not(target_os = "macos"))]
+                                {
+                                    explorer.file_dialog.config_mut().initial_directory =
+                                        path.clone();
+                                }
+                                thread_communication.gui_settings.selected_path = path.clone();
+                                explorer.new_meta_data = vec![("".to_string(), "".to_string())];
+                                explorer.rois = HashMap::new();
+                                send_latest_config(
+                                    thread_communication,
+                                    ConfigCommand::OpenFile(path),
+                                );
+                                #[cfg(target_os = "macos")]
+                                {
+                                    if let Ok(mut path_guard) =
+                                        thread_communication.macos_path_lock.write()
+                                    {
+                                        *path_guard =
+                                            thread_communication.gui_settings.selected_path.clone();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                match explorer.file_dialog_state {
+                    FileDialogState::Open => {
+                        #[cfg(target_os = "macos")]
+                        {
+                            // use RFD for macOS to be able to use the dotTHz plugin
+                            let thread_communication_clone = thread_communication.clone();
+                            std::thread::spawn(move || {
+                                let task = rfd::AsyncFileDialog::new()
+                                    .set_title("Open File")
+                                    .add_filter("thz", &["thz", "thzimg", "thzswp"])
+                                    .pick_file();
+
+                                futures::executor::block_on(async {
+                                    if let Some(file) = task.await {
+                                        if let Ok(mut path_guard) =
+                                            thread_communication_clone.macos_path_lock.write()
+                                        {
+                                            *path_guard = file.path().to_path_buf();
+                                        }
+                                        send_latest_config(
+                                            &thread_communication_clone,
+                                            ConfigCommand::OpenFile(file.path().to_path_buf()),
+                                        );
+                                    }
+                                });
+                            });
+
+                            explorer.file_dialog_state = FileDialogState::None;
+                        }
+
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            if let Some(path) = explorer
+                                .file_dialog
+                                .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                    explorer.information_panel.ui(ui, dia);
+                                })
+                                .picked()
+                            {
+                                explorer.file_dialog_state = FileDialogState::None;
+                                explorer.new_meta_data = vec![("".to_string(), "".to_string())];
+                                explorer.rois = HashMap::new();
+                                send_latest_config(
+                                    thread_communication,
+                                    ConfigCommand::OpenFile(path.to_path_buf()),
+                                );
+                            }
+                        }
+                    }
+                    FileDialogState::OpenRef => {
+                        #[cfg(target_os = "macos")]
+                        {
+                            // use RFD for macOS to be able to use the dotTHz plugin
+                            let thread_communication_clone = thread_communication.clone();
+                            std::thread::spawn(move || {
+                                let task = rfd::AsyncFileDialog::new()
+                                    .set_title("Open Reference File")
+                                    .add_filter("thz", &["thz"])
+                                    .pick_file();
+
+                                futures::executor::block_on(async {
+                                    if let Some(file) = task.await {
+                                        send_latest_config(
+                                            &thread_communication_clone,
+                                            ConfigCommand::OpenRef(file.path().to_path_buf()),
+                                        );
+                                    }
+                                });
+                            });
+
+                            explorer.file_dialog_state = FileDialogState::None;
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            if let Some(path) = explorer
+                                .file_dialog
+                                .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                    explorer.information_panel.ui(ui, dia);
+                                })
+                                .picked()
+                            {
+                                explorer.file_dialog_state = FileDialogState::None;
+                                send_latest_config(
+                                    thread_communication,
+                                    ConfigCommand::OpenRef(path.to_path_buf()),
+                                );
+                            }
+                        }
+                    }
+                    FileDialogState::OpenPSF => {
+                        #[cfg(target_os = "macos")]
+                        {
+                            // use RFD for macOS to be able to use the dotTHz plugin
+                            let thread_communication_clone = thread_communication.clone();
+                            std::thread::spawn(move || {
+                                let task = rfd::AsyncFileDialog::new()
+                                    .set_title("Open File")
+                                    .add_filter("npz", &["npz"])
+                                    .pick_file();
+
+                                futures::executor::block_on(async {
+                                    if let Some(file) = task.await {
+                                        send_latest_config(
+                                            &thread_communication_clone,
+                                            ConfigCommand::OpenPSF(file.path().to_path_buf()),
+                                        );
+                                    }
+                                });
+                            });
+
+                            explorer.file_dialog_state = FileDialogState::None;
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            if let Some(path) = explorer
+                                .file_dialog
+                                .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                    explorer.information_panel.ui(ui, dia);
+                                })
+                                .picked()
+                            {
+                                send_latest_config(
+                                    &thread_communication,
+                                    ConfigCommand::OpenPSF(path.to_path_buf()),
+                                );
+                                explorer.file_dialog_state = FileDialogState::None;
+                            }
+                        }
+                    }
+                    FileDialogState::Save => {
+                        // if let Some(_path) = explorer.file_dialog.update(ctx).picked() {
+                        //     explorer.file_dialog_state = FileDialogState::None;
+                        // }
+                    }
+                    FileDialogState::SaveToVTU => {
+                        #[cfg(target_os = "macos")]
+                        {
+                            // use RFD for macOS to be able to use the dotTHz plugin
+                            let thread_communication_clone = thread_communication.clone();
+                            std::thread::spawn(move || {
+                                let task = rfd::AsyncFileDialog::new()
+                                    .set_title("Save File")
+                                    .set_file_name("thz_scan.vtu")
+                                    .save_file();
+
+                                futures::executor::block_on(async {
+                                    if let Some(file) = task.await {
+                                        send_latest_config(
+                                            &thread_communication_clone,
+                                            ConfigCommand::SaveVTU(file.path().to_path_buf()),
+                                        );
+                                    }
+                                });
+                            });
+
+                            explorer.file_dialog_state = FileDialogState::None;
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            if let Some(path) = explorer
+                                .file_dialog
+                                .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                    explorer.information_panel.ui(ui, dia);
+                                })
+                                .picked()
+                            {
+                                send_latest_config(
+                                    &thread_communication,
+                                    ConfigCommand::SaveVTU(path.to_path_buf()),
+                                );
+                                explorer.file_dialog_state = FileDialogState::None;
+                            }
+                        }
+                    }
+                    FileDialogState::None => {
+                        #[cfg(target_os = "macos")]
+                        {
+                            if let Ok(path_guard) = thread_communication.macos_path_lock.read() {
+                                if thread_communication.gui_settings.selected_path != *path_guard {
+                                    explorer.new_meta_data = vec![("".to_string(), "".to_string())];
+                                    explorer.rois = HashMap::new();
+                                }
+                                thread_communication.gui_settings.selected_path =
+                                    path_guard.clone();
+                            }
+                        }
+                    }
+                }
+
                 ui.separator();
+                ui.heading("Housekeeping");
+                ui.separator();
+
+                let gauge_size = left_panel_width / 4.0;
 
                 ui.horizontal(|ui| {
                     ui.add_space((left_panel_width - 2.0 * gauge_size) / 3.0);
@@ -152,279 +537,16 @@ pub fn left_panel(
                 });
             });
             ui.separator();
-            ui.heading("Data Source");
-            ui.horizontal(|ui| {
-                if ui
-                    .button(egui::RichText::new(format!(
-                        "{} Load Scan",
-                        egui_phosphor::regular::FOLDER_OPEN
-                    )))
-                    .clicked()
-                {
-                    explorer.file_dialog_state = FileDialogState::Open;
-                    explorer.file_dialog.pick_file();
-                };
-                if ui
-                    .button(egui::RichText::new(format!(
-                        "{} Load Reference",
-                        egui_phosphor::regular::FOLDER_OPEN
-                    )))
-                    .clicked()
-                {
-                    explorer.file_dialog_state = FileDialogState::OpenRef;
-                    explorer.file_dialog.pick_file();
-                };
-            });
 
-            if !explorer.other_files.is_empty() {
-                ui.add_space(5.0);
-                ui.label("Files in same directory:");
-                let row_height = ui
-                    .style()
-                    .text_styles
-                    .get(&TextStyle::Body)
-                    .map_or(15.0, |font_id| 1.0 + ui.fonts(|f| f.row_height(font_id)));
+            let bottom_height = 100.0;
+            let height = ui.available_size().y - bottom_height - 20.0;
 
-                let mut table_builder = TableBuilder::new(ui)
-                    .sense(egui::Sense::click())
-                    .striped(true)
-                    .resizable(false)
-                    .max_scroll_height(row_height * 5.0)
-                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
-                if explorer.scroll_to_selection {
-                    if let Some(selected_index) = explorer.other_files.iter().position(|path| {
-                        path.file_name().unwrap().to_str().unwrap() == explorer.selected_file_name
-                    }) {
-                        table_builder =
-                            table_builder.scroll_to_row(selected_index, Some(egui::Align::Center));
-                    }
-                    explorer.scroll_to_selection = false;
-                }
-                let table = table_builder
-                    .column(Column::remainder().at_least(120.0)) // "Date Modified"
-                    .header(row_height, |_header| {});
-                table.body(|body| {
-                    body.rows(row_height, explorer.other_files.len(), |mut row| {
-                        if let Some(item) = &mut explorer.other_files.get(row.index()) {
-                            let selected = item.file_name().unwrap().to_str().unwrap()
-                                == explorer.selected_file_name;
-                            row.set_selected(selected);
-
-                            row.col(|ui| {
-                                let text_width = calc_text_width(
-                                    ui,
-                                    item.file_name().unwrap().to_str().unwrap(),
-                                );
-
-                                // Calc available width for the file name and include a small margin
-                                let available_width = ui.available_width() - 15.0;
-
-                                let text = if available_width < text_width {
-                                    truncate_filename(ui, item, available_width)
-                                } else {
-                                    item.file_name().unwrap().to_str().unwrap().to_string()
-                                };
-                                let display_name = text.to_string();
-                                let name_response =
-                                    ui.add(egui::Label::new(display_name).selectable(false));
-                                if available_width < text_width {
-                                    name_response
-                                        .on_hover_text(item.file_name().unwrap().to_str().unwrap());
-                                }
-                            });
-                            if row.response().clicked() {
-                                explorer.selected_file_name =
-                                    item.file_name().unwrap().to_str().unwrap().to_string();
-                                thread_communication.gui_settings.selected_path =
-                                    item.to_path_buf();
-                                thread_communication
-                                    .config_tx
-                                    .send(ConfigCommand::OpenFile(item.to_path_buf()))
-                                    .expect("unable to send open file cmd");
-                            }
-                        }
-                    });
-                });
-                if let Some(selected_index) = explorer.other_files.iter().position(|path| {
-                    path.file_name().unwrap().to_str().unwrap() == explorer.selected_file_name
-                }) {
-                    if ui.input(|i| i.key_pressed(egui::Key::ArrowDown))
-                        && selected_index < explorer.other_files.len() - 1
-                    {
-                        let item = explorer.other_files[selected_index + 1].clone();
-                        explorer.selected_file_name =
-                            item.file_name().unwrap().to_str().unwrap().to_string();
-                        thread_communication.gui_settings.selected_path = item.to_path_buf();
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::OpenFile(item.to_path_buf()))
-                            .expect("unable to send open file cmd");
-                        explorer.scroll_to_selection = true;
-                    }
-                    if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) && selected_index > 0 {
-                        let item = explorer.other_files[selected_index - 1].clone();
-                        explorer.selected_file_name =
-                            item.file_name().unwrap().to_str().unwrap().to_string();
-                        thread_communication.gui_settings.selected_path = item.to_path_buf();
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::OpenFile(item.to_path_buf()))
-                            .expect("unable to send open file cmd");
-                        explorer.scroll_to_selection = true;
-                    }
-                }
-            }
-
-            explorer.file_dialog.set_right_panel_width(300.0);
-
-            let mut repaint = false;
-            ctx.input(|i| {
-                // Check if files were dropped
-                if let Some(dropped_file) = i.raw.dropped_files.last() {
-                    let path = dropped_file.clone().path.unwrap();
-                    explorer.other_files = find_files_with_same_extension(&path).unwrap();
-                    explorer.selected_file_name =
-                        path.file_name().unwrap().to_str().unwrap().to_string();
-                    explorer.scroll_to_selection = true;
-                    explorer.file_dialog.config_mut().initial_directory = path.clone();
-                    thread_communication.gui_settings.selected_path = path.clone();
-                    thread_communication
-                        .config_tx
-                        .send(ConfigCommand::OpenFile(path))
-                        .expect("unable to send open file cmd");
-                    repaint = true;
-                }
-            });
-
-            // Update GUI if we dropped a file
-            if repaint {
-                ctx.request_repaint();
-            }
-
-            match explorer.file_dialog_state {
-                FileDialogState::Open => {
-                    if let Some(path) = explorer
-                        .file_dialog
-                        .update_with_right_panel_ui(ctx, &mut |ui, dia| {
-                            explorer.information_panel.ui(ui, dia);
-                        })
-                        .picked()
-                    {
-                        explorer.file_dialog_state = FileDialogState::None;
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::OpenFile(path.to_path_buf()))
-                            .expect("unable to send open file cmd");
-                    }
-                    if let Some(path) = explorer.file_dialog.take_picked() {
-                        explorer.other_files = find_files_with_same_extension(&path).unwrap();
-                        explorer.selected_file_name =
-                            path.file_name().unwrap().to_str().unwrap().to_string();
-                        explorer.scroll_to_selection = true;
-                        explorer.file_dialog.config_mut().initial_directory = path.clone();
-                        thread_communication.gui_settings.selected_path = path;
-                    }
-                }
-                FileDialogState::OpenRef => {}
-                FileDialogState::OpenPSF => {
-                    if let Some(path) = explorer
-                        .file_dialog
-                        .update_with_right_panel_ui(ctx, &mut |ui, dia| {
-                            explorer.information_panel.ui(ui, dia);
-                        })
-                        .picked()
-                    {
-                        explorer.file_dialog_state = FileDialogState::None;
-                        if let Ok(psf) = load_psf(&path.to_path_buf()) {
-                            thread_communication.gui_settings.psf = psf;
-                            thread_communication.gui_settings.beam_shape_path = path.to_path_buf();
-                        }
-                    }
-                }
-                FileDialogState::Save => {
-                    if let Some(_path) = explorer.file_dialog.update(ctx).picked() {
-                        explorer.file_dialog_state = FileDialogState::None;
-                        // match tera_flash_conf.filetype {
-                        //     FileType::Csv => {
-                        //         picked_path.set_extension("csv");
-                        //     }
-                        //     FileType::Binary => {
-                        //         picked_path.set_extension("npy");
-                        //     }
-                        //     FileType::DotTHz => {
-                        //         picked_path.set_extension("thz");
-                        //     }
-                        // }
-                        // if let Err(e) = save_tx.send(picked_path.clone()) {
-                        //
-                        // }
-                    }
-                }
-                FileDialogState::None => {}
-            }
-
-            let logo_height = 100.0;
-            let height = ui.available_size().y - logo_height - 20.0;
-
-            ui.separator();
             ui.heading("Scan");
             let mut img_data = make_dummy();
             if let Ok(read_guard) = thread_communication.img_lock.read() {
                 img_data = read_guard.clone();
             }
 
-            // read rois from md
-
-            let open_roi = if let Some(a) = explorer.pixel_selected.rois.last() {
-                if !a.closed {
-                    Some(a.clone())
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-
-            explorer.pixel_selected.rois.clear();
-
-            if let Some(labels) = meta_data.md.get("ROI Labels") {
-                let roi_labels: Vec<&str> = labels.split(',').collect();
-                for (i, label) in roi_labels.iter().enumerate() {
-                    if let Some(roi_data) = meta_data.md.get(&format!("ROI {}", i)) {
-                        // Ensure we are correctly extracting coordinates
-                        let polygon = roi_data
-                            .split("],") // Split by "]," to separate coordinate pairs
-                            .filter_map(|point| {
-                                let cleaned = point.trim_matches(|c| c == '[' || c == ']');
-                                let values: Vec<f64> = cleaned
-                                    .split(',')
-                                    .filter_map(|v| v.trim().parse::<f64>().ok())
-                                    .collect();
-
-                                if values.len() == 2 {
-                                    Some([values[0], values[1]])
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect::<Vec<[f64; 2]>>();
-
-                        if !polygon.is_empty() {
-                            explorer.pixel_selected.rois.push(ROI {
-                                polygon,
-                                closed: true,
-                                name: label.to_string(),
-                            });
-                        }
-                    }
-                }
-            }
-
-            if let Some(roi) = open_roi {
-                explorer.pixel_selected.rois.push(roi.clone());
-            }
-
-            // TODO: implement selecting reference pixel
             let pixel_clicked = plot_matrix(
                 ui,
                 &img_data,
@@ -432,65 +554,47 @@ pub fn left_panel(
                 &(height as f64),
                 explorer,
                 image_state,
+                color_bar_state,
             );
             if pixel_clicked {
-                thread_communication
-                    .config_tx
-                    .send(ConfigCommand::SetSelectedPixel(
-                        explorer.pixel_selected.clone(),
-                    ))
-                    .unwrap();
-                if let Ok(mut write_guard) = thread_communication.pixel_lock.write() {
-                    *write_guard = explorer.pixel_selected.clone();
-                }
-                let mut md_update_requested = false;
-                for (roi_i, roi) in explorer.pixel_selected.rois.iter_mut().enumerate() {
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::SetSelectedPixel(explorer.pixel_selected.clone()),
+                );
+
+                // Check if any ROI was just closed and send AddROI command
+                if let Some(roi) = &explorer.pixel_selected.open_roi {
                     if roi.closed {
-                        let formatted = roi
-                            .polygon
-                            .iter()
-                            .map(|&[x, y]| format!("[{:.2},{:.2}]", x, y))
-                            .collect::<Vec<String>>()
-                            .join(",");
-                        meta_data.md.insert(format!("ROI {}", roi_i), formatted);
-                        md_update_requested = true;
-
-                        if let Some(labels) = meta_data.md.get_mut("ROI Labels") {
-                            // Append new ROI label
-                            labels.push_str(&roi.name.clone());
-                        }
+                        let roi_uuid = uuid::Uuid::new_v4();
+                        explorer.rois.insert(roi_uuid.to_string(), roi.clone());
+                        send_latest_config(
+                            thread_communication,
+                            ConfigCommand::AddROI(roi_uuid.to_string(), roi.clone()),
+                        );
+                        explorer.pixel_selected.open_roi = None;
                     }
-                }
-
-                if md_update_requested {
-                    let labels = explorer
-                        .pixel_selected
-                        .rois
-                        .iter()
-                        .map(|l| l.name.clone())
-                        .collect::<Vec<String>>()
-                        .join(",");
-                    meta_data.md.insert("ROI Labels".to_string(), labels);
-
-                    if let Ok(mut md) = thread_communication.md_lock.write() {
-                        *md = meta_data.clone();
-                    }
-
-                    thread_communication
-                        .config_tx
-                        .send(ConfigCommand::UpdateMetaData(
-                            thread_communication.gui_settings.selected_path.clone(),
-                        ))
-                        .expect("unable to send save file cmd");
                 }
             }
 
             ui.add_space(10.0);
-            ui.label("Black/White");
-            toggle_ui(ui, &mut explorer.bw);
-            ui.label(format!("Pixel: {}", explorer.pixel_selected.id));
-            ui.label(format!("x: {}", explorer.pixel_selected.x));
-            ui.label(format!("y: {}", explorer.pixel_selected.y));
+            ui.horizontal(|ui| {
+                ui.label("B/W");
+                toggle_ui(ui, &mut explorer.bw);
+                ui.add_space(5.0);
+                ui.label(format!(
+                    "Pixel: {}/{}",
+                    explorer.pixel_selected.x, explorer.pixel_selected.y
+                ));
+                // flip x axis because of image coordinate system
+                let pos_x = explorer.data.hk.x_range[0]
+                    + explorer.data.hk.dx
+                        * (((explorer.data.hk.x_range[1] - explorer.data.hk.x_range[0])
+                            / explorer.data.hk.dx) as usize
+                            - explorer.pixel_selected.x) as f32;
+                let pos_y = explorer.data.hk.y_range[0]
+                    + explorer.data.hk.dy * explorer.pixel_selected.y as f32;
+                ui.label(format!(" {:.2} mm /{:.2} mm", pos_x, pos_y));
+            });
 
             ui.separator();
             ui.heading("Regions of Interest (ROI)");
@@ -498,9 +602,28 @@ pub fn left_panel(
                 egui::Grid::new("rois polygons")
                     .striped(true)
                     .show(ui, |ui| {
-                        let mut changed = false;
-                        for mut roi in explorer.pixel_selected.rois.iter_mut() {
-                            changed |= ui.add(egui::TextEdit::singleline(&mut roi.name)).changed();
+                        let mut rois_to_update = HashMap::new();
+                        let mut rois_to_delete = HashSet::new();
+                        for (roi_uuid, roi) in explorer.rois.iter_mut() {
+                            if ui
+                                .selectable_label(
+                                    false,
+                                    egui::RichText::new(format!(
+                                        "{}",
+                                        egui_phosphor::regular::TRASH
+                                    )),
+                                )
+                                .clicked()
+                            {
+                                rois_to_delete.insert(roi_uuid.clone());
+                                send_latest_config(
+                                    thread_communication,
+                                    ConfigCommand::DeleteROI(roi_uuid.clone()),
+                                );
+                            }
+
+                            let changed =
+                                ui.add(egui::TextEdit::singleline(&mut roi.name)).changed();
                             let points = roi
                                 .polygon
                                 .iter()
@@ -509,36 +632,73 @@ pub fn left_panel(
                                 .join(",");
                             ui.label(points);
                             ui.end_row();
+
+                            if changed {
+                                rois_to_update.insert(roi_uuid.clone(), roi.clone());
+                                send_latest_config(
+                                    thread_communication,
+                                    ConfigCommand::UpdateROI(roi_uuid.clone(), roi.clone()),
+                                );
+                            }
                         }
-                        if changed {
-                            let labels = explorer
-                                .pixel_selected
-                                .rois
+
+                        for roi in rois_to_delete.iter() {
+                            explorer.rois.remove(roi);
+                        }
+
+                        for (roi_uuid, roi) in rois_to_update.iter() {
+                            explorer.rois.insert(roi_uuid.clone(), roi.clone());
+                        }
+
+                        if let Some(roi) = &mut explorer.pixel_selected.open_roi {
+                            let mut delete_roi = false;
+                            if ui
+                                .selectable_label(
+                                    false,
+                                    egui::RichText::new(format!(
+                                        "{}",
+                                        egui_phosphor::regular::TRASH
+                                    )),
+                                )
+                                .clicked()
+                            {
+                                delete_roi = true;
+                            }
+                            ui.add(egui::TextEdit::singleline(&mut roi.name));
+                            let points = roi
+                                .polygon
                                 .iter()
-                                .map(|l| l.name.clone())
+                                .map(|&[x, y]| format!("[{:.2},{:.2}]", x, y))
                                 .collect::<Vec<String>>()
                                 .join(",");
-                            meta_data.md.insert("ROI Labels".to_string(), labels);
-
-                            dbg!(&meta_data.md.get("ROI Labels"));
-                            if let Ok(mut md) = thread_communication.md_lock.write() {
-                                *md = meta_data.clone();
+                            ui.label(points);
+                            ui.end_row();
+                            if delete_roi {
+                                explorer.pixel_selected.open_roi = None;
                             }
-                            thread_communication
-                                .config_tx
-                                .send(ConfigCommand::UpdateMetaData(
-                                    thread_communication.gui_settings.selected_path.clone(),
-                                ))
-                                .expect("unable to send save file cmd");
                         }
                     });
             });
 
+            if ui
+                .button("Save ROIs")
+                .on_hover_text("Save current ROIs to file")
+                .clicked()
+            {
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::SaveROIs(
+                        thread_communication.gui_settings.selected_path.clone(),
+                    ),
+                );
+            }
+
             ui.separator();
             ui.heading("Meta Data");
+            ui.add_space(5.0);
             ui.horizontal(|ui| {
                 let text = if thread_communication.gui_settings.meta_data_edit {
-                    "Save"
+                    "Cancel"
                 } else {
                     "Edit"
                 };
@@ -549,14 +709,6 @@ pub fn left_panel(
                     )
                     .clicked()
                 {
-                    if thread_communication.gui_settings.meta_data_edit {
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::UpdateMetaData(
-                                thread_communication.gui_settings.selected_path.clone(),
-                            ))
-                            .expect("unable to send save file cmd");
-                    }
                     thread_communication.gui_settings.meta_data_edit =
                         !thread_communication.gui_settings.meta_data_edit;
                 }
@@ -569,202 +721,284 @@ pub fn left_panel(
                         )))
                         .clicked()
                     {
+                        explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                         thread_communication.gui_settings.meta_data_edit = false;
                         thread_communication.gui_settings.meta_data_unlocked = false;
-                        thread_communication
-                            .config_tx
-                            .send(ConfigCommand::LoadMetaData(
+                        send_latest_config(
+                            thread_communication,
+                            ConfigCommand::LoadMetaData(
                                 thread_communication.gui_settings.selected_path.clone(),
-                            ))
-                            .expect("unable to send open file cmd");
+                            ),
+                        );
+                    }
+                    if ui
+                        .button(egui::RichText::new(format!(
+                            "{} Save",
+                            egui_phosphor::regular::FLOPPY_DISK
+                        )))
+                        .clicked()
+                    {
+                        if thread_communication.gui_settings.meta_data_edit {
+                            for (key, val) in explorer.new_meta_data.iter() {
+                                if !key.is_empty() && !val.is_empty() {
+                                    meta_data.md.insert(key.clone(), val.clone());
+                                }
+                            }
+
+                            if let Ok(mut md) = thread_communication.md_lock.write() {
+                                *md = meta_data.clone();
+                            }
+
+                            send_latest_config(
+                                thread_communication,
+                                ConfigCommand::UpdateMetaData(
+                                    thread_communication.gui_settings.selected_path.clone(),
+                                ),
+                            );
+                        }
+                        thread_communication.gui_settings.meta_data_edit = false;
+                        thread_communication.gui_settings.meta_data_unlocked = false;
                     }
                 }
             });
             egui::ScrollArea::both().show(ui, |ui| {
-                egui::Grid::new("meta_data").striped(true).show(ui, |ui| {
-                    // this is an aesthetic hack to draw the empty meta-data grid to full width
-                    if meta_data.md.is_empty() {
-                        ui.label("Data");
-                        ui.label(format!("{:50}", " "));
-                        ui.end_row();
-                    }
-                    let mut attributes_to_delete = vec![];
-                    for (name, value) in meta_data.md.iter_mut() {
-                        ui.label(name);
-                        ui.horizontal(|ui| {
-                            if thread_communication.gui_settings.meta_data_edit {
-                                if ui
-                                    .selectable_label(
-                                        false,
-                                        egui::RichText::new(format!(
-                                            "{}",
-                                            egui_phosphor::regular::TRASH
-                                        )),
-                                    )
-                                    .clicked()
-                                {
-                                    attributes_to_delete.push(name.clone());
-                                }
-                                let lock = if thread_communication.gui_settings.meta_data_unlocked {
-                                    egui::RichText::new(format!(
-                                        "{}",
-                                        egui_phosphor::regular::LOCK_OPEN
-                                    ))
-                                } else {
-                                    egui::RichText::new(format!("{}", egui_phosphor::regular::LOCK))
-                                };
-                                if ui
-                                    .selectable_label(
-                                        thread_communication.gui_settings.meta_data_unlocked,
-                                        lock,
-                                    )
-                                    .clicked()
-                                {
-                                    thread_communication.gui_settings.meta_data_unlocked =
-                                        !thread_communication.gui_settings.meta_data_unlocked;
-                                }
-                                if thread_communication.gui_settings.meta_data_unlocked {
+                egui::Grid::new("meta_data")
+                    .striped(true)
+                    .min_row_height(20.0)
+                    .show(ui, |ui| {
+                        // this is an aesthetic hack to draw the empty meta-data grid to full width
+                        if meta_data.md.is_empty() {
+                            ui.label("Attributes:");
+                            ui.label(format!("{:75}", " "));
+                            ui.end_row();
+                        }
+                        if thread_communication.gui_settings.meta_data_edit {
+                            let mut add_new_metdata = false;
+                            if let Some((key, val)) = explorer.new_meta_data.last_mut() {
+                                ui.horizontal(|ui| {
+                                    ui.horizontal(|ui| {
+                                        if key == "" {
+                                            ui.disable();
+                                        }
+                                        if ui
+                                            .button(format!("{}", egui_phosphor::regular::PLUS))
+                                            .on_hover_text("Add a new Metadata Attribute.")
+                                            .clicked()
+                                        {
+                                            add_new_metdata = true;
+                                        }
+                                    });
                                     ui.add(
-                                        egui::TextEdit::singleline(value)
+                                        egui::TextEdit::singleline(key)
+                                            .interactive(true)
                                             .desired_width(ui.available_width()),
                                     );
+                                });
+                                ui.add(
+                                    egui::TextEdit::singleline(val)
+                                        .desired_width(ui.available_width()),
+                                );
+                            }
+                            if add_new_metdata {
+                                explorer
+                                    .new_meta_data
+                                    .push(("".to_string(), "".to_string()));
+                            }
+                            ui.end_row();
+
+                            let mut keys_to_remove = vec![];
+
+                            for i in 0..explorer.new_meta_data.len() - 1 {
+                                ui.horizontal(|ui| {
+                                    ui.add(
+                                        egui::TextEdit::singleline(
+                                            &mut explorer.new_meta_data[i].0,
+                                        )
+                                        .desired_width(ui.available_width()),
+                                    );
+                                });
+                                ui.horizontal(|ui| {
+                                    if ui
+                                        .selectable_label(
+                                            false,
+                                            egui::RichText::new(format!(
+                                                "{}",
+                                                egui_phosphor::regular::TRASH
+                                            )),
+                                        )
+                                        .clicked()
+                                    {
+                                        keys_to_remove.push(explorer.new_meta_data[i].0.clone());
+                                    }
+
+                                    ui.add(
+                                        egui::TextEdit::singleline(
+                                            &mut explorer.new_meta_data[i].1,
+                                        )
+                                        .desired_width(ui.available_width()),
+                                    );
+                                });
+                                ui.end_row();
+                            }
+
+                            for key in keys_to_remove.iter() {
+                                explorer.new_meta_data.retain(|(k, _)| k != key);
+                            }
+                        }
+                        let mut attributes_to_delete = vec![];
+                        for (name, value) in meta_data.md.iter_mut() {
+                            ui.label(name);
+                            ui.horizontal(|ui| {
+                                if thread_communication.gui_settings.meta_data_edit {
+                                    ui.add_enabled_ui(
+                                        thread_communication.gui_settings.meta_data_unlocked,
+                                        |ui| {
+                                            if ui
+                                                .selectable_label(
+                                                    false,
+                                                    egui::RichText::new(format!(
+                                                        "{}",
+                                                        egui_phosphor::regular::TRASH
+                                                    )),
+                                                )
+                                                .clicked()
+                                            {
+                                                attributes_to_delete.push(name.clone());
+                                            }
+                                        },
+                                    );
+                                    let lock =
+                                        if thread_communication.gui_settings.meta_data_unlocked {
+                                            egui::RichText::new(format!(
+                                                "{}",
+                                                egui_phosphor::regular::LOCK_OPEN
+                                            ))
+                                        } else {
+                                            egui::RichText::new(format!(
+                                                "{}",
+                                                egui_phosphor::regular::LOCK
+                                            ))
+                                        };
+                                    if ui
+                                        .selectable_label(
+                                            thread_communication.gui_settings.meta_data_unlocked,
+                                            lock,
+                                        )
+                                        .clicked()
+                                    {
+                                        thread_communication.gui_settings.meta_data_unlocked =
+                                            !thread_communication.gui_settings.meta_data_unlocked;
+                                    }
+                                    if thread_communication.gui_settings.meta_data_unlocked {
+                                        ui.add(
+                                            egui::TextEdit::singleline(value)
+                                                .desired_width(ui.available_width()),
+                                        );
+                                    } else {
+                                        ui.label(value.clone());
+                                    }
                                 } else {
                                     ui.label(value.clone());
                                 }
-                            } else {
-                                ui.label(value.clone());
-                            }
-                        });
-                        ui.end_row()
-                    }
-
-                    for attr in attributes_to_delete {
-                        if attr.contains("ROI") {
-                            if let Some(labels_string) = meta_data.md.get_mut("ROI Labels") {
-                                let mut labels = labels_string.split(",").collect::<Vec<&str>>();
-                                if let Some(index) = attr
-                                    .strip_prefix("ROI ")
-                                    .and_then(|num| num.parse::<usize>().ok())
-                                {
-                                    dbg!(index);
-                                    explorer.pixel_selected.rois.remove(index);
-                                    if explorer.pixel_selected.rois.is_empty() {
-                                        let mut roi = ROI::default();
-                                        roi.name = format!(
-                                            "ROI {}",
-                                            explorer.pixel_selected.rois.len() + 1
-                                        );
-                                        explorer.pixel_selected.rois.push(roi);
-                                    }
-                                    labels.remove(index);
-                                    *labels_string = labels.join(",");
-                                } else {
-                                    if attr == "ROI Labels" {
-                                        for roi_i in 0..explorer.pixel_selected.rois.len() {
-                                            meta_data.md.swap_remove(&format!("ROI {roi_i}"));
-                                        }
-                                        explorer.pixel_selected.rois.clear();
-                                        let mut roi = ROI::default();
-                                        roi.name = "ROI 0".to_string();
-                                        explorer.pixel_selected.rois.push(roi);
-                                    }
-                                }
-                            }
+                            });
+                            ui.end_row()
                         }
-                        meta_data.md.swap_remove(&attr);
-                    }
 
-                    ui.label("User:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.user)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.user.clone());
-                    }
-                    ui.end_row();
-                    ui.label("E-mail:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.email)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.email.clone());
-                    }
-                    ui.end_row();
-                    ui.label("ORCID:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.orcid)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.orcid.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Institution:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.institution)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.institution.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Instrument:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.instrument)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.instrument.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Version:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.version)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.version.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Mode:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.mode)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.mode.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Date:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.date)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.date.clone());
-                    }
-                    ui.end_row();
-                    ui.label("Time:");
-                    if thread_communication.gui_settings.meta_data_edit {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut meta_data.time)
-                                .desired_width(ui.available_width()),
-                        );
-                    } else {
-                        ui.label(meta_data.time.clone());
-                    }
-                    ui.end_row();
-                });
+                        for attr in attributes_to_delete.iter() {
+                            meta_data.md.swap_remove(attr);
+                        }
+
+                        ui.label("User:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.user)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.user.clone());
+                        }
+                        ui.end_row();
+                        ui.label("E-mail:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.email)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.email.clone());
+                        }
+                        ui.end_row();
+                        ui.label("ORCID:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.orcid)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.orcid.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Institution:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.institution)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.institution.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Instrument:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.instrument)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.instrument.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Version:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.version)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.version.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Mode:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.mode)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.mode.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Date:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.date)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.date.clone());
+                        }
+                        ui.end_row();
+                        ui.label("Time:");
+                        if thread_communication.gui_settings.meta_data_edit {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut meta_data.time)
+                                    .desired_width(ui.available_width()),
+                            );
+                        } else {
+                            ui.label(meta_data.time.clone());
+                        }
+                        ui.end_row();
+                    });
             });
             if thread_communication.gui_settings.meta_data_edit {
                 if let Ok(mut md) = thread_communication.md_lock.write() {

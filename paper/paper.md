@@ -1,5 +1,5 @@
 ---
-title: 'THz Image Explorer - A Cross-Platform Open-Source THz Image Analysis Tool'
+title: "THz Image Explorer - An Interactive Cross-Platform Open-Source THz Image Analysis Tool"
 tags:
   - THz
   - Rust
@@ -17,36 +17,34 @@ authors:
     orcid: 0000-0002-0146-0071
     affiliation: "1"
 affiliations:
-  - name: University of Bern, Bern, Switzerland
+  - name: Space Research & Planetary Sciences Division, University of Bern, Bern, Switzerland
     index: 1
     ror: 02k7v4d05
   - name: University of Applied Sciences and Arts Western Switzerland Valais, HES-SO Valais-Wallis, Sion, Switzerland
     index: 2
     ror: 03r5zec51
-date: 23 January 2025
+date: 3 July 2025
 bibliography: paper.bib
-
 ---
 
 # Introduction
 
 THz time-domain spectroscopy (TDS) is a fast-growing field with applications to perform non-destructive studies of
 material properties [@neu_tutorial_2018].
-Different sources of THz radiations have been implemented in commercial products, e.g. photo-conductive antennas. The
-pulses can either be measured after passing through (transmission spectrum) or after being reflected (reflection
-spectrum) by a sample and are recorded in the time domain. By transforming the
-acquired trace into frequency domain (Fourier space), the magnitude and phase can be extracted to
-investigate the complex refractive index and absorption coefficient of the sample.
-By placing either the sample or the optical setup on a moving stage the sample can be imaged in 2D. Analysing these
-images pixel by pixel or by selecting a region of interest (ROI) without an interactive user interface can be tedious.
+The pulses can either be measured after passing through (transmission spectrum) or after being reflected (reflection
+spectrum) by a sample and are recorded in the time domain. Through Fourier analysis (FFT), we can investigate the
+complex refractive index and absorption coefficient of the sample.
+By placing either the sample or the optical setup on a moving stage the sample can be imaged in 2D.
 
 ![THz Image Explorer icon.\label{fig:icon}](icon.png){#id .class width=20%}
 
-We developed an interactive graphical user interface (GUI), written in [Rust](https://www.rust-lang.org), to aid
+We developed an interactive graphical user interface (GUI), written
+in [Rust](https://www.rust-lang.org) [@matsakis2014rust], to aid
 investigating acquired 2D scans. The
-application implements the dotTHz standard [@lee_dotthz_2023] and is platform independent and open source, thus making
-it
-easier to maintain and increasing its reach.
+application implements the dotTHz standard [@lee_dotthz_2023] and is platform independent and open-source, thus making
+it easier to maintain and increasing its reach.
+
+![THz Image Explorer screenshot.\label{fig:screenshot}](screenshot.png)
 
 # Statement of need
 
@@ -57,9 +55,10 @@ code cannot be adapted by the user, which is often essential in research environ
 the code.
 Solutions published by the scientific community are not available on all platforms, are only applicable on single pixel
 measurements and/or not focused on an interactive workflow [@peretti_thz-tds_2019; @loaiza_thztools_2024].
-With this application, we provide a performant solution written in Rust, that allows an interactive analysis of 2D THz
-scans.
-This work is open-source and pre-built bundles are available for Linux, macOS and Windows, making it available to the
+With this application, we provide a high-performance solution written in Rust, that allows an interactive analysis of 2D
+THz
+scans with multiple filters and a 3D viewer.
+This work is open-source and pre-built bundles are available for Linux, macOS and Windows, thus available to the
 entire scientific community.
 
 # Structure
@@ -69,249 +68,105 @@ The application is multithreaded with two main threads:
 - GUI thread
 - Data thread
 
-The GUI uses [egui](https://www.egui.rs), an immediate-mode GUI library for rust with the native
-back-end [glow](https://crates.io/crates/glow) based on openGL [@shreiner_opengl_2009].
+The GUI uses [egui](https://www.egui.rs), an immediate-mode GUI library for rust.
 
-The GUI thread handles all the user input and displaying of plots and other window elements. The configuration values
-set in the GUI are sent to the Data thread
-via multiple-producer-single-consumer (MPSC) channels.
-The Data thread then handles the computation of the applied filters.
-The output of the computation is then shared via mutexes with the GUI thread.
-The entire thread communication is handled with the `ThreadCommunication` and `ThreadCommunication` structs. To
-extend the communication for additional data-types, these two structs need to be extended with `Arc<RwLock<T>>` or
-`mpsc::Sender<T>`/`mpsc::Receiver<T>`.
+The structure of the software architecture is shown in figure \ref{fig:software-architecture}.
 
-# Installation
-
-## Pre-built Bundles
-
-Pre-built bundles are available for each release on [GitHub](https://github.com/hacknus/thz-image-explorer) for
-
-- macOS (`.app` bundle for x86 and Apple Silicon)
-- Linux (executable and `.deb` for x86)
-- Windows (`.exe` and `.msi` for x86)
-
-These bundles should work out of the box, but on macOS you might need to remove the quarantine flag after downloading by
-running the following command:
-
-```shell
-xattr -rd com.apple.quarantine THz\ Image\ Explorer.app
-```
-
-## Compile from Source
-
-Alternatively, to compile directly from source, rust needs to be installed and the following
-command needs to be executed:
-
-```shell
-cargo run --release
-```
-
-or to only build the executable without running:
-
-```shell
-cargo build --release
-```
-
-With default settings `cmake` is required to build HDF5 from source, which is required for the implementation of the
-dotTHz standard. If HDF5 is already installed on the
-system, the user can change remove the `hdf5-sys-static` feature from the `dotthz` dependency in the `Cargo.toml` file.
-
-On Linux, the following dependencies need to be installed first as a requirement for `egui`:
-
-- `libclang-dev`
-- `libgtk-3-dev`
-- `libxcb-render0-dev`
-- `libxcb-shape0-dev`
-- `libxcb-xfixes0-dev`
-- `libxkbcommon-dev`
-- `libssl-dev`
-
-On Linux you need to first run:
-
-```shell
-sudo apt-get install -y libclang-dev libgtk-3-dev \
-  libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-  libxkbcommon-dev libssl-dev
-```
-
-To create bundles `cargo-bundle` needs to be installed (macOS, Linux):
-
-```shell
-cargo bundle --release
-```
-
-or `cargo-wix` on Windows:
-
-```shell
-cargo wix --release
-```
-
-An update feature, which will download the latest release and upgrade the installed application, is implemented in the
-settings window.
+![Software Architecture.\label{fig:software-architecture}](thz-image-explorer.drawio.png){width=80% .center}
 
 # Usage
 
-The window is structured with the time domain trace and frequency domain spectrum for the selected pixel (default is
-0,0) at the center.
-The left side-panel contains the intensity plot of the 2D scan along with the meta-data, which can be edited. The right
-side-panel contains the possible filters with configuration settings.
-A pixel can be (de-)selected by clicking inside the intensity plot. By holding the Shift key and selecting pixels, a
-region of interest (ROI) can be selected. This ROI is a convex polygon, which is closed if the last corner is selected
-reasonably close to the first one (< 5 % of width/height of the image). This ROI can then be saved in the meta-data of
-the dotTHz file for future analysis. The displayed averaged trace in the central panel also corresponds to the pixels
-inside the ROI.
+A sample scan (of a resolution target) is available in the `sample_data` directory. The measurement has been acquired
+using the COCoNuT setup [@coconut_2025].
 
-A sample scan is available in the `sample_data` directory.
+## Optical Properties Calculation
 
-## IO
+The refractive index $n$ and absorption coefficient $\alpha$ can be computed using the relations from [@Jepsen2019]. The
+user can select a source and a reference for the calculation.
 
-THz Image Explorer is able to load scans saved as `.npy` files and scans in the `.thz` (dotTHz) format,
-which are based on the HDF5 standard.
-This allows the files to also contain meta-data, which will also be displayed by the THz Image Explorer. The meta-data
-is shown in the file opening dialog, allowing to easily
-browse through directories containing multiple scans and is also displayed upon opening a scan.
+$$n(\omega) = 1 + \frac{c \Delta\phi(\omega)}{\omega d}$$
+$$\alpha(\omega) = -\frac{2}{d} \ln\left(\frac{(n+1)^2}{4n} \cdot \frac{A_{\text{sample}}(\omega)}{A_{\text{reference}}(\omega)}\right)$$
 
-## Filters
+where:
 
-### FFT Window
+- $\Delta\phi(\omega) = \phi_{\text{sample}}(\omega) - \phi_{\text{reference}}(\omega)$ is the phase difference
+- $A_{\text{sample}}(\omega)$ and $A_{\text{reference}}(\omega)$ are the amplitude spectra
+- $c$ is the speed of light
+- $\omega = 2\pi f$ is the angular frequency
+- $d$ is the sample thickness
 
-To reduce artefacts in the frequency domain, a window is multiplied to the time domain before applying the
-Fast-Fourier-Transform (FFT). By default, the adapted Blackman
-window is applied, but the user can also select other windows:
+## Interactive 3D Viewer
 
-- Adapted Blackman (default)
-- Blackman
-- Hanning
-- Hamming
-- FlatTop
+A THz time domain scan produces a 3D data array with dimensions $n_x \times n_y \times n_t$, where $(n_x, n_y)$
+represent the spatial coordinates and $n_t$ represents the time axis.
 
-The windows are defined in `math_tools.rs`.
+Scans performed in reflection can be visualized in 3D. First, we transform each time trace into an intensity value by
+computing
+the squared amplitude and
+applying a Gaussian envelope function:
+$$
+I(x,y,t) = |s(x,y,t)|^2 * G_{\sigma}(t)
+$$
 
-### Frequency Band Pass Filter
+where $G_{\sigma}(t)$ is a normalized 1D Gaussian kernel with standard deviation $\sigma = 6.0$ and radius of 12
+samples,
+applied via convolution to smooth the squared signal and extract the envelope as shown in figure \ref{fig:envelope}.
 
-A simple band-pass filter can be applied in fourier space to only display certain frequency bands.
+![The convoluted envelope of the signal. All datapoints below the indicated threshold are treated as transparent. \label{fig:envelope}](convolution_example.pdf)
 
-### Time Domain Slice
+The time axis is converted to a spatial distance coordinate by assuming a refractive index of $n=1$ and using the
+relation $z = ct/2$, where $c$ is the speed of light and the factor of 2 accounts for the round-trip propagation. This
+transformation yields a three-dimensional intensity cube $I(x,y,z)$.
 
-By selecting a slice in the time domain, it is possible to scan through the $z$-axis of the scan and analysing
-sub-surface layers [@koch-dandolo_reflection_2015]. The double-slider can be controlled with zoom and scroll/pan
-gestures on the trackpad/mouse wheel. The user can step through the time domain using the left/right arrow keys.
+Each element (voxel) in this cube represents the THz signal intensity at a specific point in 3D space, enabling
+visualization of reflections from internal interfaces and sub-surface structures. The computed intensities are mapped to
+voxel opacity values - regions with high intensity appear opaque while low-intensity regions become transparent.
+
+The 3D viewer is implemented using the `bevy` game engine [@bevyengine] with a custom WGSL shader, available as a
+separate
+crate: [bevy_voxel_plot](https://github.com/hacknus/bevy_voxel_plot).
+
+## Filtering pipeline
+
+The filtering process is a simple linear pipeline, where the output of one filter is the input of the next filter.
+Filters can be placed in specific domains, either in time domain or frequency domain:
+
+- Time Domain Before FFT
+- Frequency Band Pass Filter
+- Time Domain After FFT
+
+Band-pass filters are already implemented in the application for each domain. The band-pass filter in time domain
+before FFT can be used to trim off trailing pulses.
+By selecting a slice in time domain after FFT, it is possible to scan through the $z$-axis of the scan and analysing
+sub-surface layers [@koch-dandolo_reflection_2015].
 
 ### Deconvolution
 
-cite Arnaud's paper
-
-Single dollars ($) are required for inline mathematics e.g. $f(x) = e^{\pi/x}$
-
-Double dollars make self-standing equations:
-
-$$\Theta(x) = \left\{\begin{array}{l}
-0\textrm{ if } x < 0\cr
-1\textrm{ else}
-\end{array}\right.$$
-
-You can also use plain \LaTeX for equations
-\begin{equation}\label{eq:fourier}
-\hat f(\omega) = \int_{-\infty}^{\infty} f(x) e^{i\omega x} dx
-\end{equation}
-and refer to \autoref{eq:fourier} from text.
+The deconvolution filter is an implementation of the Frequency-dependent Richardson-Lucy algorithm described
+in [@demion_frequency-dependent_2025].
 
 ### Custom Filters
 
-The code-base can easily be extended with custom filters. The individual filter parameters will be wrapped in
-`ParameterKind` structs to define how they should be displayed in the GUI. Each filter can be set to either be applied
-in the time or frequency domain with the `FilterDomain` enum.
-
-```rust
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FilterDomain {
-    Time,
-    Frequency,
-}
-
-#[derive(Debug, Clone)]
-pub enum ParameterKind {
-    Int(isize),
-    UInt(usize),
-    Float(f64),
-    Boolean(bool),
-    Slider {
-        value: f64,
-        show_in_plot: bool,
-        min: f64,
-        max: f64,
-    },
-    DoubleSlider {
-        values: [f64; 2],
-        show_in_plot: bool,
-        minimum_separation: f64,
-        inverted: bool,
-        min: f64,
-        max: f64,
-    },
-}
-```
-
-The user needs to create a custom file in the `src/filters`
-directory with a struct that implements the `Filter` trait. Additionally, the `#[register_filter]` procedural macro
-needs to added to the custom filter struct to automatically add it to the application.
-
-```rust
-use crate::data_container::ScannedImage;
-use crate::filters::filter::{Filter, FilterConfig,
-                             FilterDomain, FilterParameter,
-                             ParameterKind};
-use filter_macros::register_filter;
-
-#[derive(Debug)]
-#[register_filter]
-pub struct CustomFilter {
-    pub param1: f32,
-    pub param2: f32,
-    pub param3: usize,
-}
-
-impl Filter for CustomFilter {
-    fn filter(&self, _scan: &mut ScannedImage,
-              _gui_settings: &mut GuiSettingsContainer) {
-        todo!();
-        // Implement your filter algorithm here
-    }
-
-    fn config(&self) -> FilterConfig {
-        FilterConfig {
-            name: "Custom Filter".to_string(),
-            domain: FilterDomain::Frequency,
-            parameters: vec![
-                FilterParameter {
-                    name: "Parameter 1".to_string(),
-                    kind: ParameterKind::Float(self.param1),
-                },
-                FilterParameter {
-                    name: "Parameter 2".to_string(),
-                    kind: ParameterKind::Float(self.param2),
-                },
-                FilterParameter {
-                    name: "Parameter 3".to_string(),
-                    kind: ParameterKind::UInt(self.param3),
-                },
-            ],
-        }
-    }
-}
-```
-
-To implement more complex methods, further adaptations are required, but the code structure has been set up with
-modularity and simplicity in mind.
+The code-base can easily be extended with custom filters. The user needs to create a custom file in the `src/filters`
+directory with a struct that implements the `Filter` trait.
 
 # Summary
 
-THz Image Explorer primarily serves as a data analysis tool for THz 2D images. The main focus lies on preliminary
-browsing of
-measurements, rough analysis of scans and identifying regions of interest in each scan. It is designed in a modular way
-to allow
-possible implementation of more thorough analysis features in the future.
+THz Image Explorer primarily serves as a high-performance data analysis tool for THz 2D images. The main focus lies on
+preliminary browsing of measurements, rough analysis of scans and identifying regions of interest in each scan. It is
+designed in a modular way to allow possible implementation of more thorough analysis features in the future.
+
+# Declaration of the use of AI-based tools
+
+AI-based tools, including ChatGPT and GitHub Copilot, were used to support this work.
+These tools assisted with code generation but did not replace the author’s critical thinking or original contributions
+in any way.
+All content has been reviewed and validated by the author to ensure accuracy and integrity.
+
+| **AI-based tool** | **Model**                                                       | **Use Case**    | **Remarks**         |
+|-------------------|-----------------------------------------------------------------|-----------------|---------------------|
+| ChatGPT           | GPT-3, GPT-4, GPT-4o, GPT-5                                     | Code generation | Rust, Python        |
+| GitHub Copilot    | GPT-4o, GPT-5, Claude Sonnet 3.5, Claude Sonnet 3.7, Gemini 2.5 | Code generation | Rust, Python, Swift |
 
 # Acknowledgements
 

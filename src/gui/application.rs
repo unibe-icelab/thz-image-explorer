@@ -4,42 +4,55 @@
 //! file operations, and visualization panels for signal and image processing.
 
 use crate::config::ThreadCommunication;
-use crate::data_container::DataPoint;
-use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
+use crate::data_container::PlotDataContainer;
 use crate::filters::psf::PSF;
 use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
-use crate::gui::matrix_plot::{ImageState, SelectedPixel};
+use crate::gui::matrix_plot::{ColorBarState, ImageState, SelectedPixel, ROI};
 use crate::gui::right_panel::right_panel;
 use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage, SceneVisibility};
+use crate::gui::utils::truncate_filename;
 use crate::math_tools::FftWindowType;
 use bevy::prelude::*;
-use bevy_egui::egui::ThemePreference;
+use bevy_egui::egui::{Color32, Popup, PopupCloseBehavior, ThemePreference};
 use bevy_egui::{egui, EguiContexts};
 use bevy_voxel_plot::InstanceMaterialData;
 use core::f64;
+#[cfg(not(target_os = "macos"))]
 use dotthz::DotthzFile;
+#[cfg(not(target_os = "macos"))]
 use egui_file_dialog::information_panel::InformationPanel;
+#[cfg(not(target_os = "macos"))]
 use egui_file_dialog::FileDialog;
 use egui_plot::PlotPoint;
 use home::home_dir;
+use log::Level;
 use self_update::update::Release;
+use semver::Version;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
+#[cfg(not(target_os = "macos"))]
 use std::sync::Arc;
+
+pub const SAFETY_ORANGE: Color32 = Color32::from_rgb(255, 95, 21);
 
 /// Represents the state of the file dialog for opening, saving, or working with PSF files.
 #[derive(Clone)]
 pub enum FileDialogState {
-    /// File dialog is set to open a generic file.
+    /// File dialog is set to open a dotTHz file.
     Open,
-    /// File dialog is set to open a reference file.
+    /// File dialog is set to open a reference dotTHz file.
     OpenRef,
     /// File dialog is set to open a PSF file.
     OpenPSF,
-    /// File dialog is set to save a file.
+    /// File dialog is set to save a dotTHz file.
+    // TODO, implement saving/exporting  dotTHz functionality
+    #[allow(dead_code)]
     Save,
+    /// File dialog is set to save a VTU file.
+    SaveToVTU,
     /// File dialog is not active.
     None,
 }
@@ -47,7 +60,7 @@ pub enum FileDialogState {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Tab {
     Pulse,
-    RefractiveIndex,
+    OpticalProperties,
     ThreeD,
 }
 
@@ -57,8 +70,8 @@ impl Display for Tab {
             Tab::Pulse => {
                 write!(f, "Pulse")
             }
-            Tab::RefractiveIndex => {
-                write!(f, "Refractive Index")
+            Tab::OpticalProperties => {
+                write!(f, "Optical Properties")
             }
             Tab::ThreeD => {
                 write!(f, "3D")
@@ -71,7 +84,7 @@ impl Tab {
     pub fn to_arr(&self) -> [bool; 3] {
         match self {
             Tab::Pulse => [true, false, false],
-            Tab::RefractiveIndex => [false, true, false],
+            Tab::OpticalProperties => [false, true, false],
             Tab::ThreeD => [false, false, true],
         }
     }
@@ -83,6 +96,8 @@ impl Tab {
 /// file paths, resolution parameters, and debug options.
 ///
 /// # Fields
+/// - `selected_reference`: The currently selected reference for optical properties calculation.
+/// - `selected_sample`: The currently selected sample for optical properties calculation.
 /// - `selected_path`: The currently selected file path.
 /// - `log_plot`: Whether log scale for plots is enabled.
 /// - `down_scaling`: Downscaling factor for visualizations.
@@ -104,13 +119,14 @@ impl Tab {
 /// - `psf`: The point spread function represented as a 2D array.
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Resource)]
 pub struct GuiSettingsContainer {
+    pub selected_reference: String,
+    pub selected_sample: String,
+    pub sample_thickness: f32,
     pub selected_path: PathBuf,
-    pub log_plot: bool,
+    pub fft_log_plot: bool,
     pub down_scaling: usize,
     pub normalize_fft: bool,
-    pub signal_1_visible: bool,
-    pub avg_signal_1_visible: bool,
-    pub filtered_signal_1_visible: bool,
+    pub avg_in_fourier_space: bool,
     pub water_lines_visible: bool,
     pub phases_visible: bool,
     pub frequency_resolution_temp: f32,
@@ -123,12 +139,16 @@ pub struct GuiSettingsContainer {
     pub x: f32,
     pub y: f32,
     pub tab: Tab,
-    pub chart_pitch: f32,
-    pub chart_yaw: f32,
-    pub chart_scale: f32,
-    pub chart_pitch_vel: f32,
-    pub chart_yaw_vel: f32,
+    pub animation_enabled: bool,
+    pub last_progress_bar_update: HashMap<String, i64>,
+    pub progress_bars: HashMap<String, Option<f32>>,
+    pub progress_start_time: HashMap<String, i64>,
+    pub filter_ui_active: bool,
+    pub filter_info: HashMap<String, bool>,
     pub opacity_threshold: f32,
+    pub contrast_3d: f32,
+    pub kernel_sigma: f32,
+    pub kernel_radius: usize,
     pub theme_preference: ThemePreference,
     pub beam_shape: Vec<[f64; 2]>,
     pub beam_shape_path: PathBuf,
@@ -145,13 +165,14 @@ impl GuiSettingsContainer {
     /// - Default file paths set to the user's home directory or `/`.
     pub fn new() -> GuiSettingsContainer {
         GuiSettingsContainer {
+            selected_reference: "".to_string(),
+            selected_sample: "".to_string(),
+            sample_thickness: 1.0,
             selected_path: home_dir().unwrap_or_else(|| PathBuf::from("/")),
-            log_plot: true,
+            fft_log_plot: true,
             down_scaling: 1,
             normalize_fft: false,
-            signal_1_visible: true,
-            avg_signal_1_visible: false,
-            filtered_signal_1_visible: false,
+            avg_in_fourier_space: false,
             water_lines_visible: false,
             phases_visible: false,
             frequency_resolution_temp: 0.001,
@@ -163,12 +184,16 @@ impl GuiSettingsContainer {
             meta_data_unlocked: false,
             x: 1600.0,
             y: 900.0,
-            chart_pitch: 0.3,
-            chart_yaw: 0.9,
-            chart_scale: 0.9,
-            chart_pitch_vel: 0.0,
-            chart_yaw_vel: 0.0,
+            animation_enabled: true,
             opacity_threshold: 0.1,
+            contrast_3d: 2.0,
+            kernel_sigma: 3.0,
+            kernel_radius: 9,
+            last_progress_bar_update: HashMap::new(),
+            progress_bars: HashMap::new(),
+            progress_start_time: HashMap::new(),
+            filter_ui_active: true,
+            filter_info: HashMap::new(),
             theme_preference: ThemePreference::System,
             beam_shape: vec![],
             beam_shape_path: home_dir().unwrap_or_else(|| PathBuf::from("/")),
@@ -180,15 +205,16 @@ impl GuiSettingsContainer {
 
 pub fn update_gui(
     mut scene_visibility: ResMut<SceneVisibility>,
-    mut meshes: ResMut<Assets<Mesh>>,
     mut query: Query<(&mut InstanceMaterialData, &mut Mesh3d)>,
     cube_preview_image: Res<RenderImage>,
     mut contexts: EguiContexts,
     mut explorer: NonSendMut<THzImageExplorer>,
     mut image_state: Local<ImageState>,
+    mut color_bar_state: Local<ColorBarState>,
     mut opacity_threshold: ResMut<OpacityThreshold>,
     mut cam_input: ResMut<CameraInputAllowed>,
     mut thread_communication: ResMut<ThreadCommunication>,
+    mut exit: EventWriter<AppExit>,
 ) {
     if thread_communication.gui_settings.tab != Tab::ThreeD {
         if let Ok((mut instance_data, _)) = query.single_mut() {
@@ -200,14 +226,165 @@ pub fn update_gui(
 
     let cube_preview_texture_id = contexts.image_id(&cube_preview_image).unwrap();
 
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().unwrap();
 
     let left_panel_width = 300.0;
     let right_panel_width = 500.0;
 
+    let text_height = ctx.fonts(|f| f.row_height(&egui::FontId::default()));
+    let bottom_panel_height = text_height + 16.0; // Add some padding
+
+    // Add bottom panel
+    egui::TopBottomPanel::bottom("bottom_panel")
+        .exact_height(bottom_panel_height)
+        .show(ctx, |ui| {
+            ui.horizontal_centered(|ui| {
+                let path = thread_communication.gui_settings.selected_path.clone();
+
+                // Create breadcrumb-style path display with max 3 levels
+                let mut path_display = String::new();
+                let components: Vec<_> = path
+                    .components()
+                    .filter_map(|c| {
+                        if let std::path::Component::Normal(name) = c {
+                            let name_path = std::path::Path::new(name);
+                            Some(truncate_filename(ui, name_path, left_panel_width))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                if components.len() > 3 {
+                    path_display.push_str("... > ");
+                    path_display.push_str(&components[components.len() - 3..].join(" > "));
+                } else {
+                    path_display.push_str(&components.join(" > "));
+                }
+
+                ui.label(path_display);
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let (has_warnings, _has_errors, last_error_or_warning) =
+                        if let Ok(logger) = egui_logger::LOGGER.lock() {
+                            let last_entry = logger.logs.iter().rev().find(|record| {
+                                matches!(record.level, log::Level::Warn | log::Level::Error)
+                            });
+
+                            let has_warnings = if let Some(entry) = last_entry {
+                                matches!(entry.level, log::Level::Warn)
+                            } else {
+                                false
+                            };
+
+                            let has_errors = if let Some(entry) = last_entry {
+                                matches!(entry.level, log::Level::Error)
+                            } else {
+                                false
+                            };
+
+                            let last_message =
+                                last_entry.map(|record| (record.level, record.message.to_string()));
+
+                            (has_warnings, has_errors, last_message)
+                        } else {
+                            (false, false, None)
+                        };
+                    if let Some(message) = last_error_or_warning {
+                        if message != explorer.last_error_message {
+
+                            // Create a unique ID for this filter's info popup
+                            let popup_id = ui.make_persistent_id(format!("error_popup"));
+
+                            // Show info icon and handle clicks
+                            let info_button = if has_warnings {
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{}",
+                                        egui_phosphor::regular::WARNING_CIRCLE
+                                    ))
+                                        .heading()
+                                        .color(egui::Color32::YELLOW),
+                                )
+                            } else {
+                                // has errors
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{}",
+                                        egui_phosphor::regular::WARNING_CIRCLE
+                                    ))
+                                        .heading()
+                                        .color(egui::Color32::RED),
+                                )
+                            };
+
+                            let is_popup_open = Popup::menu(&info_button)
+                                .id(popup_id)
+                                .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                                .show(
+                                |ui: &mut egui::Ui| {
+                                    // Set max width for the popup
+                                    ui.set_max_width(right_panel_width * 0.8);
+
+                                    // Add text
+                                    let (level, message) = message.clone();
+
+                                    let (prefix, color) = match level {
+                                        log::Level::Warn => ("Warning", egui::Color32::YELLOW),
+                                        log::Level::Error => ("Error", egui::Color32::RED),
+                                        _ => ("", egui::Color32::WHITE),
+                                    };
+                                    ui.label(
+                                        egui::RichText::new(format!("{}: {}", prefix, message))
+                                            .color(color),
+                                    );
+
+                                    ui.label(
+                                        "Check the logs in the Settings Window for more information.",
+                                    );
+                                },
+                            );
+
+                            // Clear warnings/errors when popup is closed
+                            if explorer.error_window_was_open && !is_popup_open.is_some() {
+                                // clear it
+                                explorer.last_error_message = message;
+                            }
+
+                            explorer.error_window_was_open = is_popup_open.is_some();
+                        } else {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{}",
+                                    egui_phosphor::regular::CHECK_CIRCLE
+                                ))
+                                    .heading()
+                                    .color(egui::Color32::GREEN),
+                            )
+                                .on_hover_text("No Errors!");
+                        }
+                    } else {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{}",
+                                egui_phosphor::regular::CHECK_CIRCLE
+                            ))
+                                .heading()
+                                .color(egui::Color32::GREEN),
+                        )
+                            .on_hover_text("No Errors!");
+                    }
+
+                    ui.add_space(10.0);
+                    let current_version =
+                        Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Version::new(0, 0, 1));
+
+                    ui.label(format!("Version: {}", current_version));
+                });
+            });
+        });
+
     center_panel(
-        &mut meshes,
-        &mut query,
         &cube_preview_texture_id,
         &ctx,
         &right_panel_width,
@@ -223,6 +400,7 @@ pub fn update_gui(
         &mut explorer,
         &left_panel_width,
         &mut image_state,
+        &mut color_bar_state,
         &mut thread_communication,
     );
 
@@ -231,6 +409,7 @@ pub fn update_gui(
         &mut explorer,
         &right_panel_width,
         &mut thread_communication,
+        &mut exit,
     );
 
     thread_communication.gui_settings.x = ctx.used_size().x;
@@ -244,86 +423,74 @@ pub fn update_gui(
 /// visualizations and includes methods for rendering the main GUI panels.
 ///
 /// # Fields
+/// - `new_meta_data`: Vector of key-value pairs for new meta-data entries.
+/// - `cut_off`: Range values for signal cut-off filtering.
 /// - `fft_bounds`: Bounds for the FFT visualization.
 /// - `fft_window_type`: Selected FFT window type.
-/// - `filter_bounds`: Bounds for filter application.
-/// - `time_window`: Time window for analysis.
 /// - `pixel_selected`: Struct representing the currently selected pixel in the image.
 /// - `val`: Coordinates of the current plot point.
 /// - `mid_point`: Midpoint value for certain calculations.
 /// - `bw`: Boolean for enabling black-and-white mode.
 /// - `water_vapour_lines`: Preloaded water vapor line frequencies for reference plots.
-/// - `wp`: An image object used in the right panel.
 /// - `data`: Contains the experiment or scan data.
 /// - `file_dialog_state`: Current state of the file dialog.
-/// - `file_dialog`: Instance of the file dialog used for file operations.
-/// - `information_panel`: Instance of the file information panel.
+/// - `file_dialog`: Instance of the file dialog used for file operations (not available on macOS).
+/// - `information_panel`: Instance of the file information panel (not available on macOS).
 /// - `other_files`: List of other detected files for the file dialog.
 /// - `selected_file_name`: Name of the currently selected file.
 /// - `scroll_to_selection`: Boolean to indicate whether to scroll to the file selection.
-/// - `thread_communication`: Shared thread communication object for GUI interactions.
 /// - `settings_window_open`: Boolean indicating whether the settings window is open.
+/// - `last_error_message`: Last error or warning message with its log level.
+/// - `error_window_was_open`: Boolean tracking if error popup window was previously open.
 /// - `update_text`: Text displayed for updates.
 /// - `new_release`: Optional field for new software updates (only used with "self_update" feature).
+/// - `rois`: HashMap of named regions of interest (ROI) for analysis.
 pub struct THzImageExplorer {
+    pub(crate) new_meta_data: Vec<(String, String)>,
     pub(crate) cut_off: [f32; 2],
     pub(crate) fft_bounds: [f32; 2],
     pub(crate) fft_window_type: FftWindowType,
-    pub(crate) filter_bounds: [f32; 2],
-    pub(crate) time_window: [f32; 2],
     pub(crate) pixel_selected: SelectedPixel,
     pub(crate) val: PlotPoint,
     pub(crate) mid_point: f32,
     pub(crate) bw: bool,
     pub(crate) water_vapour_lines: Vec<f64>,
-    pub(crate) wp: &'static [u8],
-    pub(crate) data: DataPoint,
+    pub(crate) data: PlotDataContainer,
     pub(crate) file_dialog_state: FileDialogState,
+    #[cfg(not(target_os = "macos"))]
     pub(crate) file_dialog: FileDialog,
+    #[cfg(not(target_os = "macos"))]
     pub(crate) information_panel: InformationPanel,
     pub(crate) other_files: Vec<PathBuf>,
     pub(crate) selected_file_name: String,
     pub(crate) scroll_to_selection: bool,
     pub(crate) settings_window_open: bool,
+    pub(crate) last_error_message: (Level, String),
+    pub(crate) error_window_was_open: bool,
     pub(crate) update_text: String,
-    /// Data for the filters in time domain before FFT
-    pub(crate) time_domain_data_1: Vec<[Vec<f64>; 2]>,
-    /// Data for the filters in frequency domain after FFT and before iFFT
-    pub(crate) frequency_domain_data: Vec<[Vec<f64>; 3]>,
-    /// Data for the filters in time domain after FFT/iFFT
-    pub(crate) time_domain_data_2: Vec<[Vec<f64>; 2]>,
-    /// Maps the filter indices to the corresponding input data indices in time domain before FFT
-    /// Note that the output will always be saved in the corresponding index in the data Vec.
-    pub(crate) time_domain_filter_mapping_1: Vec<(usize, usize)>,
-    /// Maps the filter indices to the corresponding input data indices in frequency domain after FFT and before iFFT
-    /// Note that the output will always be saved in the corresponding index in the data Vec.
-    pub(crate) frequency_domain_filter_mapping: Vec<(usize, usize)>,
-    /// Maps the filter indices to the corresponding input data indices in time domain after FFT
-    /// Note that the output will always be saved in the corresponding index in the data Vec.
-    pub(crate) time_domain_filter_mapping_2: Vec<(usize, usize)>,
     #[cfg(feature = "self_update")]
     pub(crate) new_release: Option<Release>,
+    pub(crate) rois: HashMap<String, ROI>,
 }
 
 impl THzImageExplorer {
     /// Creates a new instance of `THzImageExplorer`.
     ///
     /// # Arguments
-    /// - `cc`: The creation context for the application instance.
     /// - `thread_communication`: An instance of `ThreadCommunication` for managing
     ///   threaded GUI settings.
     ///
     /// # Returns
     /// A new `THzImageExplorer` struct with default settings and preloaded water vapor lines.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, unused_variables)]
     pub fn new(thread_communication: ThreadCommunication) -> Self {
         let mut water_vapour_lines: Vec<f64> = Vec::new();
-        let buffered = include_str!("../../resources/water_lines.csv");
+        let buffered = include_str!("../../assets/water_lines.csv");
         for line in buffered.lines() {
             water_vapour_lines.push(line.trim().parse().unwrap());
         }
-
-        let mut file_dialog = FileDialog::default()
+        #[cfg(not(target_os = "macos"))]
+        let file_dialog = FileDialog::default()
             //.initial_directory(PathBuf::from("/path/to/app"))
             .default_file_name("measurement.thz")
             .default_size([600.0, 400.0])
@@ -361,7 +528,7 @@ impl THzImageExplorer {
             .initial_directory(thread_communication.gui_settings.selected_path.clone())
             //.default_file_filter("dotTHz files")
             ;
-        // TODO: fix this!!
+        // TODO: fix this for linux and windows!!
         // // Load the persistent data of the file dialog.
         // // Alternatively, you can also use the `FileDialog::storage` builder method.
         // if let Some(storage) = cc.storage {
@@ -369,38 +536,14 @@ impl THzImageExplorer {
         //         eframe::get_value(storage, "file_dialog_storage").unwrap_or_default()
         // }
 
-        let mut time_domain_data_1 = vec![];
-        let mut frequency_domain_data = vec![];
-        let mut time_domain_data_2 = vec![];
-        let mut time_domain_filter_mapping_1 = vec![];
-        let mut frequency_domain_filter_mapping = vec![];
-        let mut time_domain_filter_mapping_2 = vec![];
-
-        // populate with standard / empty values
-        if let Ok(mut filters) = FILTER_REGISTRY.lock() {
-            for (i, filter) in filters.iter_mut().enumerate() {
-                match filter.as_ref().config().domain {
-                    FilterDomain::TimeBeforeFFT => {
-                        time_domain_data_1.push([vec![], vec![]]);
-                        time_domain_filter_mapping_1.push((i, i));
-                    }
-                    FilterDomain::Frequency => {
-                        frequency_domain_data.push([vec![], vec![], vec![]]);
-                        frequency_domain_filter_mapping.push((i, i));
-                    }
-                    FilterDomain::TimeAfterFFT => {
-                        time_domain_data_2.push([vec![], vec![]]);
-                        time_domain_filter_mapping_2.push((i, i));
-                    }
-                }
-            }
-        }
         Self {
+            new_meta_data: vec![("".to_string(), "".to_string())],
             water_vapour_lines,
-            wp: include_bytes!("../../images/WP-Logo.png"),
-            data: DataPoint::default(),
+            data: PlotDataContainer::default(),
             file_dialog_state: FileDialogState::None,
+            #[cfg(not(target_os = "macos"))]
             file_dialog,
+            #[cfg(not(target_os = "macos"))]
             information_panel: InformationPanel::default()
                 .add_file_preview("csv", |ui, item| {
                     ui.label("CSV preview:");
@@ -447,22 +590,17 @@ impl THzImageExplorer {
             cut_off: [0.0, 100.0],
             fft_bounds: [1.0, 7.0],
             fft_window_type: FftWindowType::AdaptedBlackman,
-            filter_bounds: [0.0, 10.0],
-            time_window: [1000.0, 1050.0],
             pixel_selected: SelectedPixel::default(),
             val: PlotPoint { x: 0.0, y: 0.0 },
             mid_point: 50.0,
             bw: false,
             settings_window_open: false,
+            last_error_message: (Level::Error, "".to_string()),
+            error_window_was_open: false,
             update_text: "".to_string(),
-            time_domain_data_1,
-            frequency_domain_data,
-            time_domain_data_2,
-            time_domain_filter_mapping_1,
-            frequency_domain_filter_mapping,
-            time_domain_filter_mapping_2,
             #[cfg(feature = "self_update")]
             new_release: None,
+            rois: HashMap::new(),
         }
     }
 }

@@ -1,34 +1,27 @@
 use crate::config::ThreadCommunication;
 use crate::gui::application::{FileDialogState, THzImageExplorer};
 #[cfg(feature = "self_update")]
-use crate::update::{check_update, update};
+use crate::update::{check_for_software_updates, update};
+use crate::APP_INFO;
+use bevy::app::AppExit;
+use bevy::prelude::EventWriter;
 use bevy_egui::egui;
-use bevy_egui::egui::{
-    vec2, Align2, Color32, ColorImage, InnerResponse, TextureOptions, Vec2, Visuals,
-};
-use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotPoint, PlotPoints};
+use bevy_egui::egui::{vec2, Align2, InnerResponse, Popup, PopupCloseBehavior, Vec2, Visuals};
 use egui_theme_switch::ThemeSwitch;
-use ndarray::{Array1, Axis};
+use preferences::Preferences;
 #[cfg(feature = "self_update")]
 use self_update::restart::restart;
 #[cfg(feature = "self_update")]
 use semver::Version;
 
-fn gaussian(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
-    let x0 = params[0];
-    let w = params[1];
-    x.mapv(|xi| {
-        (2.0 * (-2.0 * (xi - x0).powf(2.0) / (w * w)) / (2.0 * std::f64::consts::PI).sqrt() * w)
-            .exp()
-    })
-}
 pub fn settings_window(
     ctx: &egui::Context,
     explorer: &mut THzImageExplorer,
     thread_communication: &mut ThreadCommunication,
+    exit: &mut EventWriter<AppExit>,
 ) -> Option<InnerResponse<Option<()>>> {
     egui::Window::new("Settings")
-        .fixed_size(Vec2 { x: 600.0, y: 200.0 })
+        .fixed_size(Vec2 { x: 400.0, y: 1000.0 })
         .anchor(Align2::CENTER_CENTER, Vec2 { x: 0.0, y: 0.0 })
         .collapsible(false)
         .show(ctx, |ui| {
@@ -58,17 +51,50 @@ pub fn settings_window(
                         .on_hover_text("The PSF raw data should be located in a directory.")
                         .clicked()
                     {
-                        explorer.file_dialog_state = FileDialogState::OpenPSF;
+                        #[cfg(not(target_os = "macos"))]
                         explorer.file_dialog.pick_file();
+                        explorer.file_dialog_state = FileDialogState::OpenPSF;
                     }
-                    if ui
-                        .selectable_label(false, format!("{}", egui_phosphor::regular::INFO))
-                        .clicked()
-                    {
-                        // TODO: add description of PSF format
-                    }
+                    // Create a unique ID for this filter's info popup
+                    let popup_id = ui.make_persistent_id(format!("PSF info_popup"));
 
-                    // TODO: maybe change this check here...
+                    // Show info icon and handle clicks
+                    let info_button = ui.button(format!("{}", egui_phosphor::regular::INFO));
+
+                    Popup::menu(&info_button)
+                        .id(popup_id)
+                        .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                        .show(
+                        |ui: &mut egui::Ui| {
+                            // Set max width for the popup
+                            ui.set_max_width(400.0);
+
+                            // Add description text
+
+                            // The PSF format is an npz file containing the following data structure:
+                            // - 'low_cut': float, low cut-off frequency
+                            // - 'high_cut': float, high cut-off frequency
+                            // - 'start_freq': float, start frequency for filters
+                            // - 'end_freq': float, end frequency for filters
+                            // - 'n_filters': int, number of filters
+                            // - 'filters': ndarray, filter coefficients, shape (n_filters, len(times_psf) // 5)
+                            // - 'filt_freqs': ndarray, filter frequencies, shape (n_filters,)
+                            // - '[x_0, w_x]': ndarray, fitted x parameters, shape (n_filters, 2)
+                            // - '[y_0, w_y]': ndarray, fitted y parameters, shape (n_filters, 2)
+
+                            ui.label("The PSF format is an npz file containing:");
+                            ui.label("- 'low_cut': float, low cut-off frequency");
+                            ui.label("- 'high_cut': float, high cut-off frequency");
+                            ui.label("- 'start_freq': float, start frequency for filters");
+                            ui.label("- 'end_freq': float, end frequency for filters");
+                            ui.label("- 'n_filters': int, number of filters");
+                            ui.label("- 'filters': ndarray, filter coefficients, shape (n_filters, len(times_psf) // 5)");
+                            ui.label("- 'filt_freqs': ndarray, filter frequencies, shape (n_filters,)");
+                            ui.label("- '[x_0, w_x]': ndarray, fitted x parameters, shape (n_filters, 2)");
+                            ui.label("- '[y_0, w_y]': ndarray, fitted y parameters, shape (n_filters, 2)");
+                        },
+                    );
+
                     if thread_communication.gui_settings.psf.popt_x.is_empty() {
                         ui.colored_label(egui::Color32::RED, "No PSF loaded.");
                     } else {
@@ -83,118 +109,27 @@ pub fn settings_window(
                         );
                     }
                     ui.end_row();
-                    ui.end_row();
                 });
-
-            let signal_plot = Plot::new("signal")
-                // .height(height)
-                // .width(width)
-                // .y_axis_formatter(s_fmt)
-                // .x_axis_formatter(t_fmt)
-                // .label_formatter(label_fmt)
-                // .coordinates_formatter(Corner::LeftTop, position_fmt)
-                // .include_x(&self.tera_flash_conf.t_begin + &self.tera_flash_conf.range)
-                // .include_x(self.tera_flash_conf.t_begin)
-                // .min_size(vec2(50.0, 100.0))
-              ;
-
-            // Assuming `beam_x` is of type `Array2<f64>`
-            let beam_x_array = thread_communication.gui_settings.clone().psf.popt_x;
-
-            let start = -5.0;
-            let end = 5.0;
-            let step = 0.5;
-
-            let values: Vec<f64> = (0..)
-                .map(|i| start + i as f64 * step)
-                .take_while(|&x| x <= end)
-                .collect();
-            let array = Array1::from(values);
-            if !beam_x_array.is_empty() {
-                let binding = beam_x_array.row(0);
-                let first_row = binding.as_slice().unwrap();
-
-                let beam_x_vec: Vec<[f64; 2]> = gaussian(&array, &first_row)
-                    .iter()
-                    .zip(array.iter())
-                    .map(|(p, x)| [*x, *p])
-                    .collect();
-
-                signal_plot.show(ui, |signal_plot_ui| {
-                    signal_plot_ui.line(
-                        Line::new(PlotPoints::from(beam_x_vec))
-                            .color(egui::Color32::RED)
-                            .style(LineStyle::Solid)
-                            .width(2.0)
-                            .name("x"),
-                    );
-                });
-            }
 
             ui.end_row();
-
-            let plot_height = 100.0;
-            let plot_width = 100.0;
-            let data = &thread_communication.gui_settings.psf.popt_x;
-
-            let width = data.len_of(Axis(0));
-            let height = data.len_of(Axis(1));
-
-            let size = [plot_width / width as f64, plot_height / height as f64]
-                .iter()
-                .fold(f64::INFINITY, |ai, &bi| ai.min(bi));
-
-            let plot = Plot::new("image")
-                .height(0.75 * height as f32 * size as f32)
-                .width(0.75 * width as f32 * size as f32)
-                .show_axes([false, false])
-                .show_x(false)
-                .show_y(false)
-                .set_margin_fraction(Vec2 { x: 0.0, y: 0.0 })
-                .allow_drag(false);
-
-            let max = data
-                .iter()
-                .fold(f64::NEG_INFINITY, |ai, &bi| ai.max(bi as f64));
-
-            let img = ColorImage::new([width, height], Color32::TRANSPARENT);
-            let mut intensity_matrix = vec![vec![0.0; height]; width];
-            let mut id_matrix = vec![vec!["".to_string(); height]; width];
-
-            for y in 0..height {
-                for x in 0..width {
-                    if let Some(i) = data.get((x, y)) {
-                        intensity_matrix[x][height - 1 - y] = *i as f64 / max * 100.0;
-                        id_matrix[x][height - 1 - y] = format!("{:05}-{:05}", x, y);
-                    }
-                }
-            }
-
-            let texture = ui
-                .ctx()
-                .load_texture("image", img.clone(), TextureOptions::NEAREST);
-            let im = PlotImage::new(
-                &texture,
-                PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
-                img.height() as f32 * vec2(texture.aspect_ratio(), 1.0),
-            );
-
-            let _plot_response = plot.show(ui, |plot_ui| {
-                plot_ui.image(im);
-            });
 
             ui.label("");
             #[cfg(feature = "self_update")]
             egui::Grid::new("update settings")
                 .striped(true)
                 .show(ui, |ui| {
+
+                    let branch = option_env!("GIT_BRANCH").unwrap_or("(No Git Branch Found)");
+                    let commit = option_env!("GIT_HASH").unwrap_or("(No Git Hash Found)");
+                    ui.label(format!("Build: {} @ {}", branch, commit));
+                    ui.end_row();
+
                     if ui.button("Check for Updates").clicked() {
-                        explorer.new_release = check_update();
+                        explorer.new_release = check_for_software_updates();
                     }
 
-                    let current_version = Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
+                    let current_version = Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Version::new(0, 0, 1));
                     ui.label(format!("Current version: {}", current_version));
-
                     ui.end_row();
 
                     if let Some(r) = &explorer.new_release {
@@ -225,23 +160,49 @@ pub fn settings_window(
                 });
             ui.label(explorer.update_text.clone());
 
-            ui.horizontal(|ui| {
-                ui.horizontal(|ui| {
-                    if !explorer.update_text.is_empty() {
-                        ui.disable();
-                    };
-                    if ui.button("Exit Settings").clicked() {
-                        explorer.settings_window_open = false;
-                        explorer.update_text = "".to_string();
-                    }
-                });
+            ui.end_row();
+            ui.label("Logger");
+            ui.end_row();
+
+            ui.allocate_ui(vec2(300.0, 300.0), |ui| {
+                egui_logger::logger_ui().show(ui);
+            });
+            ui.end_row();
+            ui.separator();
+            ui.end_row();
+
+            ui.vertical_centered(|ui| {
+                    let escape_key_pressed = ui.input(|i| i.key_pressed(egui::Key::Escape)) && explorer.update_text.is_empty();
+                    ui.add_enabled_ui(explorer.update_text.is_empty(), |ui| {
+                        if ui.button("Close").clicked() || escape_key_pressed {
+                            explorer.settings_window_open = false;
+                            explorer.update_text = "".to_string();
+
+                            thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
+
+                            let _ = thread_communication
+                                .gui_settings
+                                .save(&APP_INFO, "config/gui");
+                        }
+                    });
 
                 #[cfg(feature = "self_update")]
                 if !explorer.update_text.is_empty() && ui.button("Restart").clicked() {
                     restart();
                     ctx.request_repaint(); // Optional: Request repaint for immediate feedback
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                    exit.write(AppExit::Success);
                 }
             });
+
+            // update PSF also in gui thread
+            let mut psf_temp = None;
+            if let Ok(psf_guard) = thread_communication.psf_lock.try_read() {
+                psf_temp = Some((psf_guard.0.clone(), psf_guard.1.clone()));
+            }
+            if let Some((path, psf)) = psf_temp {
+                thread_communication.gui_settings.psf = psf;
+                thread_communication.gui_settings.beam_shape_path = path;
+            }
         })
 }

@@ -1,9 +1,9 @@
-use crate::gui::application::THzImageExplorer;
+use crate::gui::application::{THzImageExplorer, SAFETY_ORANGE};
 use bevy_egui::egui;
-use bevy_egui::egui::TextureHandle;
 use bevy_egui::egui::{
     pos2, vec2, Color32, ColorImage, DragValue, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
 };
+use bevy_egui::egui::{PopupAnchor, TextureHandle};
 use egui::TextureOptions;
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotImage, PlotPoint, PlotPoints, Polygon};
@@ -11,6 +11,11 @@ use ndarray::{Array2, Axis};
 
 #[derive(Default)]
 pub struct ImageState {
+    texture: Option<TextureHandle>,
+}
+
+#[derive(Default)]
+pub struct ColorBarState {
     texture: Option<TextureHandle>,
 }
 
@@ -38,7 +43,7 @@ pub struct SelectedPixel {
     pub x: usize,
     pub y: usize,
     pub id: String,
-    pub rois: Vec<ROI>, // Store multiple ROIs
+    pub open_roi: Option<ROI>,
 }
 
 impl Default for SelectedPixel {
@@ -49,7 +54,7 @@ impl Default for SelectedPixel {
             x: 0,
             y: 0,
             id: "0000-0000".to_string(),
-            rois: vec![ROI::default()],
+            open_roi: None,
         }
     }
 }
@@ -79,23 +84,33 @@ pub fn color_from_intensity(
         (normalized_y - cut_off[0]) / (cut_off[1] - cut_off[0])
     };
 
-    // Reverse hue mapping: red → green → blue
-    let midpoint = *midpoint_position / 100.0;
-    let hue = if remapped_y <= midpoint {
-        (1.0 - (remapped_y / midpoint)) * 0.667 // Red to green
-    } else {
-        ((remapped_y - midpoint) / (1.0 - midpoint)) * 0.667 // Green to blue
-    };
-
     if *bw {
+        // Apply midpoint mapping to grayscale values
+        let midpoint = *midpoint_position / 100.0;
+        let grayscale_value = if remapped_y <= midpoint {
+            (remapped_y / midpoint) * 0.5
+        } else {
+            0.5 + ((remapped_y - midpoint) / (1.0 - midpoint)) * 0.5
+        };
+
         egui::ecolor::Hsva {
             h: 0.0,
             s: 0.0,
-            v: remapped_y,
+            v: grayscale_value,
             a: 1.0,
         }
         .into()
     } else {
+        // Fixed hue mapping: blue (cold) → green (mid) → red (hot)
+        let midpoint = *midpoint_position / 100.0;
+        let hue = if remapped_y <= midpoint {
+            // From blue (0.667) to green (0.333)
+            0.667 - (remapped_y / midpoint) * 0.334
+        } else {
+            // From green (0.333) to red (0.0)
+            0.333 - ((remapped_y - midpoint) / (1.0 - midpoint)) * 0.333
+        };
+
         egui::ecolor::Hsva {
             h: hue,
             s: 1.0,
@@ -107,6 +122,7 @@ pub fn color_from_intensity(
 }
 fn colorbar_with_midpoint_slider(
     ui: &mut egui::Ui,
+    color_bar_state: &mut ColorBarState,
     width: &f64,
     height: &f64,
     explorer: &mut THzImageExplorer,
@@ -130,7 +146,7 @@ fn colorbar_with_midpoint_slider(
             .show_x(false)
             .show_y(false);
 
-        let mut img = egui::ColorImage::new([1, 100], Color32::TRANSPARENT);
+        let mut img = ColorImage::new([1, 100], vec![Color32::TRANSPARENT; 100]);
 
         for y in 0..100 {
             let normalized_y = y as f32 / 100.0;
@@ -162,13 +178,25 @@ fn colorbar_with_midpoint_slider(
             }
         }
 
-        let texture = ui
-            .ctx()
-            .load_texture("image", img.clone(), TextureOptions::NEAREST);
+        // Only load once
+        if let Some(color_bar_texture) = &mut color_bar_state.texture {
+            color_bar_texture.set(img.clone(), TextureOptions::NEAREST); // This *updates* the GPU texture in-place
+        } else {
+            let color_bar_texture =
+                ui.ctx()
+                    .load_texture("image", img.clone(), TextureOptions::NEAREST);
+            color_bar_state.texture = Some(color_bar_texture);
+        }
+
+        let Some(color_bar_texture) = &color_bar_state.texture else {
+            return;
+        };
+
         let im = PlotImage::new(
-            &texture,
+            "Colorbar Plot".to_string(),
+            color_bar_texture,
             PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
-            img.height() as f32 * vec2(texture.aspect_ratio(), 1.0),
+            img.height() as f32 * vec2(color_bar_texture.aspect_ratio(), 1.0),
         );
 
         let mut val_y = 0.0;
@@ -269,7 +297,7 @@ fn colorbar_with_midpoint_slider(
             let label_text = format!("{:.0}%", percentage); // Removed decimals
 
             // Create a fixed-size rectangle to hold the label at the correct height, using a constant x position
-            ui.allocate_new_ui(
+            ui.scope_builder(
                 UiBuilder::new().max_rect(egui::Rect::from_min_size(
                     egui::pos2(
                         label_x_offset + triangle_radius,
@@ -285,6 +313,40 @@ fn colorbar_with_midpoint_slider(
     });
 }
 
+fn point_in_polygon(point: (f64, f64), polygon: &[[f64; 2]]) -> bool {
+    let (x, y) = point;
+    let mut inside = false;
+    let n = polygon.len();
+    if n < 3 {
+        return false;
+    }
+    let mut j = n - 1;
+    for i in 0..n {
+        let xi = polygon[i][0];
+        let yi = polygon[i][1];
+        let xj = polygon[j][0];
+        let yj = polygon[j][1];
+        if ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi + f64::EPSILON) + xi) {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
+}
+
+fn polygon_centroid(polygon: &[[f64; 2]]) -> Option<(f64, f64)> {
+    let n = polygon.len();
+    if n == 0 {
+        return None;
+    }
+    let (mut x_sum, mut y_sum) = (0.0, 0.0);
+    for point in polygon {
+        x_sum += point[0];
+        y_sum += point[1];
+    }
+    Some((x_sum / n as f64, y_sum / n as f64))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn plot_matrix(
     ui: &mut egui::Ui,
@@ -292,7 +354,8 @@ pub fn plot_matrix(
     plot_width: &f64,
     plot_height: &f64,
     explorer: &mut THzImageExplorer,
-    state: &mut ImageState,
+    img_state: &mut ImageState,
+    colorbar_state: &mut ColorBarState,
 ) -> bool {
     let mut pixel_clicked = false;
     let max = data
@@ -306,6 +369,7 @@ pub fn plot_matrix(
         if ui
             .add(
                 DoubleSlider::new(&mut cut_off_low, &mut cut_off_high, 0.0..=100.0)
+                    .stroke(Stroke::new(7.0, SAFETY_ORANGE))
                     .separation_distance(1.0)
                     .width((*plot_width as f32) * 0.95),
             )
@@ -322,67 +386,80 @@ pub fn plot_matrix(
     ui.horizontal(|ui| {
         ui.add(DragValue::new(&mut cut_off_low).suffix("%"));
 
-        ui.add_space((0.6 * *plot_width) as f32);
-
-        ui.add(DragValue::new(&mut cut_off_high).suffix("%"));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add(DragValue::new(&mut cut_off_high).suffix("%"));
+        });
     });
     explorer.cut_off = [cut_off_low, cut_off_high];
 
+    ui.add_space(5.0);
+
     let width = data.len_of(Axis(0));
     let height = data.len_of(Axis(1));
-    let size = [plot_width / width as f64, plot_height / height as f64]
+    // Adjust size calculation for rotated dimensions
+    let size = [plot_width / height as f64, plot_height / width as f64]
         .iter()
         .fold(f64::INFINITY, |ai, &bi| ai.min(bi));
 
-    let mut img = ColorImage::new([width, height], Color32::TRANSPARENT);
+    // Create image with swapped dimensions for rotation
+    let mut img = ColorImage::new([height, width], vec![Color32::TRANSPARENT; height * width]);
     let mut intensity_matrix = vec![vec![0.0; height]; width];
     let mut id_matrix = vec![vec!["".to_string(); height]; width];
 
     for y in 0..height {
         for x in 0..width {
             if let Some(i) = data.get((x, y)) {
-                img[(x, y)] = color_from_intensity(
+                // Swap and mirror coordinates for rotation and mirroring
+                // img is indexed by (column, row)
+                // original x -> row, original y -> column
+                img[(y, x)] = color_from_intensity(
                     i,
                     &max,
                     &explorer.cut_off,
                     &explorer.mid_point,
                     &explorer.bw,
                 );
-                intensity_matrix[x][height - 1 - y] = *i as f64 / max * 100.0;
-                id_matrix[x][height - 1 - y] = format!("{:05}-{:05}", x, y);
+                intensity_matrix[x][y] = *i as f64 / max * 100.0;
+                id_matrix[x][y] = format!("{:05}-{:05}", x, y);
             }
         }
     }
 
     // Only load once
-    if let Some(texture) = &mut state.texture {
+    if let Some(texture) = &mut img_state.texture {
         texture.set(img.clone(), TextureOptions::NEAREST); // This *updates* the GPU texture in-place
     } else {
         let texture = ui
             .ctx()
             .load_texture("image", img.clone(), TextureOptions::NEAREST);
-        state.texture = Some(texture);
+        img_state.texture = Some(texture);
     }
 
-    let Some(texture) = &state.texture else {
+    let Some(img_texture) = &img_state.texture else {
         return pixel_clicked;
     };
 
+    // Correct the size vector for the PlotImage
     let im = PlotImage::new(
-        texture,
+        "Image Plot".to_string(),
+        img_texture,
         PlotPoint::new((img.width() as f64) / 2.0, (img.height() as f64) / 2.0),
-        img.height() as f32 * vec2(texture.aspect_ratio(), 1.0),
+        vec2(img.width() as f32, img.height() as f32),
     );
 
     ui.horizontal(|ui| {
+        // Swap width and height for the plot dimensions to match the rotated image
         let plot = Plot::new("image")
-            .height(0.75 * height as f32 * size as f32)
-            .width(0.75 * width as f32 * size as f32)
+            .height(0.75 * width as f32 * size as f32)
+            .width(0.75 * height as f32 * size as f32)
             .show_axes([false, false])
             .show_x(false)
             .show_y(false)
             .set_margin_fraction(Vec2 { x: 0.0, y: 0.0 })
-            .allow_drag(false);
+            .allow_drag(false)
+            .data_aspect(1.0); // Ensure aspect ratio is 1:1
+
+        let mut hovered_roi_uuid: Option<String> = None;
 
         let plot_response = plot.show(ui, |plot_ui| {
             plot_ui.image(im);
@@ -390,39 +467,61 @@ pub fn plot_matrix(
             // Draw selected single pixel
             if explorer.pixel_selected.selected {
                 plot_ui.line(
-                    Line::new(PlotPoints::from(explorer.pixel_selected.rect.clone()))
-                        .highlight(true)
-                        .color(Color32::GRAY),
+                    Line::new(
+                        "Selected Pixel".to_string(),
+                        PlotPoints::from(explorer.pixel_selected.rect.clone()),
+                    )
+                    .highlight(true)
+                    .color(Color32::GRAY),
                 );
             }
 
             // Draw all ROIs
-            for roi in explorer.pixel_selected.rois.iter() {
-                let line = Line::new(PlotPoints::from(roi.polygon.clone()))
+            if let Some(roi) = &explorer.pixel_selected.open_roi {
+                let line = Line::new(roi.name.clone(), PlotPoints::from(roi.polygon.clone()))
                     .color(Color32::WHITE)
                     .width(2.0);
                 plot_ui.line(line);
+            }
 
-                if roi.closed {
-                    let screen_points: Vec<[f64; 2]> = roi
-                        .polygon
-                        .iter()
-                        .map(|p| {
-                            let _point = plot_ui
-                                .transform()
-                                .position_from_point(&PlotPoint::new(p[0], p[1]));
-                            [p[0], p[1]]
-                        })
-                        .collect();
-                    plot_ui.polygon(
-                        Polygon::new(PlotPoints::from(screen_points))
-                            .fill_color(Color32::WHITE.gamma_multiply(0.5))
-                            .highlight(false)
-                            .style(LineStyle::Solid)
-                            .width(2.0)
-                            .name(roi.name.clone()),
-                    );
+            let pointer = plot_ui.pointer_coordinate();
+
+            for (roi_uuid, roi) in explorer.rois.iter() {
+                // Check if mouse is close to any point in the ROI polygon
+                let is_hovered = if let Some(pos) = pointer {
+                    point_in_polygon((pos.x, pos.y), &roi.polygon)
+                } else {
+                    false
+                };
+
+                let line_width = if is_hovered { 4.0 } else { 2.0 };
+                let color = if is_hovered {
+                    Color32::YELLOW
+                } else {
+                    Color32::WHITE
+                };
+
+                let screen_points: Vec<[f64; 2]> = roi.polygon.clone();
+                plot_ui.polygon(
+                    Polygon::new(roi.name.clone(), PlotPoints::from(screen_points.clone()))
+                        .fill_color(Color32::TRANSPARENT)
+                        .highlight(false)
+                        .style(LineStyle::Solid)
+                        .stroke(Stroke::new(line_width, color))
+                        .name(roi.name.clone()),
+                );
+
+                if is_hovered {
+                    hovered_roi_uuid = Some(roi_uuid.to_string());
                 }
+            }
+
+            // Draw open ROI if any
+            if let Some(roi) = &explorer.pixel_selected.open_roi {
+                let line = Line::new(roi.name.clone(), PlotPoints::from(roi.polygon.clone()))
+                    .color(Color32::WHITE)
+                    .width(2.0);
+                plot_ui.line(line);
             }
 
             // Track pointer position
@@ -435,28 +534,45 @@ pub fn plot_matrix(
             }
         });
 
+        if let Some(uuid) = hovered_roi_uuid {
+            if let Some(roi) = explorer.rois.get(&uuid) {
+                if let Some((cx, cy)) = polygon_centroid(&roi.polygon) {
+                    let plot_transform = plot_response.transform;
+                    let screen_pos = plot_transform.position_from_point(&PlotPoint::new(cx, cy));
+                    let layer_id = egui::LayerId::new(
+                        egui::Order::Foreground,
+                        egui::Id::new(format!("roi_tooltip_layer_{}", uuid)),
+                    );
+
+                    let tooltip = egui::Tooltip::always_open(
+                        ui.ctx().clone(),
+                        layer_id,
+                        egui::Id::new(format!("roi_tooltip_{}", uuid)),
+                        PopupAnchor::Position(screen_pos),
+                    );
+
+                    tooltip.gap(12.0).show(|ui| {
+                        ui.label(&roi.name);
+                    });
+                }
+            }
+        }
+
         if plot_response.response.clicked() {
             let modifiers = ui.input(|i| i.modifiers);
             if modifiers.shift {
-                dbg!(&explorer.pixel_selected.rois.len());
                 // Handle multiple polygon ROIs
                 let plot_x = explorer.val.x;
                 let plot_y = explorer.val.y;
-                let _pixel_x = plot_x.floor() as usize;
-                let _pixel_y = height - 1 - plot_y.floor() as usize;
 
-                if (!explorer.pixel_selected.rois.is_empty()
-                    && explorer.pixel_selected.rois.last().unwrap().closed)
-                    || explorer.pixel_selected.rois.is_empty()
-                {
+                if explorer.pixel_selected.open_roi.is_none() {
                     // If last ROI is closed, start a new one
                     let mut roi = ROI::default();
-                    roi.name = format!("ROI {}", explorer.pixel_selected.rois.len() + 1);
-                    explorer.pixel_selected.rois.push(roi);
+                    roi.name = format!("ROI {}", explorer.rois.len() + 1);
+                    explorer.pixel_selected.open_roi = Some(roi);
                 }
-                dbg!(&explorer.pixel_selected.rois.len());
 
-                if let Some(current_roi) = explorer.pixel_selected.rois.last_mut() {
+                if let Some(current_roi) = &mut explorer.pixel_selected.open_roi {
                     if current_roi.polygon.is_empty() {
                         current_roi.polygon.push([plot_x, plot_y]);
                     } else {
@@ -475,38 +591,50 @@ pub fn plot_matrix(
                         }
                     }
                 }
-                pixel_clicked = true;
             } else {
-                // Handle single pixel selection
-
-                if explorer.pixel_selected.x == explorer.val.x.floor() as usize
-                    && explorer.pixel_selected.y == height - 1 - explorer.val.y.floor() as usize
-                    && explorer.pixel_selected.selected
-                {
-                    explorer.pixel_selected.selected = false;
-                } else {
-                    explorer.pixel_selected.selected = true;
-                    explorer.pixel_selected.rect = vec![
-                        [explorer.val.x.floor(), explorer.val.y.floor()],
-                        [explorer.val.x.floor() + 1.0, explorer.val.y.floor()],
-                        [explorer.val.x.floor() + 1.0, explorer.val.y.floor() + 1.0],
-                        [explorer.val.x.floor(), explorer.val.y.floor() + 1.0],
-                        [explorer.val.x.floor(), explorer.val.y.floor()],
-                    ];
-                    explorer.pixel_selected.x = explorer.val.x.floor() as usize;
-                    explorer.pixel_selected.y = height - 1 - explorer.val.y.floor() as usize;
-                    explorer.pixel_selected.id =
-                        id_matrix[explorer.pixel_selected.x][explorer.pixel_selected.y].clone();
+                if let Some(current_roi) = &mut explorer.pixel_selected.open_roi {
+                    if !current_roi.closed {
+                        explorer.pixel_selected.open_roi = None;
+                    }
                 }
-                pixel_clicked = true;
             }
+            // Handle single pixel selection
+            // plot_x -> original y
+            let pixel_y = explorer.val.x.floor() as usize;
+            // plot_y -> original x (inverted)
+            let pixel_x = (img.height() - 1) - explorer.val.y.floor() as usize;
+
+            if explorer.pixel_selected.x == pixel_x
+                && explorer.pixel_selected.y == pixel_y
+                && explorer.pixel_selected.selected
+            {
+                explorer.pixel_selected.selected = false;
+            } else {
+                explorer.pixel_selected.selected = true;
+                let rect_x = explorer.val.x.floor();
+                let rect_y = explorer.val.y.floor();
+                explorer.pixel_selected.rect = vec![
+                    [rect_x, rect_y],
+                    [rect_x + 1.0, rect_y],
+                    [rect_x + 1.0, rect_y + 1.0],
+                    [rect_x, rect_y + 1.0],
+                    [rect_x, rect_y],
+                ];
+                explorer.pixel_selected.x = pixel_x;
+                explorer.pixel_selected.y = pixel_y;
+                if pixel_x < id_matrix.len() && pixel_y < id_matrix[0].len() {
+                    explorer.pixel_selected.id = id_matrix[pixel_x][pixel_y].clone();
+                }
+            }
+            pixel_clicked = true;
         }
 
-        ui.add_space(0.01 * &(width as f32 * size as f32));
+        ui.add_space(0.01 * &(height as f32 * size as f32));
         colorbar_with_midpoint_slider(
             ui,
-            &(0.1 * width as f64 * size),
-            &(0.75 * height as f64 * size),
+            colorbar_state,
+            &(0.1 * height as f64 * size),
+            &(0.75 * width as f64 * size),
             explorer,
         );
     });

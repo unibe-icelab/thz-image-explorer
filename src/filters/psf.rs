@@ -1,7 +1,6 @@
-use ndarray::{s, Array1, Array2, Axis, Ix1, Zip};
-use ndarray_stats::QuantileExt;
+use interp1d::Interp1d;
+use ndarray::{Array1, Array2};
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 
 /// Represents a Point Spread Function (PSF) used in spectroscopy and imaging analysis.
 ///
@@ -11,15 +10,21 @@ use std::error::Error;
 /// or other data sources.
 ///
 /// # Fields
-/// - `low_cut` (*f64*): The low-frequency cutoff value of the PSF filters.
-/// - `high_cut` (*f64*): The high-frequency cutoff value of the PSF filters.
-/// - `start_freq` (*f64*): The starting frequency of the PSF filters.
-/// - `end_freq` (*f64*): The ending frequency of the PSF filters.
-/// - `n_filters` (*i64*): The number of filters included in the PSF.
-/// - `filters` (*Array2<f64>*): A 2D array containing the filter coefficients for the PSF.
-/// - `filt_freqs` (*Array1<f64>*): A 1D array of frequencies associated with the filters.
-/// - `x` (*Array2<f64>*): A 2D array representing the PSF in the X-axis, typically used for spatial resolution analysis.
-/// - `y` (*Array2<f64>*): A 2D array representing the PSF in the Y-axis, typically used for spatial resolution analysis.
+/// - `low_cut` (*f32*): The low-frequency cutoff value of the PSF filters.
+/// - `high_cut` (*f32*): The high-frequency cutoff value of the PSF filters.
+/// - `start_freq` (*f32*): The starting frequency of the PSF filters.
+/// - `end_freq` (*f32*): The ending frequency of the PSF filters.
+/// - `n_filters` (*i32*): The number of filters included in the PSF.
+/// - `filters` (*Array2<f32>*): A 2D array containing the filter coefficients for the PSF
+///    the first dimension represents the filter coefficients, and the second dimension represents the frequency index.
+/// - `filt_freqs` (*Array2<f32>*): A 1D array of frequencies associated with the filters.
+/// - `[x_0, w_x]` (*Array2<f32>*): A 2D array representing the PSF in the X-axis, typically used for spatial resolution analysis.
+///    the first dimension represents the fit parameters, and the second dimension represents the frequency index.
+///    The fit parameters are the center and width of the PSF (in this order).
+/// - `[y_0, w_y]` (*Array2<f32>*): A 2D array representing the PSF in the Y-axis, typically used for spatial resolution analysis.
+///    the first dimension represents the fit parameters, and the second dimension represents the frequency index.
+///    The fit parameters are the center and width of the PSF (in this order).
+///
 ///
 /// # Typical Usage
 ///
@@ -33,15 +38,15 @@ use std::error::Error;
 /// use ndarray::{Array1, Array2};
 ///
 /// let psf = PSF {
-///     low_cut: 10.0,
-///     high_cut: 200.0,
-///     start_freq: 15.0,
-///     end_freq: 180.0,
-///     n_filters: 5,
-///     filters: Array2::zeros((5, 10)),
-///     filt_freqs: Array1::linspace(10.0, 200.0, 10),
-///     x: Array2::zeros((5, 5)),
-///     y: Array2::zeros((5, 5)),
+///     low_cut: 0.15,
+///     high_cut: 6.0,
+///     start_freq: 0.2,
+///     end_freq: 4.0,
+///     n_filters: 100,
+///     filters: Array2::zeros((100, 100)),
+///     filt_freqs: Array2::linspace(0.2, 4.0, 100),
+///     popt_x: Array2::zeros((2, 100)),
+///     popt_y: Array2::zeros((2, 100)),
 /// };
 ///
 /// println!("PSF has {} filters and spans the frequency range {:.1} Hz to {:.1} Hz.",
@@ -49,55 +54,78 @@ use std::error::Error;
 /// ```
 #[derive(Serialize, Deserialize, Default, PartialEq, Debug, Clone)]
 pub struct PSF {
-    pub low_cut: f64,
-    pub high_cut: f64,
-    pub start_freq: f64,
-    pub end_freq: f64,
-    pub n_filters: i64,
-    pub filters: Array2<f64>,
-    pub filt_freqs: Array1<f64>,
-    pub popt_x: Array2<f64>,
-    pub popt_y: Array2<f64>,
+    pub low_cut: f32,
+    pub high_cut: f32,
+    pub start_freq: f32,
+    pub end_freq: f32,
+    pub n_filters: i32,
+    pub filters: Array2<f32>,
+    pub filt_freqs: Array1<f32>,
+    pub popt_x: Array2<f32>,
+    pub popt_y: Array2<f32>,
 }
 
-/// Linear interpolation function for a 1D array.
-fn linear_interp(x: &Vec<f64>, y: &Vec<f64>, xi: f64) -> f64 {
-    let n = x.len();
-    for i in 0..n - 1 {
-        if xi >= x[i] && xi <= x[i + 1] {
-            let slope = (y[i + 1] - y[i]) / (x[i + 1] - x[i]);
-            return y[i] + slope * (xi - x[i]);
-        }
-    }
-    0.0 // Return 0.0 if xi is out of bounds
-}
-
-/// TODO: this does not yet work!
+/// Creates a 2D Point Spread Function (PSF) grid by interpolating and normalizing input PSF data.
+///
+/// # Arguments
+/// - `psf_x` (*Vec<f32>*): The PSF values along the X-axis.
+/// - `psf_y` (*Vec<f32>*): The PSF values along the Y-axis.
+/// - `x` (*Vec<f32>*): The X-axis coordinates.
+/// - `y` (*Vec<f32>*): The Y-axis coordinates.
+/// - `dx` (*f32*): The step size for the X-axis.
+/// - `dy` (*f32*): The step size for the Y-axis.
+///
+/// # Returns
+/// - (*Array2<f32>*): A 2D array representing the interpolated PSF grid.
+///
+/// # Panics
+/// - This function panics if the interpolation fails.
+///
+/// # Notes
+/// - The function normalizes the input PSF values and pads them with zeros for interpolation.
+/// - The resulting PSF grid is calculated using linear interpolation.
 pub fn create_psf_2d(
-    mut psf_x: Vec<f64>,
-    mut psf_y: Vec<f64>,
-    mut x: Vec<f64>,
-    mut y: Vec<f64>,
-    dx: f64,
-    dy: f64,
-) -> (Array2<f64>, Array2<f64>, Array2<f64>) {
-    todo!();
-    let x_max = x.iter().cloned().fold(f64::MIN, f64::max).floor() as usize;
-    let y_max = y.iter().cloned().fold(f64::MIN, f64::max).floor() as usize;
+    psf_x: Vec<f32>,
+    psf_y: Vec<f32>,
+    x: Vec<f32>,
+    y: Vec<f32>,
+    dx: f32,
+    dy: f32,
+) -> Array2<f32> {
+    // Clone the input vectors to allow modifications
+    let mut psf_x = psf_x;
+    let mut psf_y = psf_y;
+    let mut x = x;
+    let mut y = y;
+
+    // Normalize psf_x and psf_y
+    // Normalize psf_x and psf_y by dividing each value by the maximum value in the respective vector
+    let psf_x_max = psf_x.iter().cloned().fold(f32::MIN, f32::max);
+    let psf_y_max = psf_y.iter().cloned().fold(f32::MIN, f32::max);
+    psf_x.iter_mut().for_each(|v| *v /= psf_x_max);
+    psf_y.iter_mut().for_each(|v| *v /= psf_y_max);
+
+    // Determine the maximum values for x and y, rounded down to the nearest integer
+    let x_max = x.iter().cloned().fold(f32::MIN, f32::max).floor() as usize;
+    let y_max = y.iter().cloned().fold(f32::MIN, f32::max).floor() as usize;
 
     // Factor for padding
+    // Define a padding factor and calculate the new maximum dimensions for x and y
     let factor = 2.0;
-    let new_x_max = (factor * x_max as f64).ceil();
-    let new_y_max = (factor * y_max as f64).ceil();
+    let new_x_max = (factor * x_max as f32).ceil();
+    let new_y_max = (factor * y_max as f32).ceil();
 
     // Calculate step sizes
+    // Calculate the step sizes for x and y based on the last two elements of the respective vectors
     let x_step = x[x.len() - 1] - x[x.len() - 2];
     let y_step = y[y.len() - 1] - y[y.len() - 2];
 
+    // Calculate the number of additional steps needed to pad x and y to the new maximum dimensions
     let n_new_steps_x = ((new_x_max - x[x.len() - 1]) / x_step).ceil() as usize;
     let n_new_steps_y = ((new_y_max - y[y.len() - 1]) / y_step).ceil() as usize;
 
     // Padding PSF with zeros for interpolation
+    // Pad the x vector and psf_x with zeros on both ends to match the new dimensions
     for _ in 0..n_new_steps_x {
         x.push(x[x.len() - 1] + x_step);
         x.insert(0, x[0] - x_step);
@@ -105,6 +133,7 @@ pub fn create_psf_2d(
         psf_x.insert(0, 0.0);
     }
 
+    // Pad the y vector and psf_y with zeros on both ends to match the new dimensions
     for _ in 0..n_new_steps_y {
         y.push(y[y.len() - 1] + y_step);
         y.insert(0, y[0] - y_step);
@@ -113,195 +142,50 @@ pub fn create_psf_2d(
     }
 
     // Create the PSF grid
-    let xx: Vec<f64> = (-(x_max as i32)..=x_max as i32)
-        .step_by(dx as usize)
-        .map(|v| v as f64)
+    // Generate the grid of x and y coordinates based on the padded dimensions and step sizes
+    let xx: Vec<f32> = (-(x_max as f32) as i32..=x_max as f32 as i32)
+        .map(|v| v as f32 * dx)
         .collect();
 
-    let yy: Vec<f64> = (-(y_max as i32)..=y_max as i32)
-        .step_by(dy as usize)
-        .map(|v| v as f64)
+    let yy: Vec<f32> = (-(y_max as f32) as i32..=y_max as f32 as i32)
+        .map(|v| v as f32 * dy)
         .collect();
 
+    // Initialize a 2D array to store the interpolated PSF values
     let mut psf_2d = Array2::zeros((xx.len(), yy.len()));
 
     // Fill in the PSF 2D array using linear interpolation
+    // Create interpolators for the x and y dimensions using the padded data
+    let interp_x =
+        Interp1d::new_unsorted(x.to_vec(), psf_x.to_vec()).expect("Failed to create interpolator");
+    let interp_y =
+        Interp1d::new_unsorted(y.to_vec(), psf_y.to_vec()).expect("Failed to create interpolator");
+    // Populate the 2D PSF array by interpolating values for each grid point
     for (i, &x_val) in xx.iter().enumerate() {
         for (j, &y_val) in yy.iter().enumerate() {
-            let psf_x_interp = linear_interp(&x, &psf_x, x_val);
-            let psf_y_interp = linear_interp(&y, &psf_y, y_val);
+            let psf_x_interp = interp_x.interpolate(x_val);
+            let psf_y_interp = interp_y.interpolate(y_val);
             psf_2d[(i, j)] = psf_x_interp * psf_y_interp;
         }
     }
-
-    let xx_grid = Array2::from_shape_fn((xx.len(), 1), |(i, _)| xx[i]);
-    let yy_grid = Array2::from_shape_fn((yy.len(), 1), |(i, _)| yy[i]);
-
-    (xx_grid, yy_grid, psf_2d)
+    psf_2d
 }
 
-/// Computes the sum of squared residuals
-fn residual_sum_squares(
-    x: &Array1<f64>,
-    y: &Array1<f64>,
-    params: &[f64],
-    model: fn(&Array1<f64>, &[f64]) -> Array1<f64>,
-) -> f64 {
-    let y_model = model(x, params);
-    Zip::from(y)
-        .and(&y_model)
-        .fold(0.0, |acc, &yi, &ymi| acc + (yi - ymi).powi(2))
-}
-
-/// Curve fitting implementation
-fn curve_fit(
-    func: fn(&Array1<f64>, &[f64]) -> Array1<f64>,
-    x_data: &Array1<f64>,
-    y_data: &Array1<f64>,
-    initial_params: &[f64],
-) -> Result<Vec<f64>, Box<dyn Error>> {
-    let mut params = initial_params.to_vec();
-    let learning_rate = 0.01;
-    let max_iters = 1000;
-
-    for _ in 0..max_iters {
-        let gradient = compute_gradient(x_data, y_data, &params, func);
-        for (p, g) in params.iter_mut().zip(gradient) {
-            *p -= learning_rate * g;
-        }
-    }
-
-    Ok(params)
-}
-
-/// Computes the gradient of the cost function
-fn compute_gradient(
-    x: &Array1<f64>,
-    y: &Array1<f64>,
-    params: &[f64],
-    model: fn(&Array1<f64>, &[f64]) -> Array1<f64>,
-) -> Vec<f64> {
-    let delta = 1e-6;
-    let mut gradient = vec![0.0; params.len()];
-    for i in 0..params.len() {
-        let mut params_plus = params.to_vec();
-        let mut params_minus = params.to_vec();
-        params_plus[i] += delta;
-        params_minus[i] -= delta;
-
-        let rss_plus = residual_sum_squares(x, y, &params_plus, model);
-        let rss_minus = residual_sum_squares(x, y, &params_minus, model);
-        gradient[i] = (rss_plus - rss_minus) / (2.0 * delta);
-    }
-    gradient
-}
-
-/// Gaussian function
-fn gaussian(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
-    let x0 = params[0];
-    let w = params[1];
-    x.mapv(|xi| {
-        (2.0 * (-2.0 * (xi - x0).powf(2.0) / (w * w)) / (2.0 * std::f64::consts::PI).sqrt() * w)
-            .exp()
-    })
-}
 /// Gaussian function with a different normalization
-fn gaussian2(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
+/// Computes a Gaussian function with a different normalization for the given input data and parameters.
+///
+/// # Arguments
+/// - `x` (*&Array1<f32>*): The input data.
+/// - `params` (*&[f32]*): The parameters of the Gaussian function:
+///   - `params[0]` (*f32*): The center of the Gaussian.
+///   - `params[1]` (*f32*): The width of the Gaussian.
+///
+/// # Returns
+/// - (*Array1<f32>*): The computed Gaussian values for the input data.
+pub fn gaussian(x: &Array1<f32>, params: &[f32]) -> Array1<f32> {
     let x0 = params[0];
     let w = params[1];
     x.mapv(|xi| {
-        (2.0 / std::f64::consts::PI).sqrt() * (-2.0 * (xi - x0).powf(2.0) / (w * w)).exp() / w
+        (2.0 / std::f32::consts::PI).sqrt() * (-2.0 * (xi - x0).powf(2.0) / (w * w)).exp() / w
     })
-}
-
-/// Error function
-fn error_f(x: &Array1<f64>, params: &[f64]) -> Array1<f64> {
-    let x0 = params[0];
-    let w = params[1];
-    x.mapv(|xi| (1.0 + statrs::function::erf::erf(2.0_f64.sqrt() * (xi - x0) / w)) / 2.0)
-}
-
-/// TODO: this does not yet work
-pub fn get_center(
-    x_axis_psf: &Array1<f64>,
-    y_axis_psf: &Array1<f64>,
-    np_psf_t_x: &Array2<f64>,
-    np_psf_t_y: &Array2<f64>,
-    n_min: usize,
-    n_max: usize,
-) -> Result<
-    (
-        f64,
-        f64,
-        ndarray::Array<f64, Ix1>,
-        ndarray::Array<f64, Ix1>,
-        ndarray::Array<f64, Ix1>,
-        ndarray::Array<f64, Ix1>,
-    ),
-    Box<dyn Error>,
-> {
-    println!("Extracting the center of the PSF...");
-    todo!();
-
-    // Cropping the PSF to improve the fit
-    let x_axis_psf_2 = x_axis_psf.slice(s![n_min..n_max]).to_owned();
-    let y_axis_psf_2 = y_axis_psf.slice(s![n_min..n_max]).to_owned();
-    let np_psf_t_x_2 = np_psf_t_x.slice(s![n_min..n_max, ..]).to_owned();
-    let np_psf_t_y_2 = np_psf_t_y.slice(s![n_min..n_max, ..]).to_owned();
-
-    // Calculate intensities
-    let mut intensity_x = np_psf_t_x.map_axis(Axis(1), |row| row.mapv(|v| v.powi(2)).sum());
-    let mut intensity_y = np_psf_t_y.map_axis(Axis(1), |row| row.mapv(|v| v.powi(2)).sum());
-
-    intensity_x -= *intensity_x.min()?;
-    intensity_x /= *intensity_x.max()?;
-    intensity_y -= *intensity_y.min()?;
-    intensity_y /= *intensity_y.max()?;
-
-    let mut intensity_x_2 = np_psf_t_x_2.map_axis(Axis(1), |row| row.mapv(|v| v.powi(2)).sum());
-    let mut intensity_y_2 = np_psf_t_y_2.map_axis(Axis(1), |row| row.mapv(|v| v.powi(2)).sum());
-
-    intensity_x_2 -= *intensity_x_2.min()?;
-    intensity_x_2 /= *intensity_x_2.max()?;
-    intensity_y_2 -= *intensity_y_2.min()?;
-    intensity_y_2 /= *intensity_y_2.max()?;
-
-    // Initial parameters for the curve fit
-    let initial_params = vec![0.0, 10.0];
-
-    // Perform curve fitting
-    let popt_x = curve_fit(error_f, &x_axis_psf_2, &intensity_x_2, &initial_params)?;
-    let popt_y = curve_fit(error_f, &y_axis_psf_2, &intensity_y_2, &initial_params)?;
-
-    dbg!(&popt_x, &popt_y);
-
-    // Find the peak of the Gaussian
-    let gaussian_values_x = gaussian(x_axis_psf, &popt_x);
-    let max_x = gaussian_values_x
-        .iter()
-        .enumerate()
-        .max_by(|(_, v1), (_, v2)| v1.partial_cmp(v2).unwrap())
-        .map(|(index, _)| index)
-        .unwrap();
-
-    let gaussian_values_y = gaussian(y_axis_psf, &popt_y);
-    let max_y = gaussian_values_y
-        .iter()
-        .enumerate()
-        .max_by(|(_, v1), (_, v2)| v1.partial_cmp(v2).unwrap())
-        .map(|(index, _)| index)
-        .unwrap();
-
-    let x0 = x_axis_psf[max_x];
-    let y0 = y_axis_psf[max_y];
-    println!("Center of the PSF: ({}, {})", x0, y0);
-
-    Ok((
-        x0,
-        y0,
-        x_axis_psf_2,
-        intensity_x_2,
-        y_axis_psf_2,
-        intensity_y_2,
-    ))
 }
