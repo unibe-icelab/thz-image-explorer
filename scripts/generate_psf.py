@@ -127,8 +127,6 @@ if __name__ == "__main__":
 
     # Save the data to a .npz file
     data = {
-        'xx': xx,
-        'yy': yy,
         'low_cut': low_cut,  # float: low cut-off frequency
         'high_cut': high_cut,  # float: high cut-off frequency
         'start_freq': start_freq,  # float: start frequency for filters
