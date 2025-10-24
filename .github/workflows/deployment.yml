@@ -108,14 +108,7 @@ jobs:
         if: contains(matrix.os, 'windows')
         shell: pwsh
         run: |
-          $exePath1 = "target/${{ matrix.target }}/release/thz-image-explorer.exe"
-          $exePath2 = "target/release/thz-image-explorer.exe"
-          $exePath = if (Test-Path $exePath1) { $exePath1 } elseif (Test-Path $exePath2) { $exePath2 } else { "" }
-          if ($exePath -eq "") {
-            Write-Error "Executable not found"
-            exit 1
-          }
-          Compress-Archive -Path $exePath -DestinationPath "thz-image-explorer-${{ matrix.target }}.exe.zip"
+          Compress-Archive -Path"target/${{ matrix.target }}/release/thz-image-explorer.exe" -DestinationPath "thz-image-explorer-${{ matrix.target }}.exe.zip"
           Move-Item -Path "thz-image-explorer-${{ matrix.target }}.exe.zip" -Destination $env:GITHUB_WORKSPACE
 
       # Compress for Windows (.msi)
