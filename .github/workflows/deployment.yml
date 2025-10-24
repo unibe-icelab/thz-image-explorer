@@ -26,37 +26,48 @@ jobs:
             target: x86_64-pc-windows-msvc
           - os: windows-2022
             target: aarch64-pc-windows-msvc
+
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Dependencies (Linux)
         if: contains(matrix.os, 'ubuntu')
-        run: sudo apt-get update && sudo apt-get install -y libclang-dev libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libudev-dev && sudo apt-get install -y libasound2-dev && sudo apt-get install -y cmake && cargo install --git https://github.com/burtonageo/cargo-bundle
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev libgtk-3-dev libxcb-render0-dev \
+            libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev \
+            libudev-dev libasound2-dev cmake
+          cargo install --git https://github.com/burtonageo/cargo-bundle
 
       - name: Install Dependencies (macOS)
         if: contains(matrix.os, 'macos')
-        run: brew install cmake && cargo install --git https://github.com/burtonageo/cargo-bundle
+        run: |
+          brew install cmake
+          cargo install --git https://github.com/burtonageo/cargo-bundle
 
       - name: Install Dependencies (Windows)
         if: contains(matrix.os, 'windows')
-        run: cargo install --force cargo-wix && choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
-
-      - name: Set CARGO_FEATURES environment variable (Windows)
-        if: contains(matrix.os, 'windows')
         run: |
-          echo "CARGO_FEATURES=self_update" >> $env:GITHUB_ENV
+          cargo install --force cargo-wix
+          choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
+
+      - name: Set CARGO_FEATURES (Windows)
+        if: contains(matrix.os, 'windows')
+        run: echo "CARGO_FEATURES=self_update" >> $env:GITHUB_ENV
 
       - name: Build
-        run: cargo build --features self_update --release
+        run: |
+          rustup target add ${{ matrix.target }}
+          cargo build --release --features self_update --target ${{ matrix.target }}
 
       - name: Build .deb Package (Linux)
         if: contains(matrix.os, 'ubuntu')
-        run: cargo bundle --features self_update --release
+        run: cargo bundle --features self_update --release --target ${{ matrix.target }}
 
       - name: Build .app Package (macOS)
         if: contains(matrix.os, 'macos')
-        run: cargo bundle --features self_update --release
+        run: cargo bundle --features self_update --release --target ${{ matrix.target }}
 
       - name: Build .msi Package (Windows)
         if: contains(matrix.os, 'windows')
@@ -66,7 +77,9 @@ jobs:
       - name: Compress Output (Linux Binary)
         if: contains(matrix.os, 'ubuntu')
         run: |
-          cd target/release
+          BIN_DIR="target/${{ matrix.target }}/release"
+          [ -d "$BIN_DIR" ] || BIN_DIR="target/release"
+          cd "$BIN_DIR"
           zip -r thz-image-explorer-${{ matrix.target }}.zip thz-image-explorer
           mv thz-image-explorer-${{ matrix.target }}.zip $GITHUB_WORKSPACE/
 
@@ -74,7 +87,9 @@ jobs:
       - name: Compress Output (Linux .deb)
         if: contains(matrix.os, 'ubuntu')
         run: |
-          cd target/release/bundle/deb
+          DEB_DIR="target/${{ matrix.target }}/release/bundle/deb"
+          [ -d "$DEB_DIR" ] || DEB_DIR="target/release/bundle/deb"
+          cd "$DEB_DIR"
           zip thz-image-explorer-${{ matrix.target }}.deb.zip *.deb
           mv thz-image-explorer-${{ matrix.target }}.deb.zip $GITHUB_WORKSPACE/
 
@@ -82,26 +97,42 @@ jobs:
       - name: Compress Output (macOS)
         if: contains(matrix.os, 'macos')
         run: |
-          cd target/release/bundle/osx
+          OSX_DIR="target/${{ matrix.target }}/release/bundle/osx"
+          [ -d "$OSX_DIR" ] || OSX_DIR="target/release/bundle/osx"
+          cd "$OSX_DIR"
           zip -r thz-image-explorer-${{ matrix.target }}.app.zip Thz\ Image\ Explorer.app
           mv thz-image-explorer-${{ matrix.target }}.app.zip $GITHUB_WORKSPACE/
 
       # Compress for Windows (.exe)
       - name: Compress Output (Windows .exe)
         if: contains(matrix.os, 'windows')
+        shell: pwsh
         run: |
-          Compress-Archive -Path target/release/thz-image-explorer.exe -DestinationPath thz-image-explorer-${{ matrix.target }}.exe.zip
-          Move-Item -Path thz-image-explorer-${{ matrix.target }}.exe.zip -Destination $env:GITHUB_WORKSPACE
+          $exePath1 = "target/${{ matrix.target }}/release/thz-image-explorer.exe"
+          $exePath2 = "target/release/thz-image-explorer.exe"
+          $exePath = if (Test-Path $exePath1) { $exePath1 } elseif (Test-Path $exePath2) { $exePath2 } else { "" }
+          if ($exePath -eq "") {
+            Write-Error "Executable not found"
+            exit 1
+          }
+          Compress-Archive -Path $exePath -DestinationPath "thz-image-explorer-${{ matrix.target }}.exe.zip"
+          Move-Item -Path "thz-image-explorer-${{ matrix.target }}.exe.zip" -Destination $env:GITHUB_WORKSPACE
 
       # Compress for Windows (.msi)
       - name: Compress Output (Windows .msi)
         if: contains(matrix.os, 'windows')
+        shell: pwsh
         run: |
-          cd target/wix
-          Compress-Archive -Path *.msi -DestinationPath thz-image-explorer-${{ matrix.target }}.msi.zip
-          Move-Item -Path thz-image-explorer-${{ matrix.target }}.msi.zip -Destination $env:GITHUB_WORKSPACE
+          $msiPath = Get-ChildItem -Path "target/wix" -Filter "*.msi" | Select-Object -First 1
+          if (-Not $msiPath) {
+            Write-Error "MSI not found"
+            exit 1
+          }
+          Compress-Archive -Path $msiPath.FullName -DestinationPath "thz-image-explorer-${{ matrix.target }}.msi.zip"
+          Move-Item -Path "thz-image-explorer-${{ matrix.target }}.msi.zip" -Destination $env:GITHUB_WORKSPACE
 
-      - name: Upload .deb and executable for Linux (Ubuntu)
+      # Upload .deb (Linux)
+      - name: Upload .deb
         if: contains(matrix.os, 'ubuntu')
         uses: actions/upload-release-asset@v1.0.1
         env:
@@ -112,7 +143,8 @@ jobs:
           asset_name: thz-image-explorer-${{ matrix.target }}.deb.zip
           asset_content_type: application/zip
 
-      - name: Upload .zip for Linux (Ubuntu executable)
+      # Upload Linux .zip
+      - name: Upload Binary .zip (Linux)
         if: contains(matrix.os, 'ubuntu')
         uses: actions/upload-release-asset@v1.0.1
         env:
@@ -123,7 +155,8 @@ jobs:
           asset_name: thz-image-explorer-${{ matrix.target }}.zip
           asset_content_type: application/zip
 
-      - name: Upload .exe for Windows
+      # Upload .exe (Windows)
+      - name: Upload .exe
         if: contains(matrix.os, 'windows')
         uses: actions/upload-release-asset@v1.0.1
         env:
@@ -134,7 +167,8 @@ jobs:
           asset_name: thz-image-explorer-${{ matrix.target }}.exe.zip
           asset_content_type: application/zip
 
-      - name: Upload .msi for Windows
+      # Upload .msi (Windows)
+      - name: Upload .msi
         if: contains(matrix.os, 'windows')
         uses: actions/upload-release-asset@v1.0.1
         env:
@@ -145,7 +179,8 @@ jobs:
           asset_name: thz-image-explorer-${{ matrix.target }}.msi.zip
           asset_content_type: application/zip
 
-      - name: Upload .zip for macOS
+      # Upload .app (macOS)
+      - name: Upload .app
         if: contains(matrix.os, 'macos')
         uses: actions/upload-release-asset@v1.0.1
         env:
