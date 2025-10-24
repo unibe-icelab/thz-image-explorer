@@ -108,7 +108,7 @@ jobs:
         if: contains(matrix.os, 'windows')
         shell: pwsh
         run: |
-          Compress-Archive -Path"target/${{ matrix.target }}/release/thz-image-explorer.exe" -DestinationPath "thz-image-explorer-${{ matrix.target }}.exe.zip"
+          Compress-Archive -Path "target/${{ matrix.target }}/release/thz-image-explorer.exe" -DestinationPath "thz-image-explorer-${{ matrix.target }}.exe.zip"
           Move-Item -Path "thz-image-explorer-${{ matrix.target }}.exe.zip" -Destination $env:GITHUB_WORKSPACE
 
       # Compress for Windows (.msi)
