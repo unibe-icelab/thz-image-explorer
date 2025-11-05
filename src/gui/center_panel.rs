@@ -521,35 +521,37 @@ pub fn pulse_tab(
             ui.colored_label(egui::Color32::BLUE, "— ");
             ui.label("Water Lines");
 
-            ui.add_space(ui.available_size().x - 180.0 - right_panel_width);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_space(right_panel_width + 5.0);
 
-            // dynamic range:
-            let length = explorer.data.signal_fft.len();
-            let dr1 = if !explorer.data.signal_fft.is_empty() {
-                explorer.data.signal_fft[length - 100..length]
-                    .iter()
-                    .sum::<f32>()
-                    / 100.0
-            } else {
-                0.0
-            };
-            ui.label(format!(
-                "DR: {:.1} dB",
-                20.0 * (dr1.abs() + 1e-10).log(10.0) - max_fft_signals as f32,
-            ));
+                // dynamic range:
+                let length = explorer.data.signal_fft.len();
+                let dr1 = if !explorer.data.signal_fft.is_empty() {
+                    explorer.data.signal_fft[length - 100..length]
+                        .iter()
+                        .sum::<f32>()
+                        / 100.0
+                } else {
+                    0.0
+                };
+                ui.label(format!(
+                    "DR: {:.1} dB",
+                    20.0 * (dr1.abs() + 1e-10).log(10.0) - max_fft_signals as f32,
+                ));
 
-            ui.add_space(20.0);
+                ui.add_space(20.0);
 
-            // peak to peak
-            let ptp1 = if let (Some(min), Some(max)) = (
-                explorer.data.signal.iter().cloned().reduce(f32::min),
-                explorer.data.signal.iter().cloned().reduce(f32::max),
-            ) {
-                max - min
-            } else {
-                0.0
-            };
-            ui.label(format!("ptp: {:.1} nA", ptp1));
+                // peak to peak
+                let ptp1 = if let (Some(min), Some(max)) = (
+                    explorer.data.signal.iter().cloned().reduce(f32::min),
+                    explorer.data.signal.iter().cloned().reduce(f32::max),
+                ) {
+                    max - min
+                } else {
+                    0.0
+                };
+                ui.label(format!("ptp: {:.1} nA", ptp1));
+            });
         });
     });
 }
@@ -699,7 +701,7 @@ pub fn optical_properties_tab(
 
         n_plot.show(ui, |plot_ui| {
             plot_ui.line(
-                Line::new("Refractive Index (n)".to_string(), PlotPoints::from(refractive_index))
+                Line::new("Refractive Index n".to_string(), PlotPoints::from(refractive_index))
                     .color(egui::Color32::RED)
                     .style(LineStyle::Solid)
                     .width(2.0)
@@ -709,9 +711,9 @@ pub fn optical_properties_tab(
         ui.add_space(spacing);
 
         // Absorption plot
-        let a_fmt = |y: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} cm⁻¹", y.value);
+        let a_fmt = |y: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} cm^-1", y.value);
         let a_label_fmt =
-            |s: &str, val: &PlotPoint| format!("{}\n{:4.2} THz\n{:4.2} cm⁻¹", s, val.x, val.y);
+            |s: &str, val: &PlotPoint| format!("{}\n{:4.2} THz\n{:4.2} cm^-1", s, val.x, val.y);
 
         let absorption_plot = Plot::new("absorption")
             .height(height)
@@ -780,30 +782,32 @@ pub fn optical_properties_tab(
             ui.colored_label(egui::Color32::BLUE, "— ");
             ui.label("Water Lines");
 
-            ui.add_space(ui.available_size().x - 400.0 - right_panel_width);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_space(right_panel_width + 5.0);
 
-            // Display material statistics if available
-            if let Some(max_n) = explorer
-                .data
-                .refractive_index
-                .iter()
-                .cloned()
-                .reduce(f32::max)
-            {
-                ui.label(format!("Max n: {:.2}", max_n));
-            }
+                // Display material statistics if available
+                if let Some(max_n) = explorer
+                    .data
+                    .refractive_index
+                    .iter()
+                    .cloned()
+                    .reduce(f32::max)
+                {
+                    ui.label(format!("Max n: {:.2}", max_n));
+                }
 
-            ui.add_space(30.0);
+                ui.add_space(20.0);
 
-            if let Some(max_alpha) = explorer
-                .data
-                .absorption_coefficient
-                .iter()
-                .cloned()
-                .reduce(f32::max)
-            {
-                ui.label(format!("Max α: {:.2} cm⁻¹", max_alpha));
-            }
+                if let Some(max_alpha) = explorer
+                    .data
+                    .absorption_coefficient
+                    .iter()
+                    .cloned()
+                    .reduce(f32::max)
+                {
+                    ui.label(format!("Max α: {:.2} cm^-1", max_alpha));
+                }
+            });
         });
         ui.add_space(5.0);
     });
