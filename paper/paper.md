@@ -31,7 +31,7 @@ bibliography: paper.bib
 
 THz time-domain spectroscopy (TDS) is a fast-growing field with applications to perform non-destructive studies of
 material properties [@neu_tutorial_2018].
-This involves measuring the interaction of pulses of radiation with a sample, where the pulses are either be measured after either passing through (transmission spectrum) or being reflected by (reflection
+This involves measuring the interaction of pulses of radiation with a sample, where the pulses are measured after either passing through (transmission spectrum) or being reflected by (reflection
 spectrum) the sample. Through Fourier analysis (FFT), we can investigate the
 complex refractive index and absorption coefficient of the sample.
 By placing either the sample or the optical setup on a moving stage, the sample can be imaged in 2D.
