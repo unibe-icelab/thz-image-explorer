@@ -1,0 +1,44 @@
+cff-version: "1.2.0"
+authors:
+- family-names: Stöckli
+  given-names: Linus Leo
+  orcid: "https://orcid.org/0000-0002-7916-2592"
+- family-names: Demion
+  given-names: Arnaud
+  orcid: "https://orcid.org/0009-0002-6920-475X"
+- family-names: Thomas
+  given-names: Nicolas
+  orcid: "https://orcid.org/0000-0002-0146-0071"
+contact:
+- family-names: Stöckli
+  given-names: Linus Leo
+  orcid: "https://orcid.org/0000-0002-7916-2592"
+doi: 10.5281/zenodo.17529048
+message: If you use this software, please cite our article in the
+  Journal of Open Source Software.
+preferred-citation:
+  authors:
+  - family-names: Stöckli
+    given-names: Linus Leo
+    orcid: "https://orcid.org/0000-0002-7916-2592"
+  - family-names: Demion
+    given-names: Arnaud
+    orcid: "https://orcid.org/0009-0002-6920-475X"
+  - family-names: Thomas
+    given-names: Nicolas
+    orcid: "https://orcid.org/0000-0002-0146-0071"
+  date-published: 2025-11-07
+  doi: 10.21105/joss.08754
+  issn: 2475-9066
+  issue: 115
+  journal: Journal of Open Source Software
+  publisher:
+    name: Open Journals
+  start: 8754
+  title: THz Image Explorer - An Interactive Cross-Platform Open-Source
+    THz Image Analysis Tool
+  type: article
+  url: "https://joss.theoj.org/papers/10.21105/joss.08754"
+  volume: 10
+title: THz Image Explorer - An Interactive Cross-Platform Open-Source
+  THz Image Analysis Tool
