@@ -31,10 +31,10 @@ bibliography: paper.bib
 
 THz time-domain spectroscopy (TDS) is a fast-growing field with applications to perform non-destructive studies of
 material properties [@neu_tutorial_2018].
-The pulses can either be measured after passing through (transmission spectrum) or after being reflected by (reflection
-spectrum) a sample. Through Fourier analysis (FFT), we can investigate the
+This involves measuring the interaction of pulses of radiation with a sample, where the pulses are measured after either passing through (transmission spectrum) or being reflected by (reflection
+spectrum) the sample. Through Fourier analysis (FFT), we can investigate the
 complex refractive index and absorption coefficient of the sample.
-By placing either the sample or the optical setup on a moving stage the sample can be imaged in 2D.
+By placing either the sample or the optical setup on a moving stage, the sample can be imaged in 2D.
 
 ![THz Image Explorer icon.\label{fig:icon}](icon.png){#id .class width=20%}
 
@@ -49,11 +49,11 @@ it easier to maintain and increasing its reach.
 
 Interactive analysis tools for THz spectroscopy are essential to browse through images and analyse different regions of
 interest efficiently.
-Commercial suppliers provide closed-source analysis tools (e.g. [Menlo Systems](https://www.menlosystems.com)) where the
-code cannot be adapted by the user, which is often essential in research environments and extends the maintainability of
+Commercial suppliers (e.g., [Menlo Systems](https://www.menlosystems.com)) provide closed-source analysis tools where the
+code cannot be adapted by the user, which is often essential in research environments and can extend the maintainability of
 the code.
 Solutions published by the scientific community are not available on all platforms, are only applicable on single pixel
-measurements and/or are not focused on an interactive workflow [@peretti_thz-tds_2019; @loaiza_thztools_2024].
+measurements, and/or are not focused on an interactive workflow [@peretti_thz-tds_2019; @loaiza_thztools_2024].
 With this application, we provide a high-performance solution written in Rust that allows an interactive analysis of 2D
 THz
 scans with multiple filters and a 3D viewer.
@@ -64,12 +64,12 @@ for the scientific community.
 
 The application is multithreaded with two main threads:
 
-- GUI thread,
-- Data thread.
+- GUI thread
+- Data thread
 
-The GUI uses [egui](https://www.egui.rs), an immediate-mode GUI library for rust.
+The GUI uses [egui](https://www.egui.rs), an immediate-mode GUI library for Rust.
 
-The structure of the software is shown in figure \ref{fig:software-architecture}.
+The structure of the software is shown in Figure \ref{fig:software-architecture}.
 
 ![Software Architecture.\label{fig:software-architecture}](thz-image-explorer.drawio.png){width=80% .center}
 
@@ -81,16 +81,16 @@ using the COCoNuT setup [@coconut_2025].
 ## Optical Properties Calculation
 
 The user can select a source and reference scan in the drop-down menu, after which the refractive index $n$ and
-absorption coefficient $\alpha$ are computed according to [@Jepsen2019]
+absorption coefficient $\alpha$ are computed according to @Jepsen2019:
 $$n(\omega) = 1 + \frac{c \Delta\phi(\omega)}{\omega d},$$
 $$\alpha(\omega) = -\frac{2}{d} \ln\left(\frac{(n+1)^2}{4n} \cdot \frac{A_{\text{sample}}(\omega)}{A_{\text{reference}}(\omega)}\right),$$
 where
 
-- $\Delta\phi(\omega) = \phi_{\text{sample}}(\omega) - \phi_{\text{reference}}(\omega)$ is the phase difference,
-- $A_{\text{sample}}(\omega)$ and $A_{\text{reference}}(\omega)$ are the amplitude spectra,
-- $c$ is the speed of light,
-- $\omega = 2\pi f$ is the angular frequency,
-- $d$ is the sample thickness.
+- $\Delta\phi(\omega) = \phi_{\text{sample}}(\omega) - \phi_{\text{reference}}(\omega)$ is the phase difference
+- $A_{\text{sample}}(\omega)$ and $A_{\text{reference}}(\omega)$ are the amplitude spectra
+- $c$ is the speed of light
+- $\omega = 2\pi f$ is the angular frequency
+- $d$ is the sample thickness
 
 ## Interactive 3D Viewer
 
@@ -107,7 +107,7 @@ $$
 
 where $G_{\sigma}(t)$ is a normalized 1D Gaussian kernel with standard deviation $\sigma = 6.0$ and radius of 12
 samples,
-applied via convolution to smooth the squared signal and extract the envelope as shown in figure \ref{fig:envelope}.
+applied via convolution to smooth the squared signal and extract the envelope as shown in Figure \ref{fig:envelope}.
 
 ![The convoluted envelope of the signal. All datapoints below the indicated threshold are treated as transparent. \label{fig:envelope}](convolution_example.pdf)
 
@@ -127,9 +127,9 @@ separate crate under the name [bevy_voxel_plot](https://github.com/hacknus/bevy_
 The filtering process is a simple linear pipeline, where the output of one filter is the input of the next filter.
 Filters can be placed in the following specific domains:
 
-- Time Domain Before FFT,
-- Frequency Band Pass Filter,
-- Time Domain After FFT.
+- Time Domain Before FFT
+- Frequency Band Pass Filter
+- Time Domain After FFT
 
 Band-pass filters are already implemented in the application for each domain. The band-pass filter in time domain
 before FFT can be used to trim off trailing pulses.
@@ -139,7 +139,7 @@ sub-surface layers [@koch-dandolo_reflection_2015].
 ### Deconvolution
 
 The deconvolution filter is an implementation of the Frequency-dependent Richardson &ndash; Lucy algorithm described
-in [@demion_frequency-dependent_2025].
+in @demion_frequency-dependent_2025.
 
 ### Custom Filters
 
