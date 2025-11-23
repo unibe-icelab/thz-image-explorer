@@ -82,6 +82,10 @@ egui-file-dialog = { git = "https://github.com/hacknus/egui-file-dialog", branch
 [target.'cfg(target_os = "macos")'.dependencies]
 rfd = "0.15"
 futures = "0.3.31"
+tracing = "0.1.41"
+objc2 = "0.6.1"
+objc2-app-kit = { version = "0.3.1" }
+objc2-foundation = { version = "0.3.1" }
 
 [features]
 default = ["self_update"]

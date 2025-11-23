@@ -36,6 +36,9 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 
+#[cfg(target_os = "macos")]
+use crate::macos_app_delegate::setup_app_delegates;
+
 mod config;
 mod data_container;
 mod data_thread;
@@ -44,6 +47,7 @@ mod gui;
 mod io;
 mod math_tools;
 mod update;
+mod macos_app_delegate;
 
 const APP_INFO: AppInfo = AppInfo {
     name: "THz Image Explorer",
@@ -91,6 +95,10 @@ fn autosave_on_exit(
 
 // --- Main ---
 fn main() {
+
+    #[cfg(target_os = "macos")]
+    setup_app_delegates();
+
     egui_logger::builder()
         // had to take out debug prints because bevy is spamming it
         .max_level(log::LevelFilter::Info)
