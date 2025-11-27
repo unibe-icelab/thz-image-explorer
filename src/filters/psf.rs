@@ -2,67 +2,101 @@ use interp1d::Interp1d;
 use ndarray::{Array1, Array2};
 use serde::{Deserialize, Serialize};
 
+/// Cubic spline interpolation coefficients for a single curve
+#[derive(Serialize, Deserialize, Default, PartialEq, Debug, Clone)]
+pub struct CubicSplineCoeffs {
+    pub knots: Array1<f32>,   // x values (knots)
+    pub values: Array1<f32>,  // y values at knots
+    pub coeff_a: Array1<f32>, // a coefficient for each segment
+    pub coeff_b: Array1<f32>, // b coefficient for each segment
+    pub coeff_c: Array1<f32>, // c coefficient for each segment
+    pub coeff_d: Array1<f32>, // d coefficient for each segment
+}
+
+impl CubicSplineCoeffs {
+    /// Evaluate spline at a single point with constrained extrapolation
+    pub fn eval_single(&self, x: f32) -> f32 {
+        let n = self.knots.len();
+
+        if n == 0 {
+            return 0.0;
+        }
+
+        // Handle extrapolation with linear continuation based on endpoint tangent
+        if x < self.knots[0] {
+            // Left extrapolation: use linear extrapolation based on tangent at knots[0]
+            let dx = x - self.knots[0];
+            let y0 = self.coeff_a[0];
+            let slope = self.coeff_b[0]; // First derivative at knots[0]
+            let y_extrap = y0 + slope * dx;
+            // Ensure positive for beam width (w > 0) only in extrapolation
+            return y_extrap.max(1e-6);
+        }
+
+        if x > self.knots[n - 1] {
+            // Right extrapolation: use linear extrapolation based on tangent at knots[n-1]
+            let i = n - 2;
+            let dx_end = self.knots[n - 1] - self.knots[i];
+            // Evaluate value and derivative at right endpoint
+            let y_end = self.coeff_a[i]
+                + self.coeff_b[i] * dx_end
+                + self.coeff_c[i] * dx_end * dx_end
+                + self.coeff_d[i] * dx_end * dx_end * dx_end;
+            let slope_end = self.coeff_b[i]
+                + 2.0 * self.coeff_c[i] * dx_end
+                + 3.0 * self.coeff_d[i] * dx_end * dx_end;
+            let dx = x - self.knots[n - 1];
+            let y_extrap = y_end + slope_end * dx;
+            // Ensure positive for beam width (w > 0) only in extrapolation
+            return y_extrap.max(1e-6);
+        }
+
+        // Interpolation: binary search for the right segment
+        let mut left = 0;
+        let mut right = n - 1;
+        while right - left > 1 {
+            let mid = (left + right) / 2;
+            if self.knots[mid] > x {
+                right = mid;
+            } else {
+                left = mid;
+            }
+        }
+
+        // Evaluate polynomial (no clamping in interpolation region)
+        let dx = x - self.knots[left];
+        self.coeff_a[left]
+            + self.coeff_b[left] * dx
+            + self.coeff_c[left] * dx * dx
+            + self.coeff_d[left] * dx * dx * dx
+    }
+}
+
 /// Represents a Point Spread Function (PSF) used in spectroscopy and imaging analysis.
 ///
 /// A PSF characterizes the response of an imaging system to a point source signal, providing
 /// critical information about the system resolution and frequency characteristics.
-/// This structure holds both scalar and multidimensional data derived from an `.npz` file
-/// or other data sources.
+/// This structure holds cubic spline fit coefficients for beam widths and centers as functions
+/// of frequency, replacing the previous filter bank approach.
 ///
 /// # Fields
-/// - `low_cut` (*f32*): The low-frequency cutoff value of the PSF filters.
-/// - `high_cut` (*f32*): The high-frequency cutoff value of the PSF filters.
-/// - `start_freq` (*f32*): The starting frequency of the PSF filters.
-/// - `end_freq` (*f32*): The ending frequency of the PSF filters.
-/// - `n_filters` (*i32*): The number of filters included in the PSF.
-/// - `filters` (*Array2<f32>*): A 2D array containing the filter coefficients for the PSF
-///    the first dimension represents the filter coefficients, and the second dimension represents the frequency index.
-/// - `filt_freqs` (*Array2<f32>*): A 1D array of frequencies associated with the filters.
-/// - `[x_0, w_x]` (*Array2<f32>*): A 2D array representing the PSF in the X-axis, typically used for spatial resolution analysis.
-///    the first dimension represents the fit parameters, and the second dimension represents the frequency index.
-///    The fit parameters are the center and width of the PSF (in this order).
-/// - `[y_0, w_y]` (*Array2<f32>*): A 2D array representing the PSF in the Y-axis, typically used for spatial resolution analysis.
-///    the first dimension represents the fit parameters, and the second dimension represents the frequency index.
-///    The fit parameters are the center and width of the PSF (in this order).
-///
+/// - `wx_spline` (*CubicSplineCoeffs*): Cubic spline coefficients for beam width in X direction
+/// - `wy_spline` (*CubicSplineCoeffs*): Cubic spline coefficients for beam width in Y direction
+/// - `x0_spline` (*CubicSplineCoeffs*): Cubic spline coefficients for beam center in X direction
+/// - `y0_spline` (*CubicSplineCoeffs*): Cubic spline coefficients for beam center in Y direction
 ///
 /// # Typical Usage
 ///
-/// This struct is often used to:
-/// - Load PSFs from data files (e.g., `.npz`) and process their frequency or spatial characteristics.
-/// - Perform computations like filtering, interpolation, or fitting operations for spectroscopic data analysis.
-///
-/// # Example
-/// ```
-/// use crate::PSF;
-/// use ndarray::{Array1, Array2};
-///
-/// let psf = PSF {
-///     low_cut: 0.15,
-///     high_cut: 6.0,
-///     start_freq: 0.2,
-///     end_freq: 4.0,
-///     n_filters: 100,
-///     filters: Array2::zeros((100, 100)),
-///     filt_freqs: Array2::linspace(0.2, 4.0, 100),
-///     popt_x: Array2::zeros((2, 100)),
-///     popt_y: Array2::zeros((2, 100)),
-/// };
-///
-/// println!("PSF has {} filters and spans the frequency range {:.1} Hz to {:.1} Hz.",
-///     psf.n_filters, psf.start_freq, psf.end_freq);
-/// ```
+/// This struct is used to:
+/// - Load PSF spline coefficients from data files (e.g., `.npz`)
+/// - Evaluate beam widths and centers at arbitrary frequencies
+/// - Generate PSFs for frequency-dependent deconvolution
 #[derive(Serialize, Deserialize, Default, PartialEq, Debug, Clone)]
 pub struct PSF {
-    pub low_cut: f32,
-    pub high_cut: f32,
-    pub start_freq: f32,
-    pub end_freq: f32,
-    pub n_filters: i32,
-    pub filters: Array2<f32>,
-    pub filt_freqs: Array1<f32>,
-    pub popt_x: Array2<f32>,
-    pub popt_y: Array2<f32>,
+    pub wx_spline: CubicSplineCoeffs,
+    pub wy_spline: CubicSplineCoeffs,
+    pub x0_spline: CubicSplineCoeffs,
+    pub y0_spline: CubicSplineCoeffs,
 }
 
 /// Creates a 2D Point Spread Function (PSF) grid by interpolating and normalizing input PSF data.

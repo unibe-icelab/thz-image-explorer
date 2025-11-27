@@ -87,15 +87,20 @@ pub fn settings_window(
                             ui.label("- 'high_cut': float, high cut-off frequency");
                             ui.label("- 'start_freq': float, start frequency for filters");
                             ui.label("- 'end_freq': float, end frequency for filters");
-                            ui.label("- 'n_filters': int, number of filters");
-                            ui.label("- 'filters': ndarray, filter coefficients, shape (n_filters, len(times_psf) // 5)");
-                            ui.label("- 'filt_freqs': ndarray, filter frequencies, shape (n_filters,)");
-                            ui.label("- '[x_0, w_x]': ndarray, fitted x parameters, shape (n_filters, 2)");
-                            ui.label("- '[y_0, w_y]': ndarray, fitted y parameters, shape (n_filters, 2)");
+                            ui.label("PSF file format (new spline-based format):");
+                            ui.label("The .npz file must contain cubic spline coefficients:");
+                            ui.label("- 'wx_knots_thz', 'wx_values_mm': X beam width spline");
+                            ui.label("- 'wx_coeff_a/b/c/d': X beam width spline coefficients");
+                            ui.label("- 'wy_knots_thz', 'wy_values_mm': Y beam width spline");
+                            ui.label("- 'wy_coeff_a/b/c/d': Y beam width spline coefficients");
+                            ui.label("- 'x0_knots_thz', 'x0_values_mm': X center spline");
+                            ui.label("- 'x0_coeff_a/b/c/d': X center spline coefficients");
+                            ui.label("- 'y0_knots_thz', 'y0_values_mm': Y center spline");
+                            ui.label("- 'y0_coeff_a/b/c/d': Y center spline coefficients");
                         },
                     );
 
-                    if thread_communication.gui_settings.psf.popt_x.is_empty() {
+                    if thread_communication.gui_settings.psf.wx_spline.knots.is_empty() {
                         ui.colored_label(egui::Color32::RED, "No PSF loaded.");
                     } else {
                         ui.label(

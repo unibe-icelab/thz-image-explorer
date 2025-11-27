@@ -16,7 +16,7 @@ use crate::data_container::ScannedImageFilterData;
 use crate::filters::psf::PSF;
 use bevy_voxel_plot::InstanceData;
 use dotthz::{DotthzFile, DotthzMetaData};
-use ndarray::{Array0, Array1, Array2, Array3, Axis, Ix0, Ix1, Ix2, OwnedRepr};
+use ndarray::{Array1, Array2, Array3, Axis, Ix1, OwnedRepr};
 use ndarray_npy::NpzReader;
 use realfft::RealFftPlanner;
 use std::error::Error;
@@ -138,28 +138,35 @@ pub fn export_to_vtk(
 
 /// Loads a Point Spread Function (PSF) from a `.npz` file.
 ///
-/// This function reads scalar and array values from the `.npz` file and constructs a `PSF` object
-/// with the loaded values.
+/// This function reads cubic spline coefficients from the `.npz` file and constructs a `PSF` object.
+/// The new format stores spline coefficients for beam widths (wx, wy) and centers (x0, y0) as
+/// functions of frequency, rather than pre-computed filter banks.
 ///
 /// # Input File Format
 /// The `.npz` file must contain the following datasets:
-/// - Scalars:
-///   - `"low_cut"`: Low-frequency cutoff.
-///   - `"high_cut"`: High-frequency cutoff.
-///   - `"start_freq"`: Starting frequency of the filter.
-///   - `"end_freq"`: Ending frequency of the filter.
-///   - `"n_filters"`: Number of filters in the dataset.
-/// - Arrays:
-///   - `"filters"`: A 2D array representing the filters.
-///   - `"filt_freqs"`: A list of frequencies over which the filters are defined.
-///   - `"[x_0, w_x]"`: A 2D array of X-coordinates for the PSF.
-///   - `"[y_0, w_y]"`: A 2D array of Y-coordinates for the PSF.
+///
+/// ## Beam width in X direction (wx):
+///   - `"wx_knots_thz"`: Frequency knots (THz)
+///   - `"wx_values_mm"`: Beam width values at knots (mm)
+///   - `"wx_coeff_a"`, `"wx_coeff_b"`, `"wx_coeff_c"`, `"wx_coeff_d"`: Cubic spline coefficients
+///
+/// ## Beam width in Y direction (wy):
+///   - `"wy_knots_thz"`, `"wy_values_mm"`: Knots and values
+///   - `"wy_coeff_a"`, `"wy_coeff_b"`, `"wy_coeff_c"`, `"wy_coeff_d"`: Coefficients
+///
+/// ## Beam center in X direction (x0):
+///   - `"x0_knots_thz"`, `"x0_values_mm"`: Knots and values
+///   - `"x0_coeff_a"`, `"x0_coeff_b"`, `"x0_coeff_c"`, `"x0_coeff_d"`: Coefficients
+///
+/// ## Beam center in Y direction (y0):
+///   - `"y0_knots_thz"`, `"y0_values_mm"`: Knots and values
+///   - `"y0_coeff_a"`, `"y0_coeff_b"`, `"y0_coeff_c"`, `"y0_coeff_d"`: Coefficients
 ///
 /// # Arguments
 /// * `file_path` - A reference to the file path of the `.npz` file to be loaded.
 ///
 /// # Returns
-/// * `Ok(PSF)` - A `PSF` object containing the loaded filter and spatial frequency data.
+/// * `Ok(PSF)` - A `PSF` object containing the cubic spline coefficients.
 /// * `Err(Box<dyn Error>)` - An error if loading or parsing the `.npz` file fails.
 ///
 /// # Errors
@@ -173,65 +180,59 @@ pub fn export_to_vtk(
 ///
 /// let file_path = PathBuf::from("example.npz");
 /// match load_psf(&file_path) {
-///     Ok(psf) => println!("Loaded PSF with {} filters.", psf.n_filters),
+///     Ok(psf) => println!("Loaded PSF with spline coefficients"),
 ///     Err(err) => eprintln!("Error loading PSF: {}", err),
 /// }
 /// ```
 pub fn load_psf(file_path: &PathBuf) -> Result<PSF, Box<dyn Error>> {
     let mut npz = NpzReader::new(File::open(file_path)?)?;
 
-    // Load scalar values with explicit type annotations
-    let low_cut_arr: Array0<f64> = npz
-        .by_name::<OwnedRepr<f64>, Ix0>("low_cut")?
-        .into_dimensionality()?;
-    let low_cut = low_cut_arr.into_scalar();
+    // Helper function to load a cubic spline from npz
+    let load_spline = |npz: &mut NpzReader<File>,
+                       prefix: &str|
+     -> Result<crate::filters::psf::CubicSplineCoeffs, Box<dyn Error>> {
+        // Helper to load 1D array with fallback to dynamic dimensionality
+        let load_1d_array =
+            |npz: &mut NpzReader<File>, name: &str| -> Result<Array1<f64>, Box<dyn Error>> {
+                match npz.by_name::<OwnedRepr<f64>, Ix1>(name) {
+                    Ok(arr) => Ok(arr.into_dimensionality::<ndarray::Ix1>()?),
+                    Err(_) => {
+                        // Fallback: try loading as dynamic array and convert
+                        let dyn_arr = npz.by_name::<OwnedRepr<f64>, ndarray::IxDyn>(name)?;
+                        let arr_1d = dyn_arr.into_dimensionality::<ndarray::Ix1>()?;
+                        Ok(arr_1d)
+                    }
+                }
+            };
 
-    let high_cut_arr: Array0<f64> = npz
-        .by_name::<OwnedRepr<f64>, Ix0>("high_cut")?
-        .into_dimensionality()?;
-    let high_cut = high_cut_arr.into_scalar();
+        let knots = load_1d_array(npz, &format!("{}_knots_thz", prefix))?;
+        let values = load_1d_array(npz, &format!("{}_values_mm", prefix))?;
+        let coeff_a = load_1d_array(npz, &format!("{}_coeff_a", prefix))?;
+        let coeff_b = load_1d_array(npz, &format!("{}_coeff_b", prefix))?;
+        let coeff_c = load_1d_array(npz, &format!("{}_coeff_c", prefix))?;
+        let coeff_d = load_1d_array(npz, &format!("{}_coeff_d", prefix))?;
 
-    let start_freq_arr: Array0<f64> = npz
-        .by_name::<OwnedRepr<f64>, Ix0>("start_freq")?
-        .into_dimensionality()?;
-    let start_freq = start_freq_arr.into_scalar();
+        Ok(crate::filters::psf::CubicSplineCoeffs {
+            knots: knots.map(|&x| x as f32),
+            values: values.map(|&x| x as f32),
+            coeff_a: coeff_a.map(|&x| x as f32),
+            coeff_b: coeff_b.map(|&x| x as f32),
+            coeff_c: coeff_c.map(|&x| x as f32),
+            coeff_d: coeff_d.map(|&x| x as f32),
+        })
+    };
 
-    let end_freq_arr: Array0<f64> = npz
-        .by_name::<OwnedRepr<f64>, Ix0>("end_freq")?
-        .into_dimensionality()?;
-    let end_freq = end_freq_arr.into_scalar();
-
-    let n_filters_arr: Array0<i64> = npz
-        .by_name::<OwnedRepr<i64>, Ix0>("n_filters")?
-        .into_dimensionality()?;
-    let n_filters = n_filters_arr.into_scalar();
-
-    // Load arrays
-    let filters = npz
-        .by_name::<OwnedRepr<f64>, Ix2>("filters")?
-        .into_dimensionality::<ndarray::Ix2>()?;
-
-    // I read that in as Array2, hope this works
-    let filt_freqs = npz
-        .by_name::<OwnedRepr<f64>, Ix1>("filt_freqs")?
-        .into_dimensionality::<ndarray::Ix1>()?;
-    let x = npz
-        .by_name::<OwnedRepr<f64>, Ix2>("[x_0, w_x]")?
-        .into_dimensionality::<ndarray::Ix2>()?;
-    let y = npz
-        .by_name::<OwnedRepr<f64>, Ix2>("[y_0, w_y]")?
-        .into_dimensionality::<ndarray::Ix2>()?;
+    // Load all four splines
+    let wx_spline = load_spline(&mut npz, "wx")?;
+    let wy_spline = load_spline(&mut npz, "wy")?;
+    let x0_spline = load_spline(&mut npz, "x0")?;
+    let y0_spline = load_spline(&mut npz, "y0")?;
 
     Ok(PSF {
-        low_cut: low_cut as f32,
-        high_cut: high_cut as f32,
-        start_freq: start_freq as f32,
-        end_freq: end_freq as f32,
-        n_filters: n_filters as i32,
-        filters: filters.map(|&x| x as f32),
-        filt_freqs: filt_freqs.map(|&x| x as f32),
-        popt_x: x.map(|&x| x as f32),
-        popt_y: y.map(|&x| x as f32),
+        wx_spline,
+        wy_spline,
+        x0_spline,
+        y0_spline,
     })
 }
 
