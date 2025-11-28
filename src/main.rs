@@ -21,7 +21,7 @@ use bevy::window::{ExitCondition, WindowResolution};
 use bevy::winit::EventLoopProxyWrapper;
 use bevy::winit::WinitSettings;
 use bevy_egui::egui::style::HandleShape;
-use bevy_egui::egui::{vec2, Visuals};
+use bevy_egui::egui::vec2;
 use bevy_egui::{egui, EguiPrimaryContextPass, EguiStartupSet};
 use bevy_egui::{EguiContexts, EguiPlugin};
 use bevy_panorbit_camera::PanOrbitCameraPlugin;
