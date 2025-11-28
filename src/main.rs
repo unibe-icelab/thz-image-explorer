@@ -76,7 +76,7 @@ fn setup_fonts(mut contexts: EguiContexts) {
         egui_extras::install_image_loaders(&ctx_mut);
 
         // Get the current visuals (light or dark mode)
-        let mut visuals = Visuals::default(); // Or `ctx.style().visuals.clone()` to keep current settings
+        let mut visuals = ctx_mut.style().visuals.clone(); // to keep current settings
 
         // Set the global handle shape for sliders
         visuals.handle_shape = HandleShape::Circle;
