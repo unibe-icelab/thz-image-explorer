@@ -1,8 +1,8 @@
 //! This module implements a custom filter named `Deconvolution`, which operates on scanned images
-//! and performs a deconvolution operation in the frequency domain.
+//! and performs frequency-domain deconvolution operations.
 //!
-//! The implementation includes a Richardson-Lucy deconvolution algorithm placeholder,
-//! allowing for further customization and parameterization.
+//! The implementation includes a Richardson-Lucy deconvolution algorithm,
+//! allowing for customization and parameterization.
 
 use crate::config::ThreadCommunication;
 use crate::data_container::ScannedImageFilterData;
@@ -25,13 +25,13 @@ use std::sync::{Arc, RwLock};
 // Filter generation utilities (ported from thz-point-spread-function-tool)
 // ============================================================================
 
-/// Calculate Kaiser window attenuation
+/// Calculates the Kaiser window attenuation parameter.
 fn kaiser_atten(ntaps: usize, width_ratio: f64) -> f64 {
     let a = 2.285 * (ntaps as f64 - 1.0) * std::f64::consts::PI * width_ratio + 7.95;
     a.max(0.0)
 }
 
-/// Calculate Kaiser window beta parameter
+/// Calculates the Kaiser window beta parameter.
 fn kaiser_beta(atten: f64) -> f64 {
     if atten > 50.0 {
         0.1102 * (atten - 8.7)
@@ -42,7 +42,7 @@ fn kaiser_beta(atten: f64) -> f64 {
     }
 }
 
-/// Modified Bessel function of the first kind, order 0
+/// Computes the modified Bessel function of the first kind, order 0.
 fn i0(x: f64) -> f64 {
     let mut sum = 1.0;
     let mut term = 1.0;
@@ -58,7 +58,7 @@ fn i0(x: f64) -> f64 {
     sum
 }
 
-/// Sinc function sin(x)/x
+/// Computes the sinc function: sin(x)/x.
 fn sinc(x: f64) -> f64 {
     if x.abs() < 1e-10 {
         1.0
@@ -67,7 +67,7 @@ fn sinc(x: f64) -> f64 {
     }
 }
 
-/// Create a Kaiser window coefficient
+/// Creates a single Kaiser window coefficient.
 fn kaiser_window_coeff(n: usize, n_taps: usize, beta: f64) -> f64 {
     if n == 0 || n == n_taps - 1 {
         0.0
@@ -79,7 +79,7 @@ fn kaiser_window_coeff(n: usize, n_taps: usize, beta: f64) -> f64 {
     }
 }
 
-/// FIR low-pass design using time-domain Kaiser-windowed sinc
+/// Designs a FIR low-pass filter using a Kaiser-windowed sinc in the time domain.
 fn firwin_kaiser_lowpass(n_taps: usize, cutoff_hz: f64, beta: f64, sampling_freq: f64) -> Vec<f64> {
     let adjusted_n_taps = if n_taps % 2 == 0 { n_taps - 1 } else { n_taps };
     let mid = (adjusted_n_taps - 1) as f64 / 2.0;
@@ -106,7 +106,7 @@ fn firwin_kaiser_lowpass(n_taps: usize, cutoff_hz: f64, beta: f64, sampling_freq
     filter
 }
 
-/// High-pass FIR design by spectral inversion
+/// Designs a high-pass FIR filter using spectral inversion.
 fn firwin_kaiser_highpass(
     n_taps: usize,
     cutoff_hz: f64,
@@ -129,7 +129,7 @@ fn firwin_kaiser_highpass(
     filter
 }
 
-/// Design a Kaiser-windowed FIR bandpass filter
+/// Designs a Kaiser-windowed FIR bandpass filter.
 fn bandpass_kaiser(ntaps: usize, lowcut: f64, highcut: f64, fs: f64, width: f64) -> Vec<f64> {
     let width_ratio = width / (0.5 * fs);
     let atten = kaiser_atten(ntaps, width_ratio);
@@ -154,8 +154,8 @@ fn bandpass_kaiser(ntaps: usize, lowcut: f64, highcut: f64, fs: f64, width: f64)
     }
 }
 
-/// Create logarithmically spaced bandpass filters
-/// First filter is lowpass, last filter is highpass, middle filters are bandpass
+/// Creates a bank of logarithmically-spaced bandpass filters.
+/// The first filter is a lowpass, the last is a highpass, and intermediate filters are bandpass.
 fn create_filter_bank(
     n_filters: usize,
     start_freq: f64,
@@ -165,11 +165,11 @@ fn create_filter_bank(
 ) -> (Array2<f32>, Vec<f32>) {
     let ntaps = 499;
 
-    // Calculate sampling frequency
+    // Calculate the sampling frequency
     let dt = (time_array[1] - time_array[0]) as f64;
     let fs = 1.0 / dt; // in THz
 
-    // Logarithmically spaced center frequencies
+    // Generate logarithmically-spaced center frequencies
     let log_start = start_freq.ln();
     let log_end = end_freq.ln();
     let log_step = (log_end - log_start) / ((n_filters - 1) as f64);
@@ -178,7 +178,7 @@ fn create_filter_bank(
         .map(|i| (log_start + i as f64 * log_step).exp() as f32)
         .collect();
 
-    // Create filters
+    // Create the filter bank
     let mut filters = Array2::zeros((n_filters, ntaps));
 
     for (i, &center_freq) in center_frequencies.iter().enumerate() {
@@ -215,15 +215,15 @@ fn create_filter_bank(
 
 /// Represents a `Deconvolution` filter.
 ///
-/// This filter is designed to perform deconvolution using a configurable number of iterations
-/// and a defined frequency range. It is implemented to work in the frequency domain.
+/// This filter performs deconvolution using a configurable number of iterations
+/// and a defined frequency range. It operates in the frequency domain.
 ///
-/// Fields:
-/// - `n_iterations`: The number of iterations for performing the deconvolution.
+/// # Fields
+/// - `n_iterations`: The number of deconvolution iterations to perform.
 /// - `n_filters`: The number of logarithmically-spaced filters to create (first is lowpass, last is highpass).
-/// - `start_freq`: First center frequency for the filter bank (THz).
-/// - `end_freq`: Last center frequency for the filter bank (THz).
-/// - `win_width`: Kaiser window width parameter for filter design (THz).
+/// - `start_freq`: The first center frequency for the filter bank (THz).
+/// - `end_freq`: The last center frequency for the filter bank (THz).
+/// - `win_width`: The Kaiser window width parameter for filter design (THz).
 #[register_filter]
 #[derive(Clone, Debug, CopyStaticFields)]
 /// Represents the Deconvolution filter configuration.
@@ -231,22 +231,22 @@ fn create_filter_bank(
 /// # Fields
 /// - `n_iterations` (*usize*): The number of iterations for the deconvolution algorithm.
 /// - `n_filters` (*usize*): The number of logarithmically-spaced filters (first is lowpass, last is highpass).
-/// - `start_freq` (*f32*): First center frequency (THz).
-/// - `end_freq` (*f32*): Last center frequency (THz).
-/// - `win_width` (*f32*): Kaiser window width (THz).
-/// - `expert_mode` (*bool*): Toggle to show/hide advanced parameters.
+/// - `start_freq` (*f32*): The first center frequency (THz).
+/// - `end_freq` (*f32*): The last center frequency (THz).
+/// - `win_width` (*f32*): The Kaiser window width (THz).
+/// - `expert_mode` (*bool*): Toggles visibility of advanced parameters.
 pub struct Deconvolution {
-    // Number of iterations for the deconvolution algorithm
+    /// Number of iterations for the deconvolution algorithm
     pub n_iterations: usize,
-    // Number of logarithmically-spaced filters
+    /// Number of logarithmically-spaced filters
     pub n_filters: usize,
-    // First center frequency (THz)
+    /// First center frequency (THz)
     pub start_freq: f32,
-    // Last center frequency (THz)
+    /// Last center frequency (THz)
     pub end_freq: f32,
-    // Kaiser window width (THz)
+    /// Kaiser window width (THz)
     pub win_width: f32,
-    // Expert mode toggle
+    /// Expert mode toggle
     #[static_field]
     expert_mode: bool,
 }
@@ -258,10 +258,10 @@ pub struct Deconvolution {
 /// - `b` (*&Array1<f32>*): The second input array (kernel).
 /// - `fft` (*&dyn rustfft::Fft<f64>*): The FFT implementation.
 /// - `ifft` (*&dyn rustfft::Fft<f64>*): The inverse FFT implementation.
-/// - `fft_size` (*usize*): The size of the FFT to be performed.
+/// - `fft_size` (*usize*): The size of the FFT to perform.
 ///
 /// # Returns
-/// - (*Array1<f32>*): The result of the convolution.
+/// - (*Array1<f32>*): The convolution result.
 pub fn convolve1d(
     a: &Array1<f32>,
     b: &Array1<f32>,
@@ -270,11 +270,11 @@ pub fn convolve1d(
     fft_size: usize,
 ) -> Array1<f32> {
     // Pad input signals to the FFT size
-    // Initialize padded arrays for the input signals with zero values
+    // Initialize zero-padded arrays for the input signals
     let mut a_padded: Vec<Complex<f64>> = vec![Complex { re: 0.0, im: 0.0 }; fft_size];
     let mut b_padded: Vec<Complex<f64>> = vec![Complex { re: 0.0, im: 0.0 }; fft_size];
 
-    // Calculate the shift length for aligning the convolution result
+    // Calculate the shift length to align the convolution result
     let shift_len = (b.len() - 1) / 2;
 
     // Copy input data into the padded arrays
@@ -315,7 +315,6 @@ pub fn convolve1d(
     )
 }
 
-/// Perform element-wise multiplication of two complex matrices
 /// Performs element-wise multiplication of two complex matrices in the frequency domain.
 ///
 /// # Arguments
@@ -331,7 +330,7 @@ fn multiply_freq_domain(
     // Clone the first matrix to store the result
     let mut result = a.clone();
 
-    // Perform element-wise multiplication of the two matrices
+    // Perform element-wise multiplication
     Zip::from(&mut result)
         .and(b)
         .for_each(|r, &bval| *r *= bval);
@@ -339,7 +338,7 @@ fn multiply_freq_domain(
     result
 }
 
-/// Pads a 2D array with zeros to a specified shape.
+/// Pads a 2D array with zeros to the specified shape.
 ///
 /// # Arguments
 /// - `input` (*&Array2<f32>*): The input array to be padded.
@@ -369,7 +368,6 @@ pub fn pad_array(input: &Array2<f32>, padded_shape: (usize, usize)) -> Array2<Co
     output
 }
 
-/// Perform 2D FFT (in-place) on a matrix
 /// Performs 2D FFT or inverse FFT on a matrix (in-place).
 ///
 /// # Arguments
@@ -379,7 +377,7 @@ pub fn pad_array(input: &Array2<f32>, padded_shape: (usize, usize)) -> Array2<Co
 /// - `inverse` (*bool*): Whether to perform an inverse FFT.
 ///
 /// # Notes
-/// - Normalizes the result if `inverse` is true.
+/// Normalizes the result if `inverse` is true.
 fn fft2d(
     matrix: &mut Array2<Complex<f32>>,
     fft_cols: &dyn rustfft::Fft<f32>,
@@ -388,7 +386,6 @@ fn fft2d(
 ) -> Result<(), Box<dyn Error>> {
     let (rows, cols) = matrix.dim();
 
-    // FFT on rows
     // Perform FFT on each row of the matrix
     for mut row in matrix.outer_iter_mut() {
         match row.as_slice_mut() {
@@ -423,7 +420,6 @@ fn fft2d(
     Ok(())
 }
 
-/// Direct 2D Convolution for small kernels
 /// Performs direct 2D convolution for small kernels.
 ///
 /// # Arguments
@@ -460,8 +456,7 @@ fn direct_convolve2d(a: &Array2<f32>, b: &Array2<f32>) -> Array2<f32> {
     result
 }
 
-/// FFT-based convolution (output same size as `a`)
-/// Performs 2D convolution using FFT (output same size as `a`).
+/// Performs 2D convolution using FFT (output has the same size as `a`).
 ///
 /// # Arguments
 /// - `a` (*&Array2<f32>*): The input array.
@@ -484,13 +479,13 @@ pub fn convolve2d(
     let (a_rows, a_cols) = a.dim();
     let (b_rows, b_cols) = b.dim();
 
-    // If the kernel is small, we use direct convolution for efficiency
+    // Use direct convolution for small kernels (more efficient)
     const THRESHOLD: usize = 256;
     if b_rows * b_cols <= THRESHOLD {
         return Ok(direct_convolve2d(a, b));
     }
 
-    // Calculate padding to ensure output size matches input
+    // Calculate padding to ensure the output size matches the input
     let padded_rows = (a_rows + b_rows - 1).next_power_of_two();
     let padded_cols = (a_cols + b_cols - 1).next_power_of_two();
 
@@ -517,7 +512,7 @@ pub fn convolve2d(
         return Err(e);
     }
 
-    // For "same" size convolution, we need to extract the center part
+    // For "same" size convolution, extract the center part
     let start_row = (b_rows - 1) / 2;
     let start_col = (b_cols - 1) / 2;
 
@@ -549,8 +544,8 @@ pub fn convolve2d(
 }
 
 impl Deconvolution {
-    /// Computes the minimum maximum range for the deconvolution algorithm.
-    /// Ensures that the range_max value is not smaller than the minimum allowable range (wmin).
+    /// Computes the constrained maximum range for the deconvolution algorithm.
+    /// Ensures that `range_max` is not smaller than the minimum allowable range (`wmin`).
     ///
     /// # Arguments
     /// - `range_max` (*f32*): The maximum range value.
@@ -559,7 +554,7 @@ impl Deconvolution {
     /// # Returns
     /// - (*f32*): The adjusted maximum range.
     fn range_max_min(&self, range_max: f32, wmin: f32) -> f32 {
-        // If range_max is smaller than wmin, return wmin; otherwise, return range_max
+        // Return wmin if range_max is smaller, otherwise return range_max
         if range_max < wmin {
             wmin
         } else {
@@ -567,8 +562,7 @@ impl Deconvolution {
         }
     }
 
-    /// Computes the filtered scan with the FIR filter by convolving each time trace with the filter.
-    /// Applies a filter to a scanned image using convolution.
+    /// Applies a FIR filter to a scanned image by convolving each time trace with the filter.
     ///
     /// # Arguments
     /// - `_scan` (*&ScannedImageFilterData*): The scanned image data to be filtered.
@@ -720,13 +714,13 @@ impl Deconvolution {
 impl Filter for Deconvolution {
     /// Creates a new `Deconvolution` filter with default settings.
     ///
-    /// Default values:
+    /// # Default values
     /// - `n_iterations`: 500
     /// - `n_filters`: 25
     /// - `start_freq`: 0.1 THz
     /// - `end_freq`: 10.0 THz
     /// - `win_width`: 0.5 THz
-    /// - `expert_mode`: false (parameters hidden by default)
+    /// - `expert_mode`: false (advanced parameters hidden by default)
     fn new() -> Self {
         Deconvolution {
             n_iterations: 500,
@@ -738,12 +732,12 @@ impl Filter for Deconvolution {
         }
     }
 
-    /// Resets the filter state. Not used.
+    /// Resets the filter state (not currently used).
     fn reset(&mut self, _time: &Array1<f32>, _shape: &[usize]) {
         // NOOP
     }
 
-    /// Displays the filter settings in the GUI. Not used, no data to show.
+    /// Displays the filter settings in the GUI (not currently used, no data to display).
     fn show_data(&mut self, _data: &ScannedImageFilterData) {
         // NOOP
     }
@@ -759,13 +753,13 @@ impl Filter for Deconvolution {
 
     /// Applies the deconvolution algorithm to a scanned image.
     ///
-    /// # Arguments:
-    /// - `input_data`: Reference to the scanned image to be processed.
-    /// - `gui_settings`: Mutable reference to the GUI settings associated with the filter.
+    /// # Arguments
+    /// - `input_data`: Reference to the scanned image to process.
+    /// - `gui_settings`: Mutable reference to the GUI settings for the filter.
     /// - `progress_lock`: Progress indicator for the operation.
     /// - `abort_flag`: Flag to cancel the operation.
     ///
-    /// # Notes:
+    /// # Notes
     /// This method generates a filter bank on-the-fly based on the filter parameters,
     /// evaluates PSF parameters using cubic splines, and performs Richardson-Lucy deconvolution.
     fn filter(
@@ -889,7 +883,7 @@ impl Filter for Deconvolution {
             return input_data.clone();
         }
 
-        // Error flag to track if any errors are encountered
+        // Error flag to track if any errors occur
         let error_flag = Arc::new(AtomicBool::new(false));
         let error_flag_clone = Arc::clone(&error_flag);
 
