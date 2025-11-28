@@ -2,10 +2,14 @@
 
 All notable changes to the `THz Image Explorer` project will be documented in this file.
 
-# Unreleased 1.0.X - X.X.2025
+# Unreleased 1.1.X - X.X.2025
+
+* ...
+
+# 1.1.0 - 28.11.2025
 
 * Fix 3D rendering bug (blending of pixels)
-* ...
+* Update to `bevy 0.17`, `ndarray 0.17`, `bevy-egui 0.38`
 
 # 1.0.1 - 5.11.2025
 

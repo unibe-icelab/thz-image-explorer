@@ -1,8 +1,9 @@
 use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
 use crate::gui::application::{FileDialogState, THzImageExplorer, Tab};
 use crate::gui::toggle_widget::toggle;
-use bevy::render::camera::{ImageRenderTarget, RenderTarget};
-use bevy::render::view::RenderLayers;
+use bevy::camera::visibility::RenderLayers;
+use bevy::camera::ScalingMode;
+use bevy::camera::{ImageRenderTarget, RenderTarget};
 use bevy::window::PrimaryWindow;
 use bevy::winit::EventLoopProxyWrapper;
 use bevy::{prelude::*, render::render_resource::*};
@@ -21,7 +22,7 @@ pub struct OpacityThreshold(pub f32);
 pub struct InstanceContainer(pub Vec<InstanceData>, pub f32, pub f32, pub f32);
 
 #[derive(Deref, Resource)]
-pub struct RenderImage(Handle<Image>);
+pub struct RenderImage(pub Handle<Image>);
 
 #[derive(Resource, Default)]
 pub struct CameraInputAllowed(pub bool);
@@ -257,7 +258,8 @@ pub(crate) fn instance_from_data(
                 );
 
                 instances.push(InstanceData {
-                    pos_scale: [position.x, position.y, position.z, cube_scale],
+                    position: [position.x, position.y, position.z],
+                    scale: cube_scale,
                     color: LinearRgba::from(Color::srgba(r, g, b, opacity)).to_f32_array(),
                 });
             }
@@ -336,7 +338,8 @@ pub fn setup(
     image.resize(size);
 
     let image_handle = images.add(image);
-    egui_user_textures.add_image(image_handle.clone());
+    egui_user_textures.add_image(bevy_egui::EguiTextureHandle::Strong(image_handle.clone()));
+
     commands.insert_resource(RenderImage(image_handle.clone()));
 
     // This specifies the layer used for the first pass, which will be attached to the first pass camera and cube.
@@ -354,10 +357,7 @@ pub fn setup(
             Transform::from_translation(Vec3::new(0.0, 0.1, 0.0)),
             Projection::Orthographic {
                 0: OrthographicProjection {
-                    scaling_mode: bevy::render::camera::ScalingMode::Fixed {
-                        width: 512.0,
-                        height: 512.0,
-                    },
+                    scaling_mode: ScalingMode::WindowSize,
                     scale: 1.0,
                     ..OrthographicProjection::default_3d()
                 },

@@ -4,7 +4,7 @@ use crate::gui::application::{FileDialogState, THzImageExplorer};
 use crate::update::{check_for_software_updates, update};
 use crate::APP_INFO;
 use bevy::app::AppExit;
-use bevy::prelude::EventWriter;
+use bevy::prelude::MessageWriter;
 use bevy_egui::egui;
 use bevy_egui::egui::{vec2, Align2, InnerResponse, Popup, PopupCloseBehavior, Vec2, Visuals};
 use egui_theme_switch::ThemeSwitch;
@@ -18,7 +18,7 @@ pub fn settings_window(
     ctx: &egui::Context,
     explorer: &mut THzImageExplorer,
     thread_communication: &mut ThreadCommunication,
-    exit: &mut EventWriter<AppExit>,
+    exit: &mut MessageWriter<AppExit>,
 ) -> Option<InnerResponse<Option<()>>> {
     egui::Window::new("Settings")
         .fixed_size(Vec2 { x: 400.0, y: 1000.0 })

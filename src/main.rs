@@ -11,15 +11,16 @@ use crate::gui::threed_plot::{
 };
 use crate::update::check_for_software_updates;
 use bevy::app::AppExit;
-use bevy::ecs::event::EventReader;
 use bevy::log::LogPlugin;
+use bevy::prelude::MessageReader;
 use bevy::prelude::*;
 use bevy::render::render_resource::WgpuFeatures;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy::render::{RenderDebugFlags, RenderPlugin};
-use bevy::window::ExitCondition;
+use bevy::window::{ExitCondition, WindowResolution};
 use bevy::winit::EventLoopProxyWrapper;
 use bevy::winit::WinitSettings;
+use bevy_egui::egui::style::HandleShape;
 use bevy_egui::egui::{vec2, Visuals};
 use bevy_egui::{egui, EguiPrimaryContextPass, EguiStartupSet};
 use bevy_egui::{EguiContexts, EguiPlugin};
@@ -73,12 +74,20 @@ fn setup_fonts(mut contexts: EguiContexts) {
     if let Ok(ctx_mut) = contexts.ctx_mut() {
         ctx_mut.set_fonts(fonts);
         egui_extras::install_image_loaders(&ctx_mut);
-        ctx_mut.set_visuals(Visuals::dark());
+
+        // Get the current visuals (light or dark mode)
+        let mut visuals = Visuals::default(); // Or `ctx.style().visuals.clone()` to keep current settings
+
+        // Set the global handle shape for sliders
+        visuals.handle_shape = HandleShape::Circle;
+
+        // Apply the updated visuals to the context
+        ctx_mut.set_visuals(visuals);
     }
 }
 
 fn autosave_on_exit(
-    mut exit_events: EventReader<AppExit>,
+    mut exit_events: MessageReader<AppExit>,
     thread_communication: Res<ThreadCommunication>,
 ) {
     if exit_events.read().next().is_some() {
@@ -312,9 +321,10 @@ fn main() {
                         present_mode: bevy::window::PresentMode::AutoVsync,
                         prevent_default_event_handling: false,
                         title: "THz Image Explorer".into(),
-                        resolution: (gui_settings.x, gui_settings.y).into(),
+                        resolution: WindowResolution::new(gui_settings.x, gui_settings.y),
                         ..default()
                     }),
+                    primary_cursor_options: None,
                     exit_condition: ExitCondition::OnPrimaryClosed,
                     close_when_requested: true,
                 })

@@ -15,7 +15,7 @@ use std::path::Path;
 
 /// Calculates the width of a single char.
 fn calc_char_width(ui: &egui::Ui, char: char) -> f32 {
-    ui.fonts(|f| f.glyph_width(&egui::TextStyle::Body.resolve(ui.style()), char))
+    ui.fonts_mut(|f| f.glyph_width(&egui::TextStyle::Body.resolve(ui.style()), char))
 }
 
 /// Calculates the width of the specified text using the current font configuration.
@@ -170,7 +170,9 @@ pub fn left_panel(
                         .style()
                         .text_styles
                         .get(&TextStyle::Body)
-                        .map_or(15.0, |font_id| 1.0 + ui.fonts(|f| f.row_height(font_id)));
+                        .map_or(15.0, |font_id| {
+                            1.0 + ui.fonts_mut(|f| f.row_height(font_id))
+                        });
 
                     let mut table_builder = TableBuilder::new(ui)
                         .sense(egui::Sense::click())

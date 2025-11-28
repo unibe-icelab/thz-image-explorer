@@ -136,8 +136,8 @@ pub struct GuiSettingsContainer {
     pub dark_mode: bool,
     pub meta_data_edit: bool,
     pub meta_data_unlocked: bool,
-    pub x: f32,
-    pub y: f32,
+    pub x: u32,
+    pub y: u32,
     pub tab: Tab,
     pub animation_enabled: bool,
     pub last_progress_bar_update: HashMap<String, i64>,
@@ -182,8 +182,8 @@ impl GuiSettingsContainer {
             dark_mode: true,
             meta_data_edit: false,
             meta_data_unlocked: false,
-            x: 1600.0,
-            y: 900.0,
+            x: 1600,
+            y: 900,
             animation_enabled: true,
             opacity_threshold: 0.1,
             contrast_3d: 2.0,
@@ -214,7 +214,7 @@ pub fn update_gui(
     mut opacity_threshold: ResMut<OpacityThreshold>,
     mut cam_input: ResMut<CameraInputAllowed>,
     mut thread_communication: ResMut<ThreadCommunication>,
-    mut exit: EventWriter<AppExit>,
+    mut exit: MessageWriter<AppExit>,
 ) {
     if thread_communication.gui_settings.tab != Tab::ThreeD {
         if let Ok((mut instance_data, _)) = query.single_mut() {
@@ -224,14 +224,14 @@ pub fn update_gui(
 
     scene_visibility.0 = thread_communication.gui_settings.tab == Tab::ThreeD;
 
-    let cube_preview_texture_id = contexts.image_id(&cube_preview_image).unwrap();
+    let cube_preview_texture_id = contexts.image_id(&cube_preview_image.0).unwrap();
 
     let ctx = contexts.ctx_mut().unwrap();
 
     let left_panel_width = 300.0;
     let right_panel_width = 500.0;
 
-    let text_height = ctx.fonts(|f| f.row_height(&egui::FontId::default()));
+    let text_height = ctx.fonts_mut(|f| f.row_height(&egui::FontId::default()));
     let bottom_panel_height = text_height + 16.0; // Add some padding
 
     // Add bottom panel
@@ -412,8 +412,8 @@ pub fn update_gui(
         &mut exit,
     );
 
-    thread_communication.gui_settings.x = ctx.used_size().x;
-    thread_communication.gui_settings.y = ctx.used_size().y;
+    thread_communication.gui_settings.x = ctx.used_size().x as u32;
+    thread_communication.gui_settings.y = ctx.used_size().y as u32;
 }
 
 /// Main application struct for the THz Image Explorer GUI.
