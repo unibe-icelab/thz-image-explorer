@@ -100,7 +100,7 @@ pub fn settings_window(
                         },
                     );
 
-                    if thread_communication.gui_settings.psf.wx_spline.knots.is_empty() {
+                    if thread_communication.gui_settings.psf.wx_fit.correction.knots.is_empty() {
                         ui.colored_label(egui::Color32::RED, "No PSF loaded.");
                     } else {
                         ui.label(

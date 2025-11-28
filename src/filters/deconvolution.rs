@@ -186,13 +186,13 @@ fn create_filter_bank(
 
         // Calculate lowcut and highcut for this filter
         let lowcut = if i == 0 {
-            0.0  // First filter is lowpass
+            0.0 // First filter is lowpass
         } else {
             ((center_frequencies[i - 1] as f64) * center_freq_f64).sqrt()
         };
 
         let highcut = if i == n_filters - 1 {
-            0.5 * fs  // Last filter is highpass (Nyquist frequency)
+            0.5 * fs // Last filter is highpass (Nyquist frequency)
         } else {
             (center_freq_f64 * (center_frequencies[i + 1] as f64)).sqrt()
         };
@@ -234,6 +234,7 @@ fn create_filter_bank(
 /// - `start_freq` (*f32*): First center frequency (THz).
 /// - `end_freq` (*f32*): Last center frequency (THz).
 /// - `win_width` (*f32*): Kaiser window width (THz).
+/// - `expert_mode` (*bool*): Toggle to show/hide advanced parameters.
 pub struct Deconvolution {
     // Number of iterations for the deconvolution algorithm
     pub n_iterations: usize,
@@ -245,6 +246,9 @@ pub struct Deconvolution {
     pub end_freq: f32,
     // Kaiser window width (THz)
     pub win_width: f32,
+    // Expert mode toggle
+    #[static_field]
+    expert_mode: bool,
 }
 
 /// Performs 1D convolution using FFT.
@@ -718,17 +722,19 @@ impl Filter for Deconvolution {
     ///
     /// Default values:
     /// - `n_iterations`: 500
-    /// - `n_filters`: 20
-    /// - `start_freq`: 0.25 THz
-    /// - `end_freq`: 4.0 THz
+    /// - `n_filters`: 25
+    /// - `start_freq`: 0.1 THz
+    /// - `end_freq`: 10.0 THz
     /// - `win_width`: 0.5 THz
+    /// - `expert_mode`: false (parameters hidden by default)
     fn new() -> Self {
         Deconvolution {
             n_iterations: 500,
-            n_filters: 20,
-            start_freq: 0.25,
-            end_freq: 4.0,
+            n_filters: 25,
+            start_freq: 0.1,
+            end_freq: 10.0,
             win_width: 0.5,
+            expert_mode: false,
         }
     }
 
@@ -786,7 +792,7 @@ impl Filter for Deconvolution {
         }
 
         // Check if PSF splines have been loaded
-        if gui_settings.psf.wx_spline.knots.is_empty() {
+        if gui_settings.psf.wx_fit.correction.knots.is_empty() {
             log::error!("PSF splines appear empty — a PSF may not have been loaded. Skipping deconvolution.");
             if let Ok(mut p) = progress_lock.write() {
                 *p = None;
@@ -842,11 +848,11 @@ impl Filter for Deconvolution {
         // Evaluate beam widths at all filter frequencies to find min/max
         let wx_values: Vec<f32> = center_frequencies
             .iter()
-            .map(|&freq| gui_settings.psf.wx_spline.eval_single(freq))
+            .map(|&freq| gui_settings.psf.wx_fit.eval_single(freq))
             .collect();
         let wy_values: Vec<f32> = center_frequencies
             .iter()
-            .map(|&freq| gui_settings.psf.wy_spline.eval_single(freq))
+            .map(|&freq| gui_settings.psf.wy_fit.eval_single(freq))
             .collect();
 
         let wx_min = wx_values.iter().cloned().fold(f32::INFINITY, f32::min);
@@ -904,10 +910,16 @@ impl Filter for Deconvolution {
 
                 // Evaluate PSF parameters at this filter's center frequency
                 let center_freq = center_frequencies[i];
-                let wx = gui_settings.psf.wx_spline.eval_single(center_freq);
-                let wy = gui_settings.psf.wy_spline.eval_single(center_freq);
-                let x0 = gui_settings.psf.x0_spline.eval_single(center_freq);
-                let y0 = gui_settings.psf.y0_spline.eval_single(center_freq);
+                let wx = gui_settings.psf.wx_fit.eval_single(center_freq);
+                let wy = gui_settings.psf.wy_fit.eval_single(center_freq);
+                let x0 = gui_settings
+                    .psf
+                    .x0_spline
+                    .eval_single_const_extrap(center_freq);
+                let y0 = gui_settings
+                    .psf
+                    .y0_spline
+                    .eval_single_const_extrap(center_freq);
 
                 // Calculating the range for the PSF
                 let range_max_x = self.range_max_min((wx + x0.abs()) * 3.0, 2.5);
@@ -1039,55 +1051,92 @@ impl Filter for Deconvolution {
         _thread_communication: &mut ThreadCommunication,
         _panel_width: f32,
     ) -> egui::Response {
-        let mut clicked = false;
+        let mut changed = false;
 
         let mut response = ui
             .vertical(|ui| {
-                ui.label("Filter Bank Parameters:");
-
+                // Expert mode toggle button
                 ui.horizontal(|ui| {
-                    ui.label("Number of filters:");
-                    ui.add(egui::Slider::new(&mut self.n_filters, 10..=200));
-                });
-
-                ui.horizontal(|ui| {
-                    ui.label("Start frequency (THz):");
-                    ui.add(
-                        egui::DragValue::new(&mut self.start_freq)
-                            .speed(0.01)
-                            .range(0.1..=2.0),
+                    let toggle_response = ui.button(
+                        if self.expert_mode {
+                            "🔧 Expert Mode (Hide Parameters)"
+                        } else {
+                            "🔧 Expert Mode (Show Parameters)"
+                        }
+                    ).on_hover_text(
+                        "Toggle expert mode to adjust deconvolution parameters\nDefault values are optimized for most use cases"
                     );
+                    
+                    if toggle_response.clicked() {
+                        self.expert_mode = !self.expert_mode;
+                    }
+                    // Note: Toggle click does NOT trigger deconvolution
+                    // Only "Apply" button triggers it
                 });
 
-                ui.horizontal(|ui| {
-                    ui.label("End frequency (THz):");
-                    ui.add(
-                        egui::DragValue::new(&mut self.end_freq)
-                            .speed(0.1)
-                            .range(2.0..=10.0),
-                    );
-                });
+                // Show parameters only in expert mode
+                if self.expert_mode {
+                    ui.add_space(10.0);
+                    ui.label("Filter Bank Parameters:");
+                    ui.add_space(5.0);
 
-                ui.horizontal(|ui| {
-                    ui.label("Transition width (THz):");
-                    ui.add(
-                        egui::DragValue::new(&mut self.win_width)
-                            .speed(0.01)
-                            .range(0.1..=2.0),
-                    );
-                });
+                    ui.horizontal(|ui| {
+                        ui.label("Number of filters:");
+                        ui.add(egui::Slider::new(&mut self.n_filters, 10..=200));
+                    });
 
-                ui.separator();
+                    ui.horizontal(|ui| {
+                        ui.label("Start frequency (THz):");
+                        ui.add(
+                            egui::DragValue::new(&mut self.start_freq)
+                                .speed(0.01)
+                                .range(0.05..=2.0),
+                        );
+                    });
 
-                let button_response = ui.add(egui::Button::new("Apply"));
-                if button_response.clicked() {
-                    clicked = true;
+                    ui.horizontal(|ui| {
+                        ui.label("End frequency (THz):");
+                        ui.add(
+                            egui::DragValue::new(&mut self.end_freq)
+                                .speed(0.1)
+                                .range(2.0..=15.0),
+                        );
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Transition width (THz):");
+                        ui.add(
+                            egui::DragValue::new(&mut self.win_width)
+                                .speed(0.01)
+                                .range(0.1..=2.0),
+                        );
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Iterations:");
+                        ui.add(egui::Slider::new(&mut self.n_iterations, 10..=1000));
+                    });
+                } else {
+                    // Show info about current settings in simple mode
+                    ui.add_space(5.0);
+                    ui.label(format!("Using optimized defaults:"));
+                    ui.label(format!("  • {} filters", self.n_filters));
+                    ui.label(format!("  • {:.1} - {:.1} THz range", self.start_freq, self.end_freq));
+                    ui.label(format!("  • {} iterations", self.n_iterations));
                 }
-                button_response
-            })
-            .inner;
 
-        if clicked {
+                ui.add_space(10.0);
+
+                // Apply button - always visible, only this triggers the deconvolution
+                if ui.button("Apply").clicked() {
+                    changed = true;
+                }
+
+                ui.label("")
+            })
+            .response;
+
+        if changed {
             response.mark_changed();
         }
         response
@@ -1129,6 +1178,7 @@ mod tests {
             start_freq: 0.25,
             end_freq: 4.0,
             win_width: 0.5,
+            expert_mode: false,
         };
 
         let mut gui_settings = GuiSettingsContainer::new();

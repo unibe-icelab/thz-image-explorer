@@ -13,6 +13,14 @@ pub struct CubicSplineCoeffs {
     pub coeff_d: Array1<f32>, // d coefficient for each segment
 }
 
+/// Hybrid fit: physical model (a/f + b) + spline correction for optical defects
+#[derive(Serialize, Deserialize, Default, PartialEq, Debug, Clone)]
+pub struct HybridFit {
+    pub base_a: f32,                   // 1/f coefficient
+    pub base_b: f32,                   // constant offset
+    pub correction: CubicSplineCoeffs, // Spline for residuals
+}
+
 impl CubicSplineCoeffs {
     /// Evaluate spline at a single point with constrained extrapolation
     pub fn eval_single(&self, x: f32) -> f32 {
@@ -70,6 +78,105 @@ impl CubicSplineCoeffs {
             + self.coeff_c[left] * dx * dx
             + self.coeff_d[left] * dx * dx * dx
     }
+
+    /// Evaluate spline with constant extrapolation (for x0/y0 positions)
+    pub fn eval_single_const_extrap(&self, x: f32) -> f32 {
+        let n = self.knots.len();
+
+        if n == 0 {
+            return 0.0;
+        }
+
+        // Constant extrapolation: hold boundary values
+        if x < self.knots[0] {
+            return self.values[0];
+        }
+
+        if x > self.knots[n - 1] {
+            return self.values[n - 1];
+        }
+
+        // Interpolation: binary search for the right segment
+        let mut left = 0;
+        let mut right = n - 1;
+        while right - left > 1 {
+            let mid = (left + right) / 2;
+            if self.knots[mid] > x {
+                right = mid;
+            } else {
+                left = mid;
+            }
+        }
+
+        // Evaluate polynomial
+        let dx = x - self.knots[left];
+        self.coeff_a[left]
+            + self.coeff_b[left] * dx
+            + self.coeff_c[left] * dx * dx
+            + self.coeff_d[left] * dx * dx * dx
+    }
+}
+
+impl HybridFit {
+    /// Evaluate hybrid model at a single frequency with monotonicity constraint
+    pub fn eval_single(&self, f: f32) -> f32 {
+        // Base model: a/f + b
+        let base = self.base_a / f + self.base_b;
+
+        // Add correction from spline
+        let correction = self.eval_correction(f);
+
+        // Ensure positive result
+        (base + correction).max(1e-6)
+    }
+
+    /// Evaluate correction with constrained extrapolation
+    fn eval_correction(&self, f: f32) -> f32 {
+        let n = self.correction.knots.len();
+        if n == 0 {
+            return 0.0;
+        }
+
+        let f_min = self.correction.knots[0];
+        let f_max = self.correction.knots[n - 1];
+
+        // Inside data range: use spline as is
+        if f >= f_min && f <= f_max {
+            return self.correction.eval_single(f);
+        }
+
+        // Outside data range: extrapolate with slope constraint
+        // The total derivative is: dw/df = -a/f² + correction'(f)
+        // We need: -a/f² + correction'(f) <= 0
+        // So: correction'(f) <= a/f²
+
+        if f < f_min {
+            let dx = f - f_min;
+            let y0 = self.correction.coeff_a[0];
+            let slope = self.correction.coeff_b[0]; // First derivative at f_min
+                                                    // Maximum allowed slope to keep total derivative <= 0
+            let max_slope = self.base_a / (f * f);
+            let safe_slope = slope.min(max_slope);
+            return y0 + safe_slope * dx;
+        } else {
+            // Right extrapolation
+            let i = n - 2;
+            let dx_end = self.correction.knots[n - 1] - self.correction.knots[i];
+            // Evaluate value and derivative at right endpoint
+            let y_end = self.correction.coeff_a[i]
+                + self.correction.coeff_b[i] * dx_end
+                + self.correction.coeff_c[i] * dx_end * dx_end
+                + self.correction.coeff_d[i] * dx_end * dx_end * dx_end;
+            let slope_end = self.correction.coeff_b[i]
+                + 2.0 * self.correction.coeff_c[i] * dx_end
+                + 3.0 * self.correction.coeff_d[i] * dx_end * dx_end;
+            // Maximum allowed slope to keep total derivative <= 0
+            let max_slope = self.base_a / (f * f);
+            let safe_slope = slope_end.min(max_slope);
+            let dx = f - self.correction.knots[n - 1];
+            return y_end + safe_slope * dx;
+        }
+    }
 }
 
 /// Represents a Point Spread Function (PSF) used in spectroscopy and imaging analysis.
@@ -80,8 +187,8 @@ impl CubicSplineCoeffs {
 /// of frequency, replacing the previous filter bank approach.
 ///
 /// # Fields
-/// - `wx_spline` (*CubicSplineCoeffs*): Cubic spline coefficients for beam width in X direction
-/// - `wy_spline` (*CubicSplineCoeffs*): Cubic spline coefficients for beam width in Y direction
+/// - `wx_fit` (*HybridFit*): Hybrid fit (a/f + b + spline) for beam width in X direction
+/// - `wy_fit` (*HybridFit*): Hybrid fit (a/f + b + spline) for beam width in Y direction
 /// - `x0_spline` (*CubicSplineCoeffs*): Cubic spline coefficients for beam center in X direction
 /// - `y0_spline` (*CubicSplineCoeffs*): Cubic spline coefficients for beam center in Y direction
 ///
@@ -93,8 +200,8 @@ impl CubicSplineCoeffs {
 /// - Generate PSFs for frequency-dependent deconvolution
 #[derive(Serialize, Deserialize, Default, PartialEq, Debug, Clone)]
 pub struct PSF {
-    pub wx_spline: CubicSplineCoeffs,
-    pub wy_spline: CubicSplineCoeffs,
+    pub wx_fit: HybridFit,
+    pub wy_fit: HybridFit,
     pub x0_spline: CubicSplineCoeffs,
     pub y0_spline: CubicSplineCoeffs,
 }

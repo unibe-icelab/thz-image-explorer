@@ -139,26 +139,29 @@ pub fn export_to_vtk(
 /// Loads a Point Spread Function (PSF) from a `.npz` file.
 ///
 /// This function reads cubic spline coefficients from the `.npz` file and constructs a `PSF` object.
-/// The new format stores spline coefficients for beam widths (wx, wy) and centers (x0, y0) as
-/// functions of frequency, rather than pre-computed filter banks.
+/// The new format stores hybrid fits (base model + spline correction) for beam widths (wx, wy) and
+/// spline fits for centers (x0, y0) as functions of frequency.
 ///
 /// # Input File Format
 /// The `.npz` file must contain the following datasets:
 ///
-/// ## Beam width in X direction (wx):
-///   - `"wx_knots_thz"`: Frequency knots (THz)
-///   - `"wx_values_mm"`: Beam width values at knots (mm)
-///   - `"wx_coeff_a"`, `"wx_coeff_b"`, `"wx_coeff_c"`, `"wx_coeff_d"`: Cubic spline coefficients
+/// ## Beam width in X direction (wx) - Hybrid fit:
+///   - `"wx_base_a"`: 1/f coefficient (scalar)
+///   - `"wx_base_b"`: constant offset (scalar)
+///   - `"wx_corr_knots_thz"`: Frequency knots for correction spline (THz)
+///   - `"wx_corr_values_mm"`: Correction values at knots (mm)
+///   - `"wx_corr_coeff_a"`, `"wx_corr_coeff_b"`, `"wx_corr_coeff_c"`, `"wx_corr_coeff_d"`: Cubic spline coefficients
 ///
-/// ## Beam width in Y direction (wy):
-///   - `"wy_knots_thz"`, `"wy_values_mm"`: Knots and values
-///   - `"wy_coeff_a"`, `"wy_coeff_b"`, `"wy_coeff_c"`, `"wy_coeff_d"`: Coefficients
+/// ## Beam width in Y direction (wy) - Hybrid fit:
+///   - `"wy_base_a"`, `"wy_base_b"`: Base model parameters
+///   - `"wy_corr_knots_thz"`, `"wy_corr_values_mm"`: Knots and values for correction
+///   - `"wy_corr_coeff_a"`, `"wy_corr_coeff_b"`, `"wy_corr_coeff_c"`, `"wy_corr_coeff_d"`: Coefficients
 ///
-/// ## Beam center in X direction (x0):
+/// ## Beam center in X direction (x0) - Spline:
 ///   - `"x0_knots_thz"`, `"x0_values_mm"`: Knots and values
 ///   - `"x0_coeff_a"`, `"x0_coeff_b"`, `"x0_coeff_c"`, `"x0_coeff_d"`: Coefficients
 ///
-/// ## Beam center in Y direction (y0):
+/// ## Beam center in Y direction (y0) - Spline:
 ///   - `"y0_knots_thz"`, `"y0_values_mm"`: Knots and values
 ///   - `"y0_coeff_a"`, `"y0_coeff_b"`, `"y0_coeff_c"`, `"y0_coeff_d"`: Coefficients
 ///
@@ -166,7 +169,7 @@ pub fn export_to_vtk(
 /// * `file_path` - A reference to the file path of the `.npz` file to be loaded.
 ///
 /// # Returns
-/// * `Ok(PSF)` - A `PSF` object containing the cubic spline coefficients.
+/// * `Ok(PSF)` - A `PSF` object containing the hybrid fits and cubic spline coefficients.
 /// * `Err(Box<dyn Error>)` - An error if loading or parsing the `.npz` file fails.
 ///
 /// # Errors
@@ -180,31 +183,41 @@ pub fn export_to_vtk(
 ///
 /// let file_path = PathBuf::from("example.npz");
 /// match load_psf(&file_path) {
-///     Ok(psf) => println!("Loaded PSF with spline coefficients"),
+///     Ok(psf) => println!("Loaded PSF with hybrid fits"),
 ///     Err(err) => eprintln!("Error loading PSF: {}", err),
 /// }
 /// ```
 pub fn load_psf(file_path: &PathBuf) -> Result<PSF, Box<dyn Error>> {
     let mut npz = NpzReader::new(File::open(file_path)?)?;
 
+    // Helper to load 1D array with fallback to dynamic dimensionality
+    let load_1d_array =
+        |npz: &mut NpzReader<File>, name: &str| -> Result<Array1<f64>, Box<dyn Error>> {
+            match npz.by_name::<OwnedRepr<f64>, Ix1>(name) {
+                Ok(arr) => Ok(arr.into_dimensionality::<ndarray::Ix1>()?),
+                Err(_) => {
+                    // Fallback: try loading as dynamic array and convert
+                    let dyn_arr = npz.by_name::<OwnedRepr<f64>, ndarray::IxDyn>(name)?;
+                    let arr_1d = dyn_arr.into_dimensionality::<ndarray::Ix1>()?;
+                    Ok(arr_1d)
+                }
+            }
+        };
+
+    // Helper to load scalar value
+    let load_scalar = |npz: &mut NpzReader<File>, name: &str| -> Result<f32, Box<dyn Error>> {
+        let arr = load_1d_array(npz, name)?;
+        if arr.len() > 0 {
+            Ok(arr[0] as f32)
+        } else {
+            Err(format!("Array {} is empty", name).into())
+        }
+    };
+
     // Helper function to load a cubic spline from npz
     let load_spline = |npz: &mut NpzReader<File>,
                        prefix: &str|
      -> Result<crate::filters::psf::CubicSplineCoeffs, Box<dyn Error>> {
-        // Helper to load 1D array with fallback to dynamic dimensionality
-        let load_1d_array =
-            |npz: &mut NpzReader<File>, name: &str| -> Result<Array1<f64>, Box<dyn Error>> {
-                match npz.by_name::<OwnedRepr<f64>, Ix1>(name) {
-                    Ok(arr) => Ok(arr.into_dimensionality::<ndarray::Ix1>()?),
-                    Err(_) => {
-                        // Fallback: try loading as dynamic array and convert
-                        let dyn_arr = npz.by_name::<OwnedRepr<f64>, ndarray::IxDyn>(name)?;
-                        let arr_1d = dyn_arr.into_dimensionality::<ndarray::Ix1>()?;
-                        Ok(arr_1d)
-                    }
-                }
-            };
-
         let knots = load_1d_array(npz, &format!("{}_knots_thz", prefix))?;
         let values = load_1d_array(npz, &format!("{}_values_mm", prefix))?;
         let coeff_a = load_1d_array(npz, &format!("{}_coeff_a", prefix))?;
@@ -222,15 +235,32 @@ pub fn load_psf(file_path: &PathBuf) -> Result<PSF, Box<dyn Error>> {
         })
     };
 
-    // Load all four splines
-    let wx_spline = load_spline(&mut npz, "wx")?;
-    let wy_spline = load_spline(&mut npz, "wy")?;
+    // Helper function to load a hybrid fit from npz
+    let load_hybrid_fit = |npz: &mut NpzReader<File>,
+                           prefix: &str|
+     -> Result<crate::filters::psf::HybridFit, Box<dyn Error>> {
+        let base_a = load_scalar(npz, &format!("{}_base_a", prefix))?;
+        let base_b = load_scalar(npz, &format!("{}_base_b", prefix))?;
+        let correction = load_spline(npz, &format!("{}_corr", prefix))?;
+
+        Ok(crate::filters::psf::HybridFit {
+            base_a,
+            base_b,
+            correction,
+        })
+    };
+
+    // Load hybrid fits for beam widths
+    let wx_fit = load_hybrid_fit(&mut npz, "wx")?;
+    let wy_fit = load_hybrid_fit(&mut npz, "wy")?;
+
+    // Load spline fits for beam centers
     let x0_spline = load_spline(&mut npz, "x0")?;
     let y0_spline = load_spline(&mut npz, "y0")?;
 
     Ok(PSF {
-        wx_spline,
-        wy_spline,
+        wx_fit,
+        wy_fit,
         x0_spline,
         y0_spline,
     })

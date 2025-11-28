@@ -584,8 +584,25 @@ pub fn draw_filters(
                             thread_communication.filters_active_lock.write()
                         {
                             if let Some(active) = filters_active.get_mut(uuid) {
+                                let old_active = *active;
                                 ui.add(toggle(active));
                                 filter_is_active = *active;
+                                // Check if this is the Deconvolution filter
+                                let is_deconvolution =
+                                    filter.config().name.contains("Deconvolution");
+                                // Trigger filter recalculation if toggle state changed:
+                                // - For normal filters: always trigger
+                                // - For Deconvolution: only when DISABLING (to remove its effect)
+                                //   When enabling, user must click Apply button
+                                let should_update = old_active != *active
+                                    && (!is_deconvolution || (is_deconvolution && !*active));
+                                if should_update {
+                                    drop(filters_active);
+                                    send_latest_config(
+                                        &thread_communication,
+                                        ConfigCommand::UpdateFilter(uuid.clone()),
+                                    );
+                                }
                             }
                             if let Ok(filter_computation_time) =
                                 thread_communication.filter_computation_time_lock.read()
