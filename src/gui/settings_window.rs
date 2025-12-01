@@ -95,36 +95,44 @@ pub fn settings_window(
                         .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
                         .show(|ui: &mut egui::Ui| {
                             // Set max width for the popup
-                            ui.set_max_width(400.0);
+                            ui.set_max_width(500.0);
 
-                            // Add description text
+                            ui.heading("PSF File Format");
+                            ui.label("The .npz file must contain the following datasets:");
+                            ui.add_space(8.0);
 
-                            // The PSF format is an npz file containing the following data structure:
-                            // - 'low_cut': float, low cut-off frequency
-                            // - 'high_cut': float, high cut-off frequency
-                            // - 'start_freq': float, start frequency for filters
-                            // - 'end_freq': float, end frequency for filters
-                            // - 'n_filters': int, number of filters
-                            // - 'filters': ndarray, filter coefficients, shape (n_filters, len(times_psf) // 5)
-                            // - 'filt_freqs': ndarray, filter frequencies, shape (n_filters,)
-                            // - '[x_0, w_x]': ndarray, fitted x parameters, shape (n_filters, 2)
-                            // - '[y_0, w_y]': ndarray, fitted y parameters, shape (n_filters, 2)
+                            ui.label(
+                                egui::RichText::new("Beam width in X (wx) - Hybrid fit:").strong(),
+                            );
+                            ui.label("  • 'wx_base_a': 1/f coefficient (scalar)");
+                            ui.label("  • 'wx_base_b': constant offset (scalar)");
+                            ui.label(
+                                "  • 'wx_corr_knots_thz': frequency knots for correction (THz)",
+                            );
+                            ui.label("  • 'wx_corr_values_mm': correction values at knots (mm)");
+                            ui.label("  • 'wx_corr_coeff_a/b/c/d': cubic spline coefficients");
+                            ui.add_space(4.0);
 
-                            ui.label("The PSF format is an npz file containing:");
-                            ui.label("- 'low_cut': float, low cut-off frequency");
-                            ui.label("- 'high_cut': float, high cut-off frequency");
-                            ui.label("- 'start_freq': float, start frequency for filters");
-                            ui.label("- 'end_freq': float, end frequency for filters");
-                            ui.label("PSF file format (new spline-based format):");
-                            ui.label("The .npz file must contain cubic spline coefficients:");
-                            ui.label("- 'wx_knots_thz', 'wx_values_mm': X beam width spline");
-                            ui.label("- 'wx_coeff_a/b/c/d': X beam width spline coefficients");
-                            ui.label("- 'wy_knots_thz', 'wy_values_mm': Y beam width spline");
-                            ui.label("- 'wy_coeff_a/b/c/d': Y beam width spline coefficients");
-                            ui.label("- 'x0_knots_thz', 'x0_values_mm': X center spline");
-                            ui.label("- 'x0_coeff_a/b/c/d': X center spline coefficients");
-                            ui.label("- 'y0_knots_thz', 'y0_values_mm': Y center spline");
-                            ui.label("- 'y0_coeff_a/b/c/d': Y center spline coefficients");
+                            ui.label(
+                                egui::RichText::new("Beam width in Y (wy) - Hybrid fit:").strong(),
+                            );
+                            ui.label("  • 'wy_base_a', 'wy_base_b': base model parameters");
+                            ui.label("  • 'wy_corr_knots_thz', 'wy_corr_values_mm': knots/values");
+                            ui.label("  • 'wy_corr_coeff_a/b/c/d': cubic spline coefficients");
+                            ui.add_space(4.0);
+
+                            ui.label(
+                                egui::RichText::new("Beam center in X (x0) - Spline:").strong(),
+                            );
+                            ui.label("  • 'x0_knots_thz', 'x0_values_mm': knots and values");
+                            ui.label("  • 'x0_coeff_a/b/c/d': cubic spline coefficients");
+                            ui.add_space(4.0);
+
+                            ui.label(
+                                egui::RichText::new("Beam center in Y (y0) - Spline:").strong(),
+                            );
+                            ui.label("  • 'y0_knots_thz', 'y0_values_mm': knots and values");
+                            ui.label("  • 'y0_coeff_a/b/c/d': cubic spline coefficients");
                         });
 
                     if thread_communication
