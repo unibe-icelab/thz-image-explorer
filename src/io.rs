@@ -66,7 +66,7 @@ pub fn export_to_vtk(
     let mut opacities_vec = Vec::new();
 
     for instance in instances {
-        let pos = instance.pos_scale;
+        let pos = instance.position;
         points_vec.push(pos[0] as f64);
         points_vec.push(pos[1] as f64);
         points_vec.push(pos[2] as f64);

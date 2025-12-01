@@ -10,7 +10,7 @@ use crate::math_tools::{
 use crate::update::check_for_software_updates;
 use crate::PlotDataContainer;
 use bevy::app::AppExit;
-use bevy::prelude::EventWriter;
+use bevy::prelude::MessageWriter;
 use bevy_egui::egui;
 use bevy_egui::egui::panel::Side;
 use bevy_egui::egui::{DragValue, Stroke, Vec2};
@@ -24,7 +24,7 @@ pub fn right_panel(
     explorer: &mut THzImageExplorer,
     right_panel_width: &f32,
     thread_communication: &mut ThreadCommunication,
-    exit: &mut EventWriter<AppExit>,
+    exit: &mut MessageWriter<AppExit>,
 ) {
     let mut data = PlotDataContainer::default();
     if let Ok(read_guard) = thread_communication.data_lock.read() {
