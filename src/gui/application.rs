@@ -37,6 +37,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub const SAFETY_ORANGE: Color32 = Color32::from_rgb(255, 95, 21);
+pub const LIGHT_THEME_YELLOW: Color32 = Color32::from_rgb(240, 200, 0);
+pub const LIGHT_THEME_GREEN: Color32 = Color32::from_rgb(0, 120, 0);
 
 /// Represents the state of the file dialog for opening, saving, or working with PSF files.
 #[derive(Clone)]
@@ -233,7 +235,7 @@ pub fn update_gui(
     if current_preference != thread_communication.gui_settings.theme_preference {
         ctx.set_theme(thread_communication.gui_settings.theme_preference);
     }
-    
+
     // ============================================================================
     // TEMPORARY WORKAROUND: Remove when bevy_egui supports system theme natively
     // Continuously check for system theme changes when System preference is active
@@ -314,13 +316,18 @@ pub fn update_gui(
 
                             // Show info icon and handle clicks
                             let info_button = if has_warnings {
+                                let warning_color = if ui.ctx().style().visuals.dark_mode {
+                                    egui::Color32::YELLOW
+                                } else {
+                                    LIGHT_THEME_YELLOW
+                                };
                                 ui.label(
                                     egui::RichText::new(format!(
                                         "{}",
                                         egui_phosphor::regular::WARNING_CIRCLE
                                     ))
                                         .heading()
-                                        .color(egui::Color32::YELLOW),
+                                        .color(warning_color),
                                 )
                             } else {
                                 // has errors
@@ -346,7 +353,14 @@ pub fn update_gui(
                                     let (level, message) = message.clone();
 
                                     let (prefix, color) = match level {
-                                        log::Level::Warn => ("Warning", egui::Color32::YELLOW),
+                                        log::Level::Warn => {
+                                            let warning_color = if ui.ctx().style().visuals.dark_mode {
+                                                egui::Color32::YELLOW
+                                            } else {
+                                                LIGHT_THEME_YELLOW
+                                            };
+                                            ("Warning", warning_color)
+                                        },
                                         log::Level::Error => ("Error", egui::Color32::RED),
                                         _ => ("", egui::Color32::WHITE),
                                     };
@@ -364,34 +378,42 @@ pub fn update_gui(
                             // Clear warnings/errors when popup is closed
                             if explorer.error_window_was_open && !is_popup_open.is_some() {
                                 // clear it
-                                explorer.last_error_message = message;
-                            }
+                            explorer.last_error_message = message;
+                        }
 
                             explorer.error_window_was_open = is_popup_open.is_some();
                         } else {
+                            let success_color = if ui.ctx().style().visuals.dark_mode {
+                                egui::Color32::GREEN
+                            } else {
+                                LIGHT_THEME_GREEN
+                            };
                             ui.label(
                                 egui::RichText::new(format!(
                                     "{}",
                                     egui_phosphor::regular::CHECK_CIRCLE
                                 ))
                                     .heading()
-                                    .color(egui::Color32::GREEN),
+                                    .color(success_color),
                             )
                                 .on_hover_text("No Errors!");
                         }
                     } else {
+                        let success_color = if ui.ctx().style().visuals.dark_mode {
+                            egui::Color32::GREEN
+                        } else {
+                            LIGHT_THEME_GREEN
+                        };
                         ui.label(
                             egui::RichText::new(format!(
                                 "{}",
                                 egui_phosphor::regular::CHECK_CIRCLE
                             ))
                                 .heading()
-                                .color(egui::Color32::GREEN),
+                                .color(success_color),
                         )
                             .on_hover_text("No Errors!");
-                    }
-
-                    ui.add_space(10.0);
+                    }                    ui.add_space(10.0);
                     let current_version =
                         Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Version::new(0, 0, 1));
 
