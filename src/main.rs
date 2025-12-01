@@ -20,7 +20,7 @@ use bevy::render::{RenderDebugFlags, RenderPlugin};
 use bevy::window::ExitCondition;
 use bevy::winit::EventLoopProxyWrapper;
 use bevy::winit::WinitSettings;
-use bevy_egui::egui::{vec2, Visuals};
+use bevy_egui::egui::vec2;
 use bevy_egui::{egui, EguiPrimaryContextPass, EguiStartupSet};
 use bevy_egui::{EguiContexts, EguiPlugin};
 use bevy_panorbit_camera::PanOrbitCameraPlugin;
@@ -67,13 +67,14 @@ fn setup_camera(mut commands: Commands) {
     commands.spawn(Camera2d);
 }
 
-fn setup_fonts(mut contexts: EguiContexts) {
+fn setup_fonts(mut contexts: EguiContexts, thread_communication: Res<ThreadCommunication>) {
     let mut fonts = egui::FontDefinitions::default();
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
     if let Ok(ctx_mut) = contexts.ctx_mut() {
         ctx_mut.set_fonts(fonts);
         egui_extras::install_image_loaders(&ctx_mut);
-        ctx_mut.set_visuals(Visuals::dark());
+        // Apply saved theme preference instead of forcing dark mode
+        ctx_mut.set_theme(thread_communication.gui_settings.theme_preference);
     }
 }
 

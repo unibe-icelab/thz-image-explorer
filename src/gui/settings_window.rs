@@ -21,7 +21,10 @@ pub fn settings_window(
     exit: &mut EventWriter<AppExit>,
 ) -> Option<InnerResponse<Option<()>>> {
     egui::Window::new("Settings")
-        .fixed_size(Vec2 { x: 400.0, y: 1000.0 })
+        .fixed_size(Vec2 {
+            x: 400.0,
+            y: 1000.0,
+        })
         .anchor(Align2::CENTER_CENTER, Vec2 { x: 0.0, y: 0.0 })
         .collapsible(false)
         .show(ctx, |ui| {
@@ -64,8 +67,7 @@ pub fn settings_window(
                     Popup::menu(&info_button)
                         .id(popup_id)
                         .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
-                        .show(
-                        |ui: &mut egui::Ui| {
+                        .show(|ui: &mut egui::Ui| {
                             // Set max width for the popup
                             ui.set_max_width(400.0);
 
@@ -97,10 +99,16 @@ pub fn settings_window(
                             ui.label("- 'x0_coeff_a/b/c/d': X center spline coefficients");
                             ui.label("- 'y0_knots_thz', 'y0_values_mm': Y center spline");
                             ui.label("- 'y0_coeff_a/b/c/d': Y center spline coefficients");
-                        },
-                    );
+                        });
 
-                    if thread_communication.gui_settings.psf.wx_fit.correction.knots.is_empty() {
+                    if thread_communication
+                        .gui_settings
+                        .psf
+                        .wx_fit
+                        .correction
+                        .knots
+                        .is_empty()
+                    {
                         ui.colored_label(egui::Color32::RED, "No PSF loaded.");
                     } else {
                         ui.label(
@@ -123,7 +131,6 @@ pub fn settings_window(
             egui::Grid::new("update settings")
                 .striped(true)
                 .show(ui, |ui| {
-
                     let branch = option_env!("GIT_BRANCH").unwrap_or("(No Git Branch Found)");
                     let commit = option_env!("GIT_HASH").unwrap_or("(No Git Hash Found)");
                     ui.label(format!("Build: {} @ {}", branch, commit));
@@ -133,7 +140,8 @@ pub fn settings_window(
                         explorer.new_release = check_for_software_updates();
                     }
 
-                    let current_version = Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Version::new(0, 0, 1));
+                    let current_version =
+                        Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Version::new(0, 0, 1));
                     ui.label(format!("Current version: {}", current_version));
                     ui.end_row();
 
@@ -177,19 +185,21 @@ pub fn settings_window(
             ui.end_row();
 
             ui.vertical_centered(|ui| {
-                    let escape_key_pressed = ui.input(|i| i.key_pressed(egui::Key::Escape)) && explorer.update_text.is_empty();
-                    ui.add_enabled_ui(explorer.update_text.is_empty(), |ui| {
-                        if ui.button("Close").clicked() || escape_key_pressed {
-                            explorer.settings_window_open = false;
-                            explorer.update_text = "".to_string();
+                let escape_key_pressed = ui.input(|i| i.key_pressed(egui::Key::Escape))
+                    && explorer.update_text.is_empty();
+                ui.add_enabled_ui(explorer.update_text.is_empty(), |ui| {
+                    if ui.button("Close").clicked() || escape_key_pressed {
+                        explorer.settings_window_open = false;
+                        explorer.update_text = "".to_string();
 
-                            thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
+                        thread_communication.gui_settings.dark_mode =
+                            ui.visuals() == &Visuals::dark();
 
-                            let _ = thread_communication
-                                .gui_settings
-                                .save(&APP_INFO, "config/gui");
-                        }
-                    });
+                        let _ = thread_communication
+                            .gui_settings
+                            .save(&APP_INFO, "config/gui");
+                    }
+                });
 
                 #[cfg(feature = "self_update")]
                 if !explorer.update_text.is_empty() && ui.button("Restart").clicked() {
