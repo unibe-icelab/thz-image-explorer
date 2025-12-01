@@ -228,6 +228,22 @@ pub fn update_gui(
 
     let ctx = contexts.ctx_mut().unwrap();
 
+    // Ensure the theme preference is applied if it changed
+    let current_preference = ctx.options(|opt| opt.theme_preference);
+    if current_preference != thread_communication.gui_settings.theme_preference {
+        ctx.set_theme(thread_communication.gui_settings.theme_preference);
+    }
+    
+    // ============================================================================
+    // TEMPORARY WORKAROUND: Remove when bevy_egui supports system theme natively
+    // Continuously check for system theme changes when System preference is active
+    // ============================================================================
+    crate::system_theme::apply_system_theme_if_needed(
+        ctx,
+        thread_communication.gui_settings.theme_preference,
+    );
+    // ============================================================================
+
     let left_panel_width = 300.0;
     let right_panel_width = 500.0;
 

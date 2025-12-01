@@ -6,7 +6,7 @@ use crate::APP_INFO;
 use bevy::app::AppExit;
 use bevy::prelude::MessageWriter;
 use bevy_egui::egui;
-use bevy_egui::egui::{vec2, Align2, InnerResponse, Popup, PopupCloseBehavior, Vec2, Visuals};
+use bevy_egui::egui::{vec2, Align2, InnerResponse, Popup, PopupCloseBehavior, Vec2};
 use egui_theme_switch::ThemeSwitch;
 use preferences::Preferences;
 #[cfg(feature = "self_update")]
@@ -40,8 +40,34 @@ pub fn settings_window(
                     {
                         ui.ctx()
                             .set_theme(thread_communication.gui_settings.theme_preference);
+
+                        // ====================================================================
+                        // TEMPORARY WORKAROUND: Remove when bevy_egui supports system theme
+                        // ====================================================================
+                        // For System theme, detect and apply OS theme
+                        if thread_communication.gui_settings.theme_preference
+                            == egui::ThemePreference::System
+                        {
+                            crate::system_theme::apply_system_theme_if_needed(
+                                ui.ctx(),
+                                thread_communication.gui_settings.theme_preference,
+                            );
+                        } else {
+                            // For Dark/Light modes, explicitly set visuals
+                            let is_dark = thread_communication.gui_settings.theme_preference
+                                == egui::ThemePreference::Dark;
+                            ui.ctx().set_visuals(if is_dark {
+                                egui::Visuals::dark()
+                            } else {
+                                egui::Visuals::light()
+                            });
+                            // Re-apply handle shape
+                            ui.ctx().style_mut(|style| {
+                                style.visuals.handle_shape = egui::style::HandleShape::Circle;
+                            });
+                        }
+                        // ====================================================================
                     };
-                    thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
 
                     ui.end_row();
                     ui.end_row();
@@ -191,9 +217,6 @@ pub fn settings_window(
                     if ui.button("Close").clicked() || escape_key_pressed {
                         explorer.settings_window_open = false;
                         explorer.update_text = "".to_string();
-
-                        thread_communication.gui_settings.dark_mode =
-                            ui.visuals() == &Visuals::dark();
 
                         let _ = thread_communication
                             .gui_settings

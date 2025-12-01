@@ -44,6 +44,11 @@ mod filters;
 mod gui;
 mod io;
 mod math_tools;
+// ============================================================================
+// TEMPORARY WORKAROUND: Remove when bevy_egui supports system theme natively
+// ============================================================================
+mod system_theme;
+// ============================================================================
 mod update;
 
 const APP_INFO: AppInfo = AppInfo {
@@ -75,14 +80,22 @@ fn setup_fonts(mut contexts: EguiContexts, thread_communication: Res<ThreadCommu
         ctx_mut.set_fonts(fonts);
         egui_extras::install_image_loaders(&ctx_mut);
 
-        // Get the current visuals (light or dark mode)
-        let mut visuals = ctx_mut.style().visuals.clone(); // to keep current settings
+        // Apply the user's saved theme preference
+        ctx_mut.set_theme(thread_communication.gui_settings.theme_preference);
 
-        // Set the global handle shape for sliders
-        visuals.handle_shape = HandleShape::Circle;
+        // ========================================================================
+        // TEMPORARY WORKAROUND: Remove when bevy_egui supports system theme
+        // ========================================================================
+        system_theme::apply_system_theme_if_needed(
+            ctx_mut,
+            thread_communication.gui_settings.theme_preference,
+        );
+        // ========================================================================
 
-        // Apply the updated visuals to the context
-        ctx_mut.set_visuals(visuals);
+        // Modify handle shape in both dark and light styles
+        ctx_mut.all_styles_mut(|styles| {
+            styles.visuals.handle_shape = HandleShape::Circle;
+        });
     }
 }
 
