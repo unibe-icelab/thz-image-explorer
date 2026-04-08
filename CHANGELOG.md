@@ -4,6 +4,7 @@ All notable changes to the `THz Image Explorer` project will be documented in th
 
 # Unreleased 1.1.X - X.X.2025
 
+* Fix DotTHz Quick Look plugin for macOS Tahoe
 * ...
 
 # 1.1.0 - 28.11.2025
