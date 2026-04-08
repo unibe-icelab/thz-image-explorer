@@ -53,7 +53,7 @@ const APP_INFO: AppInfo = AppInfo {
 
 fn spawn_data_thread(
     state: ResMut<ThreadCommunication>,
-    event_loop_proxy: Res<EventLoopProxyWrapper<bevy::winit::WakeUp>>,
+    event_loop_proxy: Res<EventLoopProxyWrapper>,
 ) {
     let state = state.clone();
     let proxy = event_loop_proxy.clone();
@@ -76,7 +76,7 @@ fn setup_fonts(mut contexts: EguiContexts) {
         egui_extras::install_image_loaders(&ctx_mut);
 
         // Get the current visuals (light or dark mode)
-        let mut visuals = ctx_mut.style().visuals.clone(); // to keep current settings
+        let mut visuals = ctx_mut.global_style().visuals.clone(); // to keep current settings
 
         // Set the global handle shape for sliders
         visuals.handle_shape = HandleShape::Circle;
@@ -307,10 +307,10 @@ fn main() {
         .add_plugins(
             DefaultPlugins
                 .set(RenderPlugin {
-                    render_creation: RenderCreation::Automatic(WgpuSettings {
+                    render_creation: RenderCreation::Automatic(Box::new(WgpuSettings {
                         features: wgpu_features,
                         ..Default::default()
-                    }),
+                    })),
                     synchronous_pipeline_compilation: false,
                     debug_flags: RenderDebugFlags::all(),
                 })
@@ -341,7 +341,7 @@ fn main() {
         .insert_resource(OpacityThreshold(0.1))
         .insert_resource(InstanceContainer(vec![], 1.0, 1.0, 1.0))
         .insert_resource(CameraInputAllowed(false))
-        .insert_non_send_resource(THzImageExplorer::new(thread_communication))
+        .insert_non_send(THzImageExplorer::new(thread_communication))
         .insert_resource(SceneVisibility(false))
         .add_systems(
             PreStartup,

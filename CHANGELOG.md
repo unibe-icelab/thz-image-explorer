@@ -2,9 +2,13 @@
 
 All notable changes to the `THz Image Explorer` project will be documented in this file.
 
-# Unreleased 1.1.X - X.X.2025
+# Unreleased 1.2.X - X.X.2026
 
 * ...
+
+# 1.2.0 - 2.4.2026
+
+* Update dependencies to `bevy 0.18`, `bevy-egui 0.39`
 
 # 1.1.0 - 28.11.2025
 

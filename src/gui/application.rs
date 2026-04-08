@@ -227,6 +227,14 @@ pub fn update_gui(
     let cube_preview_texture_id = contexts.image_id(&cube_preview_image.0).unwrap();
 
     let ctx = contexts.ctx_mut().unwrap();
+    let viewport_rect = ctx.viewport_rect();
+    let mut ui = egui::Ui::new(
+        ctx.clone(),
+        "viewport".into(),
+        egui::UiBuilder::new()
+            .layer_id(egui::LayerId::background())
+            .max_rect(viewport_rect),
+    );
 
     let left_panel_width = 300.0;
     let right_panel_width = 500.0;
@@ -235,9 +243,9 @@ pub fn update_gui(
     let bottom_panel_height = text_height + 16.0; // Add some padding
 
     // Add bottom panel
-    egui::TopBottomPanel::bottom("bottom_panel")
-        .exact_height(bottom_panel_height)
-        .show(ctx, |ui| {
+    egui::Panel::bottom("bottom_panel")
+        .exact_size(bottom_panel_height)
+        .show_inside(&mut ui, |ui| {
             ui.horizontal_centered(|ui| {
                 let path = thread_communication.gui_settings.selected_path.clone();
 
@@ -386,7 +394,7 @@ pub fn update_gui(
 
     center_panel(
         &cube_preview_texture_id,
-        &ctx,
+        &mut ui,
         &right_panel_width,
         &left_panel_width,
         &mut explorer,
@@ -396,7 +404,7 @@ pub fn update_gui(
     );
 
     left_panel(
-        ctx,
+        &mut ui,
         &mut explorer,
         &left_panel_width,
         &mut image_state,
@@ -405,15 +413,15 @@ pub fn update_gui(
     );
 
     right_panel(
-        ctx,
+        &mut ui,
         &mut explorer,
         &right_panel_width,
         &mut thread_communication,
         &mut exit,
     );
 
-    thread_communication.gui_settings.x = ctx.used_size().x as u32;
-    thread_communication.gui_settings.y = ctx.used_size().y as u32;
+    thread_communication.gui_settings.x = ctx.globally_used_rect().width() as u32;
+    thread_communication.gui_settings.y = ctx.globally_used_rect().height() as u32;
 }
 
 /// Main application struct for the THz Image Explorer GUI.

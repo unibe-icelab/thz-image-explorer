@@ -6,7 +6,6 @@ use crate::gui::toggle_widget::toggle_ui;
 use crate::io::find_files_with_same_extension;
 use crate::PlotDataContainer;
 use bevy_egui::egui;
-use bevy_egui::egui::panel::Side;
 use bevy_egui::egui::TextStyle;
 use dotthz::DotthzMetaData;
 use egui_extras::{Column, TableBuilder};
@@ -98,7 +97,7 @@ pub fn truncate_filename(ui: &egui::Ui, item: &Path, max_length: f32) -> String 
 
 #[allow(clippy::too_many_arguments)]
 pub fn left_panel(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     explorer: &mut THzImageExplorer,
     left_panel_width: &f32,
     image_state: &mut ImageState,
@@ -130,11 +129,11 @@ pub fn left_panel(
         data.hk.ambient_pressure = pressure.parse().unwrap();
     }
 
-    egui::SidePanel::new(Side::Left, "Left Panel Settings")
-        .min_width(*left_panel_width)
-        .max_width(*left_panel_width)
+    egui::Panel::left("Left Panel Settings")
+        .min_size(*left_panel_width)
+        .max_size(*left_panel_width)
         .resizable(false)
-        .show(ctx, |ui| {
+        .show_inside(ui, |ui| {
             ui.add_enabled_ui(true, |ui| {
                 ui.heading("Data Source");
                 ui.add_space(10.0);
@@ -279,7 +278,7 @@ pub fn left_panel(
                     explorer.file_dialog.set_right_panel_width(300.0);
                 }
 
-                ctx.input(|i| {
+                ui.ctx().input(|i| {
                     // Check if files were dropped
                     if let Some(dropped_file) = i.raw.dropped_files.last() {
                         let path = dropped_file.clone().path.unwrap();

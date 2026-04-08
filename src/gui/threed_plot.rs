@@ -5,7 +5,7 @@ use bevy::camera::visibility::RenderLayers;
 use bevy::camera::ScalingMode;
 use bevy::camera::{ImageRenderTarget, RenderTarget};
 use bevy::window::PrimaryWindow;
-use bevy::winit::EventLoopProxyWrapper;
+use bevy::winit::{EventLoopProxyWrapper, WinitUserEvent};
 use bevy::{prelude::*, render::render_resource::*};
 use bevy_egui::egui::{epaint, Popup, PopupCloseBehavior, Ui};
 use bevy_egui::{egui, EguiUserTextures};
@@ -305,12 +305,6 @@ pub fn setup(
         // NoFrustumCulling,
     ));
 
-    commands.insert_resource(AmbientLight {
-        color: Color::WHITE,
-        brightness: 2.0, // Increase this to wash out shadows
-        affects_lightmapped_meshes: false,
-    });
-
     let size = Extent3d {
         width: 512,
         height: 512,
@@ -398,7 +392,7 @@ pub fn animate(
     time: Res<Time>,
     mut pan_orbit_query: Query<&mut PanOrbitCamera>,
     thread_communication: Res<ThreadCommunication>,
-    event_loop_proxy: Res<EventLoopProxyWrapper<bevy::winit::WakeUp>>,
+    event_loop_proxy: Res<EventLoopProxyWrapper>,
 ) {
     if thread_communication.gui_settings.tab == Tab::ThreeD
         && thread_communication.gui_settings.animation_enabled
@@ -410,7 +404,7 @@ pub fn animate(
             // Force camera to update its transform
             pan_orbit.force_update = true;
         }
-        let _ = event_loop_proxy.send_event(bevy::winit::WakeUp); // Wakes up the event loop
+        let _ = event_loop_proxy.send_event(WinitUserEvent::WakeUp); // Wakes up the event loop
     }
 }
 

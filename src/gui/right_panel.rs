@@ -12,7 +12,6 @@ use crate::PlotDataContainer;
 use bevy::app::AppExit;
 use bevy::prelude::MessageWriter;
 use bevy_egui::egui;
-use bevy_egui::egui::panel::Side;
 use bevy_egui::egui::{DragValue, Stroke, Vec2};
 use egui_double_slider::DoubleSlider;
 use egui_plot::{Line, LineStyle, Plot, PlotPoints, VLine};
@@ -20,7 +19,7 @@ use ndarray::Array1;
 
 #[allow(clippy::too_many_arguments)]
 pub fn right_panel(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     explorer: &mut THzImageExplorer,
     right_panel_width: &f32,
     thread_communication: &mut ThreadCommunication,
@@ -31,11 +30,11 @@ pub fn right_panel(
         data = read_guard.clone();
     }
 
-    egui::SidePanel::new(Side::Right, "Right Panel Settings")
-        .min_width(*right_panel_width)
-        .max_width(*right_panel_width)
+    egui::Panel::right( "Right Panel Settings")
+        .min_size(*right_panel_width)
+        .max_size(*right_panel_width)
         .resizable(false)
-        .show(ctx, |ui| {
+        .show_inside(ui, |ui| {
             ui.add_enabled_ui(true, |ui| {
                 ui.horizontal(|ui| {
                     ui.heading("Analysis");

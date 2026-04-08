@@ -816,7 +816,7 @@ pub fn optical_properties_tab(
 #[allow(clippy::too_many_arguments)]
 pub fn center_panel(
     cube_preview_texture_id: &epaint::TextureId,
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     right_panel_width: &f32,
     left_panel_width: &f32,
     explorer: &mut THzImageExplorer,
@@ -824,7 +824,7 @@ pub fn center_panel(
     cam_input: &mut ResMut<CameraInputAllowed>,
     thread_communication: &mut ResMut<ThreadCommunication>,
 ) {
-    egui::CentralPanel::default().show(ctx, |ui| {
+    egui::CentralPanel::default().show_inside(ui, |ui| {
         let window_height = ui.available_height();
         let height = ui.available_size().y * 0.45;
         let spacing = (ui.available_size().y - 2.0 * height) / 3.0 - 10.0;
