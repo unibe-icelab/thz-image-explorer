@@ -2,8 +2,9 @@
 
 All notable changes to the `THz Image Explorer` project will be documented in this file.
 
-# Unreleased 1.1.X - X.X.2025
+# Unreleased 1.2.X - X.X.2025
 
+* Implement PSF parameters for deconvolution
 * ...
 
 # 1.1.0 - 28.11.2025
