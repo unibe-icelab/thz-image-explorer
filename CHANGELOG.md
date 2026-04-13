@@ -4,7 +4,7 @@ All notable changes to the `THz Image Explorer` project will be documented in th
 
 # Unreleased 1.2.X - X.X.2025
 
-* Implement PSF parameters for deconvolution
+* Fix DotTHz Quick Look plugin for macOS Tahoe
 * ...
 
 # 1.1.0 - 28.11.2025
