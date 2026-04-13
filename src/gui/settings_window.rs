@@ -6,7 +6,7 @@ use crate::APP_INFO;
 use bevy::app::AppExit;
 use bevy::prelude::MessageWriter;
 use bevy_egui::egui;
-use bevy_egui::egui::{vec2, Align2, InnerResponse, Popup, PopupCloseBehavior, Vec2, Visuals};
+use bevy_egui::egui::{vec2, Align2, InnerResponse, Popup, PopupCloseBehavior, Vec2};
 use egui_theme_switch::ThemeSwitch;
 use preferences::Preferences;
 #[cfg(feature = "self_update")]
@@ -21,7 +21,10 @@ pub fn settings_window(
     exit: &mut MessageWriter<AppExit>,
 ) -> Option<InnerResponse<Option<()>>> {
     egui::Window::new("Settings")
-        .fixed_size(Vec2 { x: 400.0, y: 1000.0 })
+        .fixed_size(Vec2 {
+            x: 400.0,
+            y: 1000.0,
+        })
         .anchor(Align2::CENTER_CENTER, Vec2 { x: 0.0, y: 0.0 })
         .collapsible(false)
         .show(ctx, |ui| {
@@ -37,8 +40,34 @@ pub fn settings_window(
                     {
                         ui.ctx()
                             .set_theme(thread_communication.gui_settings.theme_preference);
+
+                        // ====================================================================
+                        // TEMPORARY WORKAROUND: Remove when bevy_egui supports system theme
+                        // ====================================================================
+                        // For System theme, detect and apply OS theme
+                        if thread_communication.gui_settings.theme_preference
+                            == egui::ThemePreference::System
+                        {
+                            crate::system_theme::apply_system_theme_if_needed(
+                                ui.ctx(),
+                                thread_communication.gui_settings.theme_preference,
+                            );
+                        } else {
+                            // For Dark/Light modes, explicitly set visuals
+                            let is_dark = thread_communication.gui_settings.theme_preference
+                                == egui::ThemePreference::Dark;
+                            ui.ctx().set_visuals(if is_dark {
+                                egui::Visuals::dark()
+                            } else {
+                                egui::Visuals::light()
+                            });
+                            // Re-apply handle shape
+                            ui.ctx().style_mut(|style| {
+                                style.visuals.handle_shape = egui::style::HandleShape::Circle;
+                            });
+                        }
+                        // ====================================================================
                     };
-                    thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
 
                     ui.end_row();
                     ui.end_row();
@@ -64,38 +93,56 @@ pub fn settings_window(
                     Popup::menu(&info_button)
                         .id(popup_id)
                         .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
-                        .show(
-                        |ui: &mut egui::Ui| {
+                        .show(|ui: &mut egui::Ui| {
                             // Set max width for the popup
-                            ui.set_max_width(400.0);
+                            ui.set_max_width(500.0);
 
-                            // Add description text
+                            ui.heading("PSF File Format");
+                            ui.label("The .npz file must contain the following datasets:");
+                            ui.add_space(8.0);
 
-                            // The PSF format is an npz file containing the following data structure:
-                            // - 'low_cut': float, low cut-off frequency
-                            // - 'high_cut': float, high cut-off frequency
-                            // - 'start_freq': float, start frequency for filters
-                            // - 'end_freq': float, end frequency for filters
-                            // - 'n_filters': int, number of filters
-                            // - 'filters': ndarray, filter coefficients, shape (n_filters, len(times_psf) // 5)
-                            // - 'filt_freqs': ndarray, filter frequencies, shape (n_filters,)
-                            // - '[x_0, w_x]': ndarray, fitted x parameters, shape (n_filters, 2)
-                            // - '[y_0, w_y]': ndarray, fitted y parameters, shape (n_filters, 2)
+                            ui.label(
+                                egui::RichText::new("Beam width in X (wx) - Hybrid fit:").strong(),
+                            );
+                            ui.label("  • 'wx_base_a': 1/f coefficient (scalar)");
+                            ui.label("  • 'wx_base_b': constant offset (scalar)");
+                            ui.label(
+                                "  • 'wx_corr_knots_thz': frequency knots for correction (THz)",
+                            );
+                            ui.label("  • 'wx_corr_values_mm': correction values at knots (mm)");
+                            ui.label("  • 'wx_corr_coeff_a/b/c/d': cubic spline coefficients");
+                            ui.add_space(4.0);
 
-                            ui.label("The PSF format is an npz file containing:");
-                            ui.label("- 'low_cut': float, low cut-off frequency");
-                            ui.label("- 'high_cut': float, high cut-off frequency");
-                            ui.label("- 'start_freq': float, start frequency for filters");
-                            ui.label("- 'end_freq': float, end frequency for filters");
-                            ui.label("- 'n_filters': int, number of filters");
-                            ui.label("- 'filters': ndarray, filter coefficients, shape (n_filters, len(times_psf) // 5)");
-                            ui.label("- 'filt_freqs': ndarray, filter frequencies, shape (n_filters,)");
-                            ui.label("- '[x_0, w_x]': ndarray, fitted x parameters, shape (n_filters, 2)");
-                            ui.label("- '[y_0, w_y]': ndarray, fitted y parameters, shape (n_filters, 2)");
-                        },
-                    );
+                            ui.label(
+                                egui::RichText::new("Beam width in Y (wy) - Hybrid fit:").strong(),
+                            );
+                            ui.label("  • 'wy_base_a', 'wy_base_b': base model parameters");
+                            ui.label("  • 'wy_corr_knots_thz', 'wy_corr_values_mm': knots/values");
+                            ui.label("  • 'wy_corr_coeff_a/b/c/d': cubic spline coefficients");
+                            ui.add_space(4.0);
 
-                    if thread_communication.gui_settings.psf.popt_x.is_empty() {
+                            ui.label(
+                                egui::RichText::new("Beam center in X (x0) - Spline:").strong(),
+                            );
+                            ui.label("  • 'x0_knots_thz', 'x0_values_mm': knots and values");
+                            ui.label("  • 'x0_coeff_a/b/c/d': cubic spline coefficients");
+                            ui.add_space(4.0);
+
+                            ui.label(
+                                egui::RichText::new("Beam center in Y (y0) - Spline:").strong(),
+                            );
+                            ui.label("  • 'y0_knots_thz', 'y0_values_mm': knots and values");
+                            ui.label("  • 'y0_coeff_a/b/c/d': cubic spline coefficients");
+                        });
+
+                    if thread_communication
+                        .gui_settings
+                        .psf
+                        .wx_fit
+                        .correction
+                        .knots
+                        .is_empty()
+                    {
                         ui.colored_label(egui::Color32::RED, "No PSF loaded.");
                     } else {
                         ui.label(
@@ -118,7 +165,6 @@ pub fn settings_window(
             egui::Grid::new("update settings")
                 .striped(true)
                 .show(ui, |ui| {
-
                     let branch = option_env!("GIT_BRANCH").unwrap_or("(No Git Branch Found)");
                     let commit = option_env!("GIT_HASH").unwrap_or("(No Git Hash Found)");
                     ui.label(format!("Build: {} @ {}", branch, commit));
@@ -128,7 +174,8 @@ pub fn settings_window(
                         explorer.new_release = check_for_software_updates();
                     }
 
-                    let current_version = Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Version::new(0, 0, 1));
+                    let current_version =
+                        Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Version::new(0, 0, 1));
                     ui.label(format!("Current version: {}", current_version));
                     ui.end_row();
 
@@ -172,19 +219,18 @@ pub fn settings_window(
             ui.end_row();
 
             ui.vertical_centered(|ui| {
-                    let escape_key_pressed = ui.input(|i| i.key_pressed(egui::Key::Escape)) && explorer.update_text.is_empty();
-                    ui.add_enabled_ui(explorer.update_text.is_empty(), |ui| {
-                        if ui.button("Close").clicked() || escape_key_pressed {
-                            explorer.settings_window_open = false;
-                            explorer.update_text = "".to_string();
+                let escape_key_pressed = ui.input(|i| i.key_pressed(egui::Key::Escape))
+                    && explorer.update_text.is_empty();
+                ui.add_enabled_ui(explorer.update_text.is_empty(), |ui| {
+                    if ui.button("Close").clicked() || escape_key_pressed {
+                        explorer.settings_window_open = false;
+                        explorer.update_text = "".to_string();
 
-                            thread_communication.gui_settings.dark_mode = ui.visuals() == &Visuals::dark();
-
-                            let _ = thread_communication
-                                .gui_settings
-                                .save(&APP_INFO, "config/gui");
-                        }
-                    });
+                        let _ = thread_communication
+                            .gui_settings
+                            .save(&APP_INFO, "config/gui");
+                    }
+                });
 
                 #[cfg(feature = "self_update")]
                 if !explorer.update_text.is_empty() && ui.button("Restart").clicked() {

@@ -1,5 +1,5 @@
 use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
-use crate::gui::application::{THzImageExplorer, Tab};
+use crate::gui::application::{THzImageExplorer, Tab, LIGHT_THEME_GREEN, LIGHT_THEME_YELLOW};
 use crate::gui::threed_plot::{three_dimensional_plot_ui, CameraInputAllowed, OpacityThreshold};
 use crate::gui::toggle_widget::toggle;
 use crate::vec2;
@@ -169,9 +169,14 @@ pub fn pulse_tab(
                 .width(2.0),
             );
 
+            let avg_signal_color = if signal_plot_ui.ctx().style().visuals.dark_mode {
+                egui::Color32::YELLOW
+            } else {
+                LIGHT_THEME_YELLOW
+            };
             signal_plot_ui.line(
                 Line::new("Avg Signal".to_string(), PlotPoints::from(avg_signal_1))
-                    .color(egui::Color32::YELLOW)
+                    .color(avg_signal_color)
                     .style(LineStyle::Solid)
                     .width(2.0),
             );
@@ -418,19 +423,29 @@ pub fn pulse_tab(
             }
 
             if !thread_communication.gui_settings.phases_visible {
+                let avg_fft_color = if fft_plot_ui.ctx().style().visuals.dark_mode {
+                    egui::Color32::YELLOW
+                } else {
+                    LIGHT_THEME_YELLOW
+                };
                 fft_plot_ui.line(
                     Line::new(
                         "Avg Amplitude".to_string(),
                         PlotPoints::from(avg_signal_1_fft),
                     )
-                    .color(egui::Color32::YELLOW)
+                    .color(avg_fft_color)
                     .style(LineStyle::Solid)
                     .width(2.0),
                 )
             } else {
+                let avg_phase_color = if fft_plot_ui.ctx().style().visuals.dark_mode {
+                    egui::Color32::YELLOW
+                } else {
+                    LIGHT_THEME_YELLOW
+                };
                 fft_plot_ui.line(
                     Line::new("Avg Phase".to_string(), PlotPoints::from(avg_phase_1_fft))
-                        .color(egui::Color32::YELLOW)
+                        .color(avg_phase_color)
                         .style(LineStyle::Solid)
                         .width(2.0),
                 );
@@ -724,9 +739,14 @@ pub fn optical_properties_tab(
             .legend(Legend::default());
 
         absorption_plot.show(ui, |plot_ui| {
+            let absorption_color = if plot_ui.ctx().style().visuals.dark_mode {
+                egui::Color32::GREEN
+            } else {
+                LIGHT_THEME_GREEN
+            };
             plot_ui.line(
                 Line::new("Absorption (α)".to_string(), PlotPoints::from(absorption))
-                    .color(egui::Color32::GREEN)
+                    .color(absorption_color)
                     .style(LineStyle::Solid)
                     .width(2.0)
             );
