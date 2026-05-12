@@ -10,10 +10,12 @@
 //! that would create scheduling ambiguities.
 
 use crate::config::ThreadCommunication;
+use crate::filters::psf::{CubicSplineCoeffs, HybridFit, PSF};
 use bevy::ecs::schedule::ScheduleLabel;
 use bevy::prelude::*;
 use bevy_egui::egui;
 use bevy_egui::EguiContext;
+use ndarray::Array1;
 
 // ─── Settings window ────────────────────────────────────────────────────────
 
@@ -77,7 +79,40 @@ pub struct SecondaryWindowState {
 /// Runs in `Update`. Fires once for every newly created egui context that
 /// belongs to a secondary window (detected by `Added<EguiContext>` + marker).
 /// Installs Phosphor icons, image loaders, the current theme and the rounded
-/// handle style.
+
+// ─── Theme helper ────────────────────────────────────────────────────────────
+
+/// Apply the current theme preference to any secondary egui context every frame.
+/// This handles both manual preference changes (via the ThemeSwitch in settings)
+/// and OS-level system theme changes.
+pub fn sync_ctx_theme(ctx: &egui::Context, pref: egui::ThemePreference) {
+    // For System preference: detect OS changes every frame (cached at 500ms)
+    crate::system_theme::apply_system_theme_if_needed(ctx, pref);
+    // If the stored preference differs (e.g. user changed it in settings),
+    // force-apply visuals so the change is visible immediately.
+    let current = ctx.options(|o| o.theme_preference);
+    if current != pref {
+        ctx.set_theme(pref);
+        match pref {
+            egui::ThemePreference::Dark => {
+                ctx.set_visuals(egui::Visuals::dark());
+                ctx.style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
+            }
+            egui::ThemePreference::Light => {
+                ctx.set_visuals(egui::Visuals::light());
+                ctx.style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
+            }
+            egui::ThemePreference::System => {
+                crate::system_theme::apply_system_theme_if_needed(ctx, pref);
+            }
+        }
+    }
+}
+
+// ─── Font + initial theme setup (runs once per new context) ──────────────────
+
+/// Bevy system that runs once per new secondary egui context (detected via
+/// `Added<EguiContext>`). Installs fonts, image loaders, and the current theme.
 pub fn setup_secondary_context_fonts(
     mut new_contexts: Query<
         &mut EguiContext,
@@ -138,6 +173,7 @@ pub fn psf_tool_system(
         return;
     };
     let ctx = ctx_guard.get_mut();
+    sync_ctx_theme(ctx, thread_communication.gui_settings.theme_preference);
 
     explorer.psf_tool.show_ui(ctx);
 
@@ -148,9 +184,9 @@ pub fn psf_tool_system(
             let psf = curve_fits_to_psf(curve_fits);
             // Send via channel so the data thread's local copy is also updated,
             // and also update psf_lock so the settings-window sync stays consistent
-            let _ = thread_communication.config_tx.send(
-                crate::config::ConfigCommand::ApplyPSF(psf.clone()),
-            );
+            let _ = thread_communication
+                .config_tx
+                .send(crate::config::ConfigCommand::ApplyPSF(psf.clone()));
             if let Ok(mut guard) = thread_communication.psf_lock.write() {
                 *guard = (std::path::PathBuf::from("PSF Tool"), psf.clone());
             }
@@ -162,13 +198,8 @@ pub fn psf_tool_system(
 }
 
 /// Converts PSF tool [`CurveFits`] (f64) into the main app [`PSF`] struct (f32).
-fn curve_fits_to_psf(cf: &crate::psf_tool::curve_fitting::CurveFits) -> crate::filters::psf::PSF {
-    use crate::filters::psf::{CubicSplineCoeffs, HybridFit, PSF};
-    use ndarray::Array1;
-
-    fn spline_to_coeffs(
-        s: &crate::psf_tool::curve_fitting::CubicSpline,
-    ) -> CubicSplineCoeffs {
+fn curve_fits_to_psf(cf: &crate::psf_tool::curve_fitting::CurveFits) -> PSF {
+    fn spline_to_coeffs(s: &crate::psf_tool::curve_fitting::CubicSpline) -> CubicSplineCoeffs {
         CubicSplineCoeffs {
             knots: Array1::from_vec(s.x.iter().map(|&v| v as f32).collect()),
             values: Array1::from_vec(s.y.iter().map(|&v| v as f32).collect()),
@@ -179,9 +210,7 @@ fn curve_fits_to_psf(cf: &crate::psf_tool::curve_fitting::CurveFits) -> crate::f
         }
     }
 
-    fn hybrid_to_main(
-        h: &crate::psf_tool::curve_fitting::HybridFit,
-    ) -> HybridFit {
+    fn hybrid_to_main(h: &crate::psf_tool::curve_fitting::HybridFit) -> HybridFit {
         HybridFit {
             base_a: h.a as f32,
             base_b: h.b as f32,
@@ -202,11 +231,13 @@ fn curve_fits_to_psf(cf: &crate::psf_tool::curve_fitting::CurveFits) -> crate::f
 pub fn psf_diagnostics_system(
     mut egui_ctx: Query<&mut EguiContext, With<PsfDiagnosticsWindowCamera>>,
     mut explorer: NonSendMut<crate::gui::application::THzImageExplorer>,
+    thread_communication: Res<ThreadCommunication>,
 ) {
     let Ok(mut ctx_guard) = egui_ctx.single_mut() else {
         return;
     };
     let ctx = ctx_guard.get_mut();
+    sync_ctx_theme(ctx, thread_communication.gui_settings.theme_preference);
     if let Some(dw) = &mut explorer.psf_tool.diagnostics_window {
         dw.show(ctx);
     }
@@ -215,11 +246,13 @@ pub fn psf_diagnostics_system(
 pub fn psf_visualizer_system(
     mut egui_ctx: Query<&mut EguiContext, With<PsfVisualizerWindowCamera>>,
     mut explorer: NonSendMut<crate::gui::application::THzImageExplorer>,
+    thread_communication: Res<ThreadCommunication>,
 ) {
     let Ok(mut ctx_guard) = egui_ctx.single_mut() else {
         return;
     };
     let ctx = ctx_guard.get_mut();
+    sync_ctx_theme(ctx, thread_communication.gui_settings.theme_preference);
     let curve_fits = explorer.psf_tool.curve_fits.clone();
     if let (Some(pv), Some(cf)) = (&mut explorer.psf_tool.psf_visualizer_window, curve_fits) {
         pv.show(ctx, &cf);
@@ -229,11 +262,13 @@ pub fn psf_visualizer_system(
 pub fn psf_individual_fits_system(
     mut egui_ctx: Query<&mut EguiContext, With<PsfIndividualFitsWindowCamera>>,
     mut explorer: NonSendMut<crate::gui::application::THzImageExplorer>,
+    thread_communication: Res<ThreadCommunication>,
 ) {
     let Ok(mut ctx_guard) = egui_ctx.single_mut() else {
         return;
     };
     let ctx = ctx_guard.get_mut();
+    sync_ctx_theme(ctx, thread_communication.gui_settings.theme_preference);
 
     let bx = explorer.psf_tool.beam_fits_x.clone();
     let by = explorer.psf_tool.beam_fits_y.clone();
@@ -241,30 +276,48 @@ pub fn psf_individual_fits_system(
 
     if let (Some(bx), Some(by), Some(filters)) = (bx, by, filters) {
         if let (
-            Some(popt_xs_left), Some(popt_xs_right),
-            Some(popt_ys_left), Some(popt_ys_right),
-            Some(ftx_left), Some(ftx_right),
-            Some(fty_left), Some(fty_right),
-            Some(xp_left), Some(xp_right),
-            Some(yp_left), Some(yp_right),
+            Some(popt_xs_left),
+            Some(popt_xs_right),
+            Some(popt_ys_left),
+            Some(popt_ys_right),
+            Some(ftx_left),
+            Some(ftx_right),
+            Some(fty_left),
+            Some(fty_right),
+            Some(xp_left),
+            Some(xp_right),
+            Some(yp_left),
+            Some(yp_right),
         ) = (
-            &bx.popt_xs_left, &bx.popt_xs_right,
-            &by.popt_ys_left, &by.popt_ys_right,
-            &bx.filtered_traces_x_left, &bx.filtered_traces_x_right,
-            &by.filtered_traces_y_left, &by.filtered_traces_y_right,
-            &bx.x_positions_left, &bx.x_positions_right,
-            &by.y_positions_left, &by.y_positions_right,
+            &bx.popt_xs_left,
+            &bx.popt_xs_right,
+            &by.popt_ys_left,
+            &by.popt_ys_right,
+            &bx.filtered_traces_x_left,
+            &bx.filtered_traces_x_right,
+            &by.filtered_traces_y_left,
+            &by.filtered_traces_y_right,
+            &bx.x_positions_left,
+            &bx.x_positions_right,
+            &by.y_positions_left,
+            &by.y_positions_right,
         ) {
             let freqs = filters.center_frequencies.clone();
             if let Some(ifw) = &mut explorer.psf_tool.individual_fits_window {
                 ifw.show(
                     ctx,
-                    popt_xs_left, popt_xs_right,
-                    popt_ys_left, popt_ys_right,
-                    ftx_left, ftx_right,
-                    fty_left, fty_right,
-                    xp_left, xp_right,
-                    yp_left, yp_right,
+                    popt_xs_left,
+                    popt_xs_right,
+                    popt_ys_left,
+                    popt_ys_right,
+                    ftx_left,
+                    ftx_right,
+                    fty_left,
+                    fty_right,
+                    xp_left,
+                    xp_right,
+                    yp_left,
+                    yp_right,
                     &freqs,
                 );
             }

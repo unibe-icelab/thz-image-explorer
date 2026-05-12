@@ -273,6 +273,10 @@ pub fn settings_window_system(
         return;
     };
     let ctx = ctx_guard.get_mut();
+    crate::gui::secondary_windows::sync_ctx_theme(
+        ctx,
+        thread_communication.gui_settings.theme_preference,
+    );
 
     egui::CentralPanel::default().show(ctx, |ui| {
         egui::ScrollArea::vertical().show(ui, |ui| {
