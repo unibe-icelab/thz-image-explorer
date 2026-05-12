@@ -158,6 +158,9 @@ pub enum ConfigCommand {
 
     /// Command to set the material thickness for processing.
     SetMaterialThickness(f32),
+
+    /// Command to directly apply a pre-computed PSF (e.g. from the PSF Tool).
+    ApplyPSF(PSF),
 }
 
 /// A container for storing configuration settings related to FFT and filtering processes.

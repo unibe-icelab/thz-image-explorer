@@ -9,6 +9,7 @@ use crate::data_container::ScannedImageFilterData;
 use crate::filters::filter::{CopyStaticFieldsTrait, Filter, FilterConfig, FilterDomain};
 use crate::filters::psf::{create_psf_2d, gaussian};
 use crate::gui::application::GuiSettingsContainer;
+use crate::gui::toggle_widget::toggle;
 use bevy_egui::egui::{self, Ui};
 use filter_macros::{register_filter, CopyStaticFields};
 use ndarray::{arr1, s, Array1, Array2, Array3, Axis, Zip};
@@ -1051,21 +1052,9 @@ impl Filter for Deconvolution {
             .vertical(|ui| {
                 // Expert mode toggle button
                 ui.horizontal(|ui| {
-                    let toggle_response = ui.button(
-                        if self.expert_mode {
-                            "🔧 Expert Mode (Hide Parameters)"
-                        } else {
-                            "🔧 Expert Mode (Show Parameters)"
-                        }
-                    ).on_hover_text(
-                        "Toggle expert mode to adjust deconvolution parameters\nDefault values are optimized for most use cases"
-                    );
-
-                    if toggle_response.clicked() {
-                        self.expert_mode = !self.expert_mode;
-                    }
-                    // Note: Toggle click does NOT trigger deconvolution
-                    // Only "Apply" button triggers it
+                    ui.add(toggle(&mut self.expert_mode));
+                    ui.label("Expert Mode")
+                        .on_hover_text("Toggle expert mode to adjust deconvolution parameters\nDefault values are optimized for most use cases");
                 });
 
                 // Show parameters only in expert mode

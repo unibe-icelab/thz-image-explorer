@@ -292,9 +292,6 @@ pub fn right_panel(
                     }
                     explorer.settings_window_open = true;
                 }
-                if explorer.settings_window_open {
-                    settings_window(ui.ctx(), explorer, thread_communication, exit);
-                }
 
                 ui.add_space(5.0);
 
