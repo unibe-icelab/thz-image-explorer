@@ -6,6 +6,8 @@ use bevy_egui::egui;
 use egui_plot::{Legend, Line, Plot, PlotPoints};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -18,7 +20,7 @@ use super::data_loader::{
 use super::diagnostic_window::DiagnosticWindow;
 use super::diagnostics::DiagnosticResults;
 use super::export;
-use super::filters::{create_filters, FilterParams, Filters};
+use super::filters::{create_filters, frequency_response, FilterParams, Filters};
 use super::fitting::{fit_beam_widths, fit_mean_beam, BeamFitParams, BeamWidthFits, MeanBeamFit};
 use super::individual_fits_window::IndividualFitsWindow;
 use super::psf_visualizer::PsfVisualizerWindow;
@@ -58,7 +60,9 @@ impl AppState {
     fn config_path() -> anyhow::Result<PathBuf> {
         let config_dir =
             dirs::config_dir().ok_or_else(|| anyhow::anyhow!("No config directory"))?;
-        Ok(config_dir.join("thz_image_explorer").join("psf_tool_state.json"))
+        Ok(config_dir
+            .join("thz_image_explorer")
+            .join("psf_tool_state.json"))
     }
 }
 
@@ -123,6 +127,12 @@ enum ComputeResult {
     Error(String),
 }
 
+#[derive(Debug, Clone)]
+struct FilterResponseCache {
+    curves_hz: Vec<Vec<[f64; 2]>>,
+    curves_wavelength_um: Vec<Vec<[f64; 2]>>,
+}
+
 // ─── Main app state ──────────────────────────────────────────────────────────
 
 pub struct ThzPsfApp {
@@ -144,6 +154,7 @@ pub struct ThzPsfApp {
     pub beam_fits_x: Option<BeamWidthFits>,
     pub beam_fits_y: Option<BeamWidthFits>,
     pub curve_fits: Option<CurveFits>,
+    filter_response_cache: Option<FilterResponseCache>,
 
     // Computation
     computation_state: ComputationState,
@@ -198,6 +209,7 @@ impl Default for ThzPsfApp {
             beam_fits_x: None,
             beam_fits_y: None,
             curve_fits: None,
+            filter_response_cache: None,
             computation_state: ComputationState::Idle,
             cancel_flag: Arc::new(AtomicBool::new(false)),
             compute_tx: None,
@@ -259,8 +271,6 @@ impl ThzPsfApp {
     }
 
     fn compute_params_hash(&self) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
         let mut h = DefaultHasher::new();
         self.knife_edge_x_path.hash(&mut h);
         self.knife_edge_y_path.hash(&mut h);
@@ -276,8 +286,7 @@ impl ThzPsfApp {
     }
 
     fn should_compute(&self) -> bool {
-        let has_data =
-            !self.knife_edge_x_path.is_empty() || !self.knife_edge_y_path.is_empty();
+        let has_data = !self.knife_edge_x_path.is_empty() || !self.knife_edge_y_path.is_empty();
         let can_compute = matches!(
             self.computation_state,
             ComputationState::Idle | ComputationState::Complete | ComputationState::Error(_)
@@ -291,10 +300,10 @@ impl ThzPsfApp {
         self.cancel_flag.store(true, Ordering::Relaxed);
         self.cancel_flag = Arc::new(AtomicBool::new(false));
 
-        let x_path = (!self.knife_edge_x_path.is_empty())
-            .then(|| PathBuf::from(&self.knife_edge_x_path));
-        let y_path = (!self.knife_edge_y_path.is_empty())
-            .then(|| PathBuf::from(&self.knife_edge_y_path));
+        let x_path =
+            (!self.knife_edge_x_path.is_empty()).then(|| PathBuf::from(&self.knife_edge_x_path));
+        let y_path =
+            (!self.knife_edge_y_path.is_empty()).then(|| PathBuf::from(&self.knife_edge_y_path));
 
         let has_x = x_path.is_some();
         let has_y = y_path.is_some();
@@ -382,7 +391,10 @@ impl ThzPsfApp {
                             Ok(m) => (Some(m.0), Some(m.1)),
                             Err(e) => {
                                 result_tx
-                                    .send(ComputeResult::Error(format!("Failed to load data: {}", e)))
+                                    .send(ComputeResult::Error(format!(
+                                        "Failed to load data: {}",
+                                        e
+                                    )))
                                     .ok();
                                 continue;
                             }
@@ -392,7 +404,10 @@ impl ThzPsfApp {
                             Ok(m) => (Some(m.0), None),
                             Err(e) => {
                                 result_tx
-                                    .send(ComputeResult::Error(format!("Failed to load X data: {}", e)))
+                                    .send(ComputeResult::Error(format!(
+                                        "Failed to load X data: {}",
+                                        e
+                                    )))
                                     .ok();
                                 continue;
                             }
@@ -402,7 +417,10 @@ impl ThzPsfApp {
                             Ok(m) => (None, Some(m.1)),
                             Err(e) => {
                                 result_tx
-                                    .send(ComputeResult::Error(format!("Failed to load Y data: {}", e)))
+                                    .send(ComputeResult::Error(format!(
+                                        "Failed to load Y data: {}",
+                                        e
+                                    )))
                                     .ok();
                                 continue;
                             }
@@ -463,53 +481,91 @@ impl ThzPsfApp {
                             let (result_left, result_right) = rayon::join(
                                 || {
                                     let mean_fit = fit_mean_beam(
-                                        &left.positions, &left.positions,
-                                        &left.time_traces, &left.time_traces,
-                                    ).ok()?;
-                                    if cancel_flag.load(Ordering::Relaxed) { return None; }
+                                        &left.positions,
+                                        &left.positions,
+                                        &left.time_traces,
+                                        &left.time_traces,
+                                    )
+                                    .ok()?;
+                                    if cancel_flag.load(Ordering::Relaxed) {
+                                        return None;
+                                    }
                                     let pc = Arc::clone(&progress_counter);
                                     let beam_fits = fit_beam_widths(
-                                        &mean_fit, &left.positions, &left.positions,
-                                        &left.time_traces, &left.time_traces,
-                                        &filters.coefficients, &fit_params,
+                                        &mean_fit,
+                                        &left.positions,
+                                        &left.positions,
+                                        &left.time_traces,
+                                        &left.time_traces,
+                                        &filters.coefficients,
+                                        &fit_params,
                                         |_cur, tot| {
                                             let p = pc.fetch_add(1, Ordering::Relaxed) + 1;
                                             let msg = if axis_idx == 0 {
-                                                ComputeResult::ProgressX { phase: ComputationPhase::Fitting, current_filter: p, total_filters: tot * 2 }
+                                                ComputeResult::ProgressX {
+                                                    phase: ComputationPhase::Fitting,
+                                                    current_filter: p,
+                                                    total_filters: tot * 2,
+                                                }
                                             } else {
-                                                ComputeResult::ProgressY { phase: ComputationPhase::Fitting, current_filter: p, total_filters: tot * 2 }
+                                                ComputeResult::ProgressY {
+                                                    phase: ComputationPhase::Fitting,
+                                                    current_filter: p,
+                                                    total_filters: tot * 2,
+                                                }
                                             };
                                             result_tx.send(msg).ok();
                                         },
-                                    ).ok()?;
+                                    )
+                                    .ok()?;
                                     Some((mean_fit, beam_fits))
                                 },
                                 || {
                                     let mean_fit = fit_mean_beam(
-                                        &right.positions, &right.positions,
-                                        &right.time_traces, &right.time_traces,
-                                    ).ok()?;
-                                    if cancel_flag.load(Ordering::Relaxed) { return None; }
+                                        &right.positions,
+                                        &right.positions,
+                                        &right.time_traces,
+                                        &right.time_traces,
+                                    )
+                                    .ok()?;
+                                    if cancel_flag.load(Ordering::Relaxed) {
+                                        return None;
+                                    }
                                     let pc = Arc::clone(&progress_counter);
                                     let beam_fits = fit_beam_widths(
-                                        &mean_fit, &right.positions, &right.positions,
-                                        &right.time_traces, &right.time_traces,
-                                        &filters.coefficients, &fit_params,
+                                        &mean_fit,
+                                        &right.positions,
+                                        &right.positions,
+                                        &right.time_traces,
+                                        &right.time_traces,
+                                        &filters.coefficients,
+                                        &fit_params,
                                         |_cur, tot| {
                                             let p = pc.fetch_add(1, Ordering::Relaxed) + 1;
                                             let msg = if axis_idx == 0 {
-                                                ComputeResult::ProgressX { phase: ComputationPhase::Fitting, current_filter: p, total_filters: tot * 2 }
+                                                ComputeResult::ProgressX {
+                                                    phase: ComputationPhase::Fitting,
+                                                    current_filter: p,
+                                                    total_filters: tot * 2,
+                                                }
                                             } else {
-                                                ComputeResult::ProgressY { phase: ComputationPhase::Fitting, current_filter: p, total_filters: tot * 2 }
+                                                ComputeResult::ProgressY {
+                                                    phase: ComputationPhase::Fitting,
+                                                    current_filter: p,
+                                                    total_filters: tot * 2,
+                                                }
                                             };
                                             result_tx.send(msg).ok();
                                         },
-                                    ).ok()?;
+                                    )
+                                    .ok()?;
                                     Some((mean_fit, beam_fits))
                                 },
                             );
 
-                            if cancel_flag.load(Ordering::Relaxed) { return None; }
+                            if cancel_flag.load(Ordering::Relaxed) {
+                                return None;
+                            }
 
                             let (mean_fit_left, beam_fits_left) = result_left?;
                             let (mean_fit_right, beam_fits_right) = result_right?;
@@ -517,24 +573,34 @@ impl ThzPsfApp {
                             // Average left and right results
                             let mut popt_avg = beam_fits_left.popt_xs.clone();
                             for i in 0..n_filters {
-                                popt_avg[[i, 0]] =
-                                    ((-beam_fits_left.popt_xs[[i, 0]]) + beam_fits_right.popt_xs[[i, 0]]) / 2.0;
-                                popt_avg[[i, 1]] =
-                                    (beam_fits_left.popt_xs[[i, 1]] + beam_fits_right.popt_xs[[i, 1]]) / 2.0;
+                                popt_avg[[i, 0]] = ((-beam_fits_left.popt_xs[[i, 0]])
+                                    + beam_fits_right.popt_xs[[i, 0]])
+                                    / 2.0;
+                                popt_avg[[i, 1]] = (beam_fits_left.popt_xs[[i, 1]]
+                                    + beam_fits_right.popt_xs[[i, 1]])
+                                    / 2.0;
                             }
-                            let mean_pos = (0..n_filters).map(|i| popt_avg[[i, 0]]).sum::<f64>() / n_filters as f64;
+                            let mean_pos = (0..n_filters).map(|i| popt_avg[[i, 0]]).sum::<f64>()
+                                / n_filters as f64;
                             for i in 0..n_filters {
                                 popt_avg[[i, 0]] -= mean_pos;
                             }
 
                             let filtered_traces_x_avg: Vec<_> = (0..n_filters)
-                                .map(|i| (&beam_fits_left.filtered_traces_x[i] + &beam_fits_right.filtered_traces_x[i]) / 2.0)
+                                .map(|i| {
+                                    (&beam_fits_left.filtered_traces_x[i]
+                                        + &beam_fits_right.filtered_traces_x[i])
+                                        / 2.0
+                                })
                                 .collect();
                             let filtered_traces_y_avg: Vec<_> = (0..n_filters)
-                                .map(|i| (&beam_fits_left.filtered_traces_y[i] + &beam_fits_right.filtered_traces_y[i]) / 2.0)
+                                .map(|i| {
+                                    (&beam_fits_left.filtered_traces_y[i]
+                                        + &beam_fits_right.filtered_traces_y[i])
+                                        / 2.0
+                                })
                                 .collect();
 
-                            use super::fitting::BeamWidthFits;
                             let beam_fits = BeamWidthFits {
                                 popt_xs: popt_avg.clone(),
                                 popt_ys: popt_avg,
@@ -546,10 +612,18 @@ impl ThzPsfApp {
                                 popt_xs_right: Some(beam_fits_right.popt_xs.clone()),
                                 popt_ys_left: Some(beam_fits_left.popt_ys.clone()),
                                 popt_ys_right: Some(beam_fits_right.popt_ys.clone()),
-                                filtered_traces_x_left: Some(beam_fits_left.filtered_traces_x.clone()),
-                                filtered_traces_x_right: Some(beam_fits_right.filtered_traces_x.clone()),
-                                filtered_traces_y_left: Some(beam_fits_left.filtered_traces_y.clone()),
-                                filtered_traces_y_right: Some(beam_fits_right.filtered_traces_y.clone()),
+                                filtered_traces_x_left: Some(
+                                    beam_fits_left.filtered_traces_x.clone(),
+                                ),
+                                filtered_traces_x_right: Some(
+                                    beam_fits_right.filtered_traces_x.clone(),
+                                ),
+                                filtered_traces_y_left: Some(
+                                    beam_fits_left.filtered_traces_y.clone(),
+                                ),
+                                filtered_traces_y_right: Some(
+                                    beam_fits_right.filtered_traces_y.clone(),
+                                ),
                                 x_positions_left: Some(left.positions.clone()),
                                 x_positions_right: Some(right.positions.clone()),
                                 y_positions_left: Some(left.positions.clone()),
@@ -573,11 +647,15 @@ impl ThzPsfApp {
 
                     let (x_measurement, mean_fit_x, beam_fits_x) = results[0]
                         .as_ref()
-                        .map(|(m, mf, bf)| (Some(Arc::clone(m)), Some(mf.clone()), Some(bf.clone())))
+                        .map(|(m, mf, bf)| {
+                            (Some(Arc::clone(m)), Some(mf.clone()), Some(bf.clone()))
+                        })
                         .unwrap_or((None, None, None));
                     let (y_measurement, mean_fit_y, beam_fits_y) = results[1]
                         .as_ref()
-                        .map(|(m, mf, bf)| (Some(Arc::clone(m)), Some(mf.clone()), Some(bf.clone())))
+                        .map(|(m, mf, bf)| {
+                            (Some(Arc::clone(m)), Some(mf.clone()), Some(bf.clone()))
+                        })
                         .unwrap_or((None, None, None));
 
                     let mut warnings = Vec::new();
@@ -612,23 +690,50 @@ impl ThzPsfApp {
         if let Some(rx) = &self.result_rx {
             while let Ok(result) = rx.try_recv() {
                 match result {
-                    ComputeResult::ProgressX { phase, current_filter, total_filters } => {
-                        if let ComputationState::Computing { progress_x, .. } = &mut self.computation_state {
-                            *progress_x = Some(AxisProgress { phase, current_filter, total_filters });
+                    ComputeResult::ProgressX {
+                        phase,
+                        current_filter,
+                        total_filters,
+                    } => {
+                        if let ComputationState::Computing { progress_x, .. } =
+                            &mut self.computation_state
+                        {
+                            *progress_x = Some(AxisProgress {
+                                phase,
+                                current_filter,
+                                total_filters,
+                            });
                         }
                     }
-                    ComputeResult::ProgressY { phase, current_filter, total_filters } => {
-                        if let ComputationState::Computing { progress_y, .. } = &mut self.computation_state {
-                            *progress_y = Some(AxisProgress { phase, current_filter, total_filters });
+                    ComputeResult::ProgressY {
+                        phase,
+                        current_filter,
+                        total_filters,
+                    } => {
+                        if let ComputationState::Computing { progress_y, .. } =
+                            &mut self.computation_state
+                        {
+                            *progress_y = Some(AxisProgress {
+                                phase,
+                                current_filter,
+                                total_filters,
+                            });
                         }
                     }
                     ComputeResult::Complete {
-                        x_measurement, y_measurement, filters,
-                        mean_fit_x, mean_fit_y, beam_fits_x, beam_fits_y, warnings,
+                        x_measurement,
+                        y_measurement,
+                        filters,
+                        mean_fit_x,
+                        mean_fit_y,
+                        beam_fits_x,
+                        beam_fits_y,
+                        warnings,
                     } => {
                         self.x_measurement = x_measurement;
                         self.y_measurement = y_measurement;
                         self.filters = Some(filters);
+                        self.filter_response_cache = None;
                         self.mean_fit_x = mean_fit_x;
                         self.mean_fit_y = mean_fit_y;
                         self.beam_fits_x = beam_fits_x;
@@ -661,20 +766,36 @@ impl ThzPsfApp {
 
         let (wx, wy, x0, y0) = match (&self.beam_fits_x, &self.beam_fits_y) {
             (Some(fx), Some(fy)) => {
-                let wx = (0..frequencies_thz.len()).map(|i| fx.popt_xs[[i, 1]].abs()).collect();
-                let wy = (0..frequencies_thz.len()).map(|i| fy.popt_ys[[i, 1]].abs()).collect();
-                let x0 = (0..frequencies_thz.len()).map(|i| fx.popt_xs[[i, 0]]).collect();
-                let y0 = (0..frequencies_thz.len()).map(|i| fy.popt_ys[[i, 0]]).collect();
+                let wx = (0..frequencies_thz.len())
+                    .map(|i| fx.popt_xs[[i, 1]].abs())
+                    .collect();
+                let wy = (0..frequencies_thz.len())
+                    .map(|i| fy.popt_ys[[i, 1]].abs())
+                    .collect();
+                let x0 = (0..frequencies_thz.len())
+                    .map(|i| fx.popt_xs[[i, 0]])
+                    .collect();
+                let y0 = (0..frequencies_thz.len())
+                    .map(|i| fy.popt_ys[[i, 0]])
+                    .collect();
                 (wx, wy, x0, y0)
             }
             (Some(fx), None) => {
-                let wx: Vec<f64> = (0..frequencies_thz.len()).map(|i| fx.popt_xs[[i, 1]].abs()).collect();
-                let x0: Vec<f64> = (0..frequencies_thz.len()).map(|i| fx.popt_xs[[i, 0]]).collect();
+                let wx: Vec<f64> = (0..frequencies_thz.len())
+                    .map(|i| fx.popt_xs[[i, 1]].abs())
+                    .collect();
+                let x0: Vec<f64> = (0..frequencies_thz.len())
+                    .map(|i| fx.popt_xs[[i, 0]])
+                    .collect();
                 (wx.clone(), wx, x0.clone(), x0)
             }
             (None, Some(fy)) => {
-                let wy: Vec<f64> = (0..frequencies_thz.len()).map(|i| fy.popt_ys[[i, 1]].abs()).collect();
-                let y0: Vec<f64> = (0..frequencies_thz.len()).map(|i| fy.popt_ys[[i, 0]]).collect();
+                let wy: Vec<f64> = (0..frequencies_thz.len())
+                    .map(|i| fy.popt_ys[[i, 1]].abs())
+                    .collect();
+                let y0: Vec<f64> = (0..frequencies_thz.len())
+                    .map(|i| fy.popt_ys[[i, 0]])
+                    .collect();
                 (wy.clone(), wy, y0.clone(), y0)
             }
             _ => return,
@@ -695,12 +816,61 @@ impl ThzPsfApp {
             None => return,
         };
         let n = 200usize;
-        let freqs: Vec<f64> = (0..n).map(|i| 0.1 + (i as f64 / (n - 1) as f64) * 9.9).collect();
+        let freqs: Vec<f64> = (0..n)
+            .map(|i| 0.1 + (i as f64 / (n - 1) as f64) * 9.9)
+            .collect();
         let w0x = curve_fits.wx_fit.evaluate(&freqs);
         let w0y = curve_fits.wy_fit.evaluate(&freqs);
         if let Ok(diag) = DiagnosticResults::compute(&freqs, &w0x, &w0y) {
             self.diagnostics_window = Some(DiagnosticWindow::new(diag));
         }
+    }
+
+    fn ensure_filter_response_cache(&mut self) {
+        let filters = match &self.filters {
+            Some(f) => f,
+            None => {
+                self.filter_response_cache = None;
+                return;
+            }
+        };
+
+        let expected_len = filters.center_frequencies.len();
+        let cache_is_valid = self
+            .filter_response_cache
+            .as_ref()
+            .map(|cache| cache.curves_hz.len() == expected_len)
+            .unwrap_or(false);
+
+        if cache_is_valid {
+            return;
+        }
+
+        let mut curves_hz = Vec::with_capacity(expected_len);
+        let mut curves_wavelength_um = Vec::with_capacity(expected_len);
+
+        for i in 0..expected_len {
+            let row = filters.coefficients.row(i).to_vec();
+            let (freqs, mags) = frequency_response(&row, 512, filters.fs);
+
+            let mut points_hz = Vec::with_capacity(freqs.len());
+            let mut points_wavelength = Vec::with_capacity(freqs.len());
+
+            for (&f, &m) in freqs.iter().zip(mags.iter()) {
+                points_hz.push([f, m]);
+                if f > 0.0 {
+                    points_wavelength.push([300.0 / f, m]);
+                }
+            }
+
+            curves_hz.push(points_hz);
+            curves_wavelength_um.push(points_wavelength);
+        }
+
+        self.filter_response_cache = Some(FilterResponseCache {
+            curves_hz,
+            curves_wavelength_um,
+        });
     }
 
     // ─── Public API ─────────────────────────────────────────────────────────
@@ -713,6 +883,10 @@ impl ThzPsfApp {
     /// Main UI entry point called by the bevy system on each frame.
     pub fn show_ui(&mut self, ctx: &egui::Context) {
         self.check_results();
+
+        if self.show_filter_response && self.filters.is_some() {
+            self.ensure_filter_response_cache();
+        }
 
         // Auto-trigger computation when parameters or paths change
         let current_hash = self.compute_params_hash();
@@ -744,7 +918,8 @@ impl ThzPsfApp {
                         {
                             let total = self.filters.as_ref().unwrap().center_frequencies.len();
                             if self.individual_fits_window.is_none() {
-                                self.individual_fits_window = Some(IndividualFitsWindow::new(total));
+                                self.individual_fits_window =
+                                    Some(IndividualFitsWindow::new(total));
                             }
                             self.show_individual_fits = true;
                         }
@@ -771,7 +946,7 @@ impl ThzPsfApp {
                         ui.label("Input Files");
                         ui.horizontal(|ui| {
                             ui.label("X measurement:");
-                            if ui.button("📁").clicked() {
+                            if ui.button(egui_phosphor::regular::FOLDER_OPEN).clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .add_filter("THz files", &["thz"])
                                     .pick_file()
@@ -786,7 +961,7 @@ impl ThzPsfApp {
                         });
                         ui.horizontal(|ui| {
                             ui.label("Y measurement:");
-                            if ui.button("📁").clicked() {
+                            if ui.button(egui_phosphor::regular::FOLDER_OPEN).clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .add_filter("THz files", &["thz"])
                                     .pick_file()
@@ -987,18 +1162,37 @@ impl ThzPsfApp {
 
             let available_height = ui.available_height();
             let mut n_plots = 0usize;
-            if self.show_filter_response && self.filters.is_some() { n_plots += 1; }
-            if self.show_intensity && (self.x_measurement.is_some() || self.y_measurement.is_some()) { n_plots += 1; }
-            if self.show_beam_widths && (self.beam_fits_x.is_some() || self.beam_fits_y.is_some()) { n_plots += 1; }
-            if self.show_beam_centers && (self.beam_fits_x.is_some() || self.beam_fits_y.is_some()) { n_plots += 1; }
-            let plot_height = if n_plots > 0 { (available_height / n_plots as f32).max(150.0) } else { 150.0 };
+            if self.show_filter_response && self.filters.is_some() {
+                n_plots += 1;
+            }
+            if self.show_intensity && (self.x_measurement.is_some() || self.y_measurement.is_some())
+            {
+                n_plots += 1;
+            }
+            if self.show_beam_widths && (self.beam_fits_x.is_some() || self.beam_fits_y.is_some()) {
+                n_plots += 1;
+            }
+            if self.show_beam_centers && (self.beam_fits_x.is_some() || self.beam_fits_y.is_some())
+            {
+                n_plots += 1;
+            }
+            let plot_height = if n_plots > 0 {
+                (available_height / n_plots as f32).max(150.0)
+            } else {
+                150.0
+            };
 
             egui::ScrollArea::vertical().show(ui, |ui| {
                 // Filter frequency response
                 if self.show_filter_response {
-                    if let Some(filters) = &self.filters {
+                    if let (Some(filters), Some(cache)) =
+                        (&self.filters, &self.filter_response_cache)
+                    {
                         ui.label("Filter frequency response:");
-                        let x_axis = self.use_wavelength.then(|| "Wavelength (µm)").unwrap_or("Frequency (THz)");
+                        let x_axis = self
+                            .use_wavelength
+                            .then(|| "Wavelength (µm)")
+                            .unwrap_or("Frequency (THz)");
                         let use_wavelength = self.use_wavelength;
                         Plot::new("filter_response")
                             .height(plot_height)
@@ -1007,15 +1201,11 @@ impl ThzPsfApp {
                             .legend(Legend::default())
                             .show(ui, |plot_ui| {
                                 for i in 0..filters.center_frequencies.len() {
-                                    let row = filters.coefficients.row(i).to_vec();
-                                    let (freqs, mags) = crate::psf_tool::filters::frequency_response(&row, 512, filters.fs);
-                                    let points: PlotPoints = freqs.iter().zip(mags.iter())
-                                        .filter(|(&f, _)| !use_wavelength || f > 0.0)
-                                        .map(|(&f, &m)| {
-                                            let x = if use_wavelength { 3e5 / f / 1e6 * 1000.0 } else { f };
-                                            [x, m]
-                                        })
-                                        .collect();
+                                    let points = if use_wavelength {
+                                        cache.curves_wavelength_um[i].clone()
+                                    } else {
+                                        cache.curves_hz[i].clone()
+                                    };
                                     let label = format!("{:.2} THz", filters.center_frequencies[i]);
                                     plot_ui.line(Line::new(label, points));
                                 }
@@ -1031,13 +1221,21 @@ impl ThzPsfApp {
                         ui.label("Beam width vs frequency:");
                         Plot::new("beam_widths")
                             .height(plot_height)
-                            .x_axis_label(if self.use_wavelength { "Wavelength (µm)" } else { "Frequency (THz)" })
+                            .x_axis_label(if self.use_wavelength {
+                                "Wavelength (µm)"
+                            } else {
+                                "Frequency (THz)"
+                            })
                             .y_axis_label("Beam width (mm)")
                             .show(ui, |plot_ui| {
                                 let x_vals: PlotPoints = (0..n)
                                     .map(|i| {
                                         let f = freqs[i];
-                                        let x = if self.use_wavelength { 3e5 / f / 1e6 * 1000.0 } else { f };
+                                        let x = if self.use_wavelength {
+                                            3e5 / f / 1e6 * 1000.0
+                                        } else {
+                                            f
+                                        };
                                         [x, fits_x.popt_xs[[i, 1]].abs()]
                                     })
                                     .collect();
@@ -1047,11 +1245,18 @@ impl ThzPsfApp {
                                     let y_vals: PlotPoints = (0..n)
                                         .map(|i| {
                                             let f = freqs[i];
-                                            let x = if self.use_wavelength { 3e5 / f / 1e6 * 1000.0 } else { f };
+                                            let x = if self.use_wavelength {
+                                                3e5 / f / 1e6 * 1000.0
+                                            } else {
+                                                f
+                                            };
                                             [x, fits_y.popt_ys[[i, 1]].abs()]
                                         })
                                         .collect();
-                                    plot_ui.line(Line::new("wy", y_vals).color(egui::Color32::from_rgb(0, 160, 0)));
+                                    plot_ui.line(
+                                        Line::new("wy", y_vals)
+                                            .color(egui::Color32::from_rgb(0, 160, 0)),
+                                    );
                                 }
                             });
                     }
@@ -1065,13 +1270,21 @@ impl ThzPsfApp {
                         ui.label("Beam center vs frequency:");
                         Plot::new("beam_centers")
                             .height(plot_height)
-                            .x_axis_label(if self.use_wavelength { "Wavelength (µm)" } else { "Frequency (THz)" })
+                            .x_axis_label(if self.use_wavelength {
+                                "Wavelength (µm)"
+                            } else {
+                                "Frequency (THz)"
+                            })
                             .y_axis_label("Center position (mm)")
                             .show(ui, |plot_ui| {
                                 let x_vals: PlotPoints = (0..n)
                                     .map(|i| {
                                         let f = freqs[i];
-                                        let x = if self.use_wavelength { 3e5 / f / 1e6 * 1000.0 } else { f };
+                                        let x = if self.use_wavelength {
+                                            3e5 / f / 1e6 * 1000.0
+                                        } else {
+                                            f
+                                        };
                                         [x, fits_x.popt_xs[[i, 0]]]
                                     })
                                     .collect();
@@ -1081,17 +1294,23 @@ impl ThzPsfApp {
                                     let y_vals: PlotPoints = (0..n)
                                         .map(|i| {
                                             let f = freqs[i];
-                                            let x = if self.use_wavelength { 3e5 / f / 1e6 * 1000.0 } else { f };
+                                            let x = if self.use_wavelength {
+                                                3e5 / f / 1e6 * 1000.0
+                                            } else {
+                                                f
+                                            };
                                             [x, fits_y.popt_ys[[i, 0]]]
                                         })
                                         .collect();
-                                    plot_ui.line(Line::new("y0", y_vals).color(egui::Color32::from_rgb(0, 160, 0)));
+                                    plot_ui.line(
+                                        Line::new("y0", y_vals)
+                                            .color(egui::Color32::from_rgb(0, 160, 0)),
+                                    );
                                 }
                             });
                     }
                 }
             });
         });
-
     }
 }
