@@ -127,6 +127,12 @@ enum ComputeResult {
     Error(String),
 }
 
+enum DialogResult {
+    XFile(Option<PathBuf>),
+    YFile(Option<PathBuf>),
+    ExportFile(Option<PathBuf>),
+}
+
 #[derive(Debug, Clone)]
 struct FilterResponseCache {
     curves_hz: Vec<Vec<[f64; 2]>>,
@@ -161,6 +167,8 @@ pub struct ThzPsfApp {
     cancel_flag: Arc<AtomicBool>,
     compute_tx: Option<Sender<ComputeMessage>>,
     result_rx: Option<Receiver<ComputeResult>>,
+    dialog_tx: Sender<DialogResult>,
+    dialog_rx: Receiver<DialogResult>,
 
     // Display options
     show_filter_response: bool,
@@ -195,6 +203,7 @@ pub struct ThzPsfApp {
 
 impl Default for ThzPsfApp {
     fn default() -> Self {
+        let (dialog_tx, dialog_rx) = channel();
         Self {
             knife_edge_x_path: String::new(),
             knife_edge_y_path: String::new(),
@@ -214,6 +223,8 @@ impl Default for ThzPsfApp {
             cancel_flag: Arc::new(AtomicBool::new(false)),
             compute_tx: None,
             result_rx: None,
+            dialog_tx,
+            dialog_rx,
             show_filter_response: true,
             show_intensity: true,
             show_beam_widths: true,
@@ -758,6 +769,37 @@ impl ThzPsfApp {
         }
     }
 
+    fn check_dialog_results(&mut self) {
+        while let Ok(result) = self.dialog_rx.try_recv() {
+            match result {
+                DialogResult::XFile(Some(path)) => {
+                    self.knife_edge_x_path = path.to_string_lossy().to_string();
+                    self.save_state();
+                    self.last_params_hash = 0;
+                }
+                DialogResult::YFile(Some(path)) => {
+                    self.knife_edge_y_path = path.to_string_lossy().to_string();
+                    self.save_state();
+                    self.last_params_hash = 0;
+                }
+                DialogResult::ExportFile(Some(path)) => {
+                    if let Some(curve_fits) = &self.curve_fits {
+                        match export::export_to_npz(&path, curve_fits) {
+                            Ok(_) => {
+                                self.status_message =
+                                    Some(format!("Exported to {}", path.display()));
+                            }
+                            Err(e) => {
+                                self.status_message = Some(format!("Export failed: {}", e));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
     fn compute_curve_fits(&mut self) {
         let frequencies_thz = match &self.filters {
             Some(f) => f.center_frequencies.clone(),
@@ -883,6 +925,7 @@ impl ThzPsfApp {
     /// Main UI entry point called by the bevy system on each frame.
     pub fn show_ui(&mut self, ctx: &egui::Context) {
         self.check_results();
+        self.check_dialog_results();
 
         if self.show_filter_response && self.filters.is_some() {
             self.ensure_filter_response_cache();
@@ -947,14 +990,16 @@ impl ThzPsfApp {
                         ui.horizontal(|ui| {
                             ui.label("X measurement:");
                             if ui.button(egui_phosphor::regular::FOLDER_OPEN).clicked() {
-                                if let Some(path) = rfd::FileDialog::new()
-                                    .add_filter("THz files", &["thz"])
-                                    .pick_file()
-                                {
-                                    self.knife_edge_x_path = path.to_string_lossy().to_string();
-                                    self.save_state();
-                                    self.last_params_hash = 0;
-                                }
+                                let dialog_tx = self.dialog_tx.clone();
+                                std::thread::spawn(move || {
+                                    let task = rfd::AsyncFileDialog::new()
+                                        .add_filter("THz files", &["thz"])
+                                        .pick_file();
+                                    futures::executor::block_on(async {
+                                        let path = task.await.map(|file| file.path().to_path_buf());
+                                        let _ = dialog_tx.send(DialogResult::XFile(path));
+                                    });
+                                });
                             }
                             ui.add(egui::TextEdit::singleline(&mut self.knife_edge_x_path)
                                 .hint_text("path/to/x_measurement.thz"));
@@ -962,14 +1007,16 @@ impl ThzPsfApp {
                         ui.horizontal(|ui| {
                             ui.label("Y measurement:");
                             if ui.button(egui_phosphor::regular::FOLDER_OPEN).clicked() {
-                                if let Some(path) = rfd::FileDialog::new()
-                                    .add_filter("THz files", &["thz"])
-                                    .pick_file()
-                                {
-                                    self.knife_edge_y_path = path.to_string_lossy().to_string();
-                                    self.save_state();
-                                    self.last_params_hash = 0;
-                                }
+                                let dialog_tx = self.dialog_tx.clone();
+                                std::thread::spawn(move || {
+                                    let task = rfd::AsyncFileDialog::new()
+                                        .add_filter("THz files", &["thz"])
+                                        .pick_file();
+                                    futures::executor::block_on(async {
+                                        let path = task.await.map(|file| file.path().to_path_buf());
+                                        let _ = dialog_tx.send(DialogResult::YFile(path));
+                                    });
+                                });
                             }
                             ui.add(egui::TextEdit::singleline(&mut self.knife_edge_y_path)
                                 .hint_text("path/to/y_measurement.thz"));
@@ -1121,22 +1168,18 @@ impl ThzPsfApp {
                     // Export button
                     if ui.button("💾 Export PSF to .npz").clicked() {
                         if let Some(curve_fits) = &self.curve_fits {
-                            if let Some(path) = rfd::FileDialog::new()
-                                .set_file_name("psf_coefficients.npz")
-                                .add_filter("NumPy Archive", &["npz"])
-                                .save_file()
-                            {
-                                match export::export_to_npz(&path, curve_fits) {
-                                    Ok(_) => {
-                                        self.status_message =
-                                            Some(format!("Exported to {}", path.display()));
-                                    }
-                                    Err(e) => {
-                                        self.status_message =
-                                            Some(format!("Export failed: {}", e));
-                                    }
-                                }
-                            }
+                            let _ = curve_fits;
+                            let dialog_tx = self.dialog_tx.clone();
+                            std::thread::spawn(move || {
+                                let task = rfd::AsyncFileDialog::new()
+                                    .set_file_name("psf_coefficients.npz")
+                                    .add_filter("NumPy Archive", &["npz"])
+                                    .save_file();
+                                futures::executor::block_on(async {
+                                    let path = task.await.map(|file| file.path().to_path_buf());
+                                    let _ = dialog_tx.send(DialogResult::ExportFile(path));
+                                });
+                            });
                         } else {
                             self.status_message = Some("No PSF data computed yet".to_string());
                         }
