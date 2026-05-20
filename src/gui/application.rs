@@ -14,8 +14,9 @@ use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage,
 use crate::gui::utils::truncate_filename;
 use crate::math_tools::FftWindowType;
 use bevy::prelude::*;
+use bevy::ecs::query::QuerySingleError;
 use bevy_egui::egui::{Color32, Popup, PopupCloseBehavior, ThemePreference};
-use bevy_egui::{egui, EguiContexts};
+use bevy_egui::{egui, EguiContext, EguiContexts, PrimaryEguiContext};
 use bevy_voxel_plot::InstanceMaterialData;
 use core::f64;
 #[cfg(not(target_os = "macos"))]
@@ -208,6 +209,7 @@ pub fn update_gui(
     mut query: Query<(&mut InstanceMaterialData, &mut Mesh3d)>,
     cube_preview_image: Res<RenderImage>,
     mut contexts: EguiContexts,
+    primary_egui_contexts: Query<Entity, (With<EguiContext>, With<PrimaryEguiContext>)>,
     mut explorer: NonSendMut<THzImageExplorer>,
     mut image_state: Local<ImageState>,
     mut color_bar_state: Local<ColorBarState>,
@@ -226,7 +228,19 @@ pub fn update_gui(
 
     let cube_preview_texture_id = contexts.image_id(&cube_preview_image.0).unwrap();
 
-    let ctx = contexts.ctx_mut().unwrap();
+    let ctx = match contexts.ctx_mut() {
+        Ok(ctx) => ctx,
+        Err(QuerySingleError::MultipleEntities(_)) => {
+            let Some(entity) = primary_egui_contexts.iter().next() else {
+                return;
+            };
+            let Ok(ctx) = contexts.ctx_for_entity_mut(entity) else {
+                return;
+            };
+            ctx
+        }
+        Err(QuerySingleError::NoEntities(_)) => return,
+    };
     let viewport_rect = ctx.viewport_rect();
     let mut ui = egui::Ui::new(
         ctx.clone(),
@@ -236,7 +250,7 @@ pub fn update_gui(
             .max_rect(viewport_rect),
     );
 
-    let left_panel_width = 300.0;
+    let left_panel_width = 400.0;
     let right_panel_width = 500.0;
 
     let text_height = ctx.fonts_mut(|f| f.row_height(&egui::FontId::default()));
