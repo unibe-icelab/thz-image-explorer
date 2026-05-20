@@ -22,8 +22,8 @@ use bevy::winit::EventLoopProxyWrapper;
 use bevy::winit::WinitSettings;
 use bevy_egui::egui::style::HandleShape;
 use bevy_egui::egui::vec2;
-use bevy_egui::{egui, EguiPrimaryContextPass, EguiStartupSet};
-use bevy_egui::{EguiContexts, EguiPlugin};
+use bevy_egui::{egui, EguiGlobalSettings, EguiPrimaryContextPass, EguiStartupSet};
+use bevy_egui::{EguiContexts, EguiPlugin, PrimaryEguiContext};
 use bevy_panorbit_camera::PanOrbitCameraPlugin;
 use bevy_voxel_plot::VoxelMaterialPlugin;
 use crossbeam_channel::{Receiver, Sender};
@@ -63,9 +63,12 @@ fn spawn_data_thread(
     });
 }
 
-fn setup_camera(mut commands: Commands) {
+fn setup_camera(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalSettings>) {
+    // We spawn more than one camera (main + offscreen render-to-texture camera),
+    // so we must pick exactly one primary egui context manually.
+    egui_global_settings.auto_create_primary_context = false;
     // camera required by bevy-egui
-    commands.spawn(Camera2d);
+    commands.spawn((Camera2d, PrimaryEguiContext));
 }
 
 fn setup_fonts(mut contexts: EguiContexts) {
@@ -331,11 +334,7 @@ fn main() {
                 .disable::<LogPlugin>(),
         )
         .add_plugins(EguiPlugin::default())
-        .add_plugins((
-            bevy_framepace::FramepacePlugin,
-            VoxelMaterialPlugin,
-            PanOrbitCameraPlugin,
-        ))
+        .add_plugins((VoxelMaterialPlugin, PanOrbitCameraPlugin))
         .insert_resource(WinitSettings::desktop_app())
         .insert_resource(thread_communication.clone())
         .insert_resource(OpacityThreshold(0.1))

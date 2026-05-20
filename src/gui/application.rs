@@ -392,16 +392,6 @@ pub fn update_gui(
             });
         });
 
-    center_panel(
-        &cube_preview_texture_id,
-        &mut ui,
-        &right_panel_width,
-        &left_panel_width,
-        &mut explorer,
-        &mut opacity_threshold,
-        &mut cam_input,
-        &mut thread_communication,
-    );
 
     left_panel(
         &mut ui,
@@ -419,6 +409,16 @@ pub fn update_gui(
         &mut thread_communication,
         &mut exit,
     );
+
+    center_panel(
+        &cube_preview_texture_id,
+        &mut ui,
+        &mut explorer,
+        &mut opacity_threshold,
+        &mut cam_input,
+        &mut thread_communication,
+    );
+
 
     thread_communication.gui_settings.x = ctx.globally_used_rect().width() as u32;
     thread_communication.gui_settings.y = ctx.globally_used_rect().height() as u32;

@@ -9,7 +9,6 @@ use bevy::winit::{EventLoopProxyWrapper, WinitUserEvent};
 use bevy::{prelude::*, render::render_resource::*};
 use bevy_egui::egui::{epaint, Popup, PopupCloseBehavior, Ui};
 use bevy_egui::{egui, EguiUserTextures};
-use bevy_framepace::Limiter;
 use bevy_panorbit_camera::{ActiveCameraData, PanOrbitCamera};
 use bevy_voxel_plot::{InstanceData, InstanceMaterialData};
 use ndarray::{Array1, Array3, ArrayView1, Axis};
@@ -279,7 +278,6 @@ pub fn set_enable_camera_controls_system(
 }
 
 pub fn setup(
-    mut framepace_settings: ResMut<bevy_framepace::FramepaceSettings>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut egui_user_textures: ResMut<EguiUserTextures>,
     mut commands: Commands,
@@ -287,9 +285,6 @@ pub fn setup(
     mut active_cam: ResMut<ActiveCameraData>,
     windows: Query<&Window, With<PrimaryWindow>>,
 ) {
-    // limit the framerate
-    framepace_settings.limiter = Limiter::from_framerate(30.0);
-
     let (instances, cube_width, cube_height, cube_depth) = (vec![], 1.0, 1.0, 1.0);
 
     commands.spawn((
@@ -345,9 +340,9 @@ pub fn setup(
                 // render before the "main pass" camera
                 clear_color: ClearColorConfig::Custom(Color::srgba(1.0, 1.0, 1.0, 0.0)),
                 order: -1,
-                target: RenderTarget::Image(ImageRenderTarget::from(image_handle.clone())),
                 ..default()
             },
+            RenderTarget::Image(ImageRenderTarget::from(image_handle.clone())),
             Transform::from_translation(Vec3::new(0.0, 0.1, 0.0)),
             Projection::Orthographic {
                 0: OrthographicProjection {

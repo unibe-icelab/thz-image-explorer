@@ -25,7 +25,6 @@ pub fn pulse_tab(
     height: f32,
     width: f32,
     spacing: f32,
-    right_panel_width: f32,
     explorer: &mut THzImageExplorer,
     thread_communication: &mut ThreadCommunication,
 ) {
@@ -522,7 +521,7 @@ pub fn pulse_tab(
             ui.label("Water Lines");
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add_space(right_panel_width + 5.0);
+                ui.add_space(5.0);
 
                 // dynamic range:
                 let length = explorer.data.signal_fft.len();
@@ -561,7 +560,6 @@ pub fn optical_properties_tab(
     height: f32,
     width: f32,
     spacing: f32,
-    right_panel_width: f32,
     explorer: &mut THzImageExplorer,
     thread_communication: &mut ThreadCommunication,
 ) {
@@ -783,7 +781,7 @@ pub fn optical_properties_tab(
             ui.label("Water Lines");
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add_space(right_panel_width + 5.0);
+                ui.add_space( 5.0);
 
                 // Display material statistics if available
                 if let Some(max_n) = explorer
@@ -817,8 +815,6 @@ pub fn optical_properties_tab(
 pub fn center_panel(
     cube_preview_texture_id: &epaint::TextureId,
     ui: &mut egui::Ui,
-    right_panel_width: &f32,
-    left_panel_width: &f32,
     explorer: &mut THzImageExplorer,
     opacity_threshold: &mut ResMut<OpacityThreshold>,
     cam_input: &mut ResMut<CameraInputAllowed>,
@@ -828,9 +824,9 @@ pub fn center_panel(
         let window_height = ui.available_height();
         let height = ui.available_size().y * 0.45;
         let spacing = (ui.available_size().y - 2.0 * height) / 3.0 - 10.0;
-        let width = ui.available_size().x - 40.0 - *left_panel_width - *right_panel_width;
+        let width = ui.available_size().x - 40.0;
         ui.horizontal(|ui| {
-            ui.add_space(*left_panel_width + 20.0);
+            ui.add_space(20.0);
             let tabs = thread_communication.gui_settings.tab.to_arr();
             if ui
                 .selectable_label(tabs[0], Tab::Pulse.to_string())
@@ -859,23 +855,14 @@ pub fn center_panel(
         ui.add_space(5.0);
 
         ui.horizontal(|ui| {
-            ui.add_space(*left_panel_width + 20.0);
+            ui.add_space(20.0);
             match thread_communication.gui_settings.tab {
-                Tab::Pulse => pulse_tab(
-                    ui,
-                    height,
-                    width,
-                    spacing,
-                    *right_panel_width,
-                    explorer,
-                    thread_communication,
-                ),
+                Tab::Pulse => pulse_tab(ui, height, width, spacing, explorer, thread_communication),
                 Tab::OpticalProperties => optical_properties_tab(
                     ui,
                     height * 0.95,
                     width,
                     spacing,
-                    *right_panel_width,
                     explorer,
                     thread_communication,
                 ),
