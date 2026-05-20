@@ -1,7 +1,6 @@
 use crate::config::{send_latest_config, ConfigCommand, ThreadCommunication};
 use crate::filters::filter::{draw_filters, FilterDomain};
 use crate::gui::application::{THzImageExplorer, SAFETY_ORANGE};
-use crate::gui::settings_window::settings_window;
 use crate::gui::toggle_widget::toggle;
 use crate::math_tools::{
     apply_adapted_blackman_window, apply_blackman, apply_flat_top, apply_hamming, apply_hanning,

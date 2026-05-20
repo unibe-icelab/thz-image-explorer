@@ -110,100 +110,104 @@ impl PsfVisualizerWindow {
 
     fn show_content(&mut self, ui: &mut egui::Ui, curve_fits: &CurveFits) {
         ui.heading("2D PSF at Selected Frequency");
-            ui.add_space(10.0);
+        ui.add_space(10.0);
 
-            // Frequency slider
-            ui.horizontal(|ui| {
-                ui.label("Frequency:");
-                let response = ui.add(
-                    egui::Slider::new(&mut self.frequency_thz, 0.1..=10.0)
-                        .text("THz")
-                        .logarithmic(true)
-                        .step_by(0.01),
-                );
+        // Frequency slider
+        ui.horizontal(|ui| {
+            ui.label("Frequency:");
+            let response = ui.add(
+                egui::Slider::new(&mut self.frequency_thz, 0.1..=10.0)
+                    .text("THz")
+                    .logarithmic(true)
+                    .step_by(0.01),
+            );
 
-                // Show wavelength
-                let wavelength_um = 299.792458 / self.frequency_thz;
-                ui.label(format!("({:.1} µm)", wavelength_um));
+            // Show wavelength
+            let wavelength_um = 299.792458 / self.frequency_thz;
+            ui.label(format!("({:.1} µm)", wavelength_um));
 
-                // Regenerate image if frequency changed
-                if response.changed() {
-                    self.cached_image = None;
+            // Regenerate image if frequency changed
+            if response.changed() {
+                self.cached_image = None;
+            }
+        });
+
+        ui.add_space(5.0);
+
+        // Generate or use cached image; keep TextureHandle alive across frames
+        // to prevent bevy_egui from releasing the GPU texture before the render pass
+        let needs_new = match &self.cached_image {
+            Some((cached_freq, _)) => (cached_freq - self.frequency_thz).abs() >= 1e-6,
+            None => true,
+        };
+        if needs_new || self.texture.is_none() {
+            let img = if needs_new {
+                let img = Self::generate_psf_image(curve_fits, self.frequency_thz, 256);
+                self.cached_image = Some((self.frequency_thz, img.clone()));
+                img
+            } else {
+                self.cached_image.as_ref().unwrap().1.clone()
+            };
+            self.texture = Some(ui.ctx().load_texture(
+                "psf_image",
+                img,
+                egui::TextureOptions::LINEAR,
+            ));
+        }
+        let texture_id = self.texture.as_ref().map(|t| t.id());
+
+        // Display PSF information
+        let freqs = vec![self.frequency_thz];
+        let wx = curve_fits.wx_fit.evaluate(&freqs)[0];
+        let wy = curve_fits.wy_fit.evaluate(&freqs)[0];
+        let x0 = curve_fits.x0_fit.evaluate_const_extrap(&freqs)[0];
+        let y0 = curve_fits.y0_fit.evaluate_const_extrap(&freqs)[0];
+
+        ui.horizontal(|ui| {
+            ui.label(format!("w_x = {:.3} mm", wx));
+            ui.separator();
+            ui.label(format!("w_y = {:.3} mm", wy));
+            ui.separator();
+            ui.label(format!("x₀ = {:.3} mm", x0));
+            ui.separator();
+            ui.label(format!("y₀ = {:.3} mm", y0));
+        });
+
+        ui.add_space(10.0);
+
+        // Display the PSF image
+        let available_size = ui.available_size();
+        let plot_size = available_size.x.min(available_size.y - 20.0);
+
+        // Calculate spatial extent for axes
+        let extent_x = 4.0 * wx;
+        let extent_y = 4.0 * wy;
+        let x_min = x0 - extent_x;
+        let x_max = x0 + extent_x;
+        let y_min = y0 - extent_y;
+        let y_max = y0 + extent_y;
+
+        egui_plot::Plot::new("psf_plot")
+            .width(plot_size)
+            .height(plot_size)
+            .data_aspect(1.0)
+            .x_axis_label("x [mm]")
+            .y_axis_label("y [mm]")
+            .show(ui, |plot_ui| {
+                if let Some(tex_id) = texture_id {
+                    plot_ui.image(PlotImage::new(
+                        "PSF",
+                        tex_id,
+                        PlotPoint::new((x_min + x_max) / 2.0, (y_min + y_max) / 2.0),
+                        egui::Vec2::new((x_max - x_min) as f32, (y_max - y_min) as f32),
+                    ));
                 }
             });
 
-            ui.add_space(5.0);
-
-            // Generate or use cached image; keep TextureHandle alive across frames
-            // to prevent bevy_egui from releasing the GPU texture before the render pass
-            let needs_new = match &self.cached_image {
-                Some((cached_freq, _)) => (cached_freq - self.frequency_thz).abs() >= 1e-6,
-                None => true,
-            };
-            if needs_new || self.texture.is_none() {
-                let img = if needs_new {
-                    let img = Self::generate_psf_image(curve_fits, self.frequency_thz, 256);
-                    self.cached_image = Some((self.frequency_thz, img.clone()));
-                    img
-                } else {
-                    self.cached_image.as_ref().unwrap().1.clone()
-                };
-                self.texture = Some(ui.ctx().load_texture("psf_image", img, egui::TextureOptions::LINEAR));
-            }
-            let texture_id = self.texture.as_ref().map(|t| t.id());
-
-            // Display PSF information
-            let freqs = vec![self.frequency_thz];
-            let wx = curve_fits.wx_fit.evaluate(&freqs)[0];
-            let wy = curve_fits.wy_fit.evaluate(&freqs)[0];
-            let x0 = curve_fits.x0_fit.evaluate_const_extrap(&freqs)[0];
-            let y0 = curve_fits.y0_fit.evaluate_const_extrap(&freqs)[0];
-
-            ui.horizontal(|ui| {
-                ui.label(format!("w_x = {:.3} mm", wx));
-                ui.separator();
-                ui.label(format!("w_y = {:.3} mm", wy));
-                ui.separator();
-                ui.label(format!("x₀ = {:.3} mm", x0));
-                ui.separator();
-                ui.label(format!("y₀ = {:.3} mm", y0));
-            });
-
-            ui.add_space(10.0);
-
-            // Display the PSF image
-            let available_size = ui.available_size();
-            let plot_size = available_size.x.min(available_size.y - 20.0);
-
-            // Calculate spatial extent for axes
-            let extent_x = 4.0 * wx;
-            let extent_y = 4.0 * wy;
-            let x_min = x0 - extent_x;
-            let x_max = x0 + extent_x;
-            let y_min = y0 - extent_y;
-            let y_max = y0 + extent_y;
-
-            egui_plot::Plot::new("psf_plot")
-                .width(plot_size)
-                .height(plot_size)
-                .data_aspect(1.0)
-                .x_axis_label("x [mm]")
-                .y_axis_label("y [mm]")
-                .show(ui, |plot_ui| {
-                    if let Some(tex_id) = texture_id {
-                        plot_ui.image(PlotImage::new(
-                            "PSF",
-                            tex_id,
-                            PlotPoint::new((x_min + x_max) / 2.0, (y_min + y_max) / 2.0),
-                            egui::Vec2::new((x_max - x_min) as f32, (y_max - y_min) as f32),
-                        ));
-                    }
-                });
-
-            ui.add_space(5.0);
-            ui.horizontal(|ui| {
-                ui.label("Colormap: Blue (low) -> Yellow -> Red (high)");
-            });
+        ui.add_space(5.0);
+        ui.horizontal(|ui| {
+            ui.label("Colormap: Blue (low) -> Yellow -> Red (high)");
+        });
     }
 }
 

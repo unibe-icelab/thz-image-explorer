@@ -59,9 +59,9 @@ impl KnifeEdgeMeasurement {
             };
 
             // Use dotthz 0.3 API: get_datasets(group_name) instead of group.datasets()
-            let datasets = file
-                .get_datasets(group_name)
-                .map_err(|e| anyhow::anyhow!("Failed to get datasets from {}: {}", group_name, e))?;
+            let datasets = file.get_datasets(group_name).map_err(|e| {
+                anyhow::anyhow!("Failed to get datasets from {}: {}", group_name, e)
+            })?;
 
             if datasets.is_empty() {
                 log::warn!("Skipping group {} - no datasets", group_name);

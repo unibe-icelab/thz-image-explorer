@@ -12,4 +12,3 @@ pub mod psf_visualizer;
 pub mod warnings;
 
 pub use app::ThzPsfApp;
-pub use curve_fitting::CurveFits;
