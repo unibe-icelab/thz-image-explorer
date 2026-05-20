@@ -3,6 +3,8 @@
 //! bevy_egui system running on the secondary window's EguiContextPass schedule.
 
 use bevy_egui::egui;
+#[cfg(not(target_os = "macos"))]
+use egui_file_dialog::FileDialog;
 use egui_plot::{Legend, Line, Plot, PlotPoints};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -133,6 +135,15 @@ enum DialogResult {
     ExportFile(Option<PathBuf>),
 }
 
+#[cfg(not(target_os = "macos"))]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PsfDialogState {
+    None,
+    OpenX,
+    OpenY,
+    SaveExport,
+}
+
 #[derive(Debug, Clone)]
 struct FilterResponseCache {
     curves_hz: Vec<Vec<[f64; 2]>>,
@@ -169,6 +180,10 @@ pub struct ThzPsfApp {
     result_rx: Option<Receiver<ComputeResult>>,
     dialog_tx: Sender<DialogResult>,
     dialog_rx: Receiver<DialogResult>,
+    #[cfg(not(target_os = "macos"))]
+    file_dialog: FileDialog,
+    #[cfg(not(target_os = "macos"))]
+    file_dialog_state: PsfDialogState,
 
     // Display options
     show_filter_response: bool,
@@ -225,6 +240,23 @@ impl Default for ThzPsfApp {
             result_rx: None,
             dialog_tx,
             dialog_rx,
+            #[cfg(not(target_os = "macos"))]
+            file_dialog: FileDialog::default()
+                .default_size([640.0, 440.0])
+                .add_file_filter(
+                    "THz files",
+                    std::sync::Arc::new(|p| {
+                        p.extension().unwrap_or_default().to_ascii_lowercase() == "thz"
+                    }),
+                )
+                .add_file_filter(
+                    "NumPy archive",
+                    std::sync::Arc::new(|p| {
+                        p.extension().unwrap_or_default().to_ascii_lowercase() == "npz"
+                    }),
+                ),
+            #[cfg(not(target_os = "macos"))]
+            file_dialog_state: PsfDialogState::None,
             show_filter_response: true,
             show_intensity: true,
             show_beam_widths: true,
@@ -800,6 +832,47 @@ impl ThzPsfApp {
         }
     }
 
+    #[cfg(not(target_os = "macos"))]
+    fn check_file_dialog_results(&mut self, ctx: &egui::Context) {
+        if self.file_dialog_state == PsfDialogState::None {
+            return;
+        }
+
+        if let Some(path) = self
+            .file_dialog
+            .update_with_right_panel_ui(ctx, &mut |_ui, _dia| {})
+            .picked()
+        {
+            match self.file_dialog_state {
+                PsfDialogState::OpenX => {
+                    self.knife_edge_x_path = path.to_string_lossy().to_string();
+                    self.save_state();
+                    self.last_params_hash = 0;
+                }
+                PsfDialogState::OpenY => {
+                    self.knife_edge_y_path = path.to_string_lossy().to_string();
+                    self.save_state();
+                    self.last_params_hash = 0;
+                }
+                PsfDialogState::SaveExport => {
+                    if let Some(curve_fits) = &self.curve_fits {
+                        match export::export_to_npz(&path, curve_fits) {
+                            Ok(_) => {
+                                self.status_message =
+                                    Some(format!("Exported to {}", path.display()));
+                            }
+                            Err(e) => {
+                                self.status_message = Some(format!("Export failed: {}", e));
+                            }
+                        }
+                    }
+                }
+                PsfDialogState::None => {}
+            }
+            self.file_dialog_state = PsfDialogState::None;
+        }
+    }
+
     fn compute_curve_fits(&mut self) {
         let frequencies_thz = match &self.filters {
             Some(f) => f.center_frequencies.clone(),
@@ -926,6 +999,8 @@ impl ThzPsfApp {
     pub fn show_ui(&mut self, ctx: &egui::Context) {
         self.check_results();
         self.check_dialog_results();
+        #[cfg(not(target_os = "macos"))]
+        self.check_file_dialog_results(ctx);
 
         if self.show_filter_response && self.filters.is_some() {
             self.ensure_filter_response_cache();
@@ -990,16 +1065,25 @@ impl ThzPsfApp {
                         ui.horizontal(|ui| {
                             ui.label("X measurement:");
                             if ui.button(egui_phosphor::regular::FOLDER_OPEN).clicked() {
-                                let dialog_tx = self.dialog_tx.clone();
-                                std::thread::spawn(move || {
-                                    let task = rfd::AsyncFileDialog::new()
-                                        .add_filter("THz files", &["thz"])
-                                        .pick_file();
-                                    futures::executor::block_on(async {
-                                        let path = task.await.map(|file| file.path().to_path_buf());
-                                        let _ = dialog_tx.send(DialogResult::XFile(path));
+                                #[cfg(target_os = "macos")]
+                                {
+                                    let dialog_tx = self.dialog_tx.clone();
+                                    std::thread::spawn(move || {
+                                        let task = rfd::AsyncFileDialog::new()
+                                            .add_filter("THz files", &["thz"])
+                                            .pick_file();
+                                        futures::executor::block_on(async {
+                                            let path =
+                                                task.await.map(|file| file.path().to_path_buf());
+                                            let _ = dialog_tx.send(DialogResult::XFile(path));
+                                        });
                                     });
-                                });
+                                }
+                                #[cfg(not(target_os = "macos"))]
+                                {
+                                    self.file_dialog.pick_file();
+                                    self.file_dialog_state = PsfDialogState::OpenX;
+                                }
                             }
                             ui.add(egui::TextEdit::singleline(&mut self.knife_edge_x_path)
                                 .hint_text("path/to/x_measurement.thz"));
@@ -1007,16 +1091,25 @@ impl ThzPsfApp {
                         ui.horizontal(|ui| {
                             ui.label("Y measurement:");
                             if ui.button(egui_phosphor::regular::FOLDER_OPEN).clicked() {
-                                let dialog_tx = self.dialog_tx.clone();
-                                std::thread::spawn(move || {
-                                    let task = rfd::AsyncFileDialog::new()
-                                        .add_filter("THz files", &["thz"])
-                                        .pick_file();
-                                    futures::executor::block_on(async {
-                                        let path = task.await.map(|file| file.path().to_path_buf());
-                                        let _ = dialog_tx.send(DialogResult::YFile(path));
+                                #[cfg(target_os = "macos")]
+                                {
+                                    let dialog_tx = self.dialog_tx.clone();
+                                    std::thread::spawn(move || {
+                                        let task = rfd::AsyncFileDialog::new()
+                                            .add_filter("THz files", &["thz"])
+                                            .pick_file();
+                                        futures::executor::block_on(async {
+                                            let path =
+                                                task.await.map(|file| file.path().to_path_buf());
+                                            let _ = dialog_tx.send(DialogResult::YFile(path));
+                                        });
                                     });
-                                });
+                                }
+                                #[cfg(not(target_os = "macos"))]
+                                {
+                                    self.file_dialog.pick_file();
+                                    self.file_dialog_state = PsfDialogState::OpenY;
+                                }
                             }
                             ui.add(egui::TextEdit::singleline(&mut self.knife_edge_y_path)
                                 .hint_text("path/to/y_measurement.thz"));
@@ -1169,17 +1262,26 @@ impl ThzPsfApp {
                     if ui.button("💾 Export PSF to .npz").clicked() {
                         if let Some(curve_fits) = &self.curve_fits {
                             let _ = curve_fits;
-                            let dialog_tx = self.dialog_tx.clone();
-                            std::thread::spawn(move || {
-                                let task = rfd::AsyncFileDialog::new()
-                                    .set_file_name("psf_coefficients.npz")
-                                    .add_filter("NumPy Archive", &["npz"])
-                                    .save_file();
-                                futures::executor::block_on(async {
-                                    let path = task.await.map(|file| file.path().to_path_buf());
-                                    let _ = dialog_tx.send(DialogResult::ExportFile(path));
+                            #[cfg(target_os = "macos")]
+                            {
+                                let dialog_tx = self.dialog_tx.clone();
+                                std::thread::spawn(move || {
+                                    let task = rfd::AsyncFileDialog::new()
+                                        .set_file_name("psf_coefficients.npz")
+                                        .add_filter("NumPy Archive", &["npz"])
+                                        .save_file();
+                                    futures::executor::block_on(async {
+                                        let path =
+                                            task.await.map(|file| file.path().to_path_buf());
+                                        let _ = dialog_tx.send(DialogResult::ExportFile(path));
+                                    });
                                 });
-                            });
+                            }
+                            #[cfg(not(target_os = "macos"))]
+                            {
+                                self.file_dialog.save_file();
+                                self.file_dialog_state = PsfDialogState::SaveExport;
+                            }
                         } else {
                             self.status_message = Some("No PSF data computed yet".to_string());
                         }
