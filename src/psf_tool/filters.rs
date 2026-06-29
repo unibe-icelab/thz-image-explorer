@@ -3,6 +3,15 @@ use num_complex::Complex64;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 
+/// Spacing strategy for filter center frequencies
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum FrequencySpacing {
+    /// Logarithmic spacing (center frequencies spread on a log scale)
+    Log,
+    /// Linear spacing (center frequencies spread on a linear scale)
+    Linear,
+}
+
 /// Parameters for filter creation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FilterParams {
@@ -12,6 +21,7 @@ pub struct FilterParams {
     pub start_freq: f64,
     pub end_freq: f64,
     pub win_width: f64,
+    pub frequency_spacing: FrequencySpacing,
 }
 
 impl Default for FilterParams {
@@ -23,6 +33,7 @@ impl Default for FilterParams {
             start_freq: 0.15,
             end_freq: 5.0,
             win_width: 0.5,
+            frequency_spacing: FrequencySpacing::Log,
         }
     }
 }
@@ -214,14 +225,23 @@ pub fn create_filters(params: &FilterParams, times: &[f64]) -> Filters {
     let dt = times[1] - times[0];
     let fs = 1.0 / dt; // in THz (since times are in ps, fs is in THz)
 
-    // Logarithmically spaced center frequencies
-    let log_start = params.start_freq.ln();
-    let log_end = params.end_freq.ln();
-    let log_step = (log_end - log_start) / ((params.n_filters - 1) as f64);
-
-    let center_frequencies: Vec<f64> = (0..params.n_filters)
-        .map(|i| (log_start + i as f64 * log_step).exp())
-        .collect();
+    // Center frequencies depending on spacing mode
+    let center_frequencies: Vec<f64> = match params.frequency_spacing {
+        FrequencySpacing::Log => {
+            let log_start = params.start_freq.ln();
+            let log_end = params.end_freq.ln();
+            let log_step = (log_end - log_start) / ((params.n_filters - 1) as f64);
+            (0..params.n_filters)
+                .map(|i| (log_start + i as f64 * log_step).exp())
+                .collect()
+        }
+        FrequencySpacing::Linear => {
+            let step = (params.end_freq - params.start_freq) / ((params.n_filters - 1) as f64);
+            (0..params.n_filters)
+                .map(|i| params.start_freq + i as f64 * step)
+                .collect()
+        }
+    };
 
     // Create filters
     let mut coefficients = Array2::zeros((params.n_filters, ntaps));

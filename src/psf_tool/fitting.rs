@@ -295,7 +295,7 @@ pub fn fit_beam_widths<F>(
     mut progress_callback: F,
 ) -> Result<BeamWidthFits, String>
 where
-    F: FnMut(usize, usize),
+    F: FnMut(usize, usize) -> bool, // ← bool au lieu de ()
 {
     let n_filters = filters.nrows();
     println!(
@@ -410,8 +410,9 @@ where
             popt_y[1].abs()
         );
 
-        // Call progress callback after each filter
-        progress_callback(nf + 1, n_filters);
+        if !progress_callback(nf + 1, n_filters) {
+            return Err("Cancelled".to_string());
+        }
     }
 
     println!(
