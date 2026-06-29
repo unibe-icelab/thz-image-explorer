@@ -18,6 +18,14 @@ impl IndividualFitsWindow {
         }
     }
 
+    /// Update the total number of filters (called when filters are recomputed).
+    pub fn update_total_filters(&mut self, total_filters: usize) {
+        self.total_filters = total_filters;
+        if self.selected_filter >= self.total_filters {
+            self.selected_filter = self.total_filters.saturating_sub(1);
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn show_in_panel(
         &mut self,

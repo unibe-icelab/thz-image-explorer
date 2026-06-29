@@ -8,6 +8,10 @@ All notable changes to the `THz Image Explorer` project will be documented in th
 * Migrate the Settings panel from an egui floating window to a native OS secondary window using `bevy_egui`'s `EguiMultipassSchedule` system
 * Fix theme propagation: changing the theme in Settings is now immediately reflected in the main window
 * Fix initial theme of the Settings window: it now opens with the correct theme (including OS-follow mode) instead of always defaulting to dark
+* Reset Parameters button in PSF tool
+* Fix individual fits update with new frequency count in PSF tool
+* Fix start and end freq. in PSF tool: now constrained by the low and high cut
+* Linear vs. logarithmic frequency spacing in PSF tool
 
 # 1.1.0 - 28.11.2025
 

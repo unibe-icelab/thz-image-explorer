@@ -22,7 +22,7 @@ use super::data_loader::{
 use super::diagnostic_window::DiagnosticWindow;
 use super::diagnostics::DiagnosticResults;
 use super::export;
-use super::filters::{create_filters, frequency_response, FilterParams, Filters};
+use super::filters::{create_filters, frequency_response, FilterParams, Filters, FrequencySpacing};
 use super::fitting::{fit_beam_widths, fit_mean_beam, BeamFitParams, BeamWidthFits, MeanBeamFit};
 use super::individual_fits_window::IndividualFitsWindow;
 use super::psf_visualizer::PsfVisualizerWindow;
@@ -313,6 +313,32 @@ impl ThzPsfApp {
         .save();
     }
 
+    /// Reset all parameters and display options to their default values.
+    pub fn reset_parameters(&mut self) {
+        self.filter_params = FilterParams::default();
+        self.fit_params = BeamFitParams::default();
+        self.show_filter_response = true;
+        self.show_intensity = true;
+        self.show_beam_widths = true;
+        self.show_beam_centers = true;
+        self.use_wavelength = false;
+        self.x_measurement = None;
+        self.y_measurement = None;
+        self.filters = None;
+        self.mean_fit_x = None;
+        self.mean_fit_y = None;
+        self.beam_fits_x = None;
+        self.beam_fits_y = None;
+        self.curve_fits = None;
+        self.filter_response_cache = None;
+        self.computation_state = ComputationState::Idle;
+        self.cancel_flag = Arc::new(AtomicBool::new(false));
+        self.last_params_hash = 0;
+        self.active_warnings.clear();
+        self.status_message = None;
+        self.save_state();
+    }
+
     fn compute_params_hash(&self) -> u64 {
         let mut h = DefaultHasher::new();
         self.knife_edge_x_path.hash(&mut h);
@@ -323,6 +349,7 @@ impl ThzPsfApp {
         self.filter_params.start_freq.to_bits().hash(&mut h);
         self.filter_params.end_freq.to_bits().hash(&mut h);
         self.filter_params.win_width.to_bits().hash(&mut h);
+        self.filter_params.frequency_spacing.hash(&mut h);
         self.fit_params.w_max.to_bits().hash(&mut h);
         self.fit_params.use_monotonicity_constraint.hash(&mut h);
         h.finish()
@@ -773,20 +800,27 @@ impl ThzPsfApp {
                         beam_fits_y,
                         warnings,
                     } => {
-                        self.x_measurement = x_measurement;
-                        self.y_measurement = y_measurement;
-                        self.filters = Some(filters);
-                        self.filter_response_cache = None;
-                        self.mean_fit_x = mean_fit_x;
-                        self.mean_fit_y = mean_fit_y;
-                        self.beam_fits_x = beam_fits_x;
-                        self.beam_fits_y = beam_fits_y;
-                        self.computation_state = ComputationState::Complete;
-                        self.active_warnings = warnings;
-                        should_update_curve_fits = true;
+                        // Only accept results from the currently active computation.
+                        // A stale Complete from a cancelled run must not overwrite state.
+                        if matches!(self.computation_state, ComputationState::Computing { .. }) {
+                            self.x_measurement = x_measurement;
+                            self.y_measurement = y_measurement;
+                            self.filters = Some(filters);
+                            self.filter_response_cache = None;
+                            self.mean_fit_x = mean_fit_x;
+                            self.mean_fit_y = mean_fit_y;
+                            self.beam_fits_x = beam_fits_x;
+                            self.beam_fits_y = beam_fits_y;
+                            self.computation_state = ComputationState::Complete;
+                            self.active_warnings = warnings;
+                            should_update_curve_fits = true;
+                        }
                     }
                     ComputeResult::Error(err) => {
-                        self.computation_state = ComputationState::Error(err);
+                        // Same guard: ignore errors from cancelled computations.
+                        if matches!(self.computation_state, ComputationState::Computing { .. }) {
+                            self.computation_state = ComputationState::Error(err);
+                        }
                     }
                 }
             }
@@ -1009,6 +1043,7 @@ impl ThzPsfApp {
         // Auto-trigger computation when parameters or paths change
         let current_hash = self.compute_params_hash();
         if current_hash != self.last_params_hash && self.should_compute() {
+            self.cancel_flag.store(true, Ordering::Relaxed);
             self.start_computation();
         }
 
@@ -1035,7 +1070,9 @@ impl ThzPsfApp {
                             && self.filters.is_some()
                         {
                             let total = self.filters.as_ref().unwrap().center_frequencies.len();
-                            if self.individual_fits_window.is_none() {
+                            if let Some(window) = &mut self.individual_fits_window {
+                                window.update_total_filters(total);
+                            } else {
                                 self.individual_fits_window =
                                     Some(IndividualFitsWindow::new(total));
                             }
@@ -1123,8 +1160,30 @@ impl ThzPsfApp {
                         let mut changed = false;
 
                         ui.horizontal(|ui| {
-                            ui.label("N filters:").on_hover_text("Number of log-spaced bandpass filters");
+                            ui.label("N filters:").on_hover_text("Number of bandpass filters");
                             changed |= ui.add(egui::Slider::new(&mut self.filter_params.n_filters, 5..=200)).changed();
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Spacing:");
+                            let prev_spacing = self.filter_params.frequency_spacing;
+                            egui::ComboBox::from_id_salt("freq_spacing_combo")
+                                .selected_text(match self.filter_params.frequency_spacing {
+                                    FrequencySpacing::Log => "Logarithmic",
+                                    FrequencySpacing::Linear => "Linear",
+                                })
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut self.filter_params.frequency_spacing,
+                                        FrequencySpacing::Log,
+                                        "Logarithmic",
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.filter_params.frequency_spacing,
+                                        FrequencySpacing::Linear,
+                                        "Linear",
+                                    );
+                                });
+                            changed |= self.filter_params.frequency_spacing != prev_spacing;
                         });
                         ui.horizontal(|ui| {
                             ui.label("Low cutoff [THz]:");
@@ -1135,19 +1194,29 @@ impl ThzPsfApp {
                             changed |= ui.add(egui::DragValue::new(&mut self.filter_params.high_cut).speed(0.05).range(0.1..=20.0)).changed();
                         });
                         ui.horizontal(|ui| {
-                            ui.label("Start freq [THz]:");
-                            changed |= ui.add(egui::DragValue::new(&mut self.filter_params.start_freq).speed(0.05).range(0.05..=self.filter_params.high_cut)).changed();
+                            ui.label("Start freq. [THz]:");
+                            let min_start = (self.filter_params.low_cut + 0.01).max(0.01);
+                            changed |= ui.add(egui::DragValue::new(&mut self.filter_params.start_freq).speed(0.05).range(min_start..=self.filter_params.high_cut)).changed();
                         });
                         ui.horizontal(|ui| {
-                            ui.label("End freq [THz]:");
-                            changed |= ui.add(egui::DragValue::new(&mut self.filter_params.end_freq).speed(0.1).range(self.filter_params.start_freq * 2.0..=20.0)).changed();
+                            ui.label("End freq. [THz]:");
+                            let max_end = (self.filter_params.high_cut - 0.01).min(20.0);
+                            let min_end = (self.filter_params.low_cut + 0.01).max(0.01);
+                            changed |= ui.add(egui::DragValue::new(&mut self.filter_params.end_freq).speed(0.1).range(min_end..=max_end)).changed();
                         });
                         ui.horizontal(|ui| {
-                            ui.label("Transition width [THz]:").on_hover_text("Transition band width (0.2–1.0 THz)");
-                            changed |= ui.add(egui::DragValue::new(&mut self.filter_params.win_width).speed(0.05).range(0.1..=2.0)).changed();
+                            ui.label("Transition width [THz]:").on_hover_text("Transition band width (0.1–1.0 THz)");
+                            changed |= ui.add(egui::DragValue::new(&mut self.filter_params.win_width).speed(0.05).range(0.1..=1.0)).changed();
                         });
 
                         if changed {
+                            // Clamp start_freq: must be > low_cut (at least low_cut + 0.01)
+                            // and <= high_cut
+                            let min_start = (self.filter_params.low_cut + 0.01).max(0.01);
+                            let max_start = self.filter_params.high_cut;
+                            self.filter_params.start_freq =
+                                self.filter_params.start_freq.clamp(min_start, max_start);
+
                             self.save_state();
                             if matches!(self.computation_state, ComputationState::Computing { .. }) {
                                 self.cancel_flag.store(true, Ordering::Relaxed);
@@ -1257,6 +1326,12 @@ impl ThzPsfApp {
                     });
 
                     ui.add_space(6.0);
+
+                    // Reset Parameters button
+                    if ui.button("🔄 Reset Parameters")
+                        .on_hover_text("Reset all filter and fitting parameters to default.").clicked() {
+                        self.reset_parameters();
+                    }
 
                     // Export button
                     if ui.button("💾 Export PSF to .npz").clicked() {
