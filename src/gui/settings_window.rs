@@ -1,6 +1,7 @@
 use crate::config::ThreadCommunication;
 use crate::gui::application::{FileDialogState, THzImageExplorer};
 use crate::gui::secondary_windows::SettingsWindowCamera;
+use crate::gui::utils::viewport_ui;
 #[cfg(feature = "self_update")]
 use crate::update::{check_for_software_updates, update};
 use crate::APP_INFO;
@@ -16,6 +17,7 @@ use self_update::restart::restart;
 #[cfg(feature = "self_update")]
 use semver::Version;
 
+#[allow(dead_code)]
 pub fn settings_window(
     ctx: &egui::Context,
     explorer: &mut THzImageExplorer,
@@ -64,7 +66,7 @@ pub fn settings_window(
                                 egui::Visuals::light()
                             });
                             // Re-apply handle shape
-                            ui.ctx().style_mut(|style| {
+                            ui.ctx().global_style_mut(|style| {
                                 style.visuals.handle_shape = egui::style::HandleShape::Circle;
                             });
                         }
@@ -278,7 +280,8 @@ pub fn settings_window_system(
         thread_communication.gui_settings.theme_preference,
     );
 
-    egui::CentralPanel::default().show(ctx, |ui| {
+    let mut viewport_ui = viewport_ui(ctx);
+    egui::CentralPanel::default().show_inside(&mut viewport_ui, |ui| {
         egui::ScrollArea::vertical().show(ui, |ui| {
             egui::Grid::new("theme settings")
                 .striped(true)
@@ -308,7 +311,7 @@ pub fn settings_window_system(
                             } else {
                                 egui::Visuals::light()
                             });
-                            ui.ctx().style_mut(|style| {
+                            ui.ctx().global_style_mut(|style| {
                                 style.visuals.handle_shape = egui::style::HandleShape::Circle;
                             });
                         }

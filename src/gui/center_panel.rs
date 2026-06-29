@@ -168,7 +168,7 @@ pub fn pulse_tab(
                 .width(2.0),
             );
 
-            let avg_signal_color = if signal_plot_ui.ctx().style().visuals.dark_mode {
+            let avg_signal_color = if signal_plot_ui.ctx().global_style().visuals.dark_mode {
                 egui::Color32::YELLOW
             } else {
                 LIGHT_THEME_YELLOW
@@ -422,7 +422,7 @@ pub fn pulse_tab(
             }
 
             if !thread_communication.gui_settings.phases_visible {
-                let avg_fft_color = if fft_plot_ui.ctx().style().visuals.dark_mode {
+                let avg_fft_color = if fft_plot_ui.ctx().global_style().visuals.dark_mode {
                     egui::Color32::YELLOW
                 } else {
                     LIGHT_THEME_YELLOW
@@ -437,7 +437,7 @@ pub fn pulse_tab(
                     .width(2.0),
                 )
             } else {
-                let avg_phase_color = if fft_plot_ui.ctx().style().visuals.dark_mode {
+                let avg_phase_color = if fft_plot_ui.ctx().global_style().visuals.dark_mode {
                     egui::Color32::YELLOW
                 } else {
                     LIGHT_THEME_YELLOW
@@ -737,7 +737,7 @@ pub fn optical_properties_tab(
             .legend(Legend::default());
 
         absorption_plot.show(ui, |plot_ui| {
-            let absorption_color = if plot_ui.ctx().style().visuals.dark_mode {
+            let absorption_color = if plot_ui.ctx().global_style().visuals.dark_mode {
                 egui::Color32::GREEN
             } else {
                 LIGHT_THEME_GREEN

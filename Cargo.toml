@@ -1,7 +1,7 @@
 [package]
 name = "thz-image-explorer"
 authors = ["Linus Leo Stöckli"]
-version = "1.2.0"
+version = "1.3.0"
 edition = "2021"
 description = "Explorer Software for THz TDS images."
 license = "GPL-3.0"
@@ -14,8 +14,8 @@ egui_logger = { git = "https://github.com/hacknus/egui_logger", branch = "expose
 egui-theme-switch = "0.7"
 egui-circular-progress-bar = "0.4"
 egui_double_slider = "2.0"
-bevy_egui = { git = "https://github.com/taboky-dev/bevy_egui", branch = "bevy-0.19", features = ["serde"] }
-bevy = { version = "0.19.0-rc.1", default-features = false, features = [
+bevy_egui = { version = "0.40", features = ["serde"] }
+bevy = { version = "0.19", default-features = false, features = [
     "std",
     "async_executor",
     "bevy_animation",
@@ -41,8 +41,8 @@ bevy = { version = "0.19.0-rc.1", default-features = false, features = [
     "sysinfo_plugin",
     "x11",
 ] }
-bevy_voxel_plot = { git = "https://github.com/hacknus/bevy_voxel_plot", branch = "bevy_0.19" }
-bevy_panorbit_camera = { git = "https://github.com/hacknus/bevy_panorbit_camera", branch = "bevy_0.19" }
+bevy_voxel_plot = { version = "5.0.0" }
+bevy_panorbit_camera = { version = "0.35" }
 bevy_framepace = { git = "https://github.com/hacknus/bevy_framepace", branch = "bevy_0.19" }
 crossbeam-channel = "0.5"
 log = "0.4.22"

@@ -22,7 +22,7 @@ pub fn right_panel(
     explorer: &mut THzImageExplorer,
     right_panel_width: &f32,
     thread_communication: &mut ThreadCommunication,
-    exit: &mut MessageWriter<AppExit>,
+    _exit: &mut MessageWriter<AppExit>,
 ) {
     let mut data = PlotDataContainer::default();
     if let Ok(read_guard) = thread_communication.data_lock.read() {

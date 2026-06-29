@@ -2,8 +2,13 @@
 
 All notable changes to the `THz Image Explorer` project will be documented in this file.
 
-# Unreleased 1.2.X - X.X.2026
+# Unreleased 1.3.X - X.X.2026
 
+*...
+
+# 1.3.0 - 29.6.2026
+
+* Update dependencies to `bevy 0.19`, `bevy-egui 0.40`
 * Fix DotTHz Quick Look plugin for macOS Tahoe
 * Migrate the Settings panel from an egui floating window to a native OS secondary window using `bevy_egui`'s `EguiMultipassSchedule` system
 * Fix theme propagation: changing the theme in Settings is now immediately reflected in the main window

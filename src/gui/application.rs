@@ -17,14 +17,14 @@ use crate::gui::secondary_windows::{
     SettingsWindowCamera,
 };
 use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage, SceneVisibility};
-use crate::gui::utils::truncate_filename;
+use crate::gui::utils::{truncate_filename, viewport_ui};
 use crate::math_tools::FftWindowType;
 use bevy::camera::RenderTarget;
-use bevy::prelude::*;
 use bevy::ecs::query::QuerySingleError;
+use bevy::prelude::*;
 use bevy::window::{WindowRef, WindowResolution};
 use bevy_egui::egui::{Color32, Popup, PopupCloseBehavior, ThemePreference};
-use bevy_egui::{egui, EguiContexts,PrimaryEguiContext,  EguiMultipassSchedule};
+use bevy_egui::{egui, EguiContext, EguiContexts, EguiMultipassSchedule, PrimaryEguiContext};
 use bevy_voxel_plot::InstanceMaterialData;
 use core::f64;
 #[cfg(not(target_os = "macos"))]
@@ -255,14 +255,7 @@ pub fn update_gui(
         }
         Err(QuerySingleError::NoEntities(_)) => return,
     };
-    let viewport_rect = ctx.viewport_rect();
-    let mut ui = egui::Ui::new(
-        ctx.clone(),
-        "viewport".into(),
-        egui::UiBuilder::new()
-            .layer_id(egui::LayerId::background())
-            .max_rect(viewport_rect),
-    );
+    let mut ui = viewport_ui(ctx);
 
     // Ensure the theme preference is applied if it changed
     let current_preference = ctx.options(|opt| opt.theme_preference);
@@ -273,11 +266,11 @@ pub fn update_gui(
         match thread_communication.gui_settings.theme_preference {
             egui::ThemePreference::Dark => {
                 ctx.set_visuals(egui::Visuals::dark());
-                ctx.style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
+                ctx.global_style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
             }
             egui::ThemePreference::Light => {
                 ctx.set_visuals(egui::Visuals::light());
-                ctx.style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
+                ctx.global_style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
             }
             egui::ThemePreference::System => {
                 crate::system_theme::apply_system_theme_if_needed(
@@ -368,7 +361,7 @@ pub fn update_gui(
 
                             // Show info icon and handle clicks
                             let info_button = if has_warnings {
-                                let warning_color = if ui.ctx().style().visuals.dark_mode {
+                                let warning_color = if ui.ctx().global_style().visuals.dark_mode {
                                     egui::Color32::YELLOW
                                 } else {
                                     LIGHT_THEME_YELLOW
@@ -406,7 +399,7 @@ pub fn update_gui(
 
                                     let (prefix, color) = match level {
                                         log::Level::Warn => {
-                                            let warning_color = if ui.ctx().style().visuals.dark_mode {
+                                            let warning_color = if ui.ctx().global_style().visuals.dark_mode {
                                                 egui::Color32::YELLOW
                                             } else {
                                                 LIGHT_THEME_YELLOW
@@ -435,7 +428,7 @@ pub fn update_gui(
 
                             explorer.error_window_was_open = is_popup_open.is_some();
                         } else {
-                            let success_color = if ui.ctx().style().visuals.dark_mode {
+                            let success_color = if ui.ctx().global_style().visuals.dark_mode {
                                 egui::Color32::GREEN
                             } else {
                                 LIGHT_THEME_GREEN
@@ -451,7 +444,7 @@ pub fn update_gui(
                                 .on_hover_text("No Errors!");
                         }
                     } else {
-                        let success_color = if ui.ctx().style().visuals.dark_mode {
+                        let success_color = if ui.ctx().global_style().visuals.dark_mode {
                             egui::Color32::GREEN
                         } else {
                             LIGHT_THEME_GREEN
@@ -473,7 +466,6 @@ pub fn update_gui(
                 });
             });
         });
-
 
     left_panel(
         &mut ui,
@@ -500,7 +492,6 @@ pub fn update_gui(
         &mut cam_input,
         &mut thread_communication,
     );
-
 
     thread_communication.gui_settings.x = ctx.globally_used_rect().width() as u32;
     thread_communication.gui_settings.y = ctx.globally_used_rect().height() as u32;
@@ -536,10 +527,8 @@ pub fn update_gui(
         let cam = commands
             .spawn((
                 Camera2d,
-                Camera {
-                    target: RenderTarget::Window(WindowRef::Entity(win)),
-                    ..Default::default()
-                },
+                Camera::default(),
+                RenderTarget::Window(WindowRef::Entity(win)),
                 EguiMultipassSchedule::new(SettingsContextPass),
                 SettingsWindowCamera,
             ))
@@ -584,10 +573,8 @@ pub fn update_gui(
         let cam = commands
             .spawn((
                 Camera2d,
-                Camera {
-                    target: RenderTarget::Window(WindowRef::Entity(win)),
-                    ..Default::default()
-                },
+                Camera::default(),
+                RenderTarget::Window(WindowRef::Entity(win)),
                 EguiMultipassSchedule::new(PsfToolContextPass),
                 PsfToolWindowCamera,
             ))
@@ -628,10 +615,8 @@ pub fn update_gui(
         let cam = commands
             .spawn((
                 Camera2d,
-                Camera {
-                    target: RenderTarget::Window(WindowRef::Entity(win)),
-                    ..Default::default()
-                },
+                Camera::default(),
+                RenderTarget::Window(WindowRef::Entity(win)),
                 EguiMultipassSchedule::new(PsfDiagnosticsContextPass),
                 PsfDiagnosticsWindowCamera,
             ))
@@ -672,10 +657,8 @@ pub fn update_gui(
         let cam = commands
             .spawn((
                 Camera2d,
-                Camera {
-                    target: RenderTarget::Window(WindowRef::Entity(win)),
-                    ..Default::default()
-                },
+                Camera::default(),
+                RenderTarget::Window(WindowRef::Entity(win)),
                 EguiMultipassSchedule::new(PsfVisualizerContextPass),
                 PsfVisualizerWindowCamera,
             ))
@@ -718,10 +701,8 @@ pub fn update_gui(
         let cam = commands
             .spawn((
                 Camera2d,
-                Camera {
-                    target: RenderTarget::Window(WindowRef::Entity(win)),
-                    ..Default::default()
-                },
+                Camera::default(),
+                RenderTarget::Window(WindowRef::Entity(win)),
                 EguiMultipassSchedule::new(PsfIndividualFitsContextPass),
                 PsfIndividualFitsWindowCamera,
             ))
@@ -740,9 +721,6 @@ pub fn update_gui(
         }
     }
     // ─────────────────────────────────────────────────────────────────────────
-
-    thread_communication.gui_settings.x = ctx.used_size().x as u32;
-    thread_communication.gui_settings.y = ctx.used_size().y as u32;
 }
 
 /// Main application struct for the THz Image Explorer GUI.
