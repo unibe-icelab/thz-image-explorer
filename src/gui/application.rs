@@ -10,13 +10,21 @@ use crate::gui::center_panel::center_panel;
 use crate::gui::left_panel::left_panel;
 use crate::gui::matrix_plot::{ColorBarState, ImageState, SelectedPixel, ROI};
 use crate::gui::right_panel::right_panel;
+use crate::gui::secondary_windows::{
+    PsfDiagnosticsContextPass, PsfDiagnosticsWindowCamera, PsfIndividualFitsContextPass,
+    PsfIndividualFitsWindowCamera, PsfToolContextPass, PsfToolWindowCamera,
+    PsfVisualizerContextPass, PsfVisualizerWindowCamera, SecondaryWindowState, SettingsContextPass,
+    SettingsWindowCamera,
+};
 use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage, SceneVisibility};
 use crate::gui::utils::truncate_filename;
 use crate::math_tools::FftWindowType;
+use bevy::camera::RenderTarget;
 use bevy::prelude::*;
 use bevy::ecs::query::QuerySingleError;
+use bevy::window::{WindowRef, WindowResolution};
 use bevy_egui::egui::{Color32, Popup, PopupCloseBehavior, ThemePreference};
-use bevy_egui::{egui, EguiContext, EguiContexts, PrimaryEguiContext};
+use bevy_egui::{egui, EguiContexts,PrimaryEguiContext,  EguiMultipassSchedule};
 use bevy_voxel_plot::InstanceMaterialData;
 use core::f64;
 #[cfg(not(target_os = "macos"))]
@@ -28,6 +36,7 @@ use egui_file_dialog::FileDialog;
 use egui_plot::PlotPoint;
 use home::home_dir;
 use log::Level;
+use preferences::Preferences;
 use self_update::update::Release;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -38,6 +47,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub const SAFETY_ORANGE: Color32 = Color32::from_rgb(255, 95, 21);
+pub const LIGHT_THEME_YELLOW: Color32 = Color32::from_rgb(240, 200, 0);
+pub const LIGHT_THEME_GREEN: Color32 = Color32::from_rgb(0, 120, 0);
 
 /// Represents the state of the file dialog for opening, saving, or working with PSF files.
 #[derive(Clone)]
@@ -217,6 +228,9 @@ pub fn update_gui(
     mut cam_input: ResMut<CameraInputAllowed>,
     mut thread_communication: ResMut<ThreadCommunication>,
     mut exit: MessageWriter<AppExit>,
+    mut commands: Commands,
+    mut sec_win_state: ResMut<SecondaryWindowState>,
+    win_exists: Query<(), With<Window>>,
 ) {
     if thread_communication.gui_settings.tab != Tab::ThreeD {
         if let Ok((mut instance_data, _)) = query.single_mut() {
@@ -249,6 +263,40 @@ pub fn update_gui(
             .layer_id(egui::LayerId::background())
             .max_rect(viewport_rect),
     );
+
+    // Ensure the theme preference is applied if it changed
+    let current_preference = ctx.options(|opt| opt.theme_preference);
+    if current_preference != thread_communication.gui_settings.theme_preference {
+        ctx.set_theme(thread_communication.gui_settings.theme_preference);
+        // set_theme alone only stores the preference; explicitly set visuals so
+        // the change is visible in the same frame (mirrors what settings_window does).
+        match thread_communication.gui_settings.theme_preference {
+            egui::ThemePreference::Dark => {
+                ctx.set_visuals(egui::Visuals::dark());
+                ctx.style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
+            }
+            egui::ThemePreference::Light => {
+                ctx.set_visuals(egui::Visuals::light());
+                ctx.style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
+            }
+            egui::ThemePreference::System => {
+                crate::system_theme::apply_system_theme_if_needed(
+                    ctx,
+                    thread_communication.gui_settings.theme_preference,
+                );
+            }
+        }
+    }
+
+    // ============================================================================
+    // TEMPORARY WORKAROUND: Remove when bevy_egui supports system theme natively
+    // Continuously check for system theme changes when System preference is active
+    // ============================================================================
+    crate::system_theme::apply_system_theme_if_needed(
+        ctx,
+        thread_communication.gui_settings.theme_preference,
+    );
+    // ============================================================================
 
     let left_panel_width = 400.0;
     let right_panel_width = 500.0;
@@ -320,13 +368,18 @@ pub fn update_gui(
 
                             // Show info icon and handle clicks
                             let info_button = if has_warnings {
+                                let warning_color = if ui.ctx().style().visuals.dark_mode {
+                                    egui::Color32::YELLOW
+                                } else {
+                                    LIGHT_THEME_YELLOW
+                                };
                                 ui.label(
                                     egui::RichText::new(format!(
                                         "{}",
                                         egui_phosphor::regular::WARNING_CIRCLE
                                     ))
                                         .heading()
-                                        .color(egui::Color32::YELLOW),
+                                        .color(warning_color),
                                 )
                             } else {
                                 // has errors
@@ -352,7 +405,14 @@ pub fn update_gui(
                                     let (level, message) = message.clone();
 
                                     let (prefix, color) = match level {
-                                        log::Level::Warn => ("Warning", egui::Color32::YELLOW),
+                                        log::Level::Warn => {
+                                            let warning_color = if ui.ctx().style().visuals.dark_mode {
+                                                egui::Color32::YELLOW
+                                            } else {
+                                                LIGHT_THEME_YELLOW
+                                            };
+                                            ("Warning", warning_color)
+                                        },
                                         log::Level::Error => ("Error", egui::Color32::RED),
                                         _ => ("", egui::Color32::WHITE),
                                     };
@@ -370,34 +430,42 @@ pub fn update_gui(
                             // Clear warnings/errors when popup is closed
                             if explorer.error_window_was_open && !is_popup_open.is_some() {
                                 // clear it
-                                explorer.last_error_message = message;
-                            }
+                            explorer.last_error_message = message;
+                        }
 
                             explorer.error_window_was_open = is_popup_open.is_some();
                         } else {
+                            let success_color = if ui.ctx().style().visuals.dark_mode {
+                                egui::Color32::GREEN
+                            } else {
+                                LIGHT_THEME_GREEN
+                            };
                             ui.label(
                                 egui::RichText::new(format!(
                                     "{}",
                                     egui_phosphor::regular::CHECK_CIRCLE
                                 ))
                                     .heading()
-                                    .color(egui::Color32::GREEN),
+                                    .color(success_color),
                             )
                                 .on_hover_text("No Errors!");
                         }
                     } else {
+                        let success_color = if ui.ctx().style().visuals.dark_mode {
+                            egui::Color32::GREEN
+                        } else {
+                            LIGHT_THEME_GREEN
+                        };
                         ui.label(
                             egui::RichText::new(format!(
                                 "{}",
                                 egui_phosphor::regular::CHECK_CIRCLE
                             ))
                                 .heading()
-                                .color(egui::Color32::GREEN),
+                                .color(success_color),
                         )
                             .on_hover_text("No Errors!");
-                    }
-
-                    ui.add_space(10.0);
+                    }                    ui.add_space(10.0);
                     let current_version =
                         Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Version::new(0, 0, 1));
 
@@ -436,6 +504,245 @@ pub fn update_gui(
 
     thread_communication.gui_settings.x = ctx.globally_used_rect().width() as u32;
     thread_communication.gui_settings.y = ctx.globally_used_rect().height() as u32;
+
+    // ── Secondary native window management ───────────────────────────────────
+    // Detect OS-level close (user clicked × on Settings window title bar):
+    // if the window entity no longer exists, clear the open flag and despawn
+    // the camera.
+    if let Some(win_entity) = sec_win_state.settings_window_entity {
+        if win_exists.get(win_entity).is_err() {
+            // Window was despawned by Bevy after OS close
+            explorer.settings_window_open = false;
+            if let Some(cam) = sec_win_state.settings_camera_entity.take() {
+                sec_win_state.cameras_to_despawn.push(cam);
+            }
+            sec_win_state.settings_window_entity = None;
+            let _ = thread_communication
+                .gui_settings
+                .save(&crate::APP_INFO, "config/gui");
+        }
+    }
+
+    // Spawn secondary window when Settings button was clicked
+    if explorer.settings_window_open && sec_win_state.settings_window_entity.is_none() {
+        let win = commands
+            .spawn(Window {
+                title: "Settings".to_string(),
+                resolution: WindowResolution::new(450u32, 750u32),
+                resizable: true,
+                ..Default::default()
+            })
+            .id();
+        let cam = commands
+            .spawn((
+                Camera2d,
+                Camera {
+                    target: RenderTarget::Window(WindowRef::Entity(win)),
+                    ..Default::default()
+                },
+                EguiMultipassSchedule::new(SettingsContextPass),
+                SettingsWindowCamera,
+            ))
+            .id();
+        sec_win_state.settings_window_entity = Some(win);
+        sec_win_state.settings_camera_entity = Some(cam);
+    }
+
+    // Despawn secondary window when programmatically closed (Close button /
+    // Escape key set settings_window_open = false from settings_window_system)
+    if !explorer.settings_window_open && sec_win_state.settings_window_entity.is_some() {
+        if let Some(cam) = sec_win_state.settings_camera_entity.take() {
+            sec_win_state.cameras_to_despawn.push(cam);
+        }
+        if let Some(win) = sec_win_state.settings_window_entity.take() {
+            commands.entity(win).despawn();
+        }
+    }
+
+    // ── PSF tool window management ────────────────────────────────────────
+    // Detect OS-level close of the PSF tool window
+    if let Some(win_entity) = sec_win_state.psf_tool_window_entity {
+        if win_exists.get(win_entity).is_err() {
+            explorer.psf_tool_open = false;
+            if let Some(cam) = sec_win_state.psf_tool_camera_entity.take() {
+                sec_win_state.cameras_to_despawn.push(cam);
+            }
+            sec_win_state.psf_tool_window_entity = None;
+        }
+    }
+
+    // Spawn PSF tool window when requested
+    if explorer.psf_tool_open && sec_win_state.psf_tool_window_entity.is_none() {
+        let win = commands
+            .spawn(Window {
+                title: "THz PSF Tool".to_string(),
+                resolution: WindowResolution::new(1400u32, 900u32),
+                resizable: true,
+                ..Default::default()
+            })
+            .id();
+        let cam = commands
+            .spawn((
+                Camera2d,
+                Camera {
+                    target: RenderTarget::Window(WindowRef::Entity(win)),
+                    ..Default::default()
+                },
+                EguiMultipassSchedule::new(PsfToolContextPass),
+                PsfToolWindowCamera,
+            ))
+            .id();
+        sec_win_state.psf_tool_window_entity = Some(win);
+        sec_win_state.psf_tool_camera_entity = Some(cam);
+    }
+
+    // Despawn PSF tool window when programmatically closed
+    if !explorer.psf_tool_open && sec_win_state.psf_tool_window_entity.is_some() {
+        if let Some(cam) = sec_win_state.psf_tool_camera_entity.take() {
+            sec_win_state.cameras_to_despawn.push(cam);
+        }
+        if let Some(win) = sec_win_state.psf_tool_window_entity.take() {
+            commands.entity(win).despawn();
+        }
+    }
+
+    // ── PSF Diagnostics sub-window ─────────────────────────────────────────
+    if let Some(win_entity) = sec_win_state.psf_diagnostics_window_entity {
+        if win_exists.get(win_entity).is_err() {
+            explorer.psf_tool.show_diagnostics = false;
+            if let Some(cam) = sec_win_state.psf_diagnostics_camera_entity.take() {
+                sec_win_state.cameras_to_despawn.push(cam);
+            }
+            sec_win_state.psf_diagnostics_window_entity = None;
+        }
+    }
+    if explorer.psf_tool.show_diagnostics && sec_win_state.psf_diagnostics_window_entity.is_none() {
+        let win = commands
+            .spawn(Window {
+                title: "PSF Diagnostics".to_string(),
+                resolution: WindowResolution::new(1200u32, 800u32),
+                resizable: true,
+                ..Default::default()
+            })
+            .id();
+        let cam = commands
+            .spawn((
+                Camera2d,
+                Camera {
+                    target: RenderTarget::Window(WindowRef::Entity(win)),
+                    ..Default::default()
+                },
+                EguiMultipassSchedule::new(PsfDiagnosticsContextPass),
+                PsfDiagnosticsWindowCamera,
+            ))
+            .id();
+        sec_win_state.psf_diagnostics_window_entity = Some(win);
+        sec_win_state.psf_diagnostics_camera_entity = Some(cam);
+    }
+    if !explorer.psf_tool.show_diagnostics && sec_win_state.psf_diagnostics_window_entity.is_some()
+    {
+        if let Some(cam) = sec_win_state.psf_diagnostics_camera_entity.take() {
+            sec_win_state.cameras_to_despawn.push(cam);
+        }
+        if let Some(win) = sec_win_state.psf_diagnostics_window_entity.take() {
+            commands.entity(win).despawn();
+        }
+    }
+
+    // ── PSF Visualizer sub-window ──────────────────────────────────────────
+    if let Some(win_entity) = sec_win_state.psf_visualizer_window_entity {
+        if win_exists.get(win_entity).is_err() {
+            explorer.psf_tool.show_psf_visualizer = false;
+            if let Some(cam) = sec_win_state.psf_visualizer_camera_entity.take() {
+                sec_win_state.cameras_to_despawn.push(cam);
+            }
+            sec_win_state.psf_visualizer_window_entity = None;
+        }
+    }
+    if explorer.psf_tool.show_psf_visualizer && sec_win_state.psf_visualizer_window_entity.is_none()
+    {
+        let win = commands
+            .spawn(Window {
+                title: "PSF Visualizer".to_string(),
+                resolution: WindowResolution::new(700u32, 700u32),
+                resizable: true,
+                ..Default::default()
+            })
+            .id();
+        let cam = commands
+            .spawn((
+                Camera2d,
+                Camera {
+                    target: RenderTarget::Window(WindowRef::Entity(win)),
+                    ..Default::default()
+                },
+                EguiMultipassSchedule::new(PsfVisualizerContextPass),
+                PsfVisualizerWindowCamera,
+            ))
+            .id();
+        sec_win_state.psf_visualizer_window_entity = Some(win);
+        sec_win_state.psf_visualizer_camera_entity = Some(cam);
+    }
+    if !explorer.psf_tool.show_psf_visualizer
+        && sec_win_state.psf_visualizer_window_entity.is_some()
+    {
+        if let Some(cam) = sec_win_state.psf_visualizer_camera_entity.take() {
+            sec_win_state.cameras_to_despawn.push(cam);
+        }
+        if let Some(win) = sec_win_state.psf_visualizer_window_entity.take() {
+            commands.entity(win).despawn();
+        }
+    }
+
+    // ── Individual Fits sub-window ─────────────────────────────────────────
+    if let Some(win_entity) = sec_win_state.psf_individual_fits_window_entity {
+        if win_exists.get(win_entity).is_err() {
+            explorer.psf_tool.show_individual_fits = false;
+            if let Some(cam) = sec_win_state.psf_individual_fits_camera_entity.take() {
+                sec_win_state.cameras_to_despawn.push(cam);
+            }
+            sec_win_state.psf_individual_fits_window_entity = None;
+        }
+    }
+    if explorer.psf_tool.show_individual_fits
+        && sec_win_state.psf_individual_fits_window_entity.is_none()
+    {
+        let win = commands
+            .spawn(Window {
+                title: "Individual Fits".to_string(),
+                resolution: WindowResolution::new(1400u32, 900u32),
+                resizable: true,
+                ..Default::default()
+            })
+            .id();
+        let cam = commands
+            .spawn((
+                Camera2d,
+                Camera {
+                    target: RenderTarget::Window(WindowRef::Entity(win)),
+                    ..Default::default()
+                },
+                EguiMultipassSchedule::new(PsfIndividualFitsContextPass),
+                PsfIndividualFitsWindowCamera,
+            ))
+            .id();
+        sec_win_state.psf_individual_fits_window_entity = Some(win);
+        sec_win_state.psf_individual_fits_camera_entity = Some(cam);
+    }
+    if !explorer.psf_tool.show_individual_fits
+        && sec_win_state.psf_individual_fits_window_entity.is_some()
+    {
+        if let Some(cam) = sec_win_state.psf_individual_fits_camera_entity.take() {
+            sec_win_state.cameras_to_despawn.push(cam);
+        }
+        if let Some(win) = sec_win_state.psf_individual_fits_window_entity.take() {
+            commands.entity(win).despawn();
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    thread_communication.gui_settings.x = ctx.used_size().x as u32;
+    thread_communication.gui_settings.y = ctx.used_size().y as u32;
 }
 
 /// Main application struct for the THz Image Explorer GUI.
@@ -487,6 +794,8 @@ pub struct THzImageExplorer {
     pub(crate) selected_file_name: String,
     pub(crate) scroll_to_selection: bool,
     pub(crate) settings_window_open: bool,
+    pub(crate) psf_tool_open: bool,
+    pub psf_tool: crate::psf_tool::ThzPsfApp,
     pub(crate) last_error_message: (Level, String),
     pub(crate) error_window_was_open: bool,
     pub(crate) update_text: String,
@@ -617,6 +926,8 @@ impl THzImageExplorer {
             mid_point: 50.0,
             bw: false,
             settings_window_open: false,
+            psf_tool_open: false,
+            psf_tool: crate::psf_tool::ThzPsfApp::new(),
             last_error_message: (Level::Error, "".to_string()),
             error_window_was_open: false,
             update_text: "".to_string(),

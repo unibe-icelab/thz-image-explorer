@@ -46,12 +46,21 @@ bevy_panorbit_camera = { git = "https://github.com/hacknus/bevy_panorbit_camera"
 bevy_framepace = { git = "https://github.com/hacknus/bevy_framepace", branch = "bevy_0.19" }
 crossbeam-channel = "0.5"
 log = "0.4.22"
-image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "gif", "png", "tiff", "rayon"] }
+image = { version = "0.25", default-features = false, features = [
+    "bmp",
+    "jpeg",
+    "gif",
+    "png",
+    "tiff",
+    "rayon",
+] }
 realfft = "3.5"
 preferences = "2.0.0"
 serde = { version = "1.0", features = ["derive"] }
 ndarray = { version = "0.17", features = ["rayon", "serde"] }
-ndarray-npy = { git = "https://github.com/jturner314/ndarray-npy", features = ["npz"] }
+ndarray-npy = { git = "https://github.com/jturner314/ndarray-npy", features = [
+    "npz",
+] }
 dotthz = { version = "0.3", features = ["serde", "hdf5-sys-static"] }
 home = "0.5"
 self_update = { git = "https://github.com/hacknus/self_update", features = ["archive-zip", "compression-zip-deflate"], optional = true }
@@ -71,12 +80,20 @@ num-traits = "0.2"
 uuid = "1.23"
 downcast-rs = "2.0"
 vtkio = "0.7.0-rc2"
+anyhow = "1.0"
+argmin = "0.11"
+argmin-math = { version = "0.5", features = ["vec"] }
+zip = { version = "6.0", default-features = false, features = ["deflate"] }
+serde_json = "1.0"
+dirs = "6.0"
 
 [dev-dependencies]
 approx = "0.5.1"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-egui-file-dialog = { git = "https://github.com/hacknus/egui-file-dialog", branch = "sort_by_metadata", features = ["information_view"] }
+egui-file-dialog = { git = "https://github.com/hacknus/egui-file-dialog", branch = "sort_by_metadata", features = [
+    "information_view",
+] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 rfd = "0.17"
@@ -100,7 +117,15 @@ long_description = "THz Image Explorer is an application for THz time-domain ima
 license = "GPL-3.0"
 osx_minimum_system_version = "10.12"
 osx_url_schemes = ["ch.unibe.thzimageexplorer"]
-deb_depends = ["libclang-dev", "libgtk-3-dev", "libxcb-render0-dev", "libxcb-shape0-dev", "libxcb-xfixes0-dev", "libxkbcommon-dev", "libssl-dev"]
+deb_depends = [
+    "libclang-dev",
+    "libgtk-3-dev",
+    "libxcb-render0-dev",
+    "libxcb-shape0-dev",
+    "libxcb-xfixes0-dev",
+    "libxkbcommon-dev",
+    "libssl-dev",
+]
 osx_info_plist_exts = ["assets/Info.ext.plist"]
 osx_plugins = ["assets/DotTHzQLExtension.appex"]
 

@@ -784,6 +784,16 @@ pub fn main_thread(
                         }
                     }
                 }
+                ConfigCommand::ApplyPSF(psf) => {
+                    let path = std::path::PathBuf::from("PSF Tool");
+                    thread_communication.gui_settings.psf = psf.clone();
+                    thread_communication.gui_settings.beam_shape_path = path.clone();
+                    if let Ok(mut psf_guard) = thread_communication.psf_lock.write() {
+                        log::info!("applied PSF from PSF Tool");
+                        *psf_guard = (path, psf);
+                    }
+                    update = UpdateType::Filter(1);
+                }
                 ConfigCommand::OpenPSF(path) => {
                     if let Ok(psf) = load_psf(&path.to_path_buf()) {
                         thread_communication.gui_settings.psf = psf.clone();

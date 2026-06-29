@@ -4,7 +4,10 @@ All notable changes to the `THz Image Explorer` project will be documented in th
 
 # Unreleased 1.2.X - X.X.2026
 
-* ...
+* Fix DotTHz Quick Look plugin for macOS Tahoe
+* Migrate the Settings panel from an egui floating window to a native OS secondary window using `bevy_egui`'s `EguiMultipassSchedule` system
+* Fix theme propagation: changing the theme in Settings is now immediately reflected in the main window
+* Fix initial theme of the Settings window: it now opens with the correct theme (including OS-follow mode) instead of always defaulting to dark
 
 # 1.2.0 - 2.4.2026
 

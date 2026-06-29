@@ -4,10 +4,6 @@
 <dict>
 	<key>files</key>
 	<dict>
-		<key>Resources/Info.plist</key>
-		<data>
-		WmdTmtdYELaBWTMoJta/Cf968TA=
-		</data>
 		<key>Resources/PreviewViewController.nib</key>
 		<data>
 		8tQspZ7gmb5OZ1V2zEXLO4SXbG4=
@@ -15,31 +11,6 @@
 	</dict>
 	<key>files2</key>
 	<dict>
-		<key>MacOS/DotTHzQLExtension.debug.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			TU5JNRaePUnTE0GqRA5vrpwCTzA=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"4d4e4935169e3d49d31341aa440e6fae9c024f30"</string>
-		</dict>
-		<key>MacOS/__preview.dylib</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			yXFl+M73YdN3Zxt0iZIMdUAeZX4=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"c97165f8cef761d377671b7489920c75401e657e"</string>
-		</dict>
-		<key>Resources/Info.plist</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			HM5SdMRdieZnmT0GcycDtR4ygGC3HTmlGABn3JpbfhE=
-			</data>
-		</dict>
 		<key>Resources/PreviewViewController.nib</key>
 		<dict>
 			<key>hash2</key>
