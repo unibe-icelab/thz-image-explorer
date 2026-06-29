@@ -8,4 +8,4 @@ pub mod secondary_windows;
 pub mod settings_window;
 pub mod threed_plot;
 pub mod toggle_widget;
-mod utils;
+pub(crate) mod utils;

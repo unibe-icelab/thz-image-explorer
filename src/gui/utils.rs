@@ -1,6 +1,18 @@
 use bevy_egui::egui;
 use std::path::Path;
 
+/// Creates a full-viewport root `Ui` for panel-based rendering from an `egui::Context`.
+pub fn viewport_ui(ctx: &egui::Context) -> egui::Ui {
+    let viewport_rect = ctx.viewport_rect();
+    egui::Ui::new(
+        ctx.clone(),
+        "viewport".into(),
+        egui::UiBuilder::new()
+            .layer_id(egui::LayerId::background())
+            .max_rect(viewport_rect),
+    )
+}
+
 /// Calculates the width of a single char.
 fn calc_char_width(ui: &egui::Ui, char: char) -> f32 {
     ui.fonts_mut(|f| f.glyph_width(&egui::TextStyle::Body.resolve(ui.style()), char))

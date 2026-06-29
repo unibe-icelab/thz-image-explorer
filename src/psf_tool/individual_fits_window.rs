@@ -2,6 +2,7 @@ use bevy_egui::egui;
 use egui_plot::{Line, Plot, PlotPoints};
 use ndarray::Array2;
 
+use crate::gui::utils::viewport_ui;
 use crate::psf_tool::fitting::{compute_intensity, error_function};
 
 /// Window for visualizing individual fits at each frequency
@@ -71,7 +72,8 @@ impl IndividualFitsWindow {
         y_positions_right: &[f64],
         center_frequencies: &[f64],
     ) {
-        egui::CentralPanel::default().show(ctx, |ui| {
+        let mut viewport_ui = viewport_ui(ctx);
+        egui::CentralPanel::default().show(&mut viewport_ui, |ui| {
             self.show_content(
                 ui,
                 popt_xs_left,

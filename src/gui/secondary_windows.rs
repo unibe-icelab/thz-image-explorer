@@ -96,11 +96,11 @@ pub fn sync_ctx_theme(ctx: &egui::Context, pref: egui::ThemePreference) {
         match pref {
             egui::ThemePreference::Dark => {
                 ctx.set_visuals(egui::Visuals::dark());
-                ctx.style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
+                ctx.global_style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
             }
             egui::ThemePreference::Light => {
                 ctx.set_visuals(egui::Visuals::light());
-                ctx.style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
+                ctx.global_style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
             }
             egui::ThemePreference::System => {
                 crate::system_theme::apply_system_theme_if_needed(ctx, pref);

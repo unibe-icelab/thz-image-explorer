@@ -6,7 +6,7 @@ use crate::vec2;
 use bevy::prelude::*;
 use bevy_egui::egui::{self, Checkbox, DragValue, Slider, Stroke, Ui};
 use bevy_egui::egui::{epaint, Popup, PopupCloseBehavior};
-use egui_plot::{GridMark, Legend, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
+use egui_plot::{GridMark, HoverPosition, Legend, Line, LineStyle, Plot, PlotPoints, VLine};
 use std::ops::RangeInclusive;
 
 const ROI_COLORS: [egui::Color32; 8] = [
@@ -25,7 +25,6 @@ pub fn pulse_tab(
     height: f32,
     width: f32,
     spacing: f32,
-    right_panel_width: f32,
     explorer: &mut THzImageExplorer,
     thread_communication: &mut ThreadCommunication,
 ) {
@@ -130,13 +129,22 @@ pub fn pulse_tab(
         let s_fmt = move |y: GridMark, _range: &RangeInclusive<f64>| {
             format!("{:4.2} nA", y.value - axis_display_offset)
         };
-        let label_fmt = move |s: &str, val: &PlotPoint| {
-            format!(
+        let label_fmt = move |pos: &HoverPosition<'_>| match pos {
+            HoverPosition::NearDataPoint {
+                plot_name,
+                position,
+                ..
+            } => Some(format!(
                 "{}\n{:4.2} ps\n{:4.2} a.u.",
-                s,
-                val.x,
-                val.y - axis_display_offset_2
-            )
+                plot_name,
+                position.x,
+                position.y - axis_display_offset_2
+            )),
+            HoverPosition::Elsewhere { position } => Some(format!(
+                "{:4.2} ps\n{:4.2} a.u.",
+                position.x,
+                position.y - axis_display_offset_2
+            )),
         };
 
         let signal_plot = Plot::new("signal")
@@ -169,7 +177,7 @@ pub fn pulse_tab(
                 .width(2.0),
             );
 
-            let avg_signal_color = if signal_plot_ui.ctx().style().visuals.dark_mode {
+            let avg_signal_color = if signal_plot_ui.ctx().global_style().visuals.dark_mode {
                 egui::Color32::YELLOW
             } else {
                 LIGHT_THEME_YELLOW
@@ -349,21 +357,36 @@ pub fn pulse_tab(
             }
         };
 
-        let label_fmt = move |s: &str, val: &PlotPoint| {
-            if log_plot {
+        let label_fmt = move |pos: &HoverPosition<'_>| {
+            let (plot_name, position) = match pos {
+                HoverPosition::NearDataPoint {
+                    plot_name,
+                    position,
+                    ..
+                } => (*plot_name, *position),
+                HoverPosition::Elsewhere { position } => ("", *position),
+            };
+            let label_prefix = if plot_name.is_empty() {
+                String::new()
+            } else {
+                format!("{plot_name}\n")
+            };
+            Some(if log_plot {
                 if phases_visible {
-                    format!("{}\n{:4.2} THz\n{:4.2} °", s, val.x, val.y)
+                    format!("{label_prefix}{:4.2} THz\n{:4.2} °", position.x, position.y)
                 } else {
                     format!(
-                        "{}\n{:4.2} THz\n{:4.2} dB",
-                        s,
-                        val.x,
-                        val.y - max_fft_signals
+                        "{label_prefix}{:4.2} THz\n{:4.2} dB",
+                        position.x,
+                        position.y - max_fft_signals
                     )
                 }
             } else {
-                format!("{}\n{:4.2} THz\n{:4.2} a.u.", s, val.x, val.y)
-            }
+                format!(
+                    "{label_prefix}{:4.2} THz\n{:4.2} a.u.",
+                    position.x, position.y
+                )
+            })
         };
         let f_fmt = |x: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} THz", x.value);
 
@@ -423,7 +446,7 @@ pub fn pulse_tab(
             }
 
             if !thread_communication.gui_settings.phases_visible {
-                let avg_fft_color = if fft_plot_ui.ctx().style().visuals.dark_mode {
+                let avg_fft_color = if fft_plot_ui.ctx().global_style().visuals.dark_mode {
                     egui::Color32::YELLOW
                 } else {
                     LIGHT_THEME_YELLOW
@@ -438,7 +461,7 @@ pub fn pulse_tab(
                     .width(2.0),
                 )
             } else {
-                let avg_phase_color = if fft_plot_ui.ctx().style().visuals.dark_mode {
+                let avg_phase_color = if fft_plot_ui.ctx().global_style().visuals.dark_mode {
                     egui::Color32::YELLOW
                 } else {
                     LIGHT_THEME_YELLOW
@@ -537,7 +560,7 @@ pub fn pulse_tab(
             ui.label("Water Lines");
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add_space(right_panel_width + 5.0);
+                ui.add_space(5.0);
 
                 // dynamic range:
                 let length = explorer.data.signal_fft.len();
@@ -576,7 +599,6 @@ pub fn optical_properties_tab(
     height: f32,
     width: f32,
     spacing: f32,
-    right_panel_width: f32,
     explorer: &mut THzImageExplorer,
     thread_communication: &mut ThreadCommunication,
 ) {
@@ -700,8 +722,17 @@ pub fn optical_properties_tab(
         // Format functions for the plots
         let f_fmt = |x: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} THz", x.value);
         let n_fmt = |y: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2}", y.value);
-        let label_fmt =
-            |s: &str, val: &PlotPoint| format!("{}\n{:4.2} THz\n{:4.2}", s, val.x, val.y);
+        let label_fmt = |pos: &HoverPosition<'_>| match pos {
+            HoverPosition::NearDataPoint {
+                plot_name, position, ..
+            } => Some(format!(
+                "{}\n{:4.2} THz\n{:4.2}",
+                plot_name, position.x, position.y
+            )),
+            HoverPosition::Elsewhere { position } => {
+                Some(format!("{:4.2} THz\n{:4.2}", position.x, position.y))
+            }
+        };
 
         // Refractive index plot
         let n_plot = Plot::new("refractive_index")
@@ -727,8 +758,17 @@ pub fn optical_properties_tab(
 
         // Absorption plot
         let a_fmt = |y: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} cm^-1", y.value);
-        let a_label_fmt =
-            |s: &str, val: &PlotPoint| format!("{}\n{:4.2} THz\n{:4.2} cm^-1", s, val.x, val.y);
+        let a_label_fmt = |pos: &HoverPosition<'_>| match pos {
+            HoverPosition::NearDataPoint {
+                plot_name, position, ..
+            } => Some(format!(
+                "{}\n{:4.2} THz\n{:4.2} cm^-1",
+                plot_name, position.x, position.y
+            )),
+            HoverPosition::Elsewhere { position } => {
+                Some(format!("{:4.2} THz\n{:4.2} cm^-1", position.x, position.y))
+            }
+        };
 
         let absorption_plot = Plot::new("absorption")
             .height(height)
@@ -739,7 +779,7 @@ pub fn optical_properties_tab(
             .legend(Legend::default());
 
         absorption_plot.show(ui, |plot_ui| {
-            let absorption_color = if plot_ui.ctx().style().visuals.dark_mode {
+            let absorption_color = if plot_ui.ctx().global_style().visuals.dark_mode {
                 egui::Color32::GREEN
             } else {
                 LIGHT_THEME_GREEN
@@ -803,7 +843,7 @@ pub fn optical_properties_tab(
             ui.label("Water Lines");
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add_space(right_panel_width + 5.0);
+                ui.add_space( 5.0);
 
                 // Display material statistics if available
                 if let Some(max_n) = explorer
@@ -836,21 +876,19 @@ pub fn optical_properties_tab(
 #[allow(clippy::too_many_arguments)]
 pub fn center_panel(
     cube_preview_texture_id: &epaint::TextureId,
-    ctx: &egui::Context,
-    right_panel_width: &f32,
-    left_panel_width: &f32,
+    ui: &mut egui::Ui,
     explorer: &mut THzImageExplorer,
     opacity_threshold: &mut ResMut<OpacityThreshold>,
     cam_input: &mut ResMut<CameraInputAllowed>,
     thread_communication: &mut ResMut<ThreadCommunication>,
 ) {
-    egui::CentralPanel::default().show(ctx, |ui| {
+    egui::CentralPanel::default().show(ui, |ui| {
         let window_height = ui.available_height();
         let height = ui.available_size().y * 0.45;
         let spacing = (ui.available_size().y - 2.0 * height) / 3.0 - 10.0;
-        let width = ui.available_size().x - 40.0 - *left_panel_width - *right_panel_width;
+        let width = ui.available_size().x - 40.0;
         ui.horizontal(|ui| {
-            ui.add_space(*left_panel_width + 20.0);
+            ui.add_space(20.0);
             let tabs = thread_communication.gui_settings.tab.to_arr();
             if ui
                 .selectable_label(tabs[0], Tab::Pulse.to_string())
@@ -879,23 +917,14 @@ pub fn center_panel(
         ui.add_space(5.0);
 
         ui.horizontal(|ui| {
-            ui.add_space(*left_panel_width + 20.0);
+            ui.add_space(20.0);
             match thread_communication.gui_settings.tab {
-                Tab::Pulse => pulse_tab(
-                    ui,
-                    height,
-                    width,
-                    spacing,
-                    *right_panel_width,
-                    explorer,
-                    thread_communication,
-                ),
+                Tab::Pulse => pulse_tab(ui, height, width, spacing, explorer, thread_communication),
                 Tab::OpticalProperties => optical_properties_tab(
                     ui,
                     height * 0.95,
                     width,
                     spacing,
-                    *right_panel_width,
                     explorer,
                     thread_communication,
                 ),

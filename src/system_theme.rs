@@ -136,7 +136,7 @@ pub fn apply_system_theme_if_needed(
     }
 
     let is_dark = is_system_dark_mode();
-    let current_is_dark = ctx.style().visuals.dark_mode;
+    let current_is_dark = ctx.global_style().visuals.dark_mode;
 
     if is_dark != current_is_dark {
         log::info!(
@@ -151,7 +151,7 @@ pub fn apply_system_theme_if_needed(
         });
 
         // Re-apply handle shape after changing visuals
-        ctx.style_mut(|style| {
+        ctx.global_style_mut(|style| {
             style.visuals.handle_shape = egui::style::HandleShape::Circle;
         });
 

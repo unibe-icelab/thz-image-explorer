@@ -1017,8 +1017,10 @@ impl ThzPsfApp {
             ctx.request_repaint();
         }
 
+        let mut viewport_ui = crate::gui::utils::viewport_ui(ctx);
+
         // ── Top panel ──────────────────────────────────────────────────────
-        egui::TopBottomPanel::top("psf_top_panel").show(ctx, |ui| {
+        egui::Panel::top("psf_top_panel").show(&mut viewport_ui, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("THz PSF Tool");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1053,10 +1055,10 @@ impl ThzPsfApp {
         });
 
         // ── Left panel (parameters) ────────────────────────────────────────
-        egui::SidePanel::left("psf_control_panel")
-            .default_width(self.control_panel_width)
+        egui::Panel::left("psf_control_panel")
+            .default_size(self.control_panel_width)
             .resizable(true)
-            .show(ctx, |ui| {
+            .show(&mut viewport_ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.heading("Parameters");
 
@@ -1204,12 +1206,12 @@ impl ThzPsfApp {
                             }
                         }
                         ComputationState::Complete => {
-                            let color = if ctx.style().visuals.dark_mode { egui::Color32::GREEN } else { egui::Color32::from_rgb(0, 120, 0) };
+                            let color = if ctx.global_style().visuals.dark_mode { egui::Color32::GREEN } else { egui::Color32::from_rgb(0, 120, 0) };
                             ui.colored_label(color, "✔ Computation complete");
 
                             // Warnings
                             for w in &self.active_warnings {
-                                let warn_color = if ctx.style().visuals.dark_mode {
+                                let warn_color = if ctx.global_style().visuals.dark_mode {
                                     egui::Color32::YELLOW
                                 } else {
                                     egui::Color32::from_rgb(160, 100, 0)
@@ -1294,7 +1296,7 @@ impl ThzPsfApp {
             });
 
         // ── Central panel (plots) ──────────────────────────────────────────
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(&mut viewport_ui, |ui| {
             if self.filters.is_none()
                 && self.x_measurement.is_none()
                 && self.y_measurement.is_none()

@@ -16,7 +16,7 @@ use crate::math_tools::{
     FftWindowType,
 };
 use crate::APP_INFO;
-use bevy::winit::EventLoopProxy;
+use bevy::winit::{EventLoopProxy, WinitUserEvent};
 use dotthz::DotthzMetaData;
 use ndarray::parallel::prelude::*;
 use ndarray::{Array1, Array2, Array3, Axis};
@@ -33,9 +33,9 @@ pub enum UpdateType {
     Plot,
 }
 
-fn request_repaint(proxy: &EventLoopProxy<bevy::winit::WakeUp>) {
+fn request_repaint(proxy: &EventLoopProxy<WinitUserEvent>) {
     log::debug!("requesting repaint.");
-    let _ = proxy.send_event(bevy::winit::WakeUp); // Wakes up the event loop
+    let _ = proxy.send_event(WinitUserEvent::WakeUp); // Wakes up the event loop
 }
 
 /// Updates the intensity image lock with the filtered image from the scan.
@@ -147,7 +147,7 @@ fn update_metadata_rois(md: &mut DotthzMetaData, input: &ScannedImageFilterData)
 /// * `thread_communication` - A channel-based communication structure between threads.
 pub fn main_thread(
     mut thread_communication: ThreadCommunication,
-    proxy: &EventLoopProxy<bevy::winit::WakeUp>,
+    proxy: &EventLoopProxy<WinitUserEvent>,
 ) {
     // reads data from mutex, samples and saves if needed
     let mut config = ConfigContainer::default();

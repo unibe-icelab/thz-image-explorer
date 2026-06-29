@@ -462,7 +462,7 @@ pub fn plot_matrix(
         let mut hovered_roi_uuid: Option<String> = None;
 
         // Capture dark mode state before entering the closure
-        let is_dark_mode = ui.ctx().style().visuals.dark_mode;
+        let is_dark_mode = ui.ctx().global_style().visuals.dark_mode;
         let hover_color = if is_dark_mode {
             Color32::YELLOW
         } else {

@@ -3,7 +3,9 @@ use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::data_container::{PlotDataContainer, ScannedImageFilterData};
 use crate::data_thread::main_thread;
 use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
-use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
+use crate::gui::application::{
+    update_gui, GuiSettingsContainer, THzImageExplorer, DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH,
+};
 use crate::gui::matrix_plot::ROI;
 use crate::gui::secondary_windows::{
     cleanup_closed_windows, psf_diagnostics_system, psf_individual_fits_system, psf_tool_system,
@@ -66,7 +68,7 @@ const APP_INFO: AppInfo = AppInfo {
 
 fn spawn_data_thread(
     state: ResMut<ThreadCommunication>,
-    event_loop_proxy: Res<EventLoopProxyWrapper<bevy::winit::WakeUp>>,
+    event_loop_proxy: Res<EventLoopProxyWrapper>,
 ) {
     let state = state.clone();
     let proxy = event_loop_proxy.clone();
@@ -123,6 +125,14 @@ fn autosave_on_exit(
     }
 }
 
+fn sanitize_window_dimension(value: u32, default_value: u32) -> u32 {
+    if value == 0 {
+        default_value
+    } else {
+        value
+    }
+}
+
 // --- Main ---
 fn main() {
     egui_logger::builder()
@@ -149,6 +159,9 @@ fn main() {
             log::error!("error in loading gui_settings: {err:?}");
         }
     }
+
+    gui_settings.x = sanitize_window_dimension(gui_settings.x, DEFAULT_WINDOW_WIDTH);
+    gui_settings.y = sanitize_window_dimension(gui_settings.y, DEFAULT_WINDOW_HEIGHT);
 
     let psf_lock = Arc::new(RwLock::new((
         gui_settings.beam_shape_path.clone(),
@@ -332,10 +345,10 @@ fn main() {
         .add_plugins(
             DefaultPlugins
                 .set(RenderPlugin {
-                    render_creation: RenderCreation::Automatic(WgpuSettings {
+                    render_creation: RenderCreation::Automatic(Box::new(WgpuSettings {
                         features: wgpu_features,
                         ..Default::default()
-                    }),
+                    })),
                     synchronous_pipeline_compilation: false,
                     debug_flags: RenderDebugFlags::all(),
                 })
@@ -366,7 +379,7 @@ fn main() {
         .insert_resource(OpacityThreshold(0.1))
         .insert_resource(InstanceContainer(vec![], 1.0, 1.0, 1.0))
         .insert_resource(CameraInputAllowed(false))
-        .insert_non_send_resource(THzImageExplorer::new(thread_communication))
+        .insert_non_send(THzImageExplorer::new(thread_communication))
         .insert_resource(SceneVisibility(false))
         .init_resource::<SecondaryWindowState>()
         .add_systems(

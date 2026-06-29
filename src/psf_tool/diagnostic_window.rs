@@ -1,3 +1,4 @@
+use crate::gui::utils::viewport_ui;
 use crate::psf_tool::diagnostics::DiagnosticResults;
 use bevy_egui::egui;
 use egui_plot::{Legend, Line, Plot, PlotPoints};
@@ -34,7 +35,8 @@ impl DiagnosticWindow {
     }
 
     pub fn show(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default().show(ctx, |ui| {
+        let mut viewport_ui = viewport_ui(ctx);
+        egui::CentralPanel::default().show(&mut viewport_ui, |ui| {
             self.show_ui(ui, ctx);
         });
     }

@@ -3,6 +3,7 @@ use egui::{Color32, ColorImage};
 use egui_plot::{PlotImage, PlotPoint};
 use serde::{Deserialize, Serialize};
 
+use crate::gui::utils::viewport_ui;
 use crate::psf_tool::curve_fitting::CurveFits;
 
 /// PSF Visualizer window state
@@ -103,7 +104,8 @@ impl PsfVisualizerWindow {
 
     /// Show the PSF visualizer window as a native viewport
     pub fn show(&mut self, ctx: &egui::Context, curve_fits: &CurveFits) {
-        egui::CentralPanel::default().show(ctx, |ui| {
+        let mut viewport_ui = viewport_ui(ctx);
+        egui::CentralPanel::default().show(&mut viewport_ui, |ui| {
             self.show_content(ui, curve_fits);
         });
     }

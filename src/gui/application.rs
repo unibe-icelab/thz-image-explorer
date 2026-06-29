@@ -17,13 +17,14 @@ use crate::gui::secondary_windows::{
     SettingsWindowCamera,
 };
 use crate::gui::threed_plot::{CameraInputAllowed, OpacityThreshold, RenderImage, SceneVisibility};
-use crate::gui::utils::truncate_filename;
+use crate::gui::utils::{truncate_filename, viewport_ui};
 use crate::math_tools::FftWindowType;
 use bevy::camera::RenderTarget;
+use bevy::ecs::query::QuerySingleError;
 use bevy::prelude::*;
-use bevy::window::{WindowRef, WindowResolution};
+use bevy::window::{PrimaryWindow, WindowRef, WindowResolution};
 use bevy_egui::egui::{Color32, Popup, PopupCloseBehavior, ThemePreference};
-use bevy_egui::{egui, EguiContexts, EguiMultipassSchedule};
+use bevy_egui::{egui, EguiContext, EguiContexts, EguiMultipassSchedule, PrimaryEguiContext};
 use bevy_voxel_plot::InstanceMaterialData;
 use core::f64;
 #[cfg(not(target_os = "macos"))]
@@ -48,6 +49,8 @@ use std::sync::Arc;
 pub const SAFETY_ORANGE: Color32 = Color32::from_rgb(255, 95, 21);
 pub const LIGHT_THEME_YELLOW: Color32 = Color32::from_rgb(240, 200, 0);
 pub const LIGHT_THEME_GREEN: Color32 = Color32::from_rgb(0, 120, 0);
+pub const DEFAULT_WINDOW_WIDTH: u32 = 1920;
+pub const DEFAULT_WINDOW_HEIGHT: u32 = 1080;
 
 /// Represents the state of the file dialog for opening, saving, or working with PSF files.
 #[derive(Clone)]
@@ -193,8 +196,8 @@ impl GuiSettingsContainer {
             dark_mode: true,
             meta_data_edit: false,
             meta_data_unlocked: false,
-            x: 1600,
-            y: 900,
+            x: DEFAULT_WINDOW_WIDTH,
+            y: DEFAULT_WINDOW_HEIGHT,
             animation_enabled: true,
             opacity_threshold: 0.1,
             contrast_3d: 2.0,
@@ -219,6 +222,7 @@ pub fn update_gui(
     mut query: Query<(&mut InstanceMaterialData, &mut Mesh3d)>,
     cube_preview_image: Res<RenderImage>,
     mut contexts: EguiContexts,
+    primary_egui_contexts: Query<Entity, (With<EguiContext>, With<PrimaryEguiContext>)>,
     mut explorer: NonSendMut<THzImageExplorer>,
     mut image_state: Local<ImageState>,
     mut color_bar_state: Local<ColorBarState>,
@@ -228,6 +232,7 @@ pub fn update_gui(
     mut exit: MessageWriter<AppExit>,
     mut commands: Commands,
     mut sec_win_state: ResMut<SecondaryWindowState>,
+    primary_window: Query<&Window, With<PrimaryWindow>>,
     win_exists: Query<(), With<Window>>,
 ) {
     if thread_communication.gui_settings.tab != Tab::ThreeD {
@@ -240,7 +245,20 @@ pub fn update_gui(
 
     let cube_preview_texture_id = contexts.image_id(&cube_preview_image.0).unwrap();
 
-    let ctx = contexts.ctx_mut().unwrap();
+    let ctx = match contexts.ctx_mut() {
+        Ok(ctx) => ctx,
+        Err(QuerySingleError::MultipleEntities(_)) => {
+            let Some(entity) = primary_egui_contexts.iter().next() else {
+                return;
+            };
+            let Ok(ctx) = contexts.ctx_for_entity_mut(entity) else {
+                return;
+            };
+            ctx
+        }
+        Err(QuerySingleError::NoEntities(_)) => return,
+    };
+    let mut ui = viewport_ui(ctx);
 
     // Ensure the theme preference is applied if it changed
     let current_preference = ctx.options(|opt| opt.theme_preference);
@@ -251,11 +269,11 @@ pub fn update_gui(
         match thread_communication.gui_settings.theme_preference {
             egui::ThemePreference::Dark => {
                 ctx.set_visuals(egui::Visuals::dark());
-                ctx.style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
+                ctx.global_style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
             }
             egui::ThemePreference::Light => {
                 ctx.set_visuals(egui::Visuals::light());
-                ctx.style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
+                ctx.global_style_mut(|s| s.visuals.handle_shape = egui::style::HandleShape::Circle);
             }
             egui::ThemePreference::System => {
                 crate::system_theme::apply_system_theme_if_needed(
@@ -276,16 +294,16 @@ pub fn update_gui(
     );
     // ============================================================================
 
-    let left_panel_width = 300.0;
+    let left_panel_width = 400.0;
     let right_panel_width = 500.0;
 
     let text_height = ctx.fonts_mut(|f| f.row_height(&egui::FontId::default()));
     let bottom_panel_height = text_height + 16.0; // Add some padding
 
     // Add bottom panel
-    egui::TopBottomPanel::bottom("bottom_panel")
-        .exact_height(bottom_panel_height)
-        .show(ctx, |ui| {
+    egui::Panel::bottom("bottom_panel")
+        .exact_size(bottom_panel_height)
+        .show(&mut ui, |ui| {
             ui.horizontal_centered(|ui| {
                 let path = thread_communication.gui_settings.selected_path.clone();
 
@@ -346,7 +364,7 @@ pub fn update_gui(
 
                             // Show info icon and handle clicks
                             let info_button = if has_warnings {
-                                let warning_color = if ui.ctx().style().visuals.dark_mode {
+                                let warning_color = if ui.ctx().global_style().visuals.dark_mode {
                                     egui::Color32::YELLOW
                                 } else {
                                     LIGHT_THEME_YELLOW
@@ -384,7 +402,7 @@ pub fn update_gui(
 
                                     let (prefix, color) = match level {
                                         log::Level::Warn => {
-                                            let warning_color = if ui.ctx().style().visuals.dark_mode {
+                                            let warning_color = if ui.ctx().global_style().visuals.dark_mode {
                                                 egui::Color32::YELLOW
                                             } else {
                                                 LIGHT_THEME_YELLOW
@@ -413,7 +431,7 @@ pub fn update_gui(
 
                             explorer.error_window_was_open = is_popup_open.is_some();
                         } else {
-                            let success_color = if ui.ctx().style().visuals.dark_mode {
+                            let success_color = if ui.ctx().global_style().visuals.dark_mode {
                                 egui::Color32::GREEN
                             } else {
                                 LIGHT_THEME_GREEN
@@ -429,7 +447,7 @@ pub fn update_gui(
                                 .on_hover_text("No Errors!");
                         }
                     } else {
-                        let success_color = if ui.ctx().style().visuals.dark_mode {
+                        let success_color = if ui.ctx().global_style().visuals.dark_mode {
                             egui::Color32::GREEN
                         } else {
                             LIGHT_THEME_GREEN
@@ -452,19 +470,8 @@ pub fn update_gui(
             });
         });
 
-    center_panel(
-        &cube_preview_texture_id,
-        &ctx,
-        &right_panel_width,
-        &left_panel_width,
-        &mut explorer,
-        &mut opacity_threshold,
-        &mut cam_input,
-        &mut thread_communication,
-    );
-
     left_panel(
-        ctx,
+        &mut ui,
         &mut explorer,
         &left_panel_width,
         &mut image_state,
@@ -473,12 +480,26 @@ pub fn update_gui(
     );
 
     right_panel(
-        ctx,
+        &mut ui,
         &mut explorer,
         &right_panel_width,
         &mut thread_communication,
         &mut exit,
     );
+
+    center_panel(
+        &cube_preview_texture_id,
+        &mut ui,
+        &mut explorer,
+        &mut opacity_threshold,
+        &mut cam_input,
+        &mut thread_communication,
+    );
+
+    if let Ok(window) = primary_window.single() {
+        thread_communication.gui_settings.x = window.width().round().max(1.0) as u32;
+        thread_communication.gui_settings.y = window.height().round().max(1.0) as u32;
+    }
 
     // ── Secondary native window management ───────────────────────────────────
     // Detect OS-level close (user clicked × on Settings window title bar):
@@ -511,10 +532,8 @@ pub fn update_gui(
         let cam = commands
             .spawn((
                 Camera2d,
-                Camera {
-                    target: RenderTarget::Window(WindowRef::Entity(win)),
-                    ..Default::default()
-                },
+                Camera::default(),
+                RenderTarget::Window(WindowRef::Entity(win)),
                 EguiMultipassSchedule::new(SettingsContextPass),
                 SettingsWindowCamera,
             ))
@@ -559,10 +578,8 @@ pub fn update_gui(
         let cam = commands
             .spawn((
                 Camera2d,
-                Camera {
-                    target: RenderTarget::Window(WindowRef::Entity(win)),
-                    ..Default::default()
-                },
+                Camera::default(),
+                RenderTarget::Window(WindowRef::Entity(win)),
                 EguiMultipassSchedule::new(PsfToolContextPass),
                 PsfToolWindowCamera,
             ))
@@ -603,10 +620,8 @@ pub fn update_gui(
         let cam = commands
             .spawn((
                 Camera2d,
-                Camera {
-                    target: RenderTarget::Window(WindowRef::Entity(win)),
-                    ..Default::default()
-                },
+                Camera::default(),
+                RenderTarget::Window(WindowRef::Entity(win)),
                 EguiMultipassSchedule::new(PsfDiagnosticsContextPass),
                 PsfDiagnosticsWindowCamera,
             ))
@@ -647,10 +662,8 @@ pub fn update_gui(
         let cam = commands
             .spawn((
                 Camera2d,
-                Camera {
-                    target: RenderTarget::Window(WindowRef::Entity(win)),
-                    ..Default::default()
-                },
+                Camera::default(),
+                RenderTarget::Window(WindowRef::Entity(win)),
                 EguiMultipassSchedule::new(PsfVisualizerContextPass),
                 PsfVisualizerWindowCamera,
             ))
@@ -693,10 +706,8 @@ pub fn update_gui(
         let cam = commands
             .spawn((
                 Camera2d,
-                Camera {
-                    target: RenderTarget::Window(WindowRef::Entity(win)),
-                    ..Default::default()
-                },
+                Camera::default(),
+                RenderTarget::Window(WindowRef::Entity(win)),
                 EguiMultipassSchedule::new(PsfIndividualFitsContextPass),
                 PsfIndividualFitsWindowCamera,
             ))
@@ -715,9 +726,6 @@ pub fn update_gui(
         }
     }
     // ─────────────────────────────────────────────────────────────────────────
-
-    thread_communication.gui_settings.x = ctx.used_size().x as u32;
-    thread_communication.gui_settings.y = ctx.used_size().y as u32;
 }
 
 /// Main application struct for the THz Image Explorer GUI.

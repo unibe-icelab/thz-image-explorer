@@ -7,4 +7,4 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/yourusername/cancellable_loops"
 
 [dependencies]
-rayon = "1.7"
+rayon = "1.11"
