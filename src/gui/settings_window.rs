@@ -281,7 +281,7 @@ pub fn settings_window_system(
     );
 
     let mut viewport_ui = viewport_ui(ctx);
-    egui::CentralPanel::default().show_inside(&mut viewport_ui, |ui| {
+    egui::CentralPanel::default().show(&mut viewport_ui, |ui| {
         egui::ScrollArea::vertical().show(ui, |ui| {
             egui::Grid::new("theme settings")
                 .striped(true)

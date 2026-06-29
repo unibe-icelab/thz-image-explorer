@@ -22,7 +22,7 @@ use crate::math_tools::FftWindowType;
 use bevy::camera::RenderTarget;
 use bevy::ecs::query::QuerySingleError;
 use bevy::prelude::*;
-use bevy::window::{WindowRef, WindowResolution};
+use bevy::window::{PrimaryWindow, WindowRef, WindowResolution};
 use bevy_egui::egui::{Color32, Popup, PopupCloseBehavior, ThemePreference};
 use bevy_egui::{egui, EguiContext, EguiContexts, EguiMultipassSchedule, PrimaryEguiContext};
 use bevy_voxel_plot::InstanceMaterialData;
@@ -49,6 +49,8 @@ use std::sync::Arc;
 pub const SAFETY_ORANGE: Color32 = Color32::from_rgb(255, 95, 21);
 pub const LIGHT_THEME_YELLOW: Color32 = Color32::from_rgb(240, 200, 0);
 pub const LIGHT_THEME_GREEN: Color32 = Color32::from_rgb(0, 120, 0);
+pub const DEFAULT_WINDOW_WIDTH: u32 = 1920;
+pub const DEFAULT_WINDOW_HEIGHT: u32 = 1080;
 
 /// Represents the state of the file dialog for opening, saving, or working with PSF files.
 #[derive(Clone)]
@@ -194,8 +196,8 @@ impl GuiSettingsContainer {
             dark_mode: true,
             meta_data_edit: false,
             meta_data_unlocked: false,
-            x: 1600,
-            y: 900,
+            x: DEFAULT_WINDOW_WIDTH,
+            y: DEFAULT_WINDOW_HEIGHT,
             animation_enabled: true,
             opacity_threshold: 0.1,
             contrast_3d: 2.0,
@@ -230,6 +232,7 @@ pub fn update_gui(
     mut exit: MessageWriter<AppExit>,
     mut commands: Commands,
     mut sec_win_state: ResMut<SecondaryWindowState>,
+    primary_window: Query<&Window, With<PrimaryWindow>>,
     win_exists: Query<(), With<Window>>,
 ) {
     if thread_communication.gui_settings.tab != Tab::ThreeD {
@@ -300,7 +303,7 @@ pub fn update_gui(
     // Add bottom panel
     egui::Panel::bottom("bottom_panel")
         .exact_size(bottom_panel_height)
-        .show_inside(&mut ui, |ui| {
+        .show(&mut ui, |ui| {
             ui.horizontal_centered(|ui| {
                 let path = thread_communication.gui_settings.selected_path.clone();
 
@@ -493,8 +496,10 @@ pub fn update_gui(
         &mut thread_communication,
     );
 
-    thread_communication.gui_settings.x = ctx.globally_used_rect().width() as u32;
-    thread_communication.gui_settings.y = ctx.globally_used_rect().height() as u32;
+    if let Ok(window) = primary_window.single() {
+        thread_communication.gui_settings.x = window.width().round().max(1.0) as u32;
+        thread_communication.gui_settings.y = window.height().round().max(1.0) as u32;
+    }
 
     // ── Secondary native window management ───────────────────────────────────
     // Detect OS-level close (user clicked × on Settings window title bar):

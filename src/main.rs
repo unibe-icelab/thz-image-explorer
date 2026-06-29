@@ -3,7 +3,10 @@ use crate::config::{ConfigCommand, ThreadCommunication};
 use crate::data_container::{PlotDataContainer, ScannedImageFilterData};
 use crate::data_thread::main_thread;
 use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
-use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
+use crate::gui::application::{
+    update_gui, GuiSettingsContainer, THzImageExplorer, DEFAULT_WINDOW_HEIGHT,
+    DEFAULT_WINDOW_WIDTH,
+};
 use crate::gui::matrix_plot::ROI;
 use crate::gui::secondary_windows::{
     cleanup_closed_windows, psf_diagnostics_system, psf_individual_fits_system, psf_tool_system,
@@ -123,6 +126,10 @@ fn autosave_on_exit(
     }
 }
 
+fn sanitize_window_dimension(value: u32, default_value: u32) -> u32 {
+    if value == 0 { default_value } else { value }
+}
+
 // --- Main ---
 fn main() {
     egui_logger::builder()
@@ -149,6 +156,9 @@ fn main() {
             log::error!("error in loading gui_settings: {err:?}");
         }
     }
+
+    gui_settings.x = sanitize_window_dimension(gui_settings.x, DEFAULT_WINDOW_WIDTH);
+    gui_settings.y = sanitize_window_dimension(gui_settings.y, DEFAULT_WINDOW_HEIGHT);
 
     let psf_lock = Arc::new(RwLock::new((
         gui_settings.beam_shape_path.clone(),

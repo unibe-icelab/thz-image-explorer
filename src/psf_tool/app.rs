@@ -1020,7 +1020,7 @@ impl ThzPsfApp {
         let mut viewport_ui = crate::gui::utils::viewport_ui(ctx);
 
         // ── Top panel ──────────────────────────────────────────────────────
-        egui::Panel::top("psf_top_panel").show_inside(&mut viewport_ui, |ui| {
+        egui::Panel::top("psf_top_panel").show(&mut viewport_ui, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("THz PSF Tool");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1058,7 +1058,7 @@ impl ThzPsfApp {
         egui::Panel::left("psf_control_panel")
             .default_size(self.control_panel_width)
             .resizable(true)
-            .show_inside(&mut viewport_ui, |ui| {
+            .show(&mut viewport_ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.heading("Parameters");
 
@@ -1296,7 +1296,7 @@ impl ThzPsfApp {
             });
 
         // ── Central panel (plots) ──────────────────────────────────────────
-        egui::CentralPanel::default().show_inside(&mut viewport_ui, |ui| {
+        egui::CentralPanel::default().show(&mut viewport_ui, |ui| {
             if self.filters.is_none()
                 && self.x_measurement.is_none()
                 && self.y_measurement.is_none()

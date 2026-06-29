@@ -73,7 +73,7 @@ impl IndividualFitsWindow {
         center_frequencies: &[f64],
     ) {
         let mut viewport_ui = viewport_ui(ctx);
-        egui::CentralPanel::default().show_inside(&mut viewport_ui, |ui| {
+        egui::CentralPanel::default().show(&mut viewport_ui, |ui| {
             self.show_content(
                 ui,
                 popt_xs_left,

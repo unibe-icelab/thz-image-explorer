@@ -6,7 +6,7 @@ use crate::vec2;
 use bevy::prelude::*;
 use bevy_egui::egui::{self, Checkbox, DragValue, Slider, Stroke, Ui};
 use bevy_egui::egui::{epaint, Popup, PopupCloseBehavior};
-use egui_plot::{GridMark, Legend, Line, LineStyle, Plot, PlotPoint, PlotPoints, VLine};
+use egui_plot::{GridMark, HoverPosition, Legend, Line, LineStyle, Plot, PlotPoints, VLine};
 use std::ops::RangeInclusive;
 
 const ROI_COLORS: [egui::Color32; 8] = [
@@ -129,13 +129,20 @@ pub fn pulse_tab(
         let s_fmt = move |y: GridMark, _range: &RangeInclusive<f64>| {
             format!("{:4.2} nA", y.value - axis_display_offset)
         };
-        let label_fmt = move |s: &str, val: &PlotPoint| {
-            format!(
+        let label_fmt = move |pos: &HoverPosition<'_>| match pos {
+            HoverPosition::NearDataPoint {
+                plot_name, position, ..
+            } => Some(format!(
                 "{}\n{:4.2} ps\n{:4.2} a.u.",
-                s,
-                val.x,
-                val.y - axis_display_offset_2
-            )
+                plot_name,
+                position.x,
+                position.y - axis_display_offset_2
+            )),
+            HoverPosition::Elsewhere { position } => Some(format!(
+                "{:4.2} ps\n{:4.2} a.u.",
+                position.x,
+                position.y - axis_display_offset_2
+            )),
         };
 
         let signal_plot = Plot::new("signal")
@@ -348,21 +355,31 @@ pub fn pulse_tab(
             }
         };
 
-        let label_fmt = move |s: &str, val: &PlotPoint| {
-            if log_plot {
+        let label_fmt = move |pos: &HoverPosition<'_>| {
+            let (plot_name, position) = match pos {
+                HoverPosition::NearDataPoint {
+                    plot_name, position, ..
+                } => (*plot_name, *position),
+                HoverPosition::Elsewhere { position } => ("", *position),
+            };
+            let label_prefix = if plot_name.is_empty() {
+                String::new()
+            } else {
+                format!("{plot_name}\n")
+            };
+            Some(if log_plot {
                 if phases_visible {
-                    format!("{}\n{:4.2} THz\n{:4.2} °", s, val.x, val.y)
+                    format!("{label_prefix}{:4.2} THz\n{:4.2} °", position.x, position.y)
                 } else {
                     format!(
-                        "{}\n{:4.2} THz\n{:4.2} dB",
-                        s,
-                        val.x,
-                        val.y - max_fft_signals
+                        "{label_prefix}{:4.2} THz\n{:4.2} dB",
+                        position.x,
+                        position.y - max_fft_signals
                     )
                 }
             } else {
-                format!("{}\n{:4.2} THz\n{:4.2} a.u.", s, val.x, val.y)
-            }
+                format!("{label_prefix}{:4.2} THz\n{:4.2} a.u.", position.x, position.y)
+            })
         };
         let f_fmt = |x: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} THz", x.value);
 
@@ -698,8 +715,17 @@ pub fn optical_properties_tab(
         // Format functions for the plots
         let f_fmt = |x: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} THz", x.value);
         let n_fmt = |y: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2}", y.value);
-        let label_fmt =
-            |s: &str, val: &PlotPoint| format!("{}\n{:4.2} THz\n{:4.2}", s, val.x, val.y);
+        let label_fmt = |pos: &HoverPosition<'_>| match pos {
+            HoverPosition::NearDataPoint {
+                plot_name, position, ..
+            } => Some(format!(
+                "{}\n{:4.2} THz\n{:4.2}",
+                plot_name, position.x, position.y
+            )),
+            HoverPosition::Elsewhere { position } => {
+                Some(format!("{:4.2} THz\n{:4.2}", position.x, position.y))
+            }
+        };
 
         // Refractive index plot
         let n_plot = Plot::new("refractive_index")
@@ -725,8 +751,17 @@ pub fn optical_properties_tab(
 
         // Absorption plot
         let a_fmt = |y: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} cm^-1", y.value);
-        let a_label_fmt =
-            |s: &str, val: &PlotPoint| format!("{}\n{:4.2} THz\n{:4.2} cm^-1", s, val.x, val.y);
+        let a_label_fmt = |pos: &HoverPosition<'_>| match pos {
+            HoverPosition::NearDataPoint {
+                plot_name, position, ..
+            } => Some(format!(
+                "{}\n{:4.2} THz\n{:4.2} cm^-1",
+                plot_name, position.x, position.y
+            )),
+            HoverPosition::Elsewhere { position } => {
+                Some(format!("{:4.2} THz\n{:4.2} cm^-1", position.x, position.y))
+            }
+        };
 
         let absorption_plot = Plot::new("absorption")
             .height(height)
@@ -840,7 +875,7 @@ pub fn center_panel(
     cam_input: &mut ResMut<CameraInputAllowed>,
     thread_communication: &mut ResMut<ThreadCommunication>,
 ) {
-    egui::CentralPanel::default().show_inside(ui, |ui| {
+    egui::CentralPanel::default().show(ui, |ui| {
         let window_height = ui.available_height();
         let height = ui.available_size().y * 0.45;
         let spacing = (ui.available_size().y - 2.0 * height) / 3.0 - 10.0;

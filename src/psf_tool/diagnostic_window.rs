@@ -36,7 +36,7 @@ impl DiagnosticWindow {
 
     pub fn show(&mut self, ctx: &egui::Context) {
         let mut viewport_ui = viewport_ui(ctx);
-        egui::CentralPanel::default().show_inside(&mut viewport_ui, |ui| {
+        egui::CentralPanel::default().show(&mut viewport_ui, |ui| {
             self.show_ui(ui, ctx);
         });
     }

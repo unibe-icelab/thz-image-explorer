@@ -133,7 +133,7 @@ pub fn left_panel(
         .min_size(*left_panel_width)
         .max_size(*left_panel_width)
         .resizable(false)
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             ui.add_enabled_ui(true, |ui| {
                 ui.heading("Data Source");
                 ui.add_space(10.0);

@@ -33,7 +33,7 @@ pub fn right_panel(
         .min_size(*right_panel_width)
         .max_size(*right_panel_width)
         .resizable(false)
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             ui.add_enabled_ui(true, |ui| {
                 ui.horizontal(|ui| {
                     ui.heading("Analysis");
