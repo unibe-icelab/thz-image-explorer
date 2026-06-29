@@ -131,7 +131,9 @@ pub fn pulse_tab(
         };
         let label_fmt = move |pos: &HoverPosition<'_>| match pos {
             HoverPosition::NearDataPoint {
-                plot_name, position, ..
+                plot_name,
+                position,
+                ..
             } => Some(format!(
                 "{}\n{:4.2} ps\n{:4.2} a.u.",
                 plot_name,
@@ -358,7 +360,9 @@ pub fn pulse_tab(
         let label_fmt = move |pos: &HoverPosition<'_>| {
             let (plot_name, position) = match pos {
                 HoverPosition::NearDataPoint {
-                    plot_name, position, ..
+                    plot_name,
+                    position,
+                    ..
                 } => (*plot_name, *position),
                 HoverPosition::Elsewhere { position } => ("", *position),
             };
@@ -378,7 +382,10 @@ pub fn pulse_tab(
                     )
                 }
             } else {
-                format!("{label_prefix}{:4.2} THz\n{:4.2} a.u.", position.x, position.y)
+                format!(
+                    "{label_prefix}{:4.2} THz\n{:4.2} a.u.",
+                    position.x, position.y
+                )
             })
         };
         let f_fmt = |x: GridMark, _range: &RangeInclusive<f64>| format!("{:4.2} THz", x.value);

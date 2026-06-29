@@ -4,8 +4,7 @@ use crate::data_container::{PlotDataContainer, ScannedImageFilterData};
 use crate::data_thread::main_thread;
 use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
 use crate::gui::application::{
-    update_gui, GuiSettingsContainer, THzImageExplorer, DEFAULT_WINDOW_HEIGHT,
-    DEFAULT_WINDOW_WIDTH,
+    update_gui, GuiSettingsContainer, THzImageExplorer, DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH,
 };
 use crate::gui::matrix_plot::ROI;
 use crate::gui::secondary_windows::{
@@ -127,7 +126,11 @@ fn autosave_on_exit(
 }
 
 fn sanitize_window_dimension(value: u32, default_value: u32) -> u32 {
-    if value == 0 { default_value } else { value }
+    if value == 0 {
+        default_value
+    } else {
+        value
+    }
 }
 
 // --- Main ---
