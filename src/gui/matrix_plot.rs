@@ -1,4 +1,4 @@
-use crate::gui::application::{THzImageExplorer, SAFETY_ORANGE};
+use crate::gui::application::{THzImageExplorer, LIGHT_THEME_YELLOW, SAFETY_ORANGE};
 use bevy_egui::egui;
 use bevy_egui::egui::{
     pos2, vec2, Color32, ColorImage, DragValue, FontId, RichText, Shape, Stroke, UiBuilder, Vec2,
@@ -461,6 +461,14 @@ pub fn plot_matrix(
 
         let mut hovered_roi_uuid: Option<String> = None;
 
+        // Capture dark mode state before entering the closure
+        let is_dark_mode = ui.ctx().style().visuals.dark_mode;
+        let hover_color = if is_dark_mode {
+            Color32::YELLOW
+        } else {
+            LIGHT_THEME_YELLOW
+        };
+
         let plot_response = plot.show(ui, |plot_ui| {
             plot_ui.image(im);
 
@@ -496,7 +504,7 @@ pub fn plot_matrix(
 
                 let line_width = if is_hovered { 4.0 } else { 2.0 };
                 let color = if is_hovered {
-                    Color32::YELLOW
+                    hover_color
                 } else {
                     Color32::WHITE
                 };

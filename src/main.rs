@@ -5,6 +5,13 @@ use crate::data_thread::main_thread;
 use crate::filters::filter::{FilterDomain, FILTER_REGISTRY};
 use crate::gui::application::{update_gui, GuiSettingsContainer, THzImageExplorer};
 use crate::gui::matrix_plot::ROI;
+use crate::gui::secondary_windows::{
+    cleanup_closed_windows, psf_diagnostics_system, psf_individual_fits_system, psf_tool_system,
+    psf_visualizer_system, setup_secondary_context_fonts, PsfDiagnosticsContextPass,
+    PsfIndividualFitsContextPass, PsfToolContextPass, PsfVisualizerContextPass,
+    SecondaryWindowState, SettingsContextPass,
+};
+use crate::gui::settings_window::settings_window_system;
 use crate::gui::threed_plot::{
     animate, set_enable_camera_controls_system, setup, update_instance_buffer_system,
     CameraInputAllowed, InstanceContainer, OpacityThreshold, SceneVisibility,
@@ -22,8 +29,8 @@ use bevy::winit::EventLoopProxyWrapper;
 use bevy::winit::WinitSettings;
 use bevy_egui::egui::style::HandleShape;
 use bevy_egui::egui::vec2;
-use bevy_egui::{egui, EguiPrimaryContextPass, EguiStartupSet};
-use bevy_egui::{EguiContexts, EguiPlugin};
+use bevy_egui::{egui, EguiGlobalSettings, EguiPrimaryContextPass, EguiStartupSet};
+use bevy_egui::{EguiContexts, EguiPlugin, PrimaryEguiContext};
 use bevy_panorbit_camera::PanOrbitCameraPlugin;
 use bevy_voxel_plot::VoxelMaterialPlugin;
 use crossbeam_channel::{Receiver, Sender};
@@ -44,6 +51,12 @@ mod filters;
 mod gui;
 mod io;
 mod math_tools;
+pub mod psf_tool;
+// ============================================================================
+// TEMPORARY WORKAROUND: Remove when bevy_egui supports system theme natively
+// ============================================================================
+mod system_theme;
+// ============================================================================
 mod update;
 
 const APP_INFO: AppInfo = AppInfo {
@@ -63,26 +76,38 @@ fn spawn_data_thread(
     });
 }
 
-fn setup_camera(mut commands: Commands) {
-    // camera required by bevy-egui
-    commands.spawn(Camera2d);
+fn setup_camera(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalSettings>) {
+    // Disable auto-creation of the primary egui context so that bevy_egui does
+    // not get confused when a secondary camera is later spawned.
+    egui_global_settings.auto_create_primary_context = false;
+    // camera required by bevy-egui — explicit PrimaryEguiContext ensures this
+    // remains the primary egui context regardless of other cameras.
+    commands.spawn((Camera2d, PrimaryEguiContext));
 }
 
-fn setup_fonts(mut contexts: EguiContexts) {
+fn setup_fonts(mut contexts: EguiContexts, thread_communication: Res<ThreadCommunication>) {
     let mut fonts = egui::FontDefinitions::default();
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
     if let Ok(ctx_mut) = contexts.ctx_mut() {
         ctx_mut.set_fonts(fonts);
         egui_extras::install_image_loaders(&ctx_mut);
 
-        // Get the current visuals (light or dark mode)
-        let mut visuals = ctx_mut.style().visuals.clone(); // to keep current settings
+        // Apply the user's saved theme preference
+        ctx_mut.set_theme(thread_communication.gui_settings.theme_preference);
 
-        // Set the global handle shape for sliders
-        visuals.handle_shape = HandleShape::Circle;
+        // ========================================================================
+        // TEMPORARY WORKAROUND: Remove when bevy_egui supports system theme
+        // ========================================================================
+        system_theme::apply_system_theme_if_needed(
+            ctx_mut,
+            thread_communication.gui_settings.theme_preference,
+        );
+        // ========================================================================
 
-        // Apply the updated visuals to the context
-        ctx_mut.set_visuals(visuals);
+        // Modify handle shape in both dark and light styles
+        ctx_mut.all_styles_mut(|styles| {
+            styles.visuals.handle_shape = HandleShape::Circle;
+        });
     }
 }
 
@@ -343,6 +368,7 @@ fn main() {
         .insert_resource(CameraInputAllowed(false))
         .insert_non_send_resource(THzImageExplorer::new(thread_communication))
         .insert_resource(SceneVisibility(false))
+        .init_resource::<SecondaryWindowState>()
         .add_systems(
             PreStartup,
             setup_camera.before(EguiStartupSet::InitContexts),
@@ -351,6 +377,16 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(Startup, spawn_data_thread)
         .add_systems(EguiPrimaryContextPass, update_gui)
+        .add_systems(SettingsContextPass, settings_window_system)
+        .add_systems(PsfToolContextPass, psf_tool_system)
+        .add_systems(PsfDiagnosticsContextPass, psf_diagnostics_system)
+        .add_systems(PsfVisualizerContextPass, psf_visualizer_system)
+        .add_systems(PsfIndividualFitsContextPass, psf_individual_fits_system)
+        .add_systems(Update, setup_secondary_context_fonts)
+        .add_systems(
+            PostUpdate,
+            cleanup_closed_windows.after(bevy_egui::EguiPostUpdateSet::EndPass),
+        )
         .add_systems(
             Update,
             update_instance_buffer_system.run_if(|vis: Res<SceneVisibility>| vis.0),

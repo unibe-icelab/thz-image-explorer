@@ -119,7 +119,7 @@ pub fn gauge_ui(
 
         // ui.painter()
         //    .circle(center, radius, visuals.bg_fill, visuals.bg_stroke);
-        
+
         let color = if ui.visuals().dark_mode {
             Color32::WHITE
         } else {
