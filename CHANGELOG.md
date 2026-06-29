@@ -12,6 +12,7 @@ All notable changes to the `THz Image Explorer` project will be documented in th
 * Fix individual fits update with new frequency count in PSF tool
 * Fix start and end freq. in PSF tool: now constrained by the low and high cut
 * Linear vs. logarithmic frequency spacing in PSF tool
+* Fix cancellation flag in PSF tool
 
 # 1.1.0 - 28.11.2025
 

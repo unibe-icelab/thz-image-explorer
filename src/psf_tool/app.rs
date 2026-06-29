@@ -585,6 +585,7 @@ impl ThzPsfApp {
                                                 }
                                             };
                                             result_tx.send(msg).ok();
+                                            !cancel_flag.load(Ordering::Relaxed)
                                         },
                                     )
                                     .ok()?;
@@ -626,6 +627,7 @@ impl ThzPsfApp {
                                                 }
                                             };
                                             result_tx.send(msg).ok();
+                                            !cancel_flag.load(Ordering::Relaxed)
                                         },
                                     )
                                     .ok()?;
