@@ -14,7 +14,7 @@ egui_logger = { git = "https://github.com/hacknus/egui_logger", branch = "expose
 egui-theme-switch = "0.8"
 egui-circular-progress-bar = "1.0"
 egui_double_slider = "3.0"
-bevy_egui = { git = "https://github.com/hacknus/bevy_egui", branch = "egui_0.35", features = ["serde"] }
+bevy_egui = { version = "0.41", features = ["serde"] }
 bevy = { version = "0.19", default-features = false, features = [
     "std",
     "async_executor",
@@ -43,7 +43,7 @@ bevy = { version = "0.19", default-features = false, features = [
 ] }
 bevy_voxel_plot = { version = "5.0" }
 bevy_panorbit_camera = { version = "0.35" }
-bevy_framepace = { git = "https://github.com/hacknus/bevy_framepace", branch = "bevy_0.19" }
+bevy_framepace = { version = "0.22" }
 crossbeam-channel = "0.5"
 log = "0.4.22"
 image = { version = "0.25", default-features = false, features = [

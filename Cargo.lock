@@ -915,8 +915,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_egui"
-version = "0.40.1"
-source = "git+https://github.com/hacknus/bevy_egui?branch=egui_0.35#e5ca913e4699eb9755309341030bbbe316a2ad08"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "903546b33a4c3ff4c8d3a6221280fa4566ee38e55dec9eecaa52de745c204c36"
 dependencies = [
  "arboard",
  "bevy_app",
@@ -948,7 +949,7 @@ dependencies = [
  "encase",
  "getrandom 0.4.3",
  "image",
- "itertools 0.15.0",
+ "itertools",
  "js-sys",
  "smithay-clipboard",
  "thread_local",
@@ -1004,8 +1005,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_framepace"
-version = "0.21.0"
-source = "git+https://github.com/hacknus/bevy_framepace?branch=bevy_0.19#4a950ca526bd4fb56d03b7caf28a04f2bbac2123"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b35d9d975da04ef8c61def028d8c6de9a151a99571acc0fbf080371e1781bc7"
 dependencies = [
  "bevy_app",
  "bevy_diagnostic",
@@ -1125,7 +1127,7 @@ dependencies = [
  "bevy_world_serialization",
  "fixedbitset",
  "gltf",
- "itertools 0.14.0",
+ "itertools",
  "percent-encoding",
  "serde",
  "serde_json",
@@ -1360,7 +1362,7 @@ dependencies = [
  "bevy_reflect",
  "derive_more",
  "glam",
- "itertools 0.14.0",
+ "itertools",
  "libm",
  "rand 0.10.1",
  "rand_distr",
@@ -1613,7 +1615,7 @@ dependencies = [
  "glam",
  "image",
  "indexmap",
- "itertools 0.14.0",
+ "itertools",
  "js-sys",
  "naga",
  "nonmax",
@@ -3068,7 +3070,7 @@ dependencies = [
  "bitflags 2.13.0",
  "emath",
  "epaint",
- "itertools 0.14.0",
+ "itertools",
  "log",
  "nohash-hasher",
  "profiling",
@@ -3139,7 +3141,7 @@ dependencies = [
  "ehttp",
  "enum-map",
  "image",
- "itertools 0.14.0",
+ "itertools",
  "log",
  "mime_guess2",
  "profiling",
@@ -4606,15 +4608,6 @@ name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
 dependencies = [
  "either",
 ]
@@ -6415,7 +6408,7 @@ dependencies = [
  "built",
  "cfg-if",
  "interpolate_name",
- "itertools 0.14.0",
+ "itertools",
  "libc",
  "libfuzzer-sys",
  "log",
