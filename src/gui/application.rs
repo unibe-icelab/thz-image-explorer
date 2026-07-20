@@ -30,11 +30,9 @@ use core::f64;
 #[cfg(not(target_os = "macos"))]
 use dotthz::DotthzFile;
 #[cfg(not(target_os = "macos"))]
-use egui_file_dialog::config::Filter;
-#[cfg(not(target_os = "macos"))]
 use egui_file_dialog::information_panel::InformationPanel;
 #[cfg(not(target_os = "macos"))]
-use egui_file_dialog::FileDialog;
+use egui_file_dialog::{FileDialog, Filter};
 use egui_plot::PlotPoint;
 use home::home_dir;
 use log::Level;
@@ -45,8 +43,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
-#[cfg(not(target_os = "macos"))]
-use std::sync::Arc;
 
 pub const SAFETY_ORANGE: Color32 = Color32::from_rgb(255, 95, 21);
 pub const LIGHT_THEME_YELLOW: Color32 = Color32::from_rgb(240, 200, 0);

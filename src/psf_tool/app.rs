@@ -4,9 +4,7 @@
 
 use bevy_egui::egui;
 #[cfg(not(target_os = "macos"))]
-use egui_file_dialog::config::Filter;
-#[cfg(not(target_os = "macos"))]
-use egui_file_dialog::FileDialog;
+use egui_file_dialog::{FileDialog, Filter};
 use egui_plot::{Legend, Line, Plot, PlotPoints};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
