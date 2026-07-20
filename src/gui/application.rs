@@ -815,29 +815,39 @@ impl THzImageExplorer {
             // })
             .set_file_icon(
                 "🖹",
-                Arc::new(|path| path.extension().unwrap_or_default().to_ascii_lowercase() == "md"),
+                Arc::new(|path: &std::path::Path| {
+                    path.extension().unwrap_or_default().to_ascii_lowercase() == "md"
+                }),
             )
             .set_file_icon(
                 "",
-                Arc::new(|path| {
+                Arc::new(|path: &std::path::Path| {
                     path.file_name().unwrap_or_default().to_ascii_lowercase() == ".gitignore"
                 }),
             )
             .add_file_filter(
                 "dotTHz files",
-                Arc::new(|p| p.extension().unwrap_or_default().to_ascii_lowercase() == "thz"),
+                Arc::new(|p: &std::path::Path| {
+                    p.extension().unwrap_or_default().to_ascii_lowercase() == "thz"
+                }),
             )
             .add_file_filter(
                 "npy files",
-                Arc::new(|p| p.extension().unwrap_or_default().to_ascii_lowercase() == "npy"),
+                Arc::new(|p: &std::path::Path| {
+                    p.extension().unwrap_or_default().to_ascii_lowercase() == "npy"
+                }),
             )
             .add_file_filter(
                 "npz files",
-                Arc::new(|p| p.extension().unwrap_or_default().to_ascii_lowercase() == "npz"),
+                Arc::new(|p: &std::path::Path| {
+                    p.extension().unwrap_or_default().to_ascii_lowercase() == "npz"
+                }),
             )
             .add_file_filter(
                 "CSV files",
-                Arc::new(|p| p.extension().unwrap_or_default().to_ascii_lowercase() == "csv"),
+                Arc::new(|p: &std::path::Path| {
+                    p.extension().unwrap_or_default().to_ascii_lowercase() == "csv"
+                }),
             )
             .initial_directory(thread_communication.gui_settings.selected_path.clone())
             //.default_file_filter("dotTHz files")

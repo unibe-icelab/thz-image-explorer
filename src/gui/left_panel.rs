@@ -355,7 +355,7 @@ pub fn left_panel(
                         {
                             if let Some(path) = explorer
                                 .file_dialog
-                                .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                .update_with_right_panel_ui(ui.ctx(), &mut |ui, dia| {
                                     explorer.information_panel.ui(ui, dia);
                                 })
                                 .picked()
@@ -397,7 +397,7 @@ pub fn left_panel(
                         {
                             if let Some(path) = explorer
                                 .file_dialog
-                                .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                .update_with_right_panel_ui(ui.ctx(), &mut |ui, dia| {
                                     explorer.information_panel.ui(ui, dia);
                                 })
                                 .picked()
@@ -437,7 +437,7 @@ pub fn left_panel(
                         {
                             if let Some(path) = explorer
                                 .file_dialog
-                                .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                .update_with_right_panel_ui(ui.ctx(), &mut |ui, dia| {
                                     explorer.information_panel.ui(ui, dia);
                                 })
                                 .picked()
@@ -482,7 +482,7 @@ pub fn left_panel(
                         {
                             if let Some(path) = explorer
                                 .file_dialog
-                                .update_with_right_panel_ui(ctx, &mut |ui, dia| {
+                                .update_with_right_panel_ui(ui.ctx(), &mut |ui, dia| {
                                     explorer.information_panel.ui(ui, dia);
                                 })
                                 .picked()

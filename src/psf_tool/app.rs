@@ -245,13 +245,13 @@ impl Default for ThzPsfApp {
                 .default_size([640.0, 440.0])
                 .add_file_filter(
                     "THz files",
-                    std::sync::Arc::new(|p| {
+                    std::sync::Arc::new(|p: &std::path::Path| {
                         p.extension().unwrap_or_default().to_ascii_lowercase() == "thz"
                     }),
                 )
                 .add_file_filter(
                     "NumPy archive",
-                    std::sync::Arc::new(|p| {
+                    std::sync::Arc::new(|p: &std::path::Path| {
                         p.extension().unwrap_or_default().to_ascii_lowercase() == "npz"
                     }),
                 ),
