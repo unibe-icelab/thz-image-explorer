@@ -30,6 +30,8 @@ use core::f64;
 #[cfg(not(target_os = "macos"))]
 use dotthz::DotthzFile;
 #[cfg(not(target_os = "macos"))]
+use egui_file_dialog::config::Filter;
+#[cfg(not(target_os = "macos"))]
 use egui_file_dialog::information_panel::InformationPanel;
 #[cfg(not(target_os = "macos"))]
 use egui_file_dialog::FileDialog;
@@ -815,37 +817,37 @@ impl THzImageExplorer {
             // })
             .set_file_icon(
                 "🖹",
-                Arc::new(|path: &std::path::Path| {
+                Filter::new(|path: &std::path::Path| {
                     path.extension().unwrap_or_default().to_ascii_lowercase() == "md"
                 }),
             )
             .set_file_icon(
                 "",
-                Arc::new(|path: &std::path::Path| {
+                Filter::new(|path: &std::path::Path| {
                     path.file_name().unwrap_or_default().to_ascii_lowercase() == ".gitignore"
                 }),
             )
             .add_file_filter(
                 "dotTHz files",
-                Arc::new(|p: &std::path::Path| {
+                Filter::new(|p: &std::path::Path| {
                     p.extension().unwrap_or_default().to_ascii_lowercase() == "thz"
                 }),
             )
             .add_file_filter(
                 "npy files",
-                Arc::new(|p: &std::path::Path| {
+                Filter::new(|p: &std::path::Path| {
                     p.extension().unwrap_or_default().to_ascii_lowercase() == "npy"
                 }),
             )
             .add_file_filter(
                 "npz files",
-                Arc::new(|p: &std::path::Path| {
+                Filter::new(|p: &std::path::Path| {
                     p.extension().unwrap_or_default().to_ascii_lowercase() == "npz"
                 }),
             )
             .add_file_filter(
                 "CSV files",
-                Arc::new(|p: &std::path::Path| {
+                Filter::new(|p: &std::path::Path| {
                     p.extension().unwrap_or_default().to_ascii_lowercase() == "csv"
                 }),
             )

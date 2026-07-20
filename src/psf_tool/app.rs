@@ -4,6 +4,8 @@
 
 use bevy_egui::egui;
 #[cfg(not(target_os = "macos"))]
+use egui_file_dialog::config::Filter;
+#[cfg(not(target_os = "macos"))]
 use egui_file_dialog::FileDialog;
 use egui_plot::{Legend, Line, Plot, PlotPoints};
 use rayon::prelude::*;
@@ -245,13 +247,13 @@ impl Default for ThzPsfApp {
                 .default_size([640.0, 440.0])
                 .add_file_filter(
                     "THz files",
-                    std::sync::Arc::new(|p: &std::path::Path| {
+                    Filter::new(|p: &std::path::Path| {
                         p.extension().unwrap_or_default().to_ascii_lowercase() == "thz"
                     }),
                 )
                 .add_file_filter(
                     "NumPy archive",
-                    std::sync::Arc::new(|p: &std::path::Path| {
+                    Filter::new(|p: &std::path::Path| {
                         p.extension().unwrap_or_default().to_ascii_lowercase() == "npz"
                     }),
                 ),
