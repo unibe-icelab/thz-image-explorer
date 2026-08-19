@@ -24,7 +24,7 @@ use bevy::ecs::query::QuerySingleError;
 use bevy::prelude::*;
 use bevy::window::{PrimaryWindow, WindowRef, WindowResolution};
 use bevy_egui::egui::{Color32, Popup, PopupCloseBehavior, ThemePreference};
-use bevy_egui::{egui, EguiContext, EguiContexts, EguiMultipassSchedule, PrimaryEguiContext};
+use bevy_egui::{egui, EguiContext, EguiContexts, EguiSchedule, PrimaryEguiContext};
 use bevy_voxel_plot::InstanceMaterialData;
 use core::f64;
 #[cfg(not(target_os = "macos"))]
@@ -532,7 +532,7 @@ pub fn update_gui(
                 Camera2d,
                 Camera::default(),
                 RenderTarget::Window(WindowRef::Entity(win)),
-                EguiMultipassSchedule::new(SettingsContextPass),
+                EguiSchedule::new(SettingsContextPass),
                 SettingsWindowCamera,
             ))
             .id();
@@ -578,7 +578,7 @@ pub fn update_gui(
                 Camera2d,
                 Camera::default(),
                 RenderTarget::Window(WindowRef::Entity(win)),
-                EguiMultipassSchedule::new(PsfToolContextPass),
+                EguiSchedule::new(PsfToolContextPass),
                 PsfToolWindowCamera,
             ))
             .id();
@@ -620,7 +620,7 @@ pub fn update_gui(
                 Camera2d,
                 Camera::default(),
                 RenderTarget::Window(WindowRef::Entity(win)),
-                EguiMultipassSchedule::new(PsfDiagnosticsContextPass),
+                EguiSchedule::new(PsfDiagnosticsContextPass),
                 PsfDiagnosticsWindowCamera,
             ))
             .id();
@@ -662,7 +662,7 @@ pub fn update_gui(
                 Camera2d,
                 Camera::default(),
                 RenderTarget::Window(WindowRef::Entity(win)),
-                EguiMultipassSchedule::new(PsfVisualizerContextPass),
+                EguiSchedule::new(PsfVisualizerContextPass),
                 PsfVisualizerWindowCamera,
             ))
             .id();
@@ -706,7 +706,7 @@ pub fn update_gui(
                 Camera2d,
                 Camera::default(),
                 RenderTarget::Window(WindowRef::Entity(win)),
-                EguiMultipassSchedule::new(PsfIndividualFitsContextPass),
+                EguiSchedule::new(PsfIndividualFitsContextPass),
                 PsfIndividualFitsWindowCamera,
             ))
             .id();

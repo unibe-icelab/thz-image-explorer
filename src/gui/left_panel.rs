@@ -293,13 +293,13 @@ pub fn left_panel(
                 ui.ctx().input(|i| {
                     // Check if files were dropped
                     if let Some(dropped_file) = i.raw.dropped_files.last() {
-                        let path = dropped_file.clone().path.unwrap();
+                        let path = dropped_file.path();
 
                         if let Some(ext) = path.extension() {
                             if ext == "npz" {
                                 send_latest_config(
                                     &thread_communication,
-                                    ConfigCommand::OpenPSF(path.clone()),
+                                    ConfigCommand::OpenPSF(PathBuf::from(path)),
                                 );
                             } else {
                                 explorer.other_files =
@@ -312,12 +312,12 @@ pub fn left_panel(
                                     explorer.file_dialog.config_mut().initial_directory =
                                         path.clone();
                                 }
-                                thread_communication.gui_settings.selected_path = path.clone();
+                                thread_communication.gui_settings.selected_path = PathBuf::from(path);
                                 explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                                 explorer.rois = HashMap::new();
                                 send_latest_config(
                                     thread_communication,
-                                    ConfigCommand::OpenFile(path),
+                                    ConfigCommand::OpenFile(PathBuf::from(path)),
                                 );
                                 #[cfg(target_os = "macos")]
                                 {
