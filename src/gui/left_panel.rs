@@ -10,7 +10,20 @@ use bevy_egui::egui::TextStyle;
 use dotthz::DotthzMetaData;
 use egui_extras::{Column, TableBuilder};
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+/// Records the active scan path for both the GUI and the macOS file-dialog bridge.
+///
+/// The bridge is read on every frame on macOS, so it must stay in sync with selections made
+/// directly in the in-panel directory list.
+fn set_selected_path(thread_communication: &mut ThreadCommunication, path: PathBuf) {
+    thread_communication.gui_settings.selected_path = path.clone();
+
+    #[cfg(target_os = "macos")]
+    if let Ok(mut path_guard) = thread_communication.macos_path_lock.write() {
+        *path_guard = path;
+    }
+}
 
 /// Calculates the width of a single char.
 fn calc_char_width(ui: &egui::Ui, char: char) -> f32 {
@@ -225,8 +238,7 @@ pub fn left_panel(
                                 if row.response().clicked() {
                                     explorer.selected_file_name =
                                         item.file_name().unwrap().to_str().unwrap().to_string();
-                                    thread_communication.gui_settings.selected_path =
-                                        item.to_path_buf();
+                                    set_selected_path(thread_communication, item.to_path_buf());
 
                                     explorer.new_meta_data = vec![("".to_string(), "".to_string())];
 
@@ -249,7 +261,7 @@ pub fn left_panel(
                             let item = explorer.other_files[selected_index + 1].clone();
                             explorer.selected_file_name =
                                 item.file_name().unwrap().to_str().unwrap().to_string();
-                            thread_communication.gui_settings.selected_path = item.to_path_buf();
+                            set_selected_path(thread_communication, item.to_path_buf());
                             explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                             explorer.rois = HashMap::new();
                             send_latest_config(
@@ -262,7 +274,7 @@ pub fn left_panel(
                             let item = explorer.other_files[selected_index - 1].clone();
                             explorer.selected_file_name =
                                 item.file_name().unwrap().to_str().unwrap().to_string();
-                            thread_communication.gui_settings.selected_path = item.to_path_buf();
+                            set_selected_path(thread_communication, item.to_path_buf());
                             explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                             explorer.rois = HashMap::new();
                             send_latest_config(
@@ -539,8 +551,8 @@ pub fn left_panel(
             });
             ui.separator();
 
-            let bottom_height = 100.0;
-            let height = ui.available_size().y - bottom_height - 20.0;
+            // Keep the scan preview from consuming the space needed for ROI and metadata controls.
+            let height = (ui.available_size().y - 120.0).clamp(180.0, 300.0);
 
             ui.heading("Scan");
             let mut img_data = make_dummy();
@@ -599,87 +611,90 @@ pub fn left_panel(
 
             ui.separator();
             ui.heading("Regions of Interest (ROI)");
-            egui::ScrollArea::both().id_salt("rois").show(ui, |ui| {
-                egui::Grid::new("rois polygons")
-                    .striped(true)
-                    .show(ui, |ui| {
-                        let mut rois_to_update = HashMap::new();
-                        let mut rois_to_delete = HashSet::new();
-                        for (roi_uuid, roi) in explorer.rois.iter_mut() {
-                            if ui
-                                .selectable_label(
-                                    false,
-                                    egui::RichText::new(format!(
-                                        "{}",
-                                        egui_phosphor::regular::TRASH
-                                    )),
-                                )
-                                .clicked()
-                            {
-                                rois_to_delete.insert(roi_uuid.clone());
-                                send_latest_config(
-                                    thread_communication,
-                                    ConfigCommand::DeleteROI(roi_uuid.clone()),
-                                );
+            egui::ScrollArea::both()
+                .id_salt("rois")
+                .max_height(160.0)
+                .show(ui, |ui| {
+                    egui::Grid::new("rois polygons")
+                        .striped(true)
+                        .show(ui, |ui| {
+                            let mut rois_to_update = HashMap::new();
+                            let mut rois_to_delete = HashSet::new();
+                            for (roi_uuid, roi) in explorer.rois.iter_mut() {
+                                if ui
+                                    .selectable_label(
+                                        false,
+                                        egui::RichText::new(format!(
+                                            "{}",
+                                            egui_phosphor::regular::TRASH
+                                        )),
+                                    )
+                                    .clicked()
+                                {
+                                    rois_to_delete.insert(roi_uuid.clone());
+                                    send_latest_config(
+                                        thread_communication,
+                                        ConfigCommand::DeleteROI(roi_uuid.clone()),
+                                    );
+                                }
+
+                                let changed =
+                                    ui.add(egui::TextEdit::singleline(&mut roi.name)).changed();
+                                let points = roi
+                                    .polygon
+                                    .iter()
+                                    .map(|&[x, y]| format!("[{:.2},{:.2}]", x, y))
+                                    .collect::<Vec<String>>()
+                                    .join(",");
+                                ui.label(points);
+                                ui.end_row();
+
+                                if changed {
+                                    rois_to_update.insert(roi_uuid.clone(), roi.clone());
+                                    send_latest_config(
+                                        thread_communication,
+                                        ConfigCommand::UpdateROI(roi_uuid.clone(), roi.clone()),
+                                    );
+                                }
                             }
 
-                            let changed =
-                                ui.add(egui::TextEdit::singleline(&mut roi.name)).changed();
-                            let points = roi
-                                .polygon
-                                .iter()
-                                .map(|&[x, y]| format!("[{:.2},{:.2}]", x, y))
-                                .collect::<Vec<String>>()
-                                .join(",");
-                            ui.label(points);
-                            ui.end_row();
-
-                            if changed {
-                                rois_to_update.insert(roi_uuid.clone(), roi.clone());
-                                send_latest_config(
-                                    thread_communication,
-                                    ConfigCommand::UpdateROI(roi_uuid.clone(), roi.clone()),
-                                );
+                            for roi in rois_to_delete.iter() {
+                                explorer.rois.remove(roi);
                             }
-                        }
 
-                        for roi in rois_to_delete.iter() {
-                            explorer.rois.remove(roi);
-                        }
-
-                        for (roi_uuid, roi) in rois_to_update.iter() {
-                            explorer.rois.insert(roi_uuid.clone(), roi.clone());
-                        }
-
-                        if let Some(roi) = &mut explorer.pixel_selected.open_roi {
-                            let mut delete_roi = false;
-                            if ui
-                                .selectable_label(
-                                    false,
-                                    egui::RichText::new(format!(
-                                        "{}",
-                                        egui_phosphor::regular::TRASH
-                                    )),
-                                )
-                                .clicked()
-                            {
-                                delete_roi = true;
+                            for (roi_uuid, roi) in rois_to_update.iter() {
+                                explorer.rois.insert(roi_uuid.clone(), roi.clone());
                             }
-                            ui.add(egui::TextEdit::singleline(&mut roi.name));
-                            let points = roi
-                                .polygon
-                                .iter()
-                                .map(|&[x, y]| format!("[{:.2},{:.2}]", x, y))
-                                .collect::<Vec<String>>()
-                                .join(",");
-                            ui.label(points);
-                            ui.end_row();
-                            if delete_roi {
-                                explorer.pixel_selected.open_roi = None;
+
+                            if let Some(roi) = &mut explorer.pixel_selected.open_roi {
+                                let mut delete_roi = false;
+                                if ui
+                                    .selectable_label(
+                                        false,
+                                        egui::RichText::new(format!(
+                                            "{}",
+                                            egui_phosphor::regular::TRASH
+                                        )),
+                                    )
+                                    .clicked()
+                                {
+                                    delete_roi = true;
+                                }
+                                ui.add(egui::TextEdit::singleline(&mut roi.name));
+                                let points = roi
+                                    .polygon
+                                    .iter()
+                                    .map(|&[x, y]| format!("[{:.2},{:.2}]", x, y))
+                                    .collect::<Vec<String>>()
+                                    .join(",");
+                                ui.label(points);
+                                ui.end_row();
+                                if delete_roi {
+                                    explorer.pixel_selected.open_roi = None;
+                                }
                             }
-                        }
-                    });
-            });
+                        });
+                });
 
             if ui
                 .button("Save ROIs")
@@ -1001,10 +1016,21 @@ pub fn left_panel(
                         ui.end_row();
                     });
             });
+            let save_metadata_shortcut =
+                ui.input(|input| input.modifiers.command && input.key_pressed(egui::Key::S));
+
             if thread_communication.gui_settings.meta_data_edit {
                 if let Ok(mut md) = thread_communication.md_lock.write() {
                     *md = meta_data.clone();
                 }
+            }
+            if save_metadata_shortcut {
+                send_latest_config(
+                    thread_communication,
+                    ConfigCommand::UpdateMetaData(
+                        thread_communication.gui_settings.selected_path.clone(),
+                    ),
+                );
             }
         });
 }

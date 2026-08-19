@@ -38,6 +38,31 @@ fn request_repaint(proxy: &EventLoopProxy<WinitUserEvent>) {
     let _ = proxy.send_event(WinitUserEvent::WakeUp); // Wakes up the event loop
 }
 
+/// Returns whether a path already refers to a dotTHz file that can be updated in place.
+///
+/// Saving ROI or metadata changes to one of these files must not fall back to a full data
+/// rewrite: that can replace the selected scan's data with data from a different open scan.
+fn is_dotthz_file(path: &std::path::Path) -> bool {
+    matches!(
+        path.extension().and_then(|extension| extension.to_str()),
+        Some("thz" | "thzimg" | "thzswp")
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_dotthz_file;
+    use std::path::Path;
+
+    #[test]
+    fn recognizes_dotthz_extensions_without_rewriting_them() {
+        assert!(is_dotthz_file(Path::new("selected.thz")));
+        assert!(is_dotthz_file(Path::new("selected.thzimg")));
+        assert!(is_dotthz_file(Path::new("selected.thzswp")));
+        assert!(!is_dotthz_file(Path::new("selected.csv")));
+    }
+}
+
 /// Updates the intensity image lock with the filtered image from the scan.
 ///
 /// This function writes the filtered image into the shared data structure to reflect the updated intensity.
@@ -174,8 +199,8 @@ pub fn main_thread(
         if let Ok(config_command) = thread_communication.config_rx.recv() {
             match config_command {
                 ConfigCommand::LoadMetaData(path) => {
-                    if let Some(os_path) = path.extension() {
-                        if os_path != "thz" || os_path != "thzimg" || os_path != "thzswp" {
+                    if let Some(_os_path) = path.extension() {
+                        if is_dotthz_file(&path) {
                             match load_meta_data_of_thz_file(&path, &mut meta_data) {
                                 Ok(_) => {
                                     if let Ok(mut filter_data) =
@@ -273,8 +298,8 @@ pub fn main_thread(
                 }
                 ConfigCommand::SaveROIs(mut path) => {
                     // THz Image Explorer always saves thz files
-                    if let Some(os_path) = path.extension() {
-                        if os_path != "thz" || os_path != "thzimg" || os_path != "thzswp" {
+                    if let Some(_os_path) = path.extension() {
+                        if !is_dotthz_file(&path) {
                             path.set_extension("thz");
                             // save full file, not just metadata, since the dotTHz file does not exist yet.
                             if let Ok(filter_data) =
@@ -330,8 +355,8 @@ pub fn main_thread(
                 }
                 ConfigCommand::UpdateMetaData(mut path) => {
                     // THz Image Explorer always saves thz files
-                    if let Some(os_path) = path.extension() {
-                        if os_path != "thz" || os_path != "thzimg" || os_path != "thzswp" {
+                    if let Some(_os_path) = path.extension() {
+                        if !is_dotthz_file(&path) {
                             path.set_extension("thz");
                             // save full file, not just metadata, since the dotTHz file does not exist yet.
                             if let Ok(filter_data) =
@@ -740,8 +765,8 @@ pub fn main_thread(
                 }
                 ConfigCommand::SaveFile(mut path) => {
                     // THz Image Explorer always saves thz files
-                    if let Some(os_path) = path.extension() {
-                        if os_path != "thz" || os_path != "thzimg" || os_path != "thzswp" {
+                    if let Some(_os_path) = path.extension() {
+                        if !is_dotthz_file(&path) {
                             path.set_extension("thz");
                         }
                     }
