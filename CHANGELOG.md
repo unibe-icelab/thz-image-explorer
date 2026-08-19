@@ -2,9 +2,14 @@
 
 All notable changes to the `THz Image Explorer` project will be documented in this file.
 
-# Unreleased 1.3.X - X.X.2026
+# Unreleased 1.4.X - X.X.2026
 
 *...
+
+# 1.4.0 - 19.8.2026
+
+* Update dependencies to `egui 0.36`
+* fix overwriting file bug if more than one file is in the directory
 
 # 1.3.0 - 29.6.2026
 
