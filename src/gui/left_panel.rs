@@ -310,7 +310,7 @@ pub fn left_panel(
                                 #[cfg(not(target_os = "macos"))]
                                 {
                                     explorer.file_dialog.config_mut().initial_directory =
-                                        path.clone();
+                                        path.to_path_buf();
                                 }
                                 thread_communication.gui_settings.selected_path =
                                     PathBuf::from(path);
