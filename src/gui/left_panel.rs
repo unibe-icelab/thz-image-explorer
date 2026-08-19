@@ -312,7 +312,8 @@ pub fn left_panel(
                                     explorer.file_dialog.config_mut().initial_directory =
                                         path.clone();
                                 }
-                                thread_communication.gui_settings.selected_path = PathBuf::from(path);
+                                thread_communication.gui_settings.selected_path =
+                                    PathBuf::from(path);
                                 explorer.new_meta_data = vec![("".to_string(), "".to_string())];
                                 explorer.rois = HashMap::new();
                                 send_latest_config(
