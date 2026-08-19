@@ -26,7 +26,7 @@ jobs:
             target: aarch64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Dependencies (Linux)
         if: contains(matrix.os, 'ubuntu')
@@ -99,58 +99,25 @@ jobs:
           Compress-Archive -Path *.msi -DestinationPath thz-image-explorer-${{ matrix.target }}.msi.zip
           Move-Item -Path thz-image-explorer-${{ matrix.target }}.msi.zip -Destination $env:GITHUB_WORKSPACE
 
-      - name: Upload .deb and executable for Linux (Ubuntu)
+      - name: Upload release assets (Linux)
         if: contains(matrix.os, 'ubuntu')
-        uses: actions/upload-release-asset@v1.0.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v3
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: thz-image-explorer-${{ matrix.target }}.deb.zip
-          asset_name: thz-image-explorer-${{ matrix.target }}.deb.zip
-          asset_content_type: application/zip
+          files: |
+            thz-image-explorer-${{ matrix.target }}.deb.zip
+            thz-image-explorer-${{ matrix.target }}.zip
 
-      - name: Upload .zip for Linux (Ubuntu executable)
-        if: contains(matrix.os, 'ubuntu')
-        uses: actions/upload-release-asset@v1.0.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: thz-image-explorer-${{ matrix.target }}.zip
-          asset_name: thz-image-explorer-${{ matrix.target }}.zip
-          asset_content_type: application/zip
-
-      - name: Upload .exe for Windows
+      - name: Upload release assets (Windows)
         if: contains(matrix.os, 'windows')
-        uses: actions/upload-release-asset@v1.0.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v3
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: thz-image-explorer-${{ matrix.target }}.exe.zip
-          asset_name: thz-image-explorer-${{ matrix.target }}.exe.zip
-          asset_content_type: application/zip
+          files: |
+            thz-image-explorer-${{ matrix.target }}.exe.zip
+            thz-image-explorer-${{ matrix.target }}.msi.zip
 
-      - name: Upload .msi for Windows
-        if: contains(matrix.os, 'windows')
-        uses: actions/upload-release-asset@v1.0.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: thz-image-explorer-${{ matrix.target }}.msi.zip
-          asset_name: thz-image-explorer-${{ matrix.target }}.msi.zip
-          asset_content_type: application/zip
-
-      - name: Upload .zip for macOS
+      - name: Upload release assets (macOS)
         if: contains(matrix.os, 'macos')
-        uses: actions/upload-release-asset@v1.0.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v3
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: thz-image-explorer-${{ matrix.target }}.app.zip
-          asset_name: thz-image-explorer-${{ matrix.target }}.app.zip
-          asset_content_type: application/zip
+          files: thz-image-explorer-${{ matrix.target }}.app.zip
       
